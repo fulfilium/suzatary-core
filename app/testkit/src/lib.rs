@@ -1,4 +1,5 @@
-//! Programs a test makes and then runs, and its scratch directories ([`scratch()`]).
+//! Programs a test makes and then runs, its scratch directories ([`scratch()`]) and its PDFs
+//! ([`pdf`]).
 //!
 //! Linux refuses to `execve` a file that any process holds open for writing (`ETXTBSY`). When a
 //! test thread writes a program, a `fork` on another thread copies the open descriptor into a
@@ -13,6 +14,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod pdf;
 mod scratch;
 
 pub use scratch::{scratch, this_test};

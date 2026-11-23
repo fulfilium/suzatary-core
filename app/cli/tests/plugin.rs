@@ -14,9 +14,9 @@ use suzatary_cli::commands::plugin;
 use suzatary_google::calendar::{Calendar, Status};
 use suzatary_health::health::Reading;
 use suzatary_health::health::Register as _;
-use suzatary_io::http::Ureq;
 use suzatary_io::plugin_store::PluginStore;
-use suzatary_io::secrets::Resolves;
+use suzatary_io_access::http::Ureq;
+use suzatary_io_access::secrets::Resolves;
 use suzatary_plugin::{Budget, Effects, Host};
 use suzatary_services::plugin::Manifest;
 use suzatary_services::plugin::Plugins;
@@ -71,7 +71,7 @@ impl Resolves for Links {
         &self,
         name: &str,
         _reason: &str,
-    ) -> Result<Option<Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<Secret>, suzatary_io_access::secrets::SecretError> {
         Ok(self.0.get(name).map(Secret::new))
     }
 }
@@ -183,7 +183,7 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
         )]))),
     };
     let host = Host::new(Budget::default()).expect("the host");
-    let health = suzatary_io::source_health::beside(&scratch.path().join("triage-heartbeat"));
+    let health = suzatary_io_local::source_health::beside(&scratch.path().join("triage-heartbeat"));
     let sync = || plugin::sync(&host, &manifest, &components(), &plugins, &effects, &health);
 
     let learnt = |report: &plugin::Report| report.learnt.expect("stored");
@@ -217,7 +217,7 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
     let healths = health.healths().expect("the health reads");
     assert!(synced(&healths, manifest.name(), "PLUGIN_ICS_HOME").is_some());
     assert_eq!(synced(&healths, manifest.name(), "PLUGIN_ICS_WORK"), None);
-    let kept = std::fs::read_to_string(scratch.path().join(suzatary_io::source_health::FILE))
+    let kept = std::fs::read_to_string(scratch.path().join(suzatary_io_local::source_health::FILE))
         .expect("the health");
     assert!(!kept.contains("s3cret"), "the link is never kept");
 

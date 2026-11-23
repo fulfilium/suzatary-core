@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use suzatary_io::run::{Cmd, succeed};
+use suzatary_io_access::run::{Cmd, succeed};
 use suzatary_mail::mail::account::MailAccount;
 use suzatary_mail::mail::cache::{Forgot, Forgotten};
 use suzatary_mail::mail::removal::Removal;

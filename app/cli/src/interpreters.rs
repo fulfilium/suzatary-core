@@ -13,31 +13,31 @@ use suzatary_digest::model_name::ModelName;
 use suzatary_health::health::Failure;
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
-use suzatary_io::attachments::AttachmentStore;
-use suzatary_io::blobs::Blobs;
-use suzatary_io::clock::SystemClock;
 use suzatary_io::drive::ProtonDrive;
-use suzatary_io::http::Ureq;
 use suzatary_io::junk::OutlookJunk;
 use suzatary_io::junk::SignedIn;
 use suzatary_io::mail_sync::Timer;
 use suzatary_io::model::ClaudeCli;
 use suzatary_io::model::Fence;
 use suzatary_io::model::TokenSource;
-use suzatary_io::model_health::Answered;
 use suzatary_io::older::Notmuched;
 use suzatary_io::older::Servers;
 use suzatary_io::repos::Mirrors;
-use suzatary_io::upload_index::UploadIndexFiles;
 use suzatary_io::web::Fetcher;
+use suzatary_io_access::http::Ureq;
+use suzatary_io_local::attachments::AttachmentStore;
+use suzatary_io_local::blobs::Blobs;
+use suzatary_io_local::clock::SystemClock;
+use suzatary_io_local::model_health::Answered;
+use suzatary_io_local::upload_index::UploadIndexFiles;
 
 use suzatary_base::capability::{Whois, WhoisError};
 use suzatary_conversations::secretary::model::{
     Conversation, Model, ModelError, Pick, Reply, SessionModel, Sessions,
 };
 use suzatary_digest::secretary::compact::Compact;
-use suzatary_io::secrets::Secretspec;
-use suzatary_io::whois::Tailscaled;
+use suzatary_io_access::secrets::Secretspec;
+use suzatary_io_local::whois::Tailscaled;
 use suzatary_services::drive::WritePort as _;
 use suzatary_services::weather::{Weather, WeatherError};
 
@@ -138,7 +138,7 @@ pub struct Declared {
 impl suzatary_connect::secrets::Secrets for Declared {
     // The value is discarded in the expression that reads it: only presence crosses.
     fn secret_state(&self, settable: &Settable) -> suzatary_connect::secrets::SecretState {
-        suzatary_io::secrets::state(&self.secrets.get(settable.name(), self.asking))
+        suzatary_io_access::secrets::state(&self.secrets.get(settable.name(), self.asking))
     }
 
     fn snapshot(&self, names: &[Settable]) -> suzatary_connect::secrets::Snapshot {
@@ -240,7 +240,9 @@ pub fn answered_by(answered: &Answered, model: &str, failed: Option<&ModelError>
 /// The limit standing now in `instance`'s model health, for callers outside a [`Door`].
 #[must_use]
 pub fn limited_now(instance: &Instance) -> Option<Limited> {
-    limited_in(&suzatary_io::model_health::beside(&instance.mail.heartbeat))
+    limited_in(&suzatary_io_local::model_health::beside(
+        &instance.mail.heartbeat,
+    ))
 }
 
 /// `None` also when the register does not read.
@@ -349,7 +351,7 @@ pub fn fence(instance: &Instance) -> Fence {
 pub fn cli_of(
     instance: &Instance,
     model: &str,
-    secrets: &suzatary_io::secrets::Secretspec,
+    secrets: &suzatary_io_access::secrets::Secretspec,
 ) -> ClaudeCli {
     spawner(instance, model)
         .with_token(TokenSource::from_store(secrets.clone()))
@@ -503,7 +505,7 @@ pub fn mail_sync(instance: &Instance) -> Timer {
 pub fn upload_store(instance: &Instance) -> AttachmentStore {
     AttachmentStore::new(
         instance.secretary.uploads(),
-        suzatary_io::pdftotext::Pdftotext::new(instance.code()),
+        suzatary_io_local::pdftotext::Pdftotext::new(instance.code()),
     )
 }
 
@@ -634,7 +636,7 @@ impl CompactorModel {
             .with_token(TokenSource::from_store(secrets));
         Self {
             door: Door::new(
-                suzatary_io::model_health::beside(&instance.mail.heartbeat),
+                suzatary_io_local::model_health::beside(&instance.mail.heartbeat),
                 asked.name(),
             ),
             asked,

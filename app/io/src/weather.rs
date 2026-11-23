@@ -6,7 +6,7 @@ use std::time::Duration;
 use suzatary_base::persona::Persona;
 use suzatary_services::weather::WeatherError;
 
-use crate::http::{Http, Req, Ureq};
+use suzatary_io_access::http::{Http, Req, Ureq};
 
 /// The forecast's service: it is asked for one city by name, and told nothing else.
 pub const FEED: &str = "https://wttr.in";

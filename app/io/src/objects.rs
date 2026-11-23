@@ -21,7 +21,7 @@ use suzatary_store::store::{
 use suzatary_stores::stores::{Kind, Store};
 
 use crate::outside::Outside;
-use crate::repository::Checkout;
+use suzatary_io_access::repository::Checkout;
 use suzatary_lines::parts;
 use suzatary_os::durable;
 
@@ -85,7 +85,7 @@ impl<E: Store<Vocabulary: Default>> Objects<E> {
 
 impl Objects<DigestEvent> {
     /// The digest's history at `root`, held by `digests.lock` across processes. Its summaries'
-    /// words live in [`crate::texts::Texts`] beside it, and its writes are made under the memory's
+    /// words live in [`suzatary_io_local::texts::Texts`] beside it, and its writes are made under the memory's
     /// hold. Its door takes a retraction only from one of `owners`, so a forged one is never
     /// stored or pushed.
     #[must_use]
@@ -786,18 +786,18 @@ mod tests {
 
         let dir = suzatary_testkit::scratch("objects");
         let history = Objects::open(dir.path().join("memory"));
-        let texts = crate::texts::Texts::open(dir.path().join("memory-texts"));
+        let texts = suzatary_io_local::texts::Texts::open(dir.path().join("memory-texts"));
         let cards = Objects::open(dir.path().join("inbox"));
         let (lines, digests) = (
             lines_at(dir.path().join("lines")),
             Objects::digests(dir.path().join("digests"), owners()),
         );
-        let digest_texts = crate::texts::Texts::open(dir.path().join("digest-texts"));
+        let digest_texts = suzatary_io_local::texts::Texts::open(dir.path().join("digest-texts"));
         let memories = Memories {
             history: &history,
             texts: &texts,
             cards: &cards,
-            entropy: &crate::texts::SystemEntropy,
+            entropy: &suzatary_io_local::texts::SystemEntropy,
             digests: suzatary_digest::secretary::digests::Digests {
                 history: &digests,
                 texts: &digest_texts,
@@ -888,18 +888,18 @@ mod tests {
 
         let dir = suzatary_testkit::scratch("objects");
         let history = Objects::open(dir.path().join("memory"));
-        let texts = crate::texts::Texts::open(dir.path().join("memory-texts"));
+        let texts = suzatary_io_local::texts::Texts::open(dir.path().join("memory-texts"));
         let cards = Objects::open(dir.path().join("inbox"));
         let (lines, digests) = (
             lines_at(dir.path().join("conversations")),
             Objects::digests(dir.path().join("digests"), owners()),
         );
-        let digest_texts = crate::texts::Texts::open(dir.path().join("digest-texts"));
+        let digest_texts = suzatary_io_local::texts::Texts::open(dir.path().join("digest-texts"));
         let memories = Memories {
             history: &history,
             texts: &texts,
             cards: &cards,
-            entropy: &crate::texts::SystemEntropy,
+            entropy: &suzatary_io_local::texts::SystemEntropy,
             digests: suzatary_digest::secretary::digests::Digests {
                 history: &digests,
                 texts: &digest_texts,
@@ -1055,14 +1055,14 @@ mod tests {
             Objects::digests(dir.path().join("digests"), owners()),
         );
         let (texts, digest_texts) = (
-            crate::texts::Texts::open(dir.path().join("memory-texts")),
-            crate::texts::Texts::open(dir.path().join("digest-texts")),
+            suzatary_io_local::texts::Texts::open(dir.path().join("memory-texts")),
+            suzatary_io_local::texts::Texts::open(dir.path().join("digest-texts")),
         );
         let memories = Memories {
             history: &history,
             texts: &texts,
             cards: &cards,
-            entropy: &crate::texts::SystemEntropy,
+            entropy: &suzatary_io_local::texts::SystemEntropy,
             digests: Digests {
                 history: &summaries,
                 texts: &digest_texts,
@@ -1181,14 +1181,14 @@ mod tests {
             Objects::digests(dir.path().join("digests"), owners()),
         );
         let (texts, digest_texts) = (
-            crate::texts::Texts::open(dir.path().join("memory-texts")),
-            crate::texts::Texts::open(dir.path().join("digest-texts")),
+            suzatary_io_local::texts::Texts::open(dir.path().join("memory-texts")),
+            suzatary_io_local::texts::Texts::open(dir.path().join("digest-texts")),
         );
         let memories = Memories {
             history: &history,
             texts: &texts,
             cards: &cards,
-            entropy: &crate::texts::SystemEntropy,
+            entropy: &suzatary_io_local::texts::SystemEntropy,
             digests: Digests {
                 history: &damaged,
                 texts: &digest_texts,

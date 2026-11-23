@@ -8,7 +8,7 @@ use suzatary_digest::secretary::compacting::Compacting;
 use suzatary_io::model::TOKEN;
 
 use suzatary_base::capability::Clock;
-use suzatary_io::clock::SystemClock;
+use suzatary_io_local::clock::SystemClock;
 use suzatary_mail::mail::account::Sync;
 
 use crate::instance;
@@ -34,7 +34,7 @@ const CAPABILITIES: &[Capability] = &[
     Capability {
         name: "Clock",
         stage: "0 — the skeleton",
-        interpreter: Some("suzatary_io::clock::SystemClock"),
+        interpreter: Some("suzatary_io_local::clock::SystemClock"),
     },
     Capability {
         name: "Whois",
@@ -64,12 +64,12 @@ const CAPABILITIES: &[Capability] = &[
     Capability {
         name: "Repository",
         stage: "6 — mail",
-        interpreter: Some("suzatary_io::repository::Checkout"),
+        interpreter: Some("suzatary_io_access::repository::Checkout"),
     },
     Capability {
         name: "Manuals",
         stage: "6 — mail",
-        interpreter: Some("suzatary_io::manuals::Handbook"),
+        interpreter: Some("suzatary_io_local::manuals::Handbook"),
     },
 ];
 
@@ -280,7 +280,7 @@ fn print_models(read: &instance::Instance) {
         ),
     }
     let secrets = read.secrets();
-    match suzatary_io::secrets::state(
+    match suzatary_io_access::secrets::state(
         &secrets.get(TOKEN, "doctor: checking whether the model's token resolves"),
     ) {
         SecretState::Missing => println!(

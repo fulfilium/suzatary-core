@@ -94,7 +94,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
                 &instance.inbox_store(),
                 &store_of(keyed.first()),
                 &keys.root().public(),
-                capability::Clock::now(&suzatary_io::clock::SystemClock),
+                capability::Clock::now(&suzatary_io_local::clock::SystemClock),
             )
             .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
             if !withdrawn.is_empty() {
@@ -210,10 +210,10 @@ fn pair(instance: &Instance, actor: Option<&str>) -> anyhow::Result<()> {
     held_keys(instance)?;
     keyed(instance)?;
     let actor = on_every_roster(instance, actor)?;
-    let (code, salt) = suzatary_io::pairing::fresh().map_err(|e| anyhow::anyhow!(e))?;
+    let (code, salt) = suzatary_io_local::pairing::fresh().map_err(|e| anyhow::anyhow!(e))?;
     let now = chrono::Utc::now();
     let minted = signatures::Pairing::minted(&code, salt, &actor, now);
-    suzatary_io::pairing::Pairings::at(instance.paths.pairing.clone())
+    suzatary_io_local::pairing::Pairings::at(instance.paths.pairing.clone())
         .rewrite(&mut |_| Some(minted.clone()))?;
     let until = now + chrono::TimeDelta::minutes(MINUTES);
     println!("Pairing code for {actor}: {}", code.shown());
@@ -279,7 +279,7 @@ pub(crate) fn kept_or_minted(
         {
             return Ok(held);
         }
-        let fresh = suzatary_io::secrets::fresh_seed().map_err(|e| anyhow::anyhow!(e))?;
+        let fresh = suzatary_io_access::secrets::fresh_seed().map_err(|e| anyhow::anyhow!(e))?;
         set(name, &fresh).with_context(|| format!("storing {name}"))?;
         Ok(fresh)
     };
@@ -293,7 +293,7 @@ pub(crate) fn kept_or_minted(
 }
 
 pub(crate) fn kept_or_minted_in(
-    secrets: &suzatary_io::secrets::Secretspec,
+    secrets: &suzatary_io_access::secrets::Secretspec,
 ) -> anyhow::Result<BoxKeys> {
     let reason = "init: the box's own keys";
     kept_or_minted(

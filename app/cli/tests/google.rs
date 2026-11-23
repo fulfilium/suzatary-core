@@ -580,10 +580,11 @@ fn a_code_google_already_redeemed_keeps_nothing() {
         suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base));
     let redirect =
         suzatary_google::google::RedirectUri::of_app("https://example.test").expect("a callback");
-    let verifier = suzatary_google::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
-        .expect("a verifier");
-    let state =
-        suzatary_google::google::State::draw(&suzatary_io::texts::SystemEntropy).expect("a state");
+    let verifier =
+        suzatary_google::google::Verifier::draw(&suzatary_io_local::texts::SystemEntropy)
+            .expect("a verifier");
+    let state = suzatary_google::google::State::draw(&suzatary_io_local::texts::SystemEntropy)
+        .expect("a state");
     let client = suzatary_google::google::Client::of_download(
         &suzatary_base::capability::Secret::new(fake_google::client_file(REDIRECT)),
         &redirect,
@@ -639,7 +640,7 @@ fn a_code_google_already_redeemed_keeps_nothing() {
     else {
         panic!("a code");
     };
-    let other = suzatary_google::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
+    let other = suzatary_google::google::Verifier::draw(&suzatary_io_local::texts::SystemEntropy)
         .expect("a verifier");
     assert!(
         google
@@ -721,10 +722,11 @@ fn the_calendars_are_read_bounded_and_learned_once() {
         suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base));
     let redirect =
         suzatary_google::google::RedirectUri::of_app("https://example.test").expect("a callback");
-    let verifier = suzatary_google::google::Verifier::draw(&suzatary_io::texts::SystemEntropy)
-        .expect("a verifier");
-    let state =
-        suzatary_google::google::State::draw(&suzatary_io::texts::SystemEntropy).expect("a state");
+    let verifier =
+        suzatary_google::google::Verifier::draw(&suzatary_io_local::texts::SystemEntropy)
+            .expect("a verifier");
+    let state = suzatary_google::google::State::draw(&suzatary_io_local::texts::SystemEntropy)
+        .expect("a state");
     let client = suzatary_io::google::Grant::client(secrets.as_ref())
         .expect("the store answers")
         .expect("a client");

@@ -190,7 +190,7 @@ fn question(
         prodrome_core::event::Actor::new(&actor).expect("an actor"),
         u32::try_from(ours.len()).expect("a count"),
         &entry,
-        &suzatary_io::texts::SystemEntropy,
+        &suzatary_io_local::texts::SystemEntropy,
     )
     .expect("a line");
     let genesis =

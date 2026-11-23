@@ -56,6 +56,9 @@ suzatary-stores.workspace = true
 suzatary-api.workspace = true
 suzatary-server.workspace = true
 suzatary-io.workspace = true
+suzatary-io-access.workspace = true
+suzatary-io-local.workspace = true
+suzatary-io-typeset.workspace = true
 suzatary-os.workspace = true
 # The context budget's measure, which the train runs without building this binary.
 suzatary-tooling.workspace = true
@@ -95,7 +98,7 @@ rustix = { version = "1", features = ["process"] }
 # that sets an environment variable could reach, and removal is checkable.
 [features]
 default = []
-fixture = ["suzatary-secretary/fixture", "suzatary-io/fixture", "suzatary-server/fixture"]
+fixture = ["suzatary-secretary/fixture", "suzatary-io-access/fixture", "suzatary-server/fixture"]
 
 # THE TWO TEST TARGETS THAT ARE NOT ABOUT THIS CRATE. `tests/guards.rs` live-fires the
 # repository's containment scripts with `git` against throwaway repositories, which a build

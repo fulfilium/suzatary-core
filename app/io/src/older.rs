@@ -25,11 +25,11 @@ use suzatary_triage::mail::older_mail::OlderMail;
 use suzatary_triage::mail::verbs::Summary;
 
 use crate::gmail::{self, Fetched, Lieer, MessageId};
-use crate::http::Http;
 use crate::imap::{Folder, Outlook};
 use crate::junk::Connect;
 use crate::sync::{read_sync_state, state_file, write_sync_state};
-use crate::tokens::{Bearer, unix_now};
+use suzatary_io_access::http::Http;
+use suzatary_io_access::tokens::{Bearer, unix_now};
 
 /// What a Gmail account's search covers: every label but Spam and Trash, as the API searches.
 pub const GMAIL_FOLDER: &str = "All Mail";
@@ -421,7 +421,7 @@ mod tests {
     use suzatary_mail::mail::imap::SyncState;
 
     use super::*;
-    use crate::http::{Resp, Scripted as Answers};
+    use suzatary_io_access::http::{Resp, Scripted as Answers};
 
     const ADA: &str = "ada@example.test";
     const GMAIL: &str = "gil@example.test";
@@ -909,7 +909,7 @@ mod tests {
             roster(),
             (root.join("Mail"), root.join("state")),
             Down,
-            Answers::always(Err(crate::http::HttpError::NotSent(
+            Answers::always(Err(suzatary_io_access::http::HttpError::NotSent(
                 "network is unreachable".to_owned(),
             ))),
             Logged::default(),
@@ -1028,9 +1028,10 @@ mod tests {
             "{sent:?}"
         );
         assert!(
-            sent.iter()
-                .all(|req| crate::http::header(&req.headers, "Authorization")
-                    == Some("Bearer box-minted")),
+            sent.iter().all(
+                |req| suzatary_io_access::http::header(&req.headers, "Authorization")
+                    == Some("Bearer box-minted")
+            ),
             "{sent:?}"
         );
     }
@@ -1043,8 +1044,8 @@ mod tests {
 
     impl Index for Real {
         fn index(&self) -> Result<(), String> {
-            crate::run::succeed(
-                &crate::run::Cmd::new("notmuch")
+            suzatary_io_access::run::succeed(
+                &suzatary_io_access::run::Cmd::new("notmuch")
                     .arg("new")
                     .env("NOTMUCH_CONFIG", &self.config),
             )
@@ -1057,8 +1058,8 @@ mod tests {
         }
     }
 
-    fn ledger(root: &Path) -> crate::state::Ledger {
-        crate::state::Ledger::new(
+    fn ledger(root: &Path) -> suzatary_io_local::state::Ledger {
+        suzatary_io_local::state::Ledger::new(
             root.join("state.json"),
             root.join("local/mail.json"),
             || {
@@ -1074,7 +1075,11 @@ mod tests {
     /// the index still holds it once.
     #[test]
     fn a_pulled_message_is_indexed_once_and_shown() {
-        if crate::run::run(&crate::run::Cmd::new("notmuch").arg("--version")).is_err() {
+        if suzatary_io_access::run::run(
+            &suzatary_io_access::run::Cmd::new("notmuch").arg("--version"),
+        )
+        .is_err()
+        {
             eprintln!("notmuch is not on PATH: the real-index half of the older search is not run");
             return;
         }

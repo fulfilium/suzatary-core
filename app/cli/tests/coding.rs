@@ -38,12 +38,13 @@ fn deployment() -> suzatary_connect::deployment::Deployment {
 /// The routine's token, and nothing else, by its one name.
 struct Holding;
 
-impl suzatary_io::secrets::Resolves for Holding {
+impl suzatary_io_access::secrets::Resolves for Holding {
     fn get(
         &self,
         name: &str,
         _reason: &str,
-    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io_access::secrets::SecretError>
+    {
         Ok((name == suzatary_connect::connect::ROUTINE_TOKEN)
             .then(|| suzatary_base::capability::Secret::new(TOKEN)))
     }

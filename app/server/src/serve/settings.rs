@@ -16,7 +16,7 @@ use suzatary_connect::settings::remote::{self, Pushed, Tip};
 use suzatary_google::calendar::Occurrence;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_io::plugin_store::PluginStore;
-use suzatary_io::repository::{Checkout, GitDirs};
+use suzatary_io_access::repository::{Checkout, GitDirs};
 use suzatary_lines::timings::{Part, Phase, timed};
 use suzatary_store::store::StoreError;
 

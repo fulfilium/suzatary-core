@@ -4192,6 +4192,9 @@ dependencies = [
  "suzatary-held",
  "suzatary-inbox",
  "suzatary-io",
+ "suzatary-io-access",
+ "suzatary-io-local",
+ "suzatary-io-typeset",
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
@@ -4494,13 +4497,10 @@ dependencies = [
  "jsonwebtoken",
  "lettre",
  "mail-parser",
- "parking_lot",
  "percent-encoding",
  "prodrome-core",
- "prodrome-typst-wasm",
  "proptest",
  "regex",
- "ring",
  "rustix",
  "rustls",
  "rustls-pki-types",
@@ -4516,6 +4516,8 @@ dependencies = [
  "suzatary-health",
  "suzatary-held",
  "suzatary-inbox",
+ "suzatary-io-access",
+ "suzatary-io-local",
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",
@@ -4532,11 +4534,84 @@ dependencies = [
  "suzatary-triage",
  "tempfile",
  "thiserror",
+ "tracing",
+ "webpki-roots",
+]
+
+[[package]]
+name = "suzatary-io-access"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "parking_lot",
+ "proptest",
+ "ring",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "suzatary-base",
+ "suzatary-connect",
+ "suzatary-google",
+ "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-lines",
+ "suzatary-mail",
+ "suzatary-os",
+ "suzatary-services",
+ "suzatary-testkit",
+ "tempfile",
+ "thiserror",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
- "typst-assets",
  "ureq",
- "webpki-roots",
+]
+
+[[package]]
+name = "suzatary-io-local"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "prodrome-core",
+ "ring",
+ "serde",
+ "serde_json",
+ "suzatary-base",
+ "suzatary-health",
+ "suzatary-held",
+ "suzatary-io-access",
+ "suzatary-mail",
+ "suzatary-memory",
+ "suzatary-os",
+ "suzatary-signatures",
+ "suzatary-store",
+ "suzatary-testkit",
+ "suzatary-topics",
+ "suzatary-triage",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "suzatary-io-typeset"
+version = "0.0.0"
+dependencies = [
+ "prodrome-core",
+ "prodrome-typst-wasm",
+ "rustix",
+ "serde",
+ "serde_json",
+ "suzatary-base",
+ "suzatary-connect",
+ "suzatary-io-access",
+ "suzatary-os",
+ "suzatary-testkit",
+ "suzatary-todo",
+ "suzatary-topics",
+ "typst-assets",
 ]
 
 [[package]]
@@ -4674,7 +4749,7 @@ dependencies = [
  "suzatary-base",
  "suzatary-google",
  "suzatary-health",
- "suzatary-io",
+ "suzatary-io-access",
  "suzatary-secretary",
  "suzatary-services",
  "thiserror",
@@ -4816,6 +4891,8 @@ dependencies = [
  "suzatary-held",
  "suzatary-inbox",
  "suzatary-io",
+ "suzatary-io-access",
+ "suzatary-io-local",
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",

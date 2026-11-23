@@ -16,7 +16,7 @@ use suzatary_triage::mail::local_state::LocalState;
 use suzatary_triage::mail::state::TriageState;
 
 use crate::docs::{DocCodec, Docs};
-use crate::secrets::Resolves;
+use suzatary_io_access::secrets::Resolves;
 
 /// The dedup authority, one document; absent is a box that has triaged nothing.
 pub type State = Docs<(), TriageState>;

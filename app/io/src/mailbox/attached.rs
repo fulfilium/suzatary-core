@@ -8,8 +8,8 @@ use suzatary_held::held_value::{Kinds, MAX_OPENED, Values};
 use suzatary_held::mail_error::MailError;
 use suzatary_store::store::{Doc as _, Gets as _};
 
-use crate::docs::{DocCodec, Docs};
-use crate::pdftotext::{Pdftotext, Unlayered};
+use suzatary_io_local::docs::{DocCodec, Docs};
+use suzatary_io_local::pdftotext::{Pdftotext, Unlayered};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Attached(Docs<String, Kinds>);
@@ -58,7 +58,7 @@ mod tests {
         let dir = suzatary_testkit::scratch("attached");
         let attached = Attached::open(dir.path().to_owned());
         let pdftotext = Pdftotext::new(".");
-        let named = crate::pdftotext::minimal_pdf(&format!("SSN {SSN}"));
+        let named = suzatary_testkit::pdf::minimal_pdf(&format!("SSN {SSN}"));
         let refused = b"%PDF-1.4 no objects".to_vec();
         assert_eq!(
             attached.kinds(&named, &pdftotext).expect("read"),
@@ -70,7 +70,10 @@ mod tests {
         );
         assert_eq!(
             attached
-                .kinds(&crate::pdftotext::minimal_pdf("Invoice 42"), &pdftotext)
+                .kinds(
+                    &suzatary_testkit::pdf::minimal_pdf("Invoice 42"),
+                    &pdftotext
+                )
                 .expect("read"),
             Kinds::empty()
         );

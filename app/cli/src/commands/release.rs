@@ -13,7 +13,7 @@ use prodrome_core::policy::Untrusted;
 use prodrome_core::term::Term;
 use suzatary_base::capability::Clock;
 use suzatary_base::escape::markup_text;
-use suzatary_io::clock::SystemClock;
+use suzatary_io_local::clock::SystemClock;
 use suzatary_record::record::Node;
 use suzatary_release::release::{
     Completed, Completes, Cut, Fragment, Plan, Reading, Released, Version, binding,

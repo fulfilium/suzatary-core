@@ -1,0 +1,56 @@
+[package]
+name = "suzatary-io-access"
+description = "Suzatary's reach outward: subprocesses, HTTP over rustls, the secret store and a checkout"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_io_access"
+path = "src/lib.rs"
+
+[dependencies]
+suzatary-os.workspace = true
+suzatary-base.workspace = true
+suzatary-held.workspace = true
+suzatary-services.workspace = true
+suzatary-google.workspace = true
+suzatary-connect.workspace = true
+suzatary-lines.workspace = true
+suzatary-inbox.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Blocking HTTP over rustls (§2: never OpenSSL).
+ureq.workspace = true
+sha2.workspace = true
+hex.workspace = true
+# The system's random generator (`secrets`).
+ring.workspace = true
+# The secret store's one lock (`secrets::CALLS`), whose wait a call's timeout bounds.
+parking_lot = "0.12"
+# A child's whole process group killed on a timeout or a halt (`run`), safely.
+rustix = { version = "1", features = ["process"] }
+# The secret file `secrets` writes: an unpredictable name, created exclusively, private.
+tempfile = "3"
+# `secrets::Declarations` reads the code root's `secretspec.toml` and writes the file that
+# extends it with the names an instance derives.
+toml.workspace = true
+# A refusal of the secret store leaves its evidence in the log (`secrets::Said`).
+tracing.workspace = true
+
+[features]
+# The e2e fixture's build alone: it also logs the secret store's stderr, whose values are test
+# values there. `suzatary`'s `fixture` enables it; the shipped build does not compile it.
+fixture = []
+
+[dev-dependencies]
+proptest.workspace = true
+suzatary-mail.workspace = true
+# Programs a test makes and runs, never executing a file its process wrote.
+suzatary-testkit = { path = "../testkit" }
+
+[lints]
+workspace = true

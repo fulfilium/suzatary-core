@@ -20,11 +20,11 @@ use suzatary_digest::secretary::memories::Memories;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
-use suzatary_io::attachments::AttachmentStore;
-use suzatary_io::blobs::Blobs;
 use suzatary_io::objects::Objects;
-use suzatary_io::pdftotext::Pdftotext;
 use suzatary_io::plugin_store::PluginStore;
+use suzatary_io_local::attachments::AttachmentStore;
+use suzatary_io_local::blobs::Blobs;
+use suzatary_io_local::pdftotext::Pdftotext;
 use suzatary_lines::secretary::held_lines;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::transcript;
@@ -87,8 +87,8 @@ fn dedup_key() -> DedupKey {
     DedupKey::of(&suzatary_base::capability::Secret::new("5a".repeat(32))).expect("a key")
 }
 
-fn ledger(root: &Path) -> suzatary_io::state::Ledger {
-    suzatary_io::state::Ledger::new(
+fn ledger(root: &Path) -> suzatary_io_local::state::Ledger {
+    suzatary_io_local::state::Ledger::new(
         root.join("state.json"),
         root.join("local/mail.json"),
         || Ok(dedup_key()),
@@ -118,10 +118,10 @@ impl suzatary_base::capability::Entropy for Counted {
 
 pub(crate) type Lines = Objects<LineEvent>;
 
-pub(crate) fn lines_at(root: &Path) -> (Lines, suzatary_io::text_keys::TextKeys) {
+pub(crate) fn lines_at(root: &Path) -> (Lines, suzatary_io_local::text_keys::TextKeys) {
     (
         Objects::open(root.join(LINES)),
-        suzatary_io::text_keys::open(root.join(LINE_KEYS)),
+        suzatary_io_local::text_keys::open(root.join(LINE_KEYS)),
     )
 }
 
@@ -392,11 +392,11 @@ fn owners() -> std::collections::BTreeSet<prodrome_core::event::Actor> {
 fn memories(root: &Path) {
     let history = Objects::open(root.join(MEMORY));
     rooted(&history, "memory");
-    let texts = suzatary_io::texts::Texts::open(root.join(MEMORY_TEXTS));
+    let texts = suzatary_io_local::texts::Texts::open(root.join(MEMORY_TEXTS));
     let cards = Objects::open(root.join(INBOX));
     let (lines, keys) = lines_at(root);
     let digests = Objects::digests(root.join(DIGESTS), owners());
-    let digest_texts = suzatary_io::texts::Texts::open(root.join(DIGEST_TEXTS));
+    let digest_texts = suzatary_io_local::texts::Texts::open(root.join(DIGEST_TEXTS));
     let memories = Memories {
         history: &history,
         texts: &texts,
@@ -811,15 +811,15 @@ fn reading_a_copy_of_every_store_writes_nothing() {
     let inbox = Objects::open(root.join(INBOX));
     let (lines, keys) = lines_at(root);
     let memory = Objects::open(root.join(MEMORY));
-    let memory_texts = suzatary_io::texts::Texts::open(root.join(MEMORY_TEXTS));
+    let memory_texts = suzatary_io_local::texts::Texts::open(root.join(MEMORY_TEXTS));
     let digests = Objects::digests(root.join(DIGESTS), owners());
-    let digest_texts = suzatary_io::texts::Texts::open(root.join(DIGEST_TEXTS));
+    let digest_texts = suzatary_io_local::texts::Texts::open(root.join(DIGEST_TEXTS));
     let calendar = PluginStore::at(root.join(CALENDAR))
         .read()
         .expect("reads")
         .expect("a store");
-    let triage = suzatary_io::state::State::open(root.join("state.json"));
-    let triage_local = suzatary_io::state::Local::open(root.join("local/mail.json"));
+    let triage = suzatary_io_local::state::State::open(root.join("state.json"));
+    let triage_local = suzatary_io_local::state::Local::open(root.join("local/mail.json"));
     let devices = suzatary_io::devices::Devices::open(root.join("devices"));
     let uploads = AttachmentStore::new(root.join("secretary/attachments"), Pdftotext::new("."));
     let kept = Blobs::open(root.join("secretary/files"));
@@ -996,11 +996,11 @@ pub(crate) fn said(k: usize) -> Entry {
 /// their keys in `keys` in one run; answers the ids and how many slots they hold.
 pub(crate) fn conversations_at_scale(
     lines: &Lines,
-    keys: &suzatary_io::text_keys::TextKeys,
+    keys: &suzatary_io_local::text_keys::TextKeys,
     conversations: usize,
     per: usize,
 ) -> (Vec<ConversationId>, usize) {
-    let entropy = suzatary_io::texts::SystemEntropy;
+    let entropy = suzatary_io_local::texts::SystemEntropy;
     let ids: Vec<ConversationId> = (1..=conversations)
         .map(|n| ConversationId::new(format!("2026-10-09-{n}")).expect("a slug"))
         .collect();
@@ -1044,9 +1044,9 @@ fn digest_at_scale() {
         Objects::<suzatary_digest::secretary::digest_event::DigestEvent>::open(
             dir.path().join("digests"),
         ),
-        suzatary_io::texts::Texts::open(dir.path().join("digest-texts")),
+        suzatary_io_local::texts::Texts::open(dir.path().join("digest-texts")),
     );
-    let entropy = suzatary_io::texts::SystemEntropy;
+    let entropy = suzatary_io_local::texts::SystemEntropy;
     let stores =
         |opened: &'static Opened| suzatary_lines::secretary::conversations::Conversations {
             runs: &*suzatary_lines::nothing::RUNS,
@@ -1105,7 +1105,7 @@ fn lines_for_a_tab() {
         std::env::var("SUZATARY_LINES_FIXTURE").expect("SUZATARY_LINES_FIXTURE names the file");
     let dir = suzatary_testkit::scratch("stores");
     let (lines, keys) = lines_at(dir.path());
-    let entropy = suzatary_io::texts::SystemEntropy;
+    let entropy = suzatary_io_local::texts::SystemEntropy;
     let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
     let stores = suzatary_lines::secretary::conversations::Conversations {
         runs: &*suzatary_lines::nothing::RUNS,
@@ -1257,8 +1257,8 @@ fn digest_nodes_at_scale() {
     let (lines, keys) = lines_at(dir.path());
     let owners = std::collections::BTreeSet::new();
     let history = Objects::<DigestEvent>::digests(dir.path().join("digests"), owners.clone());
-    let texts = suzatary_io::texts::Texts::open(dir.path().join("digest-texts"));
-    let entropy = suzatary_io::texts::SystemEntropy;
+    let texts = suzatary_io_local::texts::Texts::open(dir.path().join("digest-texts"));
+    let entropy = suzatary_io_local::texts::SystemEntropy;
     let opened: &'static Opened = Box::leak(Box::default());
     let digests = Digests {
         history: &history,
@@ -1415,8 +1415,8 @@ fn a_rules_change_over_a_stored_digest() {
     let (lines, keys) = lines_at(&root);
     let owners = std::collections::BTreeSet::new();
     let history = Objects::<DigestEvent>::digests(root.join("digests"), owners.clone());
-    let texts = suzatary_io::texts::Texts::open(root.join("digest-texts"));
-    let entropy = suzatary_io::texts::SystemEntropy;
+    let texts = suzatary_io_local::texts::Texts::open(root.join("digest-texts"));
+    let entropy = suzatary_io_local::texts::SystemEntropy;
     let stores =
         |opened: &'static Opened| suzatary_lines::secretary::conversations::Conversations {
             runs: &*suzatary_lines::nothing::RUNS,
@@ -1579,7 +1579,7 @@ fn two_handles_as(
     let (writer, keys) = lines_at(dir);
     let writer = open(writer);
     let writer: &'static Lines = Box::leak(Box::new(writer));
-    let keys: &'static suzatary_io::text_keys::TextKeys = Box::leak(Box::new(keys));
+    let keys: &'static suzatary_io_local::text_keys::TextKeys = Box::leak(Box::new(keys));
     let entropy: &'static Counted = Box::leak(Box::default());
     let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
     let stores = suzatary_lines::secretary::conversations::Conversations {
@@ -1632,8 +1632,9 @@ fn two_handles_as(
 /// Line `k` of the conversation `two_handles` began, written through `lines`, a handle of its own
 /// on the same store, with keys drawn at random so they never meet the first handle's.
 fn said_through(lines: &'static Lines, dir: &Path) -> impl Fn(u32) {
-    let keys: &'static suzatary_io::text_keys::TextKeys = Box::leak(Box::new(lines_at(dir).1));
-    let entropy: &'static suzatary_io::texts::SystemEntropy = Box::leak(Box::default());
+    let keys: &'static suzatary_io_local::text_keys::TextKeys =
+        Box::leak(Box::new(lines_at(dir).1));
+    let entropy: &'static suzatary_io_local::texts::SystemEntropy = Box::leak(Box::default());
     let opened: &'static suzatary_lines::secretary::opened::Opened = Box::leak(Box::default());
     let stores = suzatary_lines::secretary::conversations::Conversations {
         runs: &*suzatary_lines::nothing::RUNS,
@@ -1944,7 +1945,7 @@ proptest::proptest! {
             std::fs::write(dir.path().join(".git/HEAD"), "ref: refs/heads/main\n").expect("HEAD");
             std::fs::write(&branch, "0\n").expect("a branch");
             Objects::<LineEvent>::open(&root)
-                .in_checkout(suzatary_io::repository::Checkout::new(dir.path()))
+                .in_checkout(suzatary_io_access::repository::Checkout::new(dir.path()))
         } else {
             Objects::<LineEvent>::open(&root)
         };
@@ -2096,7 +2097,7 @@ fn a_door_in_the_data_tree_is_read_before_the_box_s_next_line() {
     let tree = suzatary_testkit::scratch("stores");
     let clone = suzatary_testkit::scratch("stores");
     git(tree.path(), &["init", "--quiet"]);
-    let checkout = suzatary_io::repository::Checkout::new(tree.path());
+    let checkout = suzatary_io_access::repository::Checkout::new(tree.path());
     let (_, warm, push) = two_handles_as(tree.path(), |lines| lines.in_checkout(checkout.clone()));
     push(1);
     git(tree.path(), &["add", "-A"]);

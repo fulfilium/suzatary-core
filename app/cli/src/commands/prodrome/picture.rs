@@ -3,7 +3,7 @@
 //! question, what those pictures are when the store at a commit is drawn again.
 //!
 //! The picture is a function of the store's objects and of the renderer this binary pins: the
-//! app's one Typst path (`suzatary_io::typeset::compile`, typst's HTML export of one
+//! app's one Typst path (`suzatary_io_typeset::typeset::compile`, typst's HTML export of one
 //! `html.frame`, which typst draws as SVG), the design system the package links, and typst's own
 //! faces compiled into the binary. Nothing else reaches it: no clock (prices are read at the
 //! instant of the store's latest event), no font of the machine, no path, no locale; every map is
@@ -223,9 +223,9 @@ fn write_beside(store: &Path, files: &[(&str, &str)]) -> anyhow::Result<()> {
 
 /// The store at `store` drawn in both themes.
 fn drawn(store: &Path) -> anyhow::Result<Drawn> {
-    let list = listed(store, &suzatary_io::typeset::Closed::this_binary())?;
+    let list = listed(store, &suzatary_io_typeset::typeset::Closed::this_binary())?;
     let packages = packages(&Package::running().typst_packages()?)?;
-    suzatary_io::typeset::bundled_fonts();
+    suzatary_io_typeset::typeset::bundled_fonts();
     let draw = |theme| -> anyhow::Result<String> {
         let called = PICTURE
             .call(&Picture {
@@ -235,7 +235,7 @@ fn drawn(store: &Path) -> anyhow::Result<Drawn> {
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         let mut job = called.job().clone();
         job.files.extend(packages.clone());
-        let html = suzatary_io::typeset::compile(&job).map_err(|refused| {
+        let html = suzatary_io_typeset::typeset::compile(&job).map_err(|refused| {
             anyhow::anyhow!(
                 "the picture does not draw: {}",
                 refused.said(job.main_text())
@@ -419,7 +419,7 @@ fn walked(dir: &Path) -> anyhow::Result<Vec<std::path::PathBuf>> {
 
 #[cfg(test)]
 mod tests {
-    use suzatary_io::typeset::InProcess;
+    use suzatary_io_typeset::typeset::InProcess;
 
     use super::title;
 

@@ -36,7 +36,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
             {
                 bail!("{} follows no store named {name:?}", path.display());
             }
-            let now = suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock);
+            let now = suzatary_base::capability::Clock::now(&suzatary_io_local::clock::SystemClock);
             let refused: Vec<String> = chosen
                 .into_iter()
                 .filter_map(|followed| {

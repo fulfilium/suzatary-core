@@ -3,13 +3,13 @@
 use std::sync::Arc;
 
 use suzatary_health::health::plugin::{CredentialName, Refusal, Said};
-use suzatary_io::http::Http;
-use suzatary_io::secrets::Resolves;
+use suzatary_io_access::http::Http;
+use suzatary_io_access::secrets::Resolves;
 
 /// What one call reaches. A plugin holds none of these: the host answers its imports with them.
 ///
 /// `http` bounds every plugin's reach: the deployment passes
-/// `suzatary_io::http::Ureq::public_only()`, which follows no redirect and refuses any name
+/// `suzatary_io_access::http::Ureq::public_only()`, which follows no redirect and refuses any name
 /// resolving off the public internet, so no manifest can aim a plugin at this box or the tailnet.
 #[derive(Clone)]
 pub struct Effects {

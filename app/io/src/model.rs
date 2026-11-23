@@ -23,15 +23,15 @@ use suzatary_conversations::secretary::model::{
 use suzatary_held::for_model::ForModel;
 use suzatary_inbox::secretary::stamp::stamp;
 
-use crate::attachments::AttachmentStore;
-use crate::blobs::Blobs;
 use crate::blocks::{Blocks, Stores};
-use crate::clock::SystemClock;
 use crate::prompt::{delta_prompt, prompt_of};
-use crate::run::{Cmd, RunError, run, watch, zero};
-use crate::secrets::SecretError;
 use failure::{Heard, failed};
 use stream::{Ended, Unreadable, delta_of, result_of};
+use suzatary_io_access::run::{Cmd, RunError, run, watch, zero};
+use suzatary_io_access::secrets::SecretError;
+use suzatary_io_local::attachments::AttachmentStore;
+use suzatary_io_local::blobs::Blobs;
+use suzatary_io_local::clock::SystemClock;
 
 /// The long-lived setup token an unattended run authenticates with.
 pub const TOKEN: &str = "CLAUDE_CODE_OAUTH_TOKEN";
@@ -90,7 +90,7 @@ impl TokenSource {
     }
 
     #[must_use]
-    pub fn from_store(store: crate::secrets::Secretspec) -> Self {
+    pub fn from_store(store: suzatary_io_access::secrets::Secretspec) -> Self {
         Self::new(move || store.get(TOKEN, REASON))
     }
 
@@ -224,7 +224,7 @@ impl ClaudeCli {
             .stdin(stdin.payload)
             // Where the CLI keeps its own login, when not under HOME; the token is set below.
             .pass(&["CLAUDE_CONFIG_DIR"])
-            .pass(crate::run::NETWORK)
+            .pass(suzatary_io_access::run::NETWORK)
             .env(CACHE_TTL_VAR, "1h")
             .timeout(self.timeout);
         for (name, value) in QUIET {
@@ -934,9 +934,9 @@ mod tests {
                 "_",
             ]
             .contains(&key)
-                || crate::run::BASE
+                || suzatary_io_access::run::BASE
                     .iter()
-                    .chain(crate::run::NETWORK)
+                    .chain(suzatary_io_access::run::NETWORK)
                     .any(|pattern| match pattern.strip_suffix('*') {
                         Some(prefix) => key.starts_with(prefix),
                         None => key == *pattern,

@@ -87,7 +87,7 @@ pub fn run_keyed(
     args: Args,
     env: &crate::paths::Env,
     keys: impl FnOnce(
-        &suzatary_io::secrets::Secretspec,
+        &suzatary_io_access::secrets::Secretspec,
     ) -> anyhow::Result<suzatary_signatures::signatures::BoxKeys>,
 ) -> anyhow::Result<()> {
     if args.options {
@@ -104,7 +104,7 @@ pub fn run_keyed(
     let onboarding = gather(args, std::io::stdin().is_terminal())?;
     // Every deployment signs: the box's keys are kept or minted into the secret store the code
     // root declares before the file naming their root is written.
-    let secrets = suzatary_io::secrets::Secretspec::new(
+    let secrets = suzatary_io_access::secrets::Secretspec::new(
         Instance::repo_beside(path, onboarding.repo()).join("secretspec.toml"),
     );
     let keys = keys(&secrets)?;

@@ -16,9 +16,9 @@ use suzatary_memory::coding_report::{FileStat, Lines};
 use suzatary_services::repos::{Declared, Patch, RepoRow, RepoTarget, TOKEN, Visibility};
 use suzatary_services::repositories::{InBranch, MAX_FILE_BYTES, RepoFailure, Repositories};
 
-use crate::http::{Http, Req, Ureq};
-use crate::run::{Cmd, Ran, RunError, run, succeed};
-use crate::secrets::Resolves;
+use suzatary_io_access::http::{Http, Req, Ureq};
+use suzatary_io_access::run::{Cmd, Ran, RunError, run, succeed};
+use suzatary_io_access::secrets::Resolves;
 use suzatary_os::scratch::Scratch;
 
 /// How long a listing or a fetch stays fresh.
@@ -87,7 +87,7 @@ impl Mirrors {
     /// `git` with the token in its environment, never in argv.
     fn git(token: Option<&Secret>) -> Cmd {
         let command = Cmd::new("git")
-            .pass(crate::run::NETWORK)
+            .pass(suzatary_io_access::run::NETWORK)
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_CONFIG_NOSYSTEM", "1");
         let Some(token) = token else {
@@ -807,12 +807,6 @@ fn lines(ran: &Ran) -> Vec<String> {
         .collect()
 }
 
-impl From<RunError> for RepoFailure {
-    fn from(failed: RunError) -> Self {
-        RepoFailure::Unavailable(failed.to_string())
-    }
-}
-
 /// A non-zero exit is Missing; failing to run is Unavailable.
 fn refused_as_missing(what: impl FnOnce() -> String) -> impl FnOnce(RunError) -> RepoFailure {
     move |failed| match failed {
@@ -1098,7 +1092,7 @@ mod tests {
             &self,
             name: &str,
             _reason: &str,
-        ) -> Result<Option<Secret>, crate::secrets::SecretError> {
+        ) -> Result<Option<Secret>, suzatary_io_access::secrets::SecretError> {
             panic!("a local source asked for {name}");
         }
     }

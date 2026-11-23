@@ -442,6 +442,10 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
         "secretary",
         "api",
         "server",
+        "os",
+        "io-access",
+        "io-local",
+        "io-typeset",
         "io",
         "cli",
         "plugin",
@@ -637,7 +641,7 @@ fn the_closed_world_is_the_one_world_and_library_built_here() {
     ] {
         assert_eq!(
             production_callers(&needle),
-            vec!["io/src/typeset/mod.rs"],
+            vec!["io-typeset/src/typeset/mod.rs"],
             "{needle}"
         );
     }

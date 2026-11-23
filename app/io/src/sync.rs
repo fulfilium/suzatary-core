@@ -16,7 +16,7 @@ use crate::oauth::TokenStore;
 use crate::pullers::{
     Google, Granted, LIEER, Lieer, MBSYNC, Mbsync, Microsoft, Open as _, pull_into,
 };
-use crate::run::{Cmd, succeed};
+use suzatary_io_access::run::{Cmd, succeed};
 use suzatary_os::present::Present as _;
 
 /// The file whose hold a sync and a removed account's mail delete both take, in the sync's own

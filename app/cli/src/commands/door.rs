@@ -101,7 +101,7 @@ pub(crate) struct Reading {
 impl Reading {
     /// `event` read: its strings decoded, and each nonempty markup field drawn once by `typeset`,
     /// which the box runs as the child that caps a compile's CPU time and memory
-    /// (`suzatary_io::typeset::Closed`).
+    /// (`suzatary_io_typeset::typeset::Closed`).
     #[must_use]
     pub(crate) fn of(event: &TodoEvent, typeset: &dyn Typeset) -> Self {
         let mut texts: Vec<(Site, String)> = published(event)
@@ -536,7 +536,7 @@ impl Lists {
             .map_err(|e| format!("the deployment's stores cannot be read ({e:#})"))?;
         let read = super::plan_read(&instance);
         let set = read.set(suzatary_base::capability::Clock::now(
-            &suzatary_io::clock::SystemClock,
+            &suzatary_io_local::clock::SystemClock,
         ));
         Ok(super::todos::kept(&instance)
             .into_iter()

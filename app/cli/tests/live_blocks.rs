@@ -3,8 +3,8 @@
 //! refuse every later write to that todo; it skips with its reason where there is no chain.
 
 use suzatary_base::capability::Clock;
-use suzatary_io::clock::SystemClock;
 use suzatary_io::objects::Objects;
+use suzatary_io_local::clock::SystemClock;
 use suzatary_record::record::EventStore;
 use suzatary_store::store::Reads as _;
 

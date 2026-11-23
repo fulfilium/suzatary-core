@@ -1500,7 +1500,7 @@ PROTON_BRIDGE_PASSWORD = { description = "the bridge", required = true }
         ))
         .expect("a manifest");
         Settables::of_deployment(
-            crate::model::TOKEN,
+            "CLAUDE_CODE_OAUTH_TOKEN",
             [suzatary_connect::connect::Channel::Ntfy],
             None,
             (&[manifest], &[]),

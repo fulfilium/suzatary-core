@@ -19,13 +19,13 @@ use crate::sync::Syncer;
 
 pub struct Operator {
     sync_status: PathBuf,
-    pulse: crate::pulse::Pulse,
+    pulse: suzatary_io_local::pulse::Pulse,
     /// Read-only.
     mail: Notmuch,
-    ledger: crate::state::Ledger,
+    ledger: suzatary_io_local::state::Ledger,
     syncer: Syncer,
-    health: crate::source_health::Health,
-    clock: crate::clock::SystemClock,
+    health: suzatary_io_local::source_health::Health,
+    clock: suzatary_io_local::clock::SystemClock,
     /// The owner's zone, whose day the sync window counts back from.
     zone: suzatary_base::zone::Zone,
     watches: crate::watches::Watches,
@@ -43,7 +43,7 @@ impl Operator {
     #[must_use]
     pub fn new(
         mail: Notmuch,
-        ledger: crate::state::Ledger,
+        ledger: suzatary_io_local::state::Ledger,
         syncer: Syncer,
         heartbeat: impl Into<PathBuf>,
         sync_status: impl Into<PathBuf>,
@@ -53,12 +53,12 @@ impl Operator {
         let heartbeat = heartbeat.into();
         Self {
             sync_status: sync_status.into(),
-            health: crate::source_health::beside(&heartbeat),
-            pulse: crate::pulse::Pulse::at(&heartbeat),
+            health: suzatary_io_local::source_health::beside(&heartbeat),
+            pulse: suzatary_io_local::pulse::Pulse::at(&heartbeat),
             mail,
             ledger,
             syncer,
-            clock: crate::clock::SystemClock,
+            clock: suzatary_io_local::clock::SystemClock,
             zone,
             watches,
         }
@@ -275,7 +275,11 @@ mod tests {
         .expect("a roster")
     }
 
-    fn operator_over(root: &Path, mail: Notmuch, ledger: crate::state::Ledger) -> Operator {
+    fn operator_over(
+        root: &Path,
+        mail: Notmuch,
+        ledger: suzatary_io_local::state::Ledger,
+    ) -> Operator {
         let syncer = Syncer::new(
             roster(),
             root.join("Mail"),
@@ -286,7 +290,7 @@ mod tests {
                 crate::oauth::TokenStore::new(root.join("oauth")),
                 crate::google::Grants::new(
                     crate::google::Google::new(suzatary_google::google::Endpoints::google()),
-                    std::sync::Arc::new(crate::secrets::Secretspec::new(
+                    std::sync::Arc::new(suzatary_io_access::secrets::Secretspec::new(
                         root.join("secretspec.toml"),
                     )),
                 ),
@@ -303,8 +307,8 @@ mod tests {
         )
     }
 
-    fn ledger(root: &Path) -> crate::state::Ledger {
-        crate::state::Ledger::new(
+    fn ledger(root: &Path) -> suzatary_io_local::state::Ledger {
+        suzatary_io_local::state::Ledger::new(
             root.join("state.json"),
             root.join("local/mail.json"),
             || {

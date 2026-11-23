@@ -362,7 +362,7 @@ impl Secretary {
         );
         stores.lines = stores
             .lines
-            .in_checkout(suzatary_io::repository::Checkout::new(data));
+            .in_checkout(suzatary_io_access::repository::Checkout::new(data));
         stores
     }
 

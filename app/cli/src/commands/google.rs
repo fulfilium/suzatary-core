@@ -16,7 +16,7 @@ use crate::instance::Instance;
 pub fn sync_calendars(
     instance: &Instance,
     google: suzatary_io::google::Google,
-    health: &suzatary_io::source_health::Health,
+    health: &suzatary_io_local::source_health::Health,
 ) -> (Vec<String>, bool) {
     let grants = suzatary_io::google::Grants::new(google, std::sync::Arc::new(instance.secrets()));
     let accounts: Vec<&str> = (instance.mail.accounts.accounts().iter())
@@ -27,7 +27,7 @@ pub fn sync_calendars(
         instance.mail.accounts.accounts(),
         &grants,
         |account| instance.google_calendar(account),
-        suzatary_io::clock::SystemClock.now(),
+        suzatary_io_local::clock::SystemClock.now(),
     );
     match removed {
         Ok(0) => {}

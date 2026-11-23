@@ -43,7 +43,7 @@ impl suzatary_connect::settings::Checks for Synced {
                 let (lines, _) = crate::commands::google::sync_calendars(
                     &instance,
                     suzatary_io::google::Google::new(self.google.clone()),
-                    &suzatary_io::source_health::beside(&instance.mail.heartbeat),
+                    &suzatary_io_local::source_health::beside(&instance.mail.heartbeat),
                 );
                 for line in lines {
                     tracing::info!("check: {line}");
@@ -76,7 +76,7 @@ impl Synced {
             &crate::commands::plugin::components(instance, None),
             &instance.plugins,
             &effects,
-            &suzatary_io::source_health::beside(&instance.mail.heartbeat),
+            &suzatary_io_local::source_health::beside(&instance.mail.heartbeat),
         );
         tracing::info!("check: {}", report.line);
     }

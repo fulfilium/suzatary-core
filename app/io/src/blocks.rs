@@ -6,8 +6,8 @@ use suzatary_held::attachment::{Attachment, AttachmentId};
 use suzatary_held::enclosed::{Enclosed, Enclosure};
 use suzatary_held::for_model::ForModel;
 
-use crate::attachments::AttachmentStore;
-use crate::blobs::Blobs;
+use suzatary_io_local::attachments::AttachmentStore;
+use suzatary_io_local::blobs::Blobs;
 
 pub const PHOTOS_PER_EXCHANGE: usize = 8;
 
@@ -168,7 +168,7 @@ mod tests {
         Stores {
             uploads: Some(AttachmentStore::new(
                 dir.join("uploads"),
-                crate::pdftotext::Pdftotext::new("."),
+                suzatary_io_local::pdftotext::Pdftotext::new("."),
             )),
             files: Some(Blobs::open(dir.join("files"))),
         }

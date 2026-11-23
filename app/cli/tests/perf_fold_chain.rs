@@ -23,7 +23,7 @@ use prodrome_core::{fpl, view as folds};
 use sha2::{Digest, Sha256};
 use suzatary_api::routes;
 use suzatary_base::capability::Datetime;
-use suzatary_io::render::Typst;
+use suzatary_io_typeset::render::Typst;
 use suzatary_record::record::EventStore;
 use suzatary_secretary::secretary::Secretary;
 use suzatary_server::server::Server;
@@ -53,7 +53,7 @@ impl Bench {
         let fakes = common::Fakes::with_store(tag, events);
         let render = Typst::new(
             deployment.paths.markup_cache.clone(),
-            suzatary_io::typeset::InProcess,
+            suzatary_io_typeset::typeset::InProcess,
         );
         Some(Self { fakes, render })
     }

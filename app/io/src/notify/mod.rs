@@ -15,8 +15,8 @@ use suzatary_store::store::Log;
 pub use fcm::{API as FCM, ServiceAccount, credentials};
 pub use ntfy::DEFAULT_BASE as NTFY;
 
-use crate::http::{Http, Ureq};
-use crate::secrets::{Resolves, SecretError};
+use suzatary_io_access::http::{Http, Ureq};
+use suzatary_io_access::secrets::{Resolves, SecretError};
 
 /// One deployment's channels: FCM to every registered phone, and ntfy when a topic is configured.
 pub struct Channels<D: Log<String, Device>> {
@@ -45,7 +45,7 @@ impl<D: Log<String, Device>> Channels<D> {
             fcm: fcm.map(fcm::Sender::new),
             ntfy,
             devices,
-            clock: crate::tokens::unix_now,
+            clock: suzatary_io_access::tokens::unix_now,
         }
     }
 
@@ -188,7 +188,7 @@ mod tests {
 
     use super::fcm::tests::test_account;
     use super::*;
-    use crate::http::{Resp, Scripted};
+    use suzatary_io_access::http::{Resp, Scripted};
 
     const APP: &str = "https://box.example.ts.net";
 
@@ -271,7 +271,7 @@ mod tests {
         asked: std::sync::atomic::AtomicUsize,
     }
 
-    impl Resolves for std::sync::Arc<Unlockable> {
+    impl Resolves for &Unlockable {
         fn get(
             &self,
             name: &str,
@@ -292,13 +292,8 @@ mod tests {
     /// after it is unlocked is delivered; the answer is then kept.
     #[test]
     fn the_push_right_after_an_unlock_is_delivered() {
-        let store = std::sync::Arc::new(Unlockable::default());
-        let waiting = Waiting::new(
-            Box::new(std::sync::Arc::clone(&store)),
-            "test",
-            APP,
-            PanicsIfAsked,
-        );
+        let store: &'static Unlockable = Box::leak(Box::default());
+        let waiting = Waiting::new(Box::new(store), "test", APP, PanicsIfAsked);
         let configured = Configured::Waiting(Box::new(waiting));
         let push = Push::Agent {
             authored: 2,

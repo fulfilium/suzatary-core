@@ -377,7 +377,7 @@ fn chains_written(
                     of.clone(),
                     from,
                     &suzatary_held::redact::Scrubbed::of(words).expect("words through the door"),
-                    &suzatary_io::texts::SystemEntropy,
+                    &suzatary_io_local::texts::SystemEntropy,
                 )
                 .expect("sealed again");
                 held.keys.set(&key.name(), &key).expect("kept");

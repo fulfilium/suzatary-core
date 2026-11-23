@@ -16,7 +16,7 @@ use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_inbox::secretary::stamp::stamp;
 use suzatary_io::google::Google;
-use suzatary_io::secrets::Resolves;
+use suzatary_io_access::secrets::Resolves;
 use suzatary_mail::mail::account::Sync as Strategy;
 use suzatary_mail::mail::address::EmailAddress;
 
@@ -55,7 +55,7 @@ impl Consenting {
             store,
             configuration,
             redirect: RedirectUri::of_app(app_url).ok(),
-            entropy: Arc::new(suzatary_io::texts::SystemEntropy),
+            entropy: Arc::new(suzatary_io_local::texts::SystemEntropy),
         }
     }
 

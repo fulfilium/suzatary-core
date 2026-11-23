@@ -2,7 +2,7 @@
 
 use prodrome_core::literal::Datetime;
 use suzatary_base::capability::Clock as _;
-use suzatary_io::clock::SystemClock;
+use suzatary_io_local::clock::SystemClock;
 
 #[derive(Debug, Clone, Copy, clap::Args)]
 pub struct At {

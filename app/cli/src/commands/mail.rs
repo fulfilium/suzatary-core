@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 use suzatary_io::google::Grants;
-use suzatary_io::state::Ledger;
+use suzatary_io_local::state::Ledger;
 use suzatary_mail::mail::lacking::Grant;
 use suzatary_triage::mail::verbs::NoiseAdded;
 
@@ -95,7 +95,7 @@ fn deliver_rings(instance: &Instance) {
     use suzatary_base::capability::Clock as _;
     use suzatary_triage::mail::watch;
     let watches = suzatary_io::watches::Watches::open(instance.local.watches());
-    let now = || prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
+    let now = || prodrome_core::fpl::instant_of(suzatary_io_local::clock::SystemClock.now());
     let owed = match watch::owed(&watches, now()) {
         Ok(owed) => owed,
         Err(failed) => return eprintln!("sync: the watches did not read: {}", failed.message()),

@@ -22,7 +22,5 @@ mod script_law_layers;
 mod store_laws;
 #[path = "stores.rs"]
 mod stores;
-#[path = "templates.rs"]
-mod templates;
 #[path = "verify_law.rs"]
 mod verify_law;

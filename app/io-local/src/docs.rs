@@ -91,18 +91,15 @@ impl<K: 'static, T: 'static> std::fmt::Debug for Docs<K, T> {
 }
 
 /// The directory a digest's document is in: its first two characters.
-pub(crate) fn shard(digest: &str) -> String {
+#[must_use]
+pub fn shard(digest: &str) -> String {
     digest.chars().take(2).collect()
 }
 
 impl<T: 'static> Docs<String, T> {
     /// Private documents under `dir`, each named by a hex digest, in the directory [`shard`] names.
     #[must_use]
-    pub(crate) fn sharded(
-        store: &'static str,
-        dir: PathBuf,
-        codec: &'static DocCodec<String, T>,
-    ) -> Self {
+    pub fn sharded(store: &'static str, dir: PathBuf, codec: &'static DocCodec<String, T>) -> Self {
         Docs::new(
             store,
             move |digest: &String| dir.join(shard(digest)).join(digest),

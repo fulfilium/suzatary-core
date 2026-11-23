@@ -597,7 +597,7 @@ impl FakeRender {
 /// The real closed world: a door a test drives is the door the box has.
 impl suzatary_base::capability::Typeset for FakeRender {
     fn closed(&self, source: &str) -> Result<String, suzatary_base::capability::Rejected> {
-        suzatary_io::typeset::compile(&suzatary_todo::template::Job::text(source))
+        suzatary_io_typeset::typeset::compile(&suzatary_todo::template::Job::text(source))
     }
 }
 
@@ -1566,12 +1566,13 @@ impl SecretRecorder {
 
 /// What a recorder holds now: the last value written under each name not cleared since, so a
 /// scene's later reads find what its taps stored.
-impl suzatary_io::secrets::Resolves for SecretRecorder {
+impl suzatary_io_access::secrets::Resolves for SecretRecorder {
     fn get(
         &self,
         name: &str,
         _: &str,
-    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io_access::secrets::SecretError>
+    {
         let cleared = self.cleared.lock().expect("not poisoned");
         let calls = self.calls.lock().expect("not poisoned");
         Ok(calls
@@ -1590,7 +1591,7 @@ impl suzatary_connect::secrets::Secrets for SecretRecorder {
         &self,
         settable: &suzatary_connect::settings::Settable,
     ) -> suzatary_connect::secrets::SecretState {
-        use suzatary_io::secrets::Resolves as _;
+        use suzatary_io_access::secrets::Resolves as _;
         match self.get(settable.name(), "a scene") {
             Ok(Some(_)) => suzatary_connect::secrets::SecretState::Set,
             Ok(None) | Err(_) => suzatary_connect::secrets::SecretState::Missing,
@@ -1620,7 +1621,7 @@ impl suzatary_connect::secrets::Secrets for SecretRecorder {
         &self,
         account: &suzatary_mail::mail::address::EmailAddress,
     ) -> suzatary_google::google::Held {
-        use suzatary_io::secrets::Resolves as _;
+        use suzatary_io_access::secrets::Resolves as _;
         match self.get(&suzatary_google::google::grant_name(account), "a scene") {
             Ok(Some(kept)) => suzatary_google::google::KeptGrant::parse(kept.expose())
                 .map_or(suzatary_google::google::Held::NotSignedIn, |kept| {
@@ -1666,7 +1667,7 @@ impl suzatary_connect::settings::Declares for Undeclared {
 /// otherwise records as [`SecretRecorder`] does.
 pub struct DeclaredStore {
     /// What declares its names, which the server's `declares` is.
-    pub declarations: suzatary_io::secrets::Declarations,
+    pub declarations: suzatary_io_access::secrets::Declarations,
     pub recorded: SecretRecorder,
 }
 
@@ -1682,7 +1683,7 @@ impl DeclaredStore {
             "[project]\nname = \"suzatary\"\nrevision = \"1.0\"\n\n[profiles.default]\n",
         )
         .expect("the code root's own file");
-        let declarations = suzatary_io::secrets::Declarations::new(
+        let declarations = suzatary_io_access::secrets::Declarations::new(
             base,
             dir.join("state"),
             suzatary_connect::settings::Settables::derive(suzatary_io::model::TOKEN, [], None, &[]),
@@ -1960,7 +1961,7 @@ impl suzatary_server::secretary::routes::Post for FailsFirst {
 
 /// A scripted OAuth endpoint for driving `Acting::Real` with no network:
 /// the answers in order, then a transport failure once they run out.
-pub struct ScriptedOauth(suzatary_io::http::Scripted);
+pub struct ScriptedOauth(suzatary_io_access::http::Scripted);
 
 impl ScriptedOauth {
     #[must_use]
@@ -1969,7 +1970,7 @@ impl ScriptedOauth {
             Result<suzatary_mail::mail::oauth::Answered, suzatary_mail::mail::oauth::OauthError>,
         >,
     ) -> Self {
-        use suzatary_io::http::{HttpError, Resp, Scripted};
+        use suzatary_io_access::http::{HttpError, Resp, Scripted};
         let queue = Mutex::new(std::collections::VecDeque::from(answers));
         Self(Scripted::new(move |_| {
             match queue.lock().expect("not poisoned").pop_front() {
@@ -2007,11 +2008,11 @@ impl ScriptedOauth {
     }
 }
 
-impl suzatary_io::http::Http for ScriptedOauth {
+impl suzatary_io_access::http::Http for ScriptedOauth {
     fn send(
         &self,
-        req: suzatary_io::http::Req,
-    ) -> Result<suzatary_io::http::Resp, suzatary_io::http::HttpError> {
+        req: suzatary_io_access::http::Req,
+    ) -> Result<suzatary_io_access::http::Resp, suzatary_io_access::http::HttpError> {
         self.0.send(req)
     }
 }
@@ -2512,11 +2513,11 @@ pub struct Fakes {
     pub junk: FakeJunk,
     pub files: FakeFiles,
     /// The upload index, over the upload store the server's upload route writes.
-    pub upload_index: suzatary_io::upload_index::UploadIndexFiles,
+    pub upload_index: suzatary_io_local::upload_index::UploadIndexFiles,
     /// What a PDF's text layer reads as.
     pub pdf: FakePdf,
     /// What the taps read of withheld documents, where `Acting` keeps it.
-    pub tapped: suzatary_io::docs::Docs<
+    pub tapped: suzatary_io_local::docs::Docs<
         suzatary_held::held_value::HeldFile,
         suzatary_held::secretary::attached::Attached,
     >,
@@ -2529,12 +2530,13 @@ pub struct Fakes {
     /// The recorded decisions, beside the memory.
     pub decisions: suzatary_io::objects::Objects<suzatary_todo::decisions::DecisionEvent>,
     /// The memory's texts, beside its history.
-    pub memory_texts: suzatary_io::texts::Texts<suzatary_memory::secretary::memory::Fact>,
+    pub memory_texts: suzatary_io_local::texts::Texts<suzatary_memory::secretary::memory::Fact>,
     /// The digest's history, beside the memory.
     pub digests:
         suzatary_io::objects::Objects<suzatary_digest::secretary::digest_event::DigestEvent>,
     /// The digest's summaries' words, beside its history.
-    pub digest_texts: suzatary_io::texts::Texts<suzatary_digest::secretary::digest_line::Line>,
+    pub digest_texts:
+        suzatary_io_local::texts::Texts<suzatary_digest::secretary::digest_line::Line>,
     /// Whose retraction or erasure the digest believes: none here.
     pub owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
     /// The topic stores, begun, as a box's server begins them.
@@ -2632,8 +2634,8 @@ impl Fakes {
             junk: FakeJunk::default(),
             files: FakeFiles::default(),
             pdf: FakePdf::default(),
-            tapped: suzatary_io::tapped::beside(&kept_store(&root)),
-            upload_index: suzatary_io::upload_index::UploadIndexFiles::new(
+            tapped: suzatary_io_local::tapped::beside(&kept_store(&root)),
+            upload_index: suzatary_io_local::upload_index::UploadIndexFiles::new(
                 root.join("secretary/upload-index"),
                 upload_store(&root),
             ),
@@ -2641,12 +2643,16 @@ impl Fakes {
             forgot,
             memory: suzatary_io::objects::Objects::open(root.join("memory")),
             decisions: suzatary_io::objects::Objects::open(root.join("decisions")),
-            memory_texts: suzatary_io::texts::Texts::open(root.join("secretary-memory-texts")),
+            memory_texts: suzatary_io_local::texts::Texts::open(
+                root.join("secretary-memory-texts"),
+            ),
             digests: suzatary_io::objects::Objects::digests(
                 root.join("digests"),
                 std::collections::BTreeSet::new(),
             ),
-            digest_texts: suzatary_io::texts::Texts::open(root.join("secretary-digest-texts")),
+            digest_texts: suzatary_io_local::texts::Texts::open(
+                root.join("secretary-digest-texts"),
+            ),
             owners: std::collections::BTreeSet::new(),
             secrets: Arc::new(suzatary_base::capability::Nothing),
             calendar: suzatary_io::calendar::Clocked::new(
@@ -2755,7 +2761,7 @@ impl Fakes {
             history: &self.memory,
             texts: &self.memory_texts,
             cards: &self.inbox,
-            entropy: &suzatary_io::texts::SystemEntropy,
+            entropy: &suzatary_io_local::texts::SystemEntropy,
             digests: suzatary_digest::secretary::digests::Digests {
                 history: &self.digests,
                 texts: &self.digest_texts,
@@ -3044,7 +3050,7 @@ pub struct Server {
 pub struct Googled {
     pub endpoints: suzatary_google::google::Endpoints,
     /// The store a client and a grant are read from.
-    pub store: Arc<dyn suzatary_io::secrets::Resolves + Send + Sync>,
+    pub store: Arc<dyn suzatary_io_access::secrets::Resolves + Send + Sync>,
 }
 
 impl Default for Googled {
@@ -3154,7 +3160,7 @@ pub struct Running {
     /// Every file the owner said to keep private.
     pub vault: Arc<FakeVault>,
     /// Where the requests devices signed and the server admitted are recorded.
-    pub requests: suzatary_io::requests::Requests,
+    pub requests: suzatary_io_local::requests::Requests,
     /// The last pairing code, as `suzatary device pair` would keep it.
     pub pairings: Arc<suzatary_signatures::signatures::InMemoryPairings>,
 }
@@ -3245,7 +3251,7 @@ impl Server {
     pub fn google(
         self,
         endpoints: suzatary_google::google::Endpoints,
-        store: Arc<dyn suzatary_io::secrets::Resolves + Send + Sync>,
+        store: Arc<dyn suzatary_io_access::secrets::Resolves + Send + Sync>,
     ) -> Self {
         Self {
             google: Googled { endpoints, store },
@@ -3554,8 +3560,8 @@ fn publishing(
 }
 
 /// Where a server records the requests it admitted, and keeps their answers.
-fn recorded_requests(port: u16) -> suzatary_io::requests::Requests {
-    suzatary_io::requests::Requests::open(requests_dir(port), answers_dir(port))
+fn recorded_requests(port: u16) -> suzatary_io_local::requests::Requests {
+    suzatary_io_local::requests::Requests::open(requests_dir(port), answers_dir(port))
 }
 
 /// The directory a server on `port`, started by the running test, pushes its request records
@@ -3580,16 +3586,16 @@ fn stamped() -> chrono::DateTime<chrono::Utc> {
 }
 
 /// The owner's uploads under a scratch root, as the instance lays them out.
-fn upload_store(root: &std::path::Path) -> suzatary_io::attachments::AttachmentStore {
-    suzatary_io::attachments::AttachmentStore::new(
+fn upload_store(root: &std::path::Path) -> suzatary_io_local::attachments::AttachmentStore {
+    suzatary_io_local::attachments::AttachmentStore::new(
         root.join("secretary/attachments"),
-        suzatary_io::pdftotext::Pdftotext::new("."),
+        suzatary_io_local::pdftotext::Pdftotext::new("."),
     )
 }
 
 /// Where a tapped document is kept for the model, under the scene's own root.
-fn kept_store(root: &std::path::Path) -> suzatary_io::blobs::Blobs {
-    suzatary_io::blobs::Blobs::open(root.join("secretary").join("files"))
+fn kept_store(root: &std::path::Path) -> suzatary_io_local::blobs::Blobs {
+    suzatary_io_local::blobs::Blobs::open(root.join("secretary").join("files"))
 }
 
 /// A Drive CLI nothing is at: a tapped document in a scene that did not ask for a Drive fails,
@@ -3703,8 +3709,8 @@ fn performer(
 }
 
 /// A mail ledger under `root`, keyed by a fixed key: the one a tapped noise card writes.
-fn test_ledger(root: &Path) -> suzatary_io::state::Ledger {
-    suzatary_io::state::Ledger::new(
+fn test_ledger(root: &Path) -> suzatary_io_local::state::Ledger {
+    suzatary_io_local::state::Ledger::new(
         root.join("state.json"),
         root.join("local/mail.json"),
         || {
@@ -4150,12 +4156,13 @@ impl FakeDrive {
 /// No secret resolves: a local repository source never asks for one.
 pub struct NoSecrets;
 
-impl suzatary_io::secrets::Resolves for NoSecrets {
+impl suzatary_io_access::secrets::Resolves for NoSecrets {
     fn get(
         &self,
         _name: &str,
         _reason: &str,
-    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<suzatary_base::capability::Secret>, suzatary_io_access::secrets::SecretError>
+    {
         Ok(None)
     }
 }

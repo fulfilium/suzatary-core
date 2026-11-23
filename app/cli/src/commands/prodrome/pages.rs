@@ -10,7 +10,7 @@ use prodrome_core::event::TodoId;
 use prodrome_core::literal::Datetime;
 use suzatary_base::capability::Typeset;
 use suzatary_base::chains::ChainName;
-use suzatary_io::typeset::Compiler;
+use suzatary_io_typeset::typeset::Compiler;
 use suzatary_signatures::chain_set::Read;
 use suzatary_todo::pages::{Drawn, Field, Linked, Listed, TodoPage, TodosPage};
 use suzatary_todo::rendering::{TODO, TODOS};
@@ -59,7 +59,7 @@ pub(super) fn run(paging: &Paging) -> anyhow::Result<()> {
     }
     empty(&paging.into)?;
     let read = crate::commands::store_at::by_path(&paging.store)?;
-    let closed = suzatary_io::typeset::Closed::this_binary();
+    let closed = suzatary_io_typeset::typeset::Closed::this_binary();
     let site = site(read, paging.at, &paging.named, &closed, &closed)?;
     write(&paging.into, &site)?;
     println!("wrote {} files into {}", site.len(), paging.into.display());
@@ -227,7 +227,7 @@ fn todo_path(id: &str) -> String {
 }
 
 fn drawn(compiler: &dyn Compiler, called: &Called) -> anyhow::Result<String> {
-    Ok(suzatary_io::render::drawn(compiler, called)?)
+    Ok(suzatary_io_typeset::render::drawn(compiler, called)?)
 }
 
 /// Which page a shell holds.

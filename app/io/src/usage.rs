@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use suzatary_services::usage::{Allowance as AllowanceSum, Reported, Window};
 
-use crate::http::{Http, Req, Ureq};
-use crate::secrets::{Resolves, Secretspec};
+use suzatary_io_access::http::{Http, Req, Ureq};
+use suzatary_io_access::secrets::{Resolves, Secretspec};
 
 /// Undocumented; the OAuth token is in scope for it.
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -347,7 +347,7 @@ fn summarise(cache: &Cached) -> Vec<(Window, AllowanceSum)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::{Resp, Scripted};
+    use suzatary_io_access::http::{Resp, Scripted};
 
     /// A token that is always there, so no test reaches a `secretspec` subprocess.
     struct FixedSecret;
@@ -357,8 +357,10 @@ mod tests {
             &self,
             _name: &str,
             _reason: &str,
-        ) -> Result<Option<suzatary_base::capability::Secret>, crate::secrets::SecretError>
-        {
+        ) -> Result<
+            Option<suzatary_base::capability::Secret>,
+            suzatary_io_access::secrets::SecretError,
+        > {
             Ok(Some(suzatary_base::capability::Secret::new("test-token")))
         }
     }

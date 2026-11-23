@@ -15,7 +15,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_held::attachment::{Attachment, AttachmentId};
 use suzatary_held::file_read::Withheld;
-use suzatary_io::attachments::{Stored, UploadError};
+use suzatary_io_local::attachments::{Stored, UploadError};
 use suzatary_signatures::signatures::Tap;
 use suzatary_topics::secretary::readings;
 use suzatary_topics::wire::topics as wire;
@@ -123,7 +123,7 @@ impl Body for Upload {
             return Err(Refusal::bad_request("file: base64 text is required"));
         }
         Ok(Self {
-            bytes: suzatary_io::attachments::decoded(&uploading.file)
+            bytes: suzatary_io_local::attachments::decoded(&uploading.file)
                 .map_err(|failed| Refusal::bad_request(format!("file: {failed}")))?,
             name: uploading.name,
             keep: if uploading.private {

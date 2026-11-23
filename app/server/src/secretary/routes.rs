@@ -2626,7 +2626,7 @@ mod tests {
     }
 
     /// A model turn is drawn in blocks, each asked of the renderer; a refused one is text. That
-    /// `html` is refused is the closed world's law (`suzatary_io::render`), not a scan here.
+    /// `html` is refused is the closed world's law (`suzatary_io_typeset::render`), not a scan here.
     #[test]
     fn a_model_turns_blocks_each_ask_the_renderer() {
         let model_turn = Said {

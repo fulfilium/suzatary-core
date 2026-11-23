@@ -3,8 +3,8 @@
 
 use suzatary_base::persona::Persona;
 use suzatary_io::objects::Objects;
-use suzatary_io::render::Typst;
-use suzatary_io::secrets::Declarations;
+use suzatary_io_access::secrets::Declarations;
+use suzatary_io_typeset::render::Typst;
 use suzatary_record::record::TodoEvent;
 use suzatary_server::portal::Portal;
 use suzatary_signatures::signatures;
@@ -128,7 +128,7 @@ impl Instance {
     pub fn answers(&self) -> Typst {
         Typst::new(
             self.secretary.renders.join("blocks"),
-            suzatary_io::typeset::Closed::this_binary(),
+            suzatary_io_typeset::typeset::Closed::this_binary(),
         )
     }
 
@@ -190,7 +190,7 @@ impl Instance {
 
     /// The secret store, reading the names this instance declares.
     #[must_use]
-    pub fn secrets(&self) -> suzatary_io::secrets::Secretspec {
+    pub fn secrets(&self) -> suzatary_io_access::secrets::Secretspec {
         self.declarations.store()
     }
 
@@ -420,7 +420,7 @@ impl Instance {
         Ok(adoption.registered)
     }
 
-    fn locked(&self, locked: &suzatary_io::secrets::SecretError) -> String {
+    fn locked(&self, locked: &suzatary_io_access::secrets::SecretError) -> String {
         format!(
             "{}: [signatures] declares a root and {locked} — {}; reads work meanwhile",
             self.path.display(),
@@ -802,7 +802,7 @@ sent_folder = "Sent Items"
         assert!(
             matches!(
                 asked,
-                Err(suzatary_io::secrets::SecretError::Undeclared { .. })
+                Err(suzatary_io_access::secrets::SecretError::Undeclared { .. })
             ),
             "{asked:?}"
         );

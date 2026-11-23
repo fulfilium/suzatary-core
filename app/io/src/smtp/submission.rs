@@ -667,12 +667,12 @@ mod tests {
 
     struct BridgePassword;
 
-    impl crate::secrets::Resolves for BridgePassword {
+    impl suzatary_io_access::secrets::Resolves for BridgePassword {
         fn get(
             &self,
             name: &str,
             _reason: &str,
-        ) -> Result<Option<Secret>, crate::secrets::SecretError> {
+        ) -> Result<Option<Secret>, suzatary_io_access::secrets::SecretError> {
             Ok((name == "PROTON_BRIDGE_PASSWORD").then(|| Secret::new(PASSWORD)))
         }
     }

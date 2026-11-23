@@ -95,10 +95,10 @@ pub(crate) fn path() -> &'static str {
 
 /// The closed world's child, `suzatary typeset`, as the box runs it: it reads its stdin and no
 /// deployment.
-pub(crate) fn typeset() -> suzatary_io::typeset::Closed {
-    suzatary_io::typeset::Closed::new(
+pub(crate) fn typeset() -> suzatary_io_typeset::typeset::Closed {
+    suzatary_io_typeset::typeset::Closed::new(
         env!("CARGO_BIN_EXE_suzatary"),
-        suzatary_io::typeset::closed::BACKSTOP,
+        suzatary_io_typeset::typeset::closed::BACKSTOP,
     )
 }
 

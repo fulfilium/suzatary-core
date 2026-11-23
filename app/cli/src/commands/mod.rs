@@ -69,7 +69,7 @@ pub(crate) fn opened(
                 lists.clone(),
                 &chain.policy,
                 opened,
-                std::sync::Arc::new(suzatary_io::typeset::Closed::this_binary()),
+                std::sync::Arc::new(suzatary_io_typeset::typeset::Closed::this_binary()),
             )
             .rule(),
         ),

@@ -286,7 +286,9 @@ mod tests {
     /// kept as a file a model is handed whole.
     #[test]
     fn a_pdf_holding_a_filled_form_is_withheld() {
-        if !crate::tool::on_path("pdftotext") || !crate::tool::on_path("pdfinfo") {
+        if !suzatary_io_access::tool::on_path("pdftotext")
+            || !suzatary_io_access::tool::on_path("pdfinfo")
+        {
             eprintln!("skipping: pdftotext or pdfinfo is not on PATH");
             return;
         }
@@ -295,7 +297,7 @@ mod tests {
             dir.path().to_path_buf(),
             crate::pdftotext::Pdftotext::new("."),
         );
-        let w9 = crate::pdftotext::filled_form_pdf("Form W-9", "123-45-6789");
+        let w9 = suzatary_testkit::pdf::filled_form_pdf("Form W-9", "123-45-6789");
         let layer = store.layer(&w9).expect("poppler reads it");
         assert!(
             !layer.text().contains("6789"),
@@ -309,7 +311,7 @@ mod tests {
 
     #[test]
     fn a_pdf_is_kept_unless_a_model_would_not_be_handed_it() {
-        if !crate::tool::on_path("pdftotext") {
+        if !suzatary_io_access::tool::on_path("pdftotext") {
             eprintln!("skipping: pdftotext is not on PATH");
             return;
         }
@@ -318,10 +320,10 @@ mod tests {
             dir.path().to_path_buf(),
             crate::pdftotext::Pdftotext::new("."),
         );
-        let plain = crate::pdftotext::minimal_pdf("Lease for unit 4");
+        let plain = suzatary_testkit::pdf::minimal_pdf("Lease for unit 4");
         let kept = store.put(&plain).expect("an ordinary PDF");
         assert_eq!(kept.media_type, Enclosure::Pdf);
-        let naming = crate::pdftotext::minimal_pdf("SSN 123-45-6789");
+        let naming = suzatary_testkit::pdf::minimal_pdf("SSN 123-45-6789");
         assert!(matches!(
             store.put(&naming),
             Err(UploadError::Withheld(Withheld::HeldNumber))
@@ -354,14 +356,14 @@ mod tests {
     /// A private file leaves only a note on the box: where it is, and its text masked.
     #[test]
     fn a_private_file_goes_to_the_vault_and_the_box_keeps_only_where() {
-        if !crate::tool::on_path("pdftotext") {
+        if !suzatary_io_access::tool::on_path("pdftotext") {
             eprintln!("skipping: pdftotext is not on PATH");
             return;
         }
         let dir = suzatary_testkit::scratch("attachments");
         let store = AttachmentStore::new(dir.path().to_path_buf(), Pdftotext::new("."));
         let vault = FakeVault::default();
-        let w2 = crate::pdftotext::minimal_pdf("SSN 123-45-6789");
+        let w2 = suzatary_testkit::pdf::minimal_pdf("SSN 123-45-6789");
         let kept = store
             .keep_private(&w2, "w2.pdf", &vault)
             .expect("kept private");

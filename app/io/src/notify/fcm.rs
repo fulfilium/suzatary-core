@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 use suzatary_base::capability::Secret;
 use suzatary_cards::notify::Printed;
 
-use crate::http::{Http, Req};
-use crate::secrets::{Resolves, SecretError};
-use crate::tokens::{Bearer, Fresh, Grant};
 use suzatary_base::spelling::shorten as truncate;
+use suzatary_io_access::http::{Http, Req};
+use suzatary_io_access::secrets::{Resolves, SecretError};
+use suzatary_io_access::tokens::{Bearer, Fresh, Grant};
 
 const FCM_SCOPE: &str = "https://www.googleapis.com/auth/firebase.messaging";
 

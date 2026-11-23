@@ -8,8 +8,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use suzatary_base::repo_ids::RepoName;
-use suzatary_io::clock::SystemClock;
 use suzatary_io::repos::Mirrors;
+use suzatary_io_local::clock::SystemClock;
 use suzatary_server::serve::Workers;
 
 use suzatary_base::capability::Clock as _;
@@ -18,8 +18,8 @@ use suzatary_connect::connect::RoutineId;
 use suzatary_inbox::coding::{Fired, Task};
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_io::conversations::ConversationStores;
-use suzatary_io::routine::{Endpoint, FireError};
-use suzatary_io::secrets::Resolves;
+use suzatary_io_access::routine::{Endpoint, FireError};
+use suzatary_io_access::secrets::Resolves;
 use suzatary_topics::secretary::coding::Advanced;
 
 use crate::instance::Instance;
@@ -66,7 +66,7 @@ impl Firing {
             .coding
             .as_ref()
             .map_or(Self::Undeclared, |coding| Self::Endpoint {
-                base: suzatary_io::routine::API.to_owned(),
+                base: suzatary_io_access::routine::API.to_owned(),
                 routine: coding.routine.clone(),
                 secrets: Arc::new(instance.secrets()),
             })
@@ -86,7 +86,7 @@ impl Firing {
                 base.clone(),
                 routine.clone(),
                 secrets.as_ref(),
-                suzatary_io::http::Ureq::new(),
+                suzatary_io_access::http::Ureq::new(),
             )
             .and_then(|endpoint| endpoint.fire(task))
             .map_err(|failed| failed_fire(&failed)),

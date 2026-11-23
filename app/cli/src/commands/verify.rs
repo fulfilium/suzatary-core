@@ -14,7 +14,7 @@ use crate::instance::Instance;
 use crate::interpreters::{file_store, upload_store};
 use prodrome_core::event::Hash;
 use suzatary_io::objects::Objects;
-use suzatary_io::texts::Texts;
+use suzatary_io_local::texts::Texts;
 use suzatary_lines::first_read;
 use suzatary_lines::secretary::prune;
 use suzatary_store::store::{Prodrome, Reads as _};
@@ -65,8 +65,8 @@ fn every_store(instance: &Instance) -> anyhow::Result<()> {
     let decisions = Objects::open(instance.decisions());
     let topics = instance.secretary.topics.open();
     let asks = Objects::open(instance.asks());
-    let triage = suzatary_io::state::State::open(instance.mail.state.clone());
-    let triage_local = suzatary_io::state::Local::open(instance.local.mail());
+    let triage = suzatary_io_local::state::State::open(instance.mail.state.clone());
+    let triage_local = suzatary_io_local::state::Local::open(instance.local.mail());
     let devices = suzatary_io::devices::Devices::open(instance.paths.devices.clone());
     let uploads = upload_store(instance);
     let kept = file_store(instance);
@@ -94,8 +94,10 @@ fn every_store(instance: &Instance) -> anyhow::Result<()> {
         uploads: &uploads,
         kept: &kept,
     };
-    let requests =
-        suzatary_io::requests::Requests::open(instance.requests(), instance.paths.answers.clone());
+    let requests = suzatary_io_local::requests::Requests::open(
+        instance.requests(),
+        instance.paths.answers.clone(),
+    );
     let stray = first_read::first("stores", || {
         findings.extend(database.verify());
         prune::stray(conversations.conversations())

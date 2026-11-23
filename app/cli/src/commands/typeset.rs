@@ -1,6 +1,6 @@
 //! `suzatary typeset`: one job on stdin (`suzatary_todo::template::Job`) compiled, its answer on stdout.
 //!
-//! The box runs this as a child of itself (`suzatary_io::typeset::Closed`). The child caps its
+//! The box runs this as a child of itself (`suzatary_io_typeset::typeset::Closed`). The child caps its
 //! own CPU time (a looping text is stopped by the kernel) and address space (an endless
 //! allocation fails here, not in the box's OOM killer), both before the text is read.
 
@@ -8,7 +8,7 @@ use std::io::{Read as _, Write as _};
 
 use anyhow::Context as _;
 use rustix::process::{Resource, Rlimit, setrlimit};
-use suzatary_io::typeset::closed::CPU_SECONDS;
+use suzatary_io_typeset::typeset::closed::CPU_SECONDS;
 
 /// Plenty for one text; typst reserves stacks and arenas well under this.
 const ADDRESS_SPACE: u64 = 2 << 30;
@@ -41,8 +41,8 @@ pub fn run() -> anyhow::Result<()> {
         .map_err(|e| {
             suzatary_base::capability::Rejected::whole(format!("the job does not parse: {e}"))
         })
-        .and_then(|job| suzatary_io::typeset::compile(&job));
+        .and_then(|job| suzatary_io_typeset::typeset::compile(&job));
     std::io::stdout()
-        .write_all(suzatary_io::typeset::closed::print(&answer).as_bytes())
+        .write_all(suzatary_io_typeset::typeset::closed::print(&answer).as_bytes())
         .context("writing the answer")
 }

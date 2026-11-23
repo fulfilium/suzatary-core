@@ -12,8 +12,8 @@ use serde::Deserialize;
 use suzatary_base::capability::Secret;
 use suzatary_triage::mail::older::Matched;
 
-use crate::http::{Http, Req};
-use crate::tokens::{Fresh, Grant};
+use suzatary_io_access::http::{Http, Req};
+use suzatary_io_access::tokens::{Fresh, Grant};
 
 /// Characters of an error body kept, so a whole HTML page never lands in a refusal.
 pub const ERROR_CAP: usize = 300;
@@ -279,7 +279,7 @@ pub enum Fetched {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::{Resp, Scripted};
+    use suzatary_io_access::http::{Resp, Scripted};
 
     #[test]
     fn a_message_id_is_lowercase_hex_and_nothing_else() {
@@ -316,7 +316,7 @@ mod tests {
                 .ends_with("?maxResults=500&q=subject%3A%22a%20b%22%20after%3A2023%2F01%2F01")
         );
         assert_eq!(
-            crate::http::header(&sent[0].headers, "Authorization"),
+            suzatary_io_access::http::header(&sent[0].headers, "Authorization"),
             Some("Bearer tok")
         );
     }

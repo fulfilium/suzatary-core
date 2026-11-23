@@ -24,8 +24,8 @@ use suzatary_base::capability::Secret;
 use suzatary_health::health::plugin::{
     CredentialName, MAX_FETCHES, MAX_SAID, Origin, Refusal, Said,
 };
-use suzatary_io::http::Ureq;
-use suzatary_io::secrets::Resolves;
+use suzatary_io_access::http::Ureq;
+use suzatary_io_access::secrets::Resolves;
 use suzatary_plugin::{Budget, Effects, Host, LoadError, Run, RunError, Source};
 use suzatary_services::plugin::{Manifest, admit};
 use wasmtime::component::Component;
@@ -106,7 +106,7 @@ impl Resolves for Secrets {
         &self,
         name: &str,
         _reason: &str,
-    ) -> Result<Option<Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<Secret>, suzatary_io_access::secrets::SecretError> {
         self.asked
             .lock()
             .unwrap_or_else(PoisonError::into_inner)

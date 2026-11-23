@@ -13,7 +13,7 @@ use prodrome_core::policy::Untrusted;
 use serde::{Deserialize, Serialize};
 use suzatary_base::chains::ChainName;
 use suzatary_io::reading::Reading;
-use suzatary_io::run::{Cmd, run, succeed};
+use suzatary_io_access::run::{Cmd, run, succeed};
 
 /// One `[[follows]]` entry as the file spells it.
 #[derive(Debug, Deserialize, Serialize)]

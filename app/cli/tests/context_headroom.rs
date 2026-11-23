@@ -198,7 +198,7 @@ fn the_agents_context_leaves_a_fifth_of_its_cap_for_the_manual_and_holds_a_full_
             )
         },
     );
-    let handbook = suzatary_io::manuals::Handbook::new(&repo, persona);
+    let handbook = suzatary_io_local::manuals::Handbook::new(&repo, persona);
     let wire =
         serde_json::to_string_pretty(&manual(&handbook, &deployment)).expect("it serialises");
     let budget = CONTEXT_CAP - CONTEXT_HEADROOM;

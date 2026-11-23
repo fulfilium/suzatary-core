@@ -15,7 +15,7 @@ use suzatary_services::drive::{
     DriveEntry, EntryKind, MAX_FILE, Port, WritePort, extension_of, mime_of,
 };
 
-use crate::run::{Cmd, RunError, succeed};
+use suzatary_io_access::run::{Cmd, RunError, succeed};
 use suzatary_os::scratch::Scratch;
 
 /// Bytes of stdout.
@@ -91,7 +91,7 @@ impl Command<'_> {
 pub struct ProtonDrive {
     cli: PathBuf,
     scratch: PathBuf,
-    pdftotext: crate::pdftotext::Pdftotext,
+    pdftotext: suzatary_io_local::pdftotext::Pdftotext,
     timeout: Option<Duration>,
 }
 
@@ -102,7 +102,7 @@ impl ProtonDrive {
         Self {
             cli,
             scratch,
-            pdftotext: crate::pdftotext::Pdftotext::new(repo),
+            pdftotext: suzatary_io_local::pdftotext::Pdftotext::new(repo),
             timeout: None,
         }
     }
@@ -142,9 +142,9 @@ impl ProtonDrive {
         succeed(
             &Cmd::new(&self.cli)
                 .args(command.argv())
-                .pass(crate::run::NETWORK)
+                .pass(suzatary_io_access::run::NETWORK)
                 // The Drive CLI keeps its session in the secret store.
-                .pass(crate::secrets::STORE)
+                .pass(suzatary_io_access::secrets::STORE)
                 .timeout(timeout)
                 .max_stdout(MAX_LISTING),
         )

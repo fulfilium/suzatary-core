@@ -17,6 +17,7 @@ use std::sync::mpsc::{RecvTimeoutError, channel};
 use std::time::{Duration, Instant};
 
 use suzatary_held::excerpt::Excerpt;
+use suzatary_services::repositories::RepoFailure;
 
 const POLL: Duration = Duration::from_millis(20);
 
@@ -89,7 +90,7 @@ fn passes<'a>(key: &OsStr, pass: impl Iterator<Item = &'a str>) -> bool {
 /// Not `Debug`: its env, stdin and args can hold secrets.
 ///
 /// ```compile_fail
-/// let printed = format!("{:?}", suzatary_io::run::Cmd::new("git"));
+/// let printed = format!("{:?}", suzatary_io_access::run::Cmd::new("git"));
 /// ```
 #[derive(Clone)]
 pub struct Cmd {
@@ -152,6 +153,12 @@ fn missing(source: &std::io::Error) -> &'static str {
     match source.kind() {
         ErrorKind::NotFound => " (no such program here: the deploy did not bring it)",
         _ => "",
+    }
+}
+
+impl From<RunError> for RepoFailure {
+    fn from(failed: RunError) -> Self {
+        RepoFailure::Unavailable(failed.to_string())
     }
 }
 
@@ -362,7 +369,7 @@ fn exited(child: &Child) -> std::io::Result<bool> {
 /// Kill `child`'s group and return once no process in it runs (each gone or a zombie), polling
 /// `/proc`. The child must lead the group and must not be reaped before this returns, so its id
 /// names this group alone.
-pub(crate) fn end_group(child: &Child) -> std::io::Result<()> {
+pub fn end_group(child: &Child) -> std::io::Result<()> {
     let group = rustix::process::Pid::from_child(child);
     // Killed again before each look: a fork racing the kill would otherwise survive.
     loop {

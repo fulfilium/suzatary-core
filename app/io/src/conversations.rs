@@ -12,8 +12,8 @@ use suzatary_todo::render_cache::RenderCache;
 
 use crate::objects;
 use crate::runs::Locks;
-use crate::text_keys::{self, TextKeys};
-use crate::texts::SystemEntropy;
+use suzatary_io_local::text_keys::{self, TextKeys};
+use suzatary_io_local::texts::SystemEntropy;
 
 pub struct ConversationStores {
     /// The lines, pushed; a line no key opens may be kept as its husk.

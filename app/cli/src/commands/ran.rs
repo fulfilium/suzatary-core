@@ -88,14 +88,14 @@ fn limit_of(
 ) -> anyhow::Result<Option<suzatary_health::health::Limited>> {
     use suzatary_base::capability::Clock as _;
     use suzatary_conversations::secretary::model::ModelError;
-    let now = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
+    let now = prodrome_core::fpl::instant_of(suzatary_io_local::clock::SystemClock.now());
     let failed = suzatary_io::model::failure::Heard::of(text).failure(String::new(), now);
     let ModelError::Limited(limited) = failed else {
         return Ok(None);
     };
     let instance = crate::instance::Instance::open(path)?;
     crate::interpreters::answered_by(
-        &suzatary_io::model_health::beside(&instance.mail.heartbeat),
+        &suzatary_io_local::model_health::beside(&instance.mail.heartbeat),
         &suzatary_io::model::name_of(model),
         Some(&failed),
     );

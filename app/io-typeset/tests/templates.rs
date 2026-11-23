@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use suzatary_base::tripwire::suspicious;
-use suzatary_io::typeset::compile;
+use suzatary_io_typeset::typeset::compile;
 use suzatary_todo::rendering;
 use suzatary_todo::template::{Checked, Job};
 

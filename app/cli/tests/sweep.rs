@@ -82,7 +82,7 @@ fn a_sourced_todo(events: &EventStore, id: &str, thread: &str, sender: &str) {
         },
         "ada",
         &["work", "home", "other", "study"],
-        &suzatary_io::typeset::InProcess,
+        &suzatary_io_typeset::typeset::InProcess,
     )
     .expect("a valid todo");
     suzatary_store::store::append_to(events, suzatary_record::record::GENESIS, event)
@@ -111,7 +111,7 @@ fn a_plain_todo(events: &EventStore, id: &str, body: &str) {
         },
         "ada",
         &["work", "home", "other", "study"],
-        &suzatary_io::typeset::InProcess,
+        &suzatary_io_typeset::typeset::InProcess,
     )
     .expect("a valid todo");
     suzatary_store::store::append_to(events, suzatary_record::record::GENESIS, event)

@@ -14,9 +14,9 @@ use suzatary_health::health;
 use suzatary_health::health::{Reading, Register};
 use suzatary_held::held_value::Reveal;
 use suzatary_held::vault::Vault;
-use suzatary_io::attachments::AttachmentStore;
 use suzatary_io::objects::Objects;
-use suzatary_io::requests::Requests;
+use suzatary_io_local::attachments::AttachmentStore;
+use suzatary_io_local::requests::Requests;
 use suzatary_lines::parts::{Parts, part, scoped};
 use suzatary_lines::secretary::transcript::Retry;
 use suzatary_secretary::secretary::Bound;
@@ -202,12 +202,12 @@ pub struct Inner {
 
 pub struct Unresolved;
 
-impl suzatary_io::secrets::Resolves for Unresolved {
+impl suzatary_io_access::secrets::Resolves for Unresolved {
     fn get(
         &self,
         _: &str,
         _: &str,
-    ) -> Result<Option<capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<capability::Secret>, suzatary_io_access::secrets::SecretError> {
         Ok(None)
     }
 }
@@ -1097,7 +1097,7 @@ pub fn watching(
     first: &Chained,
     rest: Vec<Chained>,
     mirrors: Arc<suzatary_io::repos::Mirrors>,
-    tokens: Arc<suzatary_io::github_tokens::GithubTokens>,
+    tokens: Arc<suzatary_io_access::github_tokens::GithubTokens>,
 ) {
     tokio::spawn(patches::sweeping(state.clone(), mirrors));
     tokio::spawn(token_expiry::watching(state.clone(), tokens));

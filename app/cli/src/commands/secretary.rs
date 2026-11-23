@@ -17,15 +17,15 @@ use suzatary_conversations::secretary::store::{Entry, Kind, Line, Lines};
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
 use suzatary_held::held_value::{Filled, HeldFile};
-use suzatary_io::blobs::Blobs;
-use suzatary_io::clock::SystemClock;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::drive::ReadOnly;
 use suzatary_io::google::{Grants, Inserted};
 use suzatary_io::oauth::{Pending, TokenStore};
 use suzatary_io::objects::Objects;
 use suzatary_io::repos::{Author, Mirrors, Stopped};
-use suzatary_io::state::Ledger;
+use suzatary_io_local::blobs::Blobs;
+use suzatary_io_local::clock::SystemClock;
+use suzatary_io_local::state::Ledger;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::{Consent, Protocol};
 use suzatary_secretary::secretary;
@@ -150,12 +150,12 @@ pub fn fixture_mirrors(instance: &Instance) -> Arc<Mirrors> {
 struct NoToken;
 
 #[cfg(feature = "fixture")]
-impl suzatary_io::secrets::Resolves for NoToken {
+impl suzatary_io_access::secrets::Resolves for NoToken {
     fn get(
         &self,
         _name: &str,
         _reason: &str,
-    ) -> Result<Option<capability::Secret>, suzatary_io::secrets::SecretError> {
+    ) -> Result<Option<capability::Secret>, suzatary_io_access::secrets::SecretError> {
         Ok(None)
     }
 }
@@ -780,7 +780,7 @@ fn keep_tapped(
     )
     .map_err(|failed| failed.to_string())
     .and_then(|record| {
-        suzatary_io::tapped::beside(kept)
+        suzatary_io_local::tapped::beside(kept)
             .set(&file, &record)
             .map_err(|failed| failed.to_string())
     });
@@ -1929,7 +1929,7 @@ pub fn dismiss(
 
 fn words_of(instance: &Instance) -> impl Fn(&salted_text::TextName) -> inbox_reading::Words {
     use suzatary_store::store::Gets as _;
-    let texts = suzatary_io::texts::Texts::<suzatary_memory::secretary::memory::Fact>::open(
+    let texts = suzatary_io_local::texts::Texts::<suzatary_memory::secretary::memory::Fact>::open(
         instance.secretary.memory_texts(),
     );
     // A failed read is unread, never gone.
@@ -1968,7 +1968,7 @@ fn wired(instance: &Instance, first: Option<&str>) -> anyhow::Result<Wired> {
         rest,
         brain: crate::interpreters::brain(
             instance,
-            suzatary_io::model_health::beside(&instance.mail.heartbeat),
+            suzatary_io_local::model_health::beside(&instance.mail.heartbeat),
         ),
     })
 }

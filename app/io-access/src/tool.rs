@@ -23,7 +23,8 @@ pub fn tool(repo: &Path, name: &str) -> Cmd {
     }
 }
 
-pub(crate) fn on_path(name: &str) -> bool {
+#[must_use]
+pub fn on_path(name: &str) -> bool {
     std::env::var_os("PATH").is_some_and(|paths| {
         std::env::split_paths(&paths).any(|dir| is_executable(&dir.join(name)))
     })

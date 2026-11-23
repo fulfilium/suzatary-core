@@ -7,17 +7,17 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use suzatary_io::briefings::BriefingFiles;
 use suzatary_io::calendar::Clocked;
-use suzatary_io::clock::SystemClock;
 use suzatary_io::corpus::Operator;
 use suzatary_io::mailbox::Notmuch;
 use suzatary_io::mailbox::located::Located;
-use suzatary_io::manuals::Handbook;
-use suzatary_io::pdftotext::Pdftotext;
-use suzatary_io::render::Typst;
-use suzatary_io::repository::Checkout;
 use suzatary_io::sync::Syncer;
-use suzatary_io::typeset::Closed;
 use suzatary_io::watches::Watches;
+use suzatary_io_access::repository::Checkout;
+use suzatary_io_local::clock::SystemClock;
+use suzatary_io_local::manuals::Handbook;
+use suzatary_io_local::pdftotext::Pdftotext;
+use suzatary_io_typeset::render::Typst;
+use suzatary_io_typeset::typeset::Closed;
 
 use prodrome_core::event::Actor;
 use suzatary_base::chains::ChainPolicy;
@@ -33,8 +33,8 @@ use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
-use suzatary_io::texts::Texts;
-use suzatary_io::unrendered::Unrendered;
+use suzatary_io_local::texts::Texts;
+use suzatary_io_typeset::unrendered::Unrendered;
 use suzatary_mail::mail::account::Roster;
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
@@ -55,7 +55,7 @@ pub struct Ground {
     notmuch: PathBuf,
     /// `None` is a box with no mail index, which every read refuses.
     notmuch_config: Option<PathBuf>,
-    pub(crate) ledger: suzatary_io::state::Ledger,
+    pub(crate) ledger: suzatary_io_local::state::Ledger,
     /// Where each listed message lives, by canonical hash.
     mail_hashes: PathBuf,
     /// The accounts a message's folder is read as, and the accounts a sync pulls.
@@ -265,7 +265,7 @@ impl Remembering {
             history: &self.memory,
             texts: &self.memory_texts,
             cards: &self.inbox,
-            entropy: &suzatary_io::texts::SystemEntropy,
+            entropy: &suzatary_io_local::texts::SystemEntropy,
             digests: Digests {
                 history: &self.digests,
                 texts: &self.digest_texts,
@@ -351,13 +351,13 @@ pub struct Opened {
     pub(crate) drive: DriveAccess,
     pub(crate) junk: Junk,
     pub(crate) sync: suzatary_io::mail_sync::Timer,
-    pub(crate) health: suzatary_io::source_health::Health,
+    pub(crate) health: suzatary_io_local::source_health::Health,
     pub(crate) older: crate::interpreters::Older,
-    pub(crate) uploads: suzatary_io::attachments::AttachmentStore,
-    pub(crate) upload_index: suzatary_io::upload_index::UploadIndexFiles,
-    pub(crate) kept: suzatary_io::blobs::Blobs,
+    pub(crate) uploads: suzatary_io_local::attachments::AttachmentStore,
+    pub(crate) upload_index: suzatary_io_local::upload_index::UploadIndexFiles,
+    pub(crate) kept: suzatary_io_local::blobs::Blobs,
     pub(crate) pdf: Pdftotext,
-    pub(crate) tapped: suzatary_io::docs::Docs<
+    pub(crate) tapped: suzatary_io_local::docs::Docs<
         suzatary_held::held_value::HeldFile,
         suzatary_held::secretary::attached::Attached,
     >,
@@ -390,13 +390,13 @@ impl Opened {
             drive: DriveAccess::of(instance),
             junk: chosen::junk(instance),
             sync: chosen::mail_sync(instance),
-            health: suzatary_io::source_health::beside(&instance.mail.heartbeat),
+            health: suzatary_io_local::source_health::beside(&instance.mail.heartbeat),
             older: chosen::older(instance),
             uploads: chosen::upload_store(instance),
             upload_index: chosen::upload_index(instance),
             kept: chosen::file_store(instance),
             pdf: Pdftotext::new(instance.code()),
-            tapped: suzatary_io::tapped::beside(&chosen::file_store(instance)),
+            tapped: suzatary_io_local::tapped::beside(&chosen::file_store(instance)),
             configuration: InstanceEdits::new(instance.path.clone()),
             watches: Watches::open(instance.local.watches()),
             repos: chosen::mirrors(instance),

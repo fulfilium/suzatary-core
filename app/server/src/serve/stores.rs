@@ -258,7 +258,7 @@ impl suzatary_lines::secretary::lines_rule::World for Beyond {
         &self,
         id: &suzatary_held::attachment::AttachmentId,
     ) -> Result<Option<suzatary_lines::secretary::lines_rule::Upload>, String> {
-        use suzatary_io::attachments::Stored;
+        use suzatary_io_local::attachments::Stored;
         use suzatary_lines::secretary::lines_rule::Upload;
         let Some(uploads) = &self.uploads else {
             return Ok(None);

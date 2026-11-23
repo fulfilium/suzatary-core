@@ -5,7 +5,7 @@ use std::path::Path;
 
 use clap::Subcommand;
 use suzatary_base::capability::Clock as _;
-use suzatary_io::pulse::Pulse;
+use suzatary_io_local::pulse::Pulse;
 use suzatary_triage::mail::heartbeat::{Pass, Stage};
 
 use crate::instance::Instance;
@@ -34,7 +34,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Ended::Ok => Pass::Ok,
         Ended::Failed { stage } => Pass::Failed(stage),
     };
-    let now = prodrome_core::fpl::instant_of(suzatary_io::clock::SystemClock.now());
+    let now = prodrome_core::fpl::instant_of(suzatary_io_local::clock::SystemClock.now());
     let outcome = Pulse::at(&instance.mail.heartbeat).record(pass, now)?;
     println!("{}", outcome.line());
     Ok(())

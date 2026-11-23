@@ -25,9 +25,9 @@ use suzatary_base::capability::{Secret, SmtpToken};
 use suzatary_mail::mail::send::{Outgoing, SendError, Sent, Step, angle, build_mime};
 use suzatary_mail::mail::transport::Transport;
 
-use crate::http::{Http, HttpError, Req, Ureq};
-use crate::secrets::Resolves;
-use crate::tokens::{Bearer, unix_now};
+use suzatary_io_access::http::{Http, HttpError, Req, Ureq};
+use suzatary_io_access::secrets::Resolves;
+use suzatary_io_access::tokens::{Bearer, unix_now};
 
 /// Microsoft's submission endpoint.
 pub const SMTP_HOST: &str = "smtp.office365.com";

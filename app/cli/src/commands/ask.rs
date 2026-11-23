@@ -73,7 +73,7 @@ pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Resu
             },
             at,
             operator.actor(),
-            &suzatary_io::texts::SystemEntropy,
+            &suzatary_io_local::texts::SystemEntropy,
         )
         .map_err(|e| anyhow::anyhow!("the question was not sealed: {e}"))?;
     let own = owned

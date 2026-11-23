@@ -96,8 +96,8 @@ impl SignIn {
         let child = Command::new(program)
             .arg(SUBCOMMAND)
             .env_clear()
-            .envs(crate::run::environment(
-                crate::run::NETWORK
+            .envs(suzatary_io_access::run::environment(
+                suzatary_io_access::run::NETWORK
                     .iter()
                     .copied()
                     .chain(["CLAUDE_CONFIG_DIR"]),
@@ -202,7 +202,7 @@ impl Running {
 impl Drop for Running {
     /// A sign-in left unfinished leaves no CLI behind, nor anything it started.
     fn drop(&mut self) {
-        let _ = crate::run::end_group(&self.child);
+        let _ = suzatary_io_access::run::end_group(&self.child);
         let _ = self.child.wait();
     }
 }

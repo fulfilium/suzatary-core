@@ -14,9 +14,9 @@ use suzatary_base::refusal::shown;
 use suzatary_digest::secretary::compact::Compact;
 use suzatary_digest::secretary::compacting::Compacting;
 use suzatary_google::google::Endpoints;
-use suzatary_io::model_health::Answered;
 use suzatary_io::objects::Objects;
-use suzatary_io::requests::Requests;
+use suzatary_io_local::model_health::Answered;
+use suzatary_io_local::requests::Requests;
 use suzatary_server::gate::{self, Door};
 
 use crate::commands::secretary::{Acting, ActingStores, Postman};
@@ -66,7 +66,7 @@ pub struct Serving {
 pub type Performing = Box<dyn FnOnce(ActingStores, Arc<Workers>) -> Acting + Send>;
 
 pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()> {
-    use suzatary_io::{epochs, frontiers};
+    use suzatary_io_local::{epochs, frontiers};
     let listener = serve::bound(&serving.listening)?;
     // Declared first, so a server that cannot write them does not start.
     instance
@@ -106,7 +106,7 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
                 instance.paths.answers.clone(),
             )),
             asks: Arc::new(Objects::open(instance.asks())),
-            pairings: Arc::new(suzatary_io::pairing::Pairings::at(
+            pairings: Arc::new(suzatary_io_local::pairing::Pairings::at(
                 instance.paths.pairing.clone(),
             )),
         },
@@ -274,7 +274,7 @@ fn serving(instance: &Instance, args: Args) -> anyhow::Result<Serving> {
     let google = Endpoints::google();
     let live = live_of(instance).shared();
     let moved = Arc::new(tokio::sync::Notify::new());
-    let answered = suzatary_io::model_health::beside(&instance.mail.heartbeat).ringing({
+    let answered = suzatary_io_local::model_health::beside(&instance.mail.heartbeat).ringing({
         let moved = Arc::clone(&moved);
         move || moved.notify_one()
     });
@@ -482,7 +482,7 @@ fn stamp_of(build_fixture: Option<PathBuf>, reachable: bool) -> anyhow::Result<S
 
 /// The local daemon names every peer, loopback included: an address is never an identity.
 fn daemon_peers(socket: &Path) -> Peers {
-    Peers::Daemon(suzatary_io::whois::Tailscaled::new(socket))
+    Peers::Daemon(suzatary_io_local::whois::Tailscaled::new(socket))
 }
 
 fn real_brain(instance: &Instance, answered: &Answered) -> Brain {
@@ -553,7 +553,7 @@ fn watch_from_now_on(
         first,
         rest,
         interpreters::mirrors(instance),
-        Arc::new(suzatary_io::github_tokens::GithubTokens::new(
+        Arc::new(suzatary_io_access::github_tokens::GithubTokens::new(
             instance.paths.github_tokens.clone(),
             Box::new(instance.secrets()),
         )),

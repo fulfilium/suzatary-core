@@ -164,7 +164,7 @@ fn destinations() -> Vec<Destination> {
         Destination {
             to: format!(
                 "The coding routine: `{}`, the one Claude Code routine `[coding]` names.",
-                suzatary_io::routine::API
+                suzatary_io_access::routine::API
             ),
             receives: "The task text of a coding session you tapped, and nothing else.".to_owned(),
             off: "Leave out `[coding]`.".to_owned(),

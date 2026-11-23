@@ -52,7 +52,7 @@ path = "app/record/src/record.rs"
 characters = 27046
 tokens = 10235
 [[tokens.sample]]
-path = "app/io/src/run.rs"
+path = "app/io-access/src/run.rs"
 characters = 23433
 tokens = 9421
 [[tokens.sample]]
@@ -353,7 +353,7 @@ scripts = ["scripts/wire.sh"]
 name = "server"
 path = "app/server"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "os", "prodrome-core", "record", "release", "secretary", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "io-access", "io-local", "lines", "mail", "memory", "os", "prodrome-core", "record", "release", "secretary", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]
@@ -364,24 +364,45 @@ depends = ["store"]
 scripts = []
 
 [[unit]]
+name = "io-access"
+path = "app/io-access"
+shape = "crate"
+depends = ["base", "connect", "google", "held", "inbox", "lines", "os", "services"]
+scripts = []
+
+[[unit]]
+name = "io-local"
+path = "app/io-local"
+shape = "crate"
+depends = ["base", "health", "held", "io-access", "mail", "memory", "os", "prodrome-core", "signatures", "store", "triage"]
+scripts = []
+
+[[unit]]
+name = "io-typeset"
+path = "app/io-typeset"
+shape = "crate"
+depends = ["base", "io-access", "os", "prodrome-core", "prodrome-typst-wasm", "todo", "topics"]
+scripts = []
+
+[[unit]]
 name = "io"
 path = "app/io"
 shape = "crate"
-depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "os", "prodrome-core", "prodrome-typst-wasm", "record", "secretary", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
+depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io-access", "io-local", "lines", "mail", "memory", "os", "prodrome-core", "record", "secretary", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]
 name = "plugin"
 path = "app/plugin"
 shape = "crate"
-depends = ["base", "health", "io", "prodrome-core", "secretary", "services"]
+depends = ["base", "health", "io-access", "prodrome-core", "secretary", "services"]
 scripts = ["scripts/plugin-sync.sh"]
 
 [[unit]]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "lines", "mail", "memory", "os", "plan", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "tooling", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "io-access", "io-local", "io-typeset", "lines", "mail", "memory", "os", "plan", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "tooling", "topics", "triage"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]

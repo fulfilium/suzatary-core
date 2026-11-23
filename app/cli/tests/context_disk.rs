@@ -13,7 +13,7 @@ use suzatary_digest::secretary::memories::ReadMemories;
 use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_io::conversations::ConversationStores;
 use suzatary_io::objects::Objects;
-use suzatary_io::texts::Texts;
+use suzatary_io_local::texts::Texts;
 use suzatary_secretary::secretary::live_shape::{self, Shape, Summaries};
 use suzatary_store::store::{Doc as _, Gets as _, Prodrome, Reads};
 

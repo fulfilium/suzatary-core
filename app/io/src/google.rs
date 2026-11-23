@@ -14,8 +14,8 @@ use suzatary_google::google::{
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::{NeedsLogin, OauthError, Silent};
 
-use crate::http::{Http, HttpError, Req, Ureq};
-use crate::secrets::{Resolves, SecretError};
+use suzatary_io_access::http::{Http, HttpError, Req, Ureq};
+use suzatary_io_access::secrets::{Resolves, SecretError};
 
 const TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -460,7 +460,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt as _;
 
     use super::*;
-    use crate::http::{Resp, Scripted};
+    use suzatary_io_access::http::{Resp, Scripted};
 
     fn ada() -> EmailAddress {
         EmailAddress::new("ada@example.test").expect("an address")
@@ -514,7 +514,7 @@ mod tests {
         for req in &sent[1..] {
             assert_eq!(req.limit, suzatary_google::google::MAX_ANSWER as u64);
             assert_eq!(
-                crate::http::header(&req.headers, "authorization"),
+                suzatary_io_access::http::header(&req.headers, "authorization"),
                 Some("Bearer ya29.a")
             );
             assert!(!req.url.contains("ya29"), "{}", req.url);

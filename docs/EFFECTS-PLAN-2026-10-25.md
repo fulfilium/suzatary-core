@@ -23,7 +23,7 @@ not an output.
 ## 6. Stages
 
 - Stage 1 (one health register): landed in 2.1.31
-  (`suzatary_health::health::SourceKey`, `suzatary_io::source_health`,
+  (`suzatary_health::health::SourceKey`, `suzatary_io_local::source_health`,
   `Connection::sources` in `app/connect/src/connect/connection.rs`).
   `Endpoint`, the sum of `In(SourceKey)` and `Out(SinkKey)` with one print,
   waits for stage 3, which adds the first `SinkKey`.

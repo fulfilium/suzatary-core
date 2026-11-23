@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use suzatary_io::github_tokens::GithubTokens;
+use suzatary_io_access::github_tokens::GithubTokens;
 
 use super::State;
 

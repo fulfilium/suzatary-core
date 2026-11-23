@@ -44,7 +44,8 @@ impl Drop for Holding {
 impl Runs for Locks {
     fn begin(&self) -> Result<Held, StoreError> {
         let refused = |failed: &dyn std::fmt::Display| StoreError::unwritable("a run", failed);
-        let run = RunId::drawn(&crate::texts::SystemEntropy).map_err(|failed| refused(&failed))?;
+        let run = RunId::drawn(&suzatary_io_local::texts::SystemEntropy)
+            .map_err(|failed| refused(&failed))?;
         std::fs::create_dir_all(&self.dir).map_err(|failed| refused(&failed))?;
         let path = self.path(&run);
         let file = OpenOptions::new()

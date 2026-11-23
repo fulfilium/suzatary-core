@@ -2,7 +2,7 @@
 
 use suzatary_cards::notify::Printed;
 
-use crate::http::{Http, Req};
+use suzatary_io_access::http::{Http, Req};
 
 /// ntfy's own service, used when no `base` is configured.
 pub const DEFAULT_BASE: &str = "https://ntfy.sh";

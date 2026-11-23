@@ -8,7 +8,7 @@ use clap::Subcommand;
 use prodrome_core::event::{Actor, TodoId, mk_cancelled, mk_completed, mk_reopened, mk_tended};
 use prodrome_core::policy::Untrusted;
 use suzatary_base::capability::Clock;
-use suzatary_io::clock::SystemClock;
+use suzatary_io_local::clock::SystemClock;
 use suzatary_record::todo;
 use suzatary_signatures::believed::Preview;
 use suzatary_signatures::signatures::Signers;
@@ -503,7 +503,7 @@ fn add(
                 },
                 &new.actor,
                 &known,
-                &suzatary_io::typeset::Closed::this_binary(),
+                &suzatary_io_typeset::typeset::Closed::this_binary(),
             )
             .map_err(refused)?,
         ],
@@ -527,7 +527,7 @@ fn add(
                 },
                 &new.actor,
                 &known,
-                &suzatary_io::typeset::Closed::this_binary(),
+                &suzatary_io_typeset::typeset::Closed::this_binary(),
             )
             .map_err(refused)?;
             vec![child, revision]
@@ -568,7 +568,7 @@ fn update(
         actor,
         &known,
         "",
-        &suzatary_io::typeset::Closed::this_binary(),
+        &suzatary_io_typeset::typeset::Closed::this_binary(),
     )
     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
     appended(

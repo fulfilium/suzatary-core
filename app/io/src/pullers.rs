@@ -14,8 +14,8 @@ use suzatary_mail::mail::puller::{Puller, Unpulled};
 use crate::google::{Grants, NotReady};
 use crate::imap::{Folder, Outlook};
 use crate::oauth::TokenStore;
-use crate::run::Cmd;
 use crate::sync::{read_sync_state, said, state_file, tail, write_sync_state};
+use suzatary_io_access::run::Cmd;
 
 /// Looked up on `PATH`, as is [`MBSYNC`].
 pub const LIEER: &str = "gmi";
@@ -134,7 +134,7 @@ impl Puller for Lieer {
         ran(&Cmd::new(&self.program)
             .arg("sync")
             .cwd(&self.maildir)
-            .pass(crate::run::NETWORK))
+            .pass(suzatary_io_access::run::NETWORK))
     }
 }
 
@@ -162,7 +162,7 @@ impl Puller for Google {
                 &Cmd::new(program)
                     .args(["init", "--no-auth", self.account.as_str()])
                     .cwd(maildir)
-                    .pass(crate::run::NETWORK),
+                    .pass(suzatary_io_access::run::NETWORK),
             )
             .map_err(|failed| not_ready(NotReady::Failed(tail(&failed))))?;
         }
@@ -186,7 +186,7 @@ impl Puller for Mbsync {
             .arg("-c")
             .arg(&self.config)
             .arg(&self.channel)
-            .pass(crate::secrets::STORE))
+            .pass(suzatary_io_access::secrets::STORE))
     }
 }
 

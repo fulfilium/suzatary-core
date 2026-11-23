@@ -28,7 +28,7 @@ pub struct GitDirs {
 /// index. A pull, merge, checkout, reset, rebase or stash moves one; `git clean`, a copy or an
 /// unpack moves none.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Stamp {
+pub struct Stamp {
     head: Vec<u8>,
     branch: Vec<u8>,
     index: Option<(u64, std::time::SystemTime)>,
@@ -40,7 +40,8 @@ impl Checkout {
         Self { data: data.into() }
     }
 
-    pub(crate) fn is_repository(&self) -> bool {
+    #[must_use]
+    pub fn is_repository(&self) -> bool {
         self.data.join(".git").exists()
     }
 
@@ -68,7 +69,7 @@ impl Checkout {
     }
 
     /// Read from git's files, with no git process.
-    pub(crate) fn stamp(&self) -> std::io::Result<Stamp> {
+    pub fn stamp(&self) -> std::io::Result<Stamp> {
         let GitDirs { dir, common } = self.git_dirs()?;
         let head = std::fs::read(dir.join("HEAD"))?;
         let branch = match std::str::from_utf8(&head)

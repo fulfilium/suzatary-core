@@ -339,7 +339,7 @@ one.
 
 | Effect | The non-monotone question | The one decision | Why the page does not wait |
 |---|---|---|---|
-| pairing code (§4.1) | is this code unused, unexpired, within 5 tries? | the pairing file under its lock (`app/io/src/pairing.rs`, `signatures::Pairing`) | the page draws "trusting", and switches when its key's `KeyAdded` reaches a chain it pulls |
+| pairing code (§4.1) | is this code unused, unexpired, within 5 tries? | the pairing file under its lock (`app/io-local/src/pairing.rs`, `signatures::Pairing`) | the page draws "trusting", and switches when its key's `KeyAdded` reaches a chain it pulls |
 | key revocation (§4.2) | is this key trusted now? | the terminal (`suzatary device revoke`), applied at each store's acceptance | the revoked device is answered with the wipe (410); no page of another device waits |
 | erasure (§4.3) | none: an erasure is a tombstone | none needed | the device deletes its keys at once |
 | a model call (§4.4) | has this said line's round begun, and is the run of its first attempt gone? | the conversation worker's hold, by appending `Began { said, attempt, run }` | the question is drawn at once; the answer streams in |

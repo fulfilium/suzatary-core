@@ -67,7 +67,7 @@ a foreign trait for a type of another module finds none whose two modules sit in
 | `run` | io-access | 6.5 | 1.8 | held | cli:2 | — |
 | `tool` | io-access | 0.5 | 0.1 | — | — | run |
 | `repository` | io-access | 1.4 | 0.3 | connect os services | cli:3 server:1 | run (at 2.1.220) |
-| `api_error` | io-access | 0.3 | 0.2 | — | — | — |
+| `api_error` | io-access | 0.3 | 0.2 | — | — | — (no `mod` line named it; deleted at stage 2) |
 | `github_tokens` | io-access | 2.2 | 0.3 | connect | cli:1 server:2 | http secrets |
 | `http` | io-access | 5.3 | 1.7 | google services | cli:4 plugin:2 | — |
 | `routine` | io-access | 2.0 | 0.9 | base connect inbox | cli:2 | http secrets |
@@ -188,9 +188,9 @@ from the cut.
 | # | crate | files moved | waits for |
 |---|---|---|---|
 | 1 | `os` | 4 | — (this pull request) |
-| 2 | `io-access` | 9; `impl From<RunError> for RepoFailure` moves into `run.rs`, and `run::end_group` (`setup_token`) and `tool::on_path` (tests of `attachments`, `upload_index`) become `pub` | stage 1 |
-| 3 | `io-local` | 20 | stage 2 |
-| 4 | `io-typeset` | 5 | stage 2 |
+| 2 | `io-access` | 8, and `api_error.rs` deleted; `impl From<RunError> for RepoFailure` moves into `run.rs`; `run::end_group` (`setup_token`), `tool::on_path` (tests of `attachments`, `upload_index`), `http::header` (tests of `gmail`, `google`) and `repository::Stamp` with `Checkout::stamp` and `is_repository` (`outside`) become `pub` | stage 1 |
+| 3 | `io-local` | 20; `docs::shard`, `Docs::sharded`, `Pdftotext::layer` and `Unlayered` (`mailbox`) become `pub`, and the PDFs tests make move to `suzatary_testkit::pdf` | stage 2 |
+| 4 | `io-typeset` | 5, and `tests/templates.rs` | stage 2 |
 | 5 | `io-chains` | 12 | stage 3, and the changes in flight to `objects.rs`, `plugin_store.rs`, `ignores.rs` and the calendar |
 | 6 | `io-mail` | 21 | stage 5, and the change in flight to `google.rs` |
 | 7 | `io-model` | 11 | stage 3 |
@@ -212,6 +212,33 @@ Stages 2, 3 and 4 go together in one pull request. Stages 5 to 8 each follow the
 `io`, which is 1.7k smaller. The four files moved equal themselves at the merge base with `use`
 lines and paths set aside, but for the one item moved into `durable.rs`. The build times are in
 the pull request.
+
+**Stages 2 to 4, measured** (one pull request, at its head against the merge base, 2.1.229; the
+cut still held there, and every module moved with its layer):
+
+| | before | after |
+|---|---|---|
+| `io` USE / DEVELOP / tests | 49,199 / 786.6k / 228.2k | 31,982 / 731.2k / 181.5k |
+| `io-access` USE / DEVELOP / tests | — | 8,699 / 248.3k / 17.9k |
+| `io-local` USE / DEVELOP / tests | — | 7,352 / 335.0k / 20.1k |
+| `io-typeset` USE / DEVELOP / tests | — | 2,122 / 254.4k / 8.3k |
+| `cli` USE / DEVELOP / tests | 49.6k / 948.2k / 808.3k | 49.6k / 949.6k / 808.5k |
+| `server` USE / DEVELOP / tests | 13.8k / 759.5k / 70.1k | 13.8k / 758.4k / 70.1k |
+| `plugin` USE / DEVELOP / tests | 3.0k / 299.1k / 6.9k | 3.0k / 258.6k / 6.9k |
+
+The plugin depends on `io-access` alone and reads 40.5k less to develop; `server` does not read
+`io-typeset` and reads 1.1k less; `cli` reads all four and pays 1.4k more, the three new
+manifests and roots. An edit in a moved module reads 248k to 335k instead of 787k. Three test
+edges the order cannot see, since it reads production code: a test of `secrets` named
+`model::TOKEN` and now names its value; a test of `notify` implemented `Resolves` for an `Arc`,
+which the orphan rule refuses across crates, and now implements it for a reference; and the
+PDF builders that `pdftotext.rs` held under `#[cfg(test)]` for the tests of `mailbox` too,
+which a crate's tests cannot reach in another crate, moved to `suzatary_testkit::pdf`.
+
+A clean workspace build, one run each in the `.#triage` shell on 4 cores, took 900 s before and
+877 s after; `cargo test --workspace --no-run` on top of it took 329 s and 360 s, linking 116 and
+120 test executables. The four new ones are the three crates' unit tests and `templates`, and
+two of them link Typst, which `io`'s one binary linked once.
 
 ## 6. What argues against it
 

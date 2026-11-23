@@ -12,10 +12,10 @@ use prodrome_core::fpl::instant_of;
 use suzatary_base::capability::Clock as _;
 use suzatary_google::calendar::{Occurrence, learn_kept};
 use suzatary_health::health::plugin::CredentialName;
-use suzatary_io::clock::SystemClock;
-use suzatary_io::http::Ureq;
 use suzatary_io::objects::Objects;
 use suzatary_io::plugin_store::{How, PluginStore};
+use suzatary_io_access::http::Ureq;
+use suzatary_io_local::clock::SystemClock;
 use suzatary_os::durable;
 use suzatary_os::present::Present as _;
 use suzatary_plugin::{Budget, Effects, Fetch, Host, Run, Source};
@@ -74,7 +74,7 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
             })
             .collect::<anyhow::Result<_>>()?
     };
-    let health = suzatary_io::source_health::beside(&instance.mail.heartbeat);
+    let health = suzatary_io_local::source_health::beside(&instance.mail.heartbeat);
     let (google, calendars_stored) = if args.names.is_empty() {
         let declared: Vec<&str> = (plugins.manifests.iter())
             .map(|manifest| manifest.name().as_str())
@@ -133,7 +133,7 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
 
 /// List every Drive folder the secretary may read and join what came of it into `health`; a
 /// register that cannot be written is a journal line, since the next run probes again.
-fn probe_drive(instance: &Instance, health: &suzatary_io::source_health::Health) {
+fn probe_drive(instance: &Instance, health: &suzatary_io_local::source_health::Health) {
     use suzatary_services::drive::Drive as _;
     let drive = crate::interpreters::DriveAccess::of(instance);
     let at = instant_of(SystemClock.now());
@@ -178,7 +178,7 @@ pub fn sync(
     components: &Path,
     plugins: &Plugins,
     effects: &Effects,
-    health: &suzatary_io::source_health::Health,
+    health: &suzatary_io_local::source_health::Health,
 ) -> Report {
     let name = manifest.name();
     let at = SystemClock.now();

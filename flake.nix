@@ -154,7 +154,7 @@
         # The other workspace members, but those in `except`: every build names each member's
         # manifest, or cargo cannot load the workspace.
         members = part: except: map (crate: ./app + "/${crate}${part}") (lib.subtractLists except [
-          "cli" "os" "io" "server" "plugin" "plugin-fence" "plugin-ics" "testkit" "script-guards"
+          "cli" "os" "io-access" "io-local" "io-typeset" "io" "server" "plugin" "plugin-fence" "plugin-ics" "testkit" "script-guards"
           "viewtree" "pages" "wasm" "tooling" ]);
 
         # THE SOURCE IS `app/` AND THE FILES ITS TESTS READ: a `fileset`, so a briefing, a commit

@@ -113,7 +113,7 @@ fn flags() -> String {
 
 /// The guide as HTML, compiled in the closed world and past the tripwire.
 pub fn html(guide: &str) -> anyhow::Result<String> {
-    let html = suzatary_io::typeset::compile(&suzatary_todo::template::Job::text(&source(
+    let html = suzatary_io_typeset::typeset::compile(&suzatary_todo::template::Job::text(&source(
         World::Closed,
         guide,
     )?))

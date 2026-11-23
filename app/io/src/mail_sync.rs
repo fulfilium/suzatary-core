@@ -9,7 +9,7 @@ use suzatary_base::capability::Datetime;
 use suzatary_mail::mail::mail_sync::{MailSync, SyncFailure, Synced};
 use suzatary_mail::mail::sync_report::SyncReport;
 
-use crate::run::{Cmd, Ran, RunError, run};
+use suzatary_io_access::run::{Cmd, Ran, RunError, run};
 use suzatary_os::present::Present as _;
 
 /// The systemd user unit the timer starts: a sync, then triage when there is something new.
@@ -173,7 +173,7 @@ mod tests {
         let dir = scratch("start");
         let timer = timer(&dir, "true");
         std::fs::write(dir.join("last-sync.json"), report("before")).expect("written");
-        let since = crate::clock::SystemClock.now();
+        let since = suzatary_io_local::clock::SystemClock.now();
         let path = dir.join("last-sync.json");
         let writer = std::thread::spawn(move || {
             // Past the clock's one-second grain, so the new report's time is after `since`.

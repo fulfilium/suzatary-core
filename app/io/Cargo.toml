@@ -13,6 +13,8 @@ path = "src/lib.rs"
 
 [dependencies]
 suzatary-os.workspace = true
+suzatary-io-access.workspace = true
+suzatary-io-local.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-store.workspace = true
@@ -37,11 +39,10 @@ suzatary-stores.workspace = true
 prodrome_core.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
-# The JSON this crate parses: the whois answer, the FCM message and notmuch's output.
+# The JSON this crate parses: the FCM message and notmuch's output.
 serde.workspace = true
 serde_json.workspace = true
-# FCM and ntfy, blocking, over rustls (§2: never OpenSSL).
-ureq.workspace = true
+# The roots IMAP trusts.
 webpki-roots.workspace = true
 jsonwebtoken.workspace = true
 base64.workspace = true
@@ -49,13 +50,9 @@ base64.workspace = true
 mail-parser.workspace = true
 sha2.workspace = true
 hex.workspace = true
-# The system's random generator (`secrets`, `pairing`, `texts`).
-ring.workspace = true
 # The Gmail API's search query, percent-encoded into its URL.
 percent-encoding = "2"
-# The secret store's one lock (`secrets::CALLS`), whose wait a call's timeout bounds.
-parking_lot = "0.12"
-# `markup.suspicious`' three tripwires, and the html-to-text walk over a body.
+# The html-to-text walk over a body.
 regex.workspace = true
 # --- THE MAIL TRANSPORTS (§8.6).
 # IMAP, with no TLS feature of its own: the stream is built here, from the workspace's rustls.
@@ -69,36 +66,23 @@ rustls-pki-types = "1"
 # SMTP + XOAUTH2 + STARTTLS, for Microsoft. The Bridge's SMTP is spoken by hand,
 # because lettre cannot take a verifier of our own.
 lettre.workspace = true
-# A pseudo-terminal for `claude setup-token` (`setup_token`), and a child's whole process
-# group killed on a timeout or a halt (`run`), safely: the one rustix already linked.
-rustix = { version = "1", features = ["process", "pty", "termios"] }
-# Authored markup compiled in the closed world (`typeset`): the Prodrome's restricted project.
-prodrome-typst-wasm.workspace = true
-# The faces a drawing is set in (`typeset::bundled_fonts`).
-typst-assets.workspace = true
-# The secret file `secrets` writes: an unpredictable name, created exclusively, private.
-tempfile = "3"
-# `secrets::Declarations` reads the code root's `secretspec.toml` and writes the file that
-# extends it with the names an instance derives.
-toml.workspace = true
-# A refusal of the secret store leaves its evidence in the log (`secrets::Said`).
+# A pseudo-terminal for `claude setup-token` (`setup_token`), safely: the one rustix already
+# linked.
+rustix = { version = "1", features = ["pty", "termios"] }
+# A watch that cannot read its store says so once in the log (`outside`).
 tracing.workspace = true
-
-[features]
-# The e2e fixture's build alone: it also logs the secret store's stderr, whose values are test
-# values there. `suzatary`'s `fixture` enables it; the shipped build does not compile it.
-fixture = []
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-# THE TRIPWIRE IS FUZZED: `suspicious` answers every string and never panics.
 proptest.workspace = true
 # Inert effects a test fills a record from (a render cache that keeps nothing).
 suzatary-stores = { workspace = true, features = ["nothing"] }
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
+# A test's private scratch directory.
+tempfile = "3"
 # The Prodrome's law kit: law 68's script machine over each store's schema (`tests/script_law.rs`).
 prodrome_core = { workspace = true, features = ["laws"] }
 

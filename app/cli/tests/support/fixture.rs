@@ -14,7 +14,7 @@ use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
 use prodrome_core::fpl::{self, mk_decay, mk_flat};
 use suzatary_base::capability::Clock;
 use suzatary_connect::cast::{self, CAST};
-use suzatary_io::clock::SystemClock;
+use suzatary_io_local::clock::SystemClock;
 use suzatary_record::record::{EventStore, mk_authored, mk_source, mk_subtodo};
 use suzatary_store::store::{append_to, linearised};
 
@@ -422,7 +422,7 @@ fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<(
     } else {
         (suzatary_health::health::Outcome::Succeeded, "")
     };
-    suzatary_io::model_health::beside(&read.mail.heartbeat)
+    suzatary_io_local::model_health::beside(&read.mail.heartbeat)
         .record(
             &suzatary_io::model::name_of(read.secretary.model.as_str()),
             at,
@@ -597,7 +597,7 @@ fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<(
     let manifest = (read.plugins.named(name.as_str()))
         .context("the fixture declares the calendar's plugin")?;
     let link = CredentialName::parse(&name, SETTINGS_CALENDAR_LINK)?;
-    suzatary_io::source_health::beside(&read.mail.heartbeat)
+    suzatary_io_local::source_health::beside(&read.mail.heartbeat)
         .join(&run(9)?.health(manifest, &[(link, Answer::Status(200))]))?;
     Ok(())
 }
@@ -2116,7 +2116,7 @@ mod tests {
         };
         let mailbox = suzatary_io::mailbox::Notmuch::new(
             &mail_root,
-            suzatary_io::state::Ledger::new(
+            suzatary_io_local::state::Ledger::new(
                 root.join("state.json"),
                 root.join("local.json"),
                 || {

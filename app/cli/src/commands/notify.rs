@@ -10,7 +10,7 @@ use suzatary_connect::connect::Channel;
 use suzatary_conversations::nonempty::NonEmpty;
 use suzatary_io::devices::Devices;
 use suzatary_io::notify::{Channels, Configured, Waiting};
-use suzatary_io::secrets::Resolves;
+use suzatary_io_access::secrets::Resolves;
 use suzatary_signatures::devices::Device;
 use suzatary_store::store::Log;
 
@@ -150,7 +150,7 @@ mod tests {
             &self,
             name: &str,
             _reason: &str,
-        ) -> Result<Option<Secret>, suzatary_io::secrets::SecretError> {
+        ) -> Result<Option<Secret>, suzatary_io_access::secrets::SecretError> {
             panic!("push must not resolve {name} when no channel is named")
         }
     }

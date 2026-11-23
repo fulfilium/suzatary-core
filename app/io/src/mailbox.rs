@@ -15,10 +15,10 @@ pub mod text;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-use crate::run::{Cmd, succeed};
+use suzatary_io_access::run::{Cmd, succeed};
 use suzatary_os::present::Present as _;
 
-/// What notmuch reads of its environment beyond [`crate::run::BASE`].
+/// What notmuch reads of its environment beyond [`suzatary_io_access::run::BASE`].
 const NOTMUCH: &[&str] = &["NOTMUCH_*"];
 
 /// `cmd` told which index to use: the `config` named and no other `NOTMUCH_*` variable (which
@@ -52,14 +52,14 @@ pub struct Notmuch {
     binary: PathBuf,
     /// The root each account's `subdir` is relative to.
     mail_root: PathBuf,
-    ledger: crate::state::Ledger,
+    ledger: suzatary_io_local::state::Ledger,
     /// Where each listed hash lives: every listing writes it, every lookup by hash reads it.
     located: located::Located,
     attached: attached::Attached,
     accounts: Roster,
     /// Never inherited, so a fixture cannot read the box's own index.
     config: Option<PathBuf>,
-    pdftotext: crate::pdftotext::Pdftotext,
+    pdftotext: suzatary_io_local::pdftotext::Pdftotext,
 }
 
 impl std::fmt::Debug for Notmuch {
@@ -78,7 +78,7 @@ impl Notmuch {
     #[must_use]
     pub fn new(
         mail_root: impl Into<PathBuf>,
-        ledger: crate::state::Ledger,
+        ledger: suzatary_io_local::state::Ledger,
         located: located::Located,
         accounts: Roster,
     ) -> Self {
@@ -90,7 +90,7 @@ impl Notmuch {
             located,
             accounts,
             config: None,
-            pdftotext: crate::pdftotext::Pdftotext::new("."),
+            pdftotext: suzatary_io_local::pdftotext::Pdftotext::new("."),
         }
     }
 
@@ -103,7 +103,7 @@ impl Notmuch {
     /// `pdftotext`'s nix fallback.
     #[must_use]
     pub fn with_pdftotext_repo(mut self, repo: impl Into<PathBuf>) -> Self {
-        self.pdftotext = crate::pdftotext::Pdftotext::new(repo);
+        self.pdftotext = suzatary_io_local::pdftotext::Pdftotext::new(repo);
         self
     }
 
@@ -882,7 +882,7 @@ pub(crate) fn read_of(
     name: &str,
     mime: &str,
     content: Vec<u8>,
-    pdftotext: &crate::pdftotext::Pdftotext,
+    pdftotext: &suzatary_io_local::pdftotext::Pdftotext,
 ) -> Result<FileRead, String> {
     FileRead::of(file, name, mime, content, |pdf| pdftotext.read(pdf))
 }
@@ -898,7 +898,7 @@ pub(crate) mod fixture {
         root: &std::path::Path,
         tags: &str,
         files: &[(&str, String)],
-    ) -> (Notmuch, crate::state::Ledger) {
+    ) -> (Notmuch, suzatary_io_local::state::Ledger) {
         let mail = root.join("Mail");
         for leaf in ["ada/Inbox/cur", "ada/Inbox/new", "ada/Inbox/tmp"] {
             std::fs::create_dir_all(mail.join(leaf)).expect("a leaf");
@@ -919,7 +919,7 @@ pub(crate) mod fixture {
             ),
         )
         .expect("a notmuch config");
-        crate::run::succeed(
+        suzatary_io_access::run::succeed(
             &Cmd::new("notmuch")
                 .arg("new")
                 .env("NOTMUCH_CONFIG", &config),
@@ -932,7 +932,7 @@ pub(crate) mod fixture {
             sync: suzatary_mail::mail::account::Sync::Gmail,
         }])
         .expect("a roster");
-        let keyed = crate::state::Ledger::new(
+        let keyed = suzatary_io_local::state::Ledger::new(
             root.join("state.json"),
             root.join("local/mail.json"),
             || {
@@ -954,7 +954,7 @@ pub(crate) mod fixture {
 
     /// Whether the real notmuch is on PATH; a test that needs it says so when it is not.
     pub(crate) fn notmuch_present(test: &str) -> bool {
-        let present = crate::run::run(&Cmd::new("notmuch").arg("--version")).is_ok();
+        let present = suzatary_io_access::run::run(&Cmd::new("notmuch").arg("--version")).is_ok();
         if !present {
             eprintln!("notmuch is not on PATH: {test} is not run");
         }
@@ -1130,7 +1130,7 @@ mod tests {
     /// A message whose words name no number and whose PDF attachment names an ITIN.
     fn scanned() -> String {
         use base64::Engine as _;
-        let pdf = crate::pdftotext::minimal_pdf(&format!("ITIN {ITIN}"));
+        let pdf = suzatary_testkit::pdf::minimal_pdf(&format!("ITIN {ITIN}"));
         format!(
             "From: counsel@example.test\nTo: ada@example.test\nSubject: the okapi scan\n\
          Message-ID: <pdf-1@example.test>\nDate: Thu, 09 Mar 2023 10:00:00 +0000\n\
@@ -1146,7 +1146,7 @@ mod tests {
     /// A search row and the agent's row name the kinds of held value and hold none of them.
     #[test]
     fn a_search_row_names_the_kinds_its_message_holds_and_no_value() {
-        if crate::run::run(&Cmd::new("notmuch").arg("--version")).is_err() {
+        if suzatary_io_access::run::run(&Cmd::new("notmuch").arg("--version")).is_err() {
             eprintln!("notmuch is not on PATH: the real-index half of held values is not run");
             return;
         }
@@ -1202,8 +1202,8 @@ mod tests {
     }
 
     /// A ledger no test here reads: its key never resolves.
-    fn ledger() -> crate::state::Ledger {
-        crate::state::Ledger::new(
+    fn ledger() -> suzatary_io_local::state::Ledger {
+        suzatary_io_local::state::Ledger::new(
             "/tmp/state.json".into(),
             "/tmp/local/mail.json".into(),
             || Err("no key in this test".to_owned()),

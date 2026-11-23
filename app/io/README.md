@@ -1,8 +1,10 @@
 # suzatary-io
 
-The interpreters: each capability trait of the model crates, run against the world (files and
-processes through `suzatary-os`, IMAP and SMTP, HTTP, the `claude` CLI, notmuch). It makes no decisions and writes no
-log: a refusal comes back as a typed value.
+The interpreters: each capability trait of the model crates, run against the world (chains on
+disk, IMAP and SMTP, the `claude` CLI, notmuch). It makes no decisions and writes no log: a
+refusal comes back as a typed value. Below it are `suzatary-os` (files), `suzatary-io-access`
+(processes, HTTP and secrets) and `suzatary-io-local` (the box's own stores); Typst on the box
+is `suzatary-io-typeset`, beside it.
 
 ## Use
 
@@ -12,7 +14,8 @@ log: a refusal comes back as a typed value.
 
 ## Depends on
 
-`suzatary-os`, the model crates below `suzatary-api`, the Prodrome and `prodrome-typst-wasm` (Typst compiled in the closed world).
+`suzatary-os`, `suzatary-io-access`, `suzatary-io-local`, the model crates below `suzatary-api`
+and the Prodrome.
 
 ## Develop
 

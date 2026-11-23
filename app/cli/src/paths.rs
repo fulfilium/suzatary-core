@@ -95,7 +95,7 @@ const TAILSCALED_SOCKET: &str = "/run/tailscale/tailscaled.sock";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paths {
-    /// The derived secret-name declarations (`suzatary_io::secrets::Declarations`): box state,
+    /// The derived secret-name declarations (`suzatary_io_access::secrets::Declarations`): box state,
     /// per instance, since the code root may be read-only and the data root holds no derived file.
     pub secretspec: PathBuf,
     /// The Microsoft grants, one file per account.

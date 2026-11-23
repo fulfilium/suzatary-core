@@ -1,0 +1,39 @@
+[package]
+name = "suzatary-io-typeset"
+description = "Suzatary's Typst on the box: markup compiled in the closed world, templates rendered to checked HTML, and the render caches"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_io_typeset"
+path = "src/lib.rs"
+
+[dependencies]
+suzatary-os.workspace = true
+suzatary-io-access.workspace = true
+suzatary-base.workspace = true
+suzatary-todo.workspace = true
+suzatary-topics.workspace = true
+prodrome_core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Authored markup compiled in the closed world (`typeset`): the Prodrome's restricted project.
+prodrome-typst-wasm.workspace = true
+# The faces a drawing is set in (`typeset::bundled_fonts`).
+typst-assets.workspace = true
+# The signal a closed-world compile is stopped by (`typeset`), safely.
+rustix = { version = "1", features = ["process"] }
+
+[dev-dependencies]
+suzatary-connect.workspace = true
+# Programs a test makes and runs, and its scratch directories.
+suzatary-testkit = { path = "../testkit" }
+
+[[test]]
+name = "templates"
+path = "tests/templates.rs"
+
+[lints]
+workspace = true

@@ -12,10 +12,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::http::{Http, Req, Ureq};
-use crate::tokens::{Bearer, Fresh, Grant, unix_now};
 use serde::{Deserialize, Serialize};
 use suzatary_base::capability::Secret;
+use suzatary_io_access::http::{Http, Req, Ureq};
+use suzatary_io_access::tokens::{Bearer, Fresh, Grant, unix_now};
 use suzatary_mail::mail::account::{Authority, MailAccount};
 use suzatary_mail::mail::oauth::{
     Answered, Consent, DeviceCode, FormPost, Imap, NeedsLogin, OauthError, Polled, Protocol,
@@ -378,7 +378,7 @@ impl<P: Protocol> Pending<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::{Resp, Scripted};
+    use suzatary_io_access::http::{Resp, Scripted};
     use suzatary_mail::mail::account::{Authority, MsImap, Sync};
 
     fn scratch(name: &str) -> PathBuf {

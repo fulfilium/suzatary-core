@@ -4,8 +4,8 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use suzatary_base::capability::Typeset;
-use suzatary_io::typeset::Closed;
-use suzatary_io::typeset::closed::{BACKSTOP, CPU_SECONDS};
+use suzatary_io_typeset::typeset::Closed;
+use suzatary_io_typeset::typeset::closed::{BACKSTOP, CPU_SECONDS};
 
 fn closed() -> Closed {
     crate::binary::typeset()
@@ -13,12 +13,12 @@ fn closed() -> Closed {
 
 #[test]
 fn the_child_answers_as_the_compile_does_in_process() {
-    use suzatary_io::typeset::Compiler as _;
+    use suzatary_io_typeset::typeset::Compiler as _;
     let closed = closed();
     for source in ["Renew *passport*", "#html.elem(\"b\")[x]", "a ] b"] {
         assert_eq!(
             closed.closed(source),
-            suzatary_io::typeset::compile(&suzatary_todo::template::Job::text(source)),
+            suzatary_io_typeset::typeset::compile(&suzatary_todo::template::Job::text(source)),
             "{source}"
         );
     }
@@ -26,7 +26,7 @@ fn the_child_answers_as_the_compile_does_in_process() {
         for job in template.examples() {
             assert_eq!(
                 closed.compile(&job),
-                suzatary_io::typeset::compile(&job),
+                suzatary_io_typeset::typeset::compile(&job),
                 "{}",
                 template.main()
             );
@@ -86,7 +86,9 @@ fn a_short_text_compiles_while_the_box_is_busy() {
     for _ in 0..5 {
         assert_eq!(
             closed.closed("Renew *passport*"),
-            suzatary_io::typeset::compile(&suzatary_todo::template::Job::text("Renew *passport*"))
+            suzatary_io_typeset::typeset::compile(&suzatary_todo::template::Job::text(
+                "Renew *passport*"
+            ))
         );
     }
     drop(load);
@@ -106,7 +108,9 @@ fn a_slow_start_is_not_counted_against_the_text() {
     );
     assert_eq!(
         Closed::new(&script, BACKSTOP).closed("Renew *passport*"),
-        suzatary_io::typeset::compile(&suzatary_todo::template::Job::text("Renew *passport*"))
+        suzatary_io_typeset::typeset::compile(&suzatary_todo::template::Job::text(
+            "Renew *passport*"
+        ))
     );
 }
 

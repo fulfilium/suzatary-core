@@ -74,7 +74,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
 }
 
 fn texts(objects: &[std::path::PathBuf]) -> anyhow::Result<()> {
-    let typeset = suzatary_io::typeset::Closed::this_binary();
+    let typeset = suzatary_io_typeset::typeset::Closed::this_binary();
     for path in objects {
         let literal =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;

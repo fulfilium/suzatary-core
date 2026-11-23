@@ -214,7 +214,7 @@ sum can be stored, printed, compared and tested. A closure cannot.
   event.
 - Rust: `secretary::acts::Act` is the closed set of actions that the server performs on a tap,
   such as `Auth`, `Secret` and `Web`. The tap's handler interprets it.
-- Rust: `suzatary_io::run::Cmd` is the description of a subprocess, as data. One function,
+- Rust: `suzatary_io_access::run::Cmd` is the description of a subprocess, as data. One function,
   `run(&Cmd) -> Result<Ran, RunError>`, runs every subprocess.
 - TypeScript: `app.Event` has one case for each change to the shell's state. `app.step` is the
   one function that interprets it.

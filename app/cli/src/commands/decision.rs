@@ -9,8 +9,8 @@ use clap::Subcommand;
 use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 use suzatary_base::capability::Clock;
-use suzatary_io::clock::SystemClock;
 use suzatary_io::objects::Objects;
+use suzatary_io_local::clock::SystemClock;
 use suzatary_todo::decisions::{Decision, DecisionId, Decisions, Draft, Ledger};
 
 use super::store_at::StoreAt;
@@ -96,7 +96,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     )?;
     let store = Objects::open(root);
     let decisions = Decisions { store: &store };
-    let typeset = suzatary_io::typeset::Closed::this_binary();
+    let typeset = suzatary_io_typeset::typeset::Closed::this_binary();
     match &args.action {
         Action::Record(stated) => {
             let name = decisions.decide(
@@ -152,7 +152,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::View { html } => {
             let called = suzatary_todo::rendering::DECISIONS
                 .call(&suzatary_todo::decisions::document(&decisions.ledger()?))?;
-            let page = suzatary_io::render::drawn(&typeset, &called)?;
+            let page = suzatary_io_typeset::render::drawn(&typeset, &called)?;
             match html {
                 None => print!("{page}"),
                 Some(out) => std::fs::write(out, page)

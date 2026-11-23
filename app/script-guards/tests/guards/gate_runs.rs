@@ -1031,7 +1031,7 @@ fn merge_gate_keys_the_ignored_counterexamples_and_the_time_zone() {
 fn units_fixture(gate: &Gate) {
     gate.write(
         "app/Cargo.toml",
-        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io\", \"cli\", \"wasm\"]\n",
+        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io-local\", \"io-typeset\", \"io\", \"cli\", \"wasm\"]\n",
     );
     for (dir, name, dep) in [
         ("stores", "suzatary-stores", ""),
@@ -1040,6 +1040,8 @@ fn units_fixture(gate: &Gate) {
             "suzatary-secretary",
             "suzatary-stores = { path = \"../stores\" }\n",
         ),
+        ("io-local", "suzatary-io-local", ""),
+        ("io-typeset", "suzatary-io-typeset", ""),
         (
             "io",
             "suzatary-io",

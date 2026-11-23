@@ -12,7 +12,7 @@ use suzatary_base::capability::{Rejected, Typeset};
 use suzatary_todo::template::Job;
 
 use super::Compiler;
-use crate::run::{Cmd, RunError, succeed};
+use suzatary_io_access::run::{Cmd, RunError, succeed};
 
 /// The CPU time one compile may use, counted from the child's start and across its threads.
 /// A todo's text uses 15 to 35 ms.

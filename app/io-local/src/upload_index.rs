@@ -145,9 +145,10 @@ impl UploadIndex for UploadIndexFiles {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pdftotext::{Pdftotext, minimal_pdf};
+    use crate::pdftotext::Pdftotext;
     use suzatary_base::drive_path::DriveFailure;
     use suzatary_held::vault::Vault;
+    use suzatary_testkit::pdf::minimal_pdf;
 
     /// A Drive that keeps nothing and answers where it would have.
     struct Kept;
@@ -166,7 +167,7 @@ mod tests {
 
     /// An index over a scratch upload store, or `None` where `pdftotext` is missing.
     fn index() -> Option<(tempfile::TempDir, AttachmentStore, UploadIndexFiles)> {
-        if !crate::tool::on_path("pdftotext") {
+        if !suzatary_io_access::tool::on_path("pdftotext") {
             eprintln!("skipping: pdftotext is not on PATH");
             return None;
         }

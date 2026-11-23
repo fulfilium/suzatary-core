@@ -8,7 +8,7 @@ use suzatary_google::url::percent_encode;
 use suzatary_services::web::{SEARCH_HOST, WebRequest};
 use suzatary_services::web::{WebAnswer, WebFailure};
 
-use crate::http::{Http, HttpError, Req, Ureq};
+use suzatary_io_access::http::{Http, HttpError, Req, Ureq};
 
 /// Bytes.
 const MAX_BODY: u64 = 2 * 1024 * 1024;

@@ -500,13 +500,13 @@ fn the_agents_reads_of_the_memory_write_no_file() {
                     .expect("a slug"),
                 turn: 0,
             },
-            suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock),
+            suzatary_base::capability::Clock::now(&suzatary_io_local::clock::SystemClock),
         )
         .expect("the box remembers");
     let remembering = suzatary_cli::wiring::Remembering::reader(&read);
     let lines = remembering.memories().digests.lines;
     let id = suzatary_base::conversation_id::ConversationId::new("permits").expect("a slug");
-    let at = suzatary_base::capability::Clock::now(&suzatary_io::clock::SystemClock);
+    let at = suzatary_base::capability::Clock::now(&suzatary_io_local::clock::SystemClock);
     for (held, entry) in [
         store::Entry::Opened {
             at,
