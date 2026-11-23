@@ -23,9 +23,9 @@ pub struct Flags {
 pub struct Route {
     pub(crate) page: String,
     pub(crate) conversation: String,
-    /// The todo a list's screen shows in its pane, `""` for none.
+    /// The todo open beside the list, or in the Typst list, `""` for none.
     pub(crate) selected: String,
-    /// What a list's screen puts in its add sheet, shared from another app, `""` for nothing.
+    /// What the list puts in its add sheet, shared from another app, `""` for nothing.
     pub(crate) shared: String,
 }
 

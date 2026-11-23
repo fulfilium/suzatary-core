@@ -68,10 +68,10 @@ app.scene("back after going to a todo is the list as it was left, and forward is
 app.scene("a deep link is a route printed, and its back is the fallback in its place", async () => {
   await app.page.navigate("about:blank");
   await app.page.navigate(`${BASE}/#/todo/${todos.urgent.id}`);
-  await app.page.waitFor(`document.querySelector(".todoview .back") !== null`, { timeout: 20000 });
+  await app.page.waitFor(`document.querySelector(".tilelines .crumbs .back") !== null`, { timeout: 20000 });
   assert.equal(await app.page.evaluate<string>(`location.hash`), `#/todo/${todos.urgent.id}`);
   const length = await app.page.evaluate<number>(`history.length`);
-  await app.page.click(".todoview .back");
+  await app.page.click(".tilelines .crumbs .back");
   await app.page.waitFor(`location.hash === "#/" && ${listed}`);
   assert.equal(await app.page.evaluate<number>(`history.length`), length, "nothing lay behind the link, so back wrote no entry");
 });
@@ -85,16 +85,16 @@ app.scene("a hash typed by hand is a place in the log, and a page that only forw
   await app.page.waitFor(`location.hash === "#/about"`);
 });
 
-app.scene("on a desktop, back from a selected todo unselects it and keeps the list mounted", async () => {
+app.scene("on a desktop, back from a todo beside the list closes its tile and keeps the list mounted", async () => {
   await app.page.viewport(DESKTOP[0], DESKTOP[1]);
   await app.page.navigate(`${BASE}/#/`);
   await app.page.waitFor(listed);
   await app.page.evaluate(`document.querySelector(".tree").dataset.mark = "kept"`);
   await reveal(app.page, todos.urgent.id);
   await app.page.click(`${row(todos.urgent.id)} .rowmain`);
-  await app.page.waitFor(`location.hash === "#/todo/${todos.urgent.id}" && document.querySelector(".detailpane .todoview") !== null`, { timeout: 20000 });
+  await app.page.waitFor(`location.hash === "#/todo/${todos.urgent.id}" && document.querySelector("#view.tiled .tile .todoview") !== null`, { timeout: 20000 });
   await app.page.evaluate(`history.back()`);
-  await app.page.waitFor(`location.hash === "#/" && document.querySelector(".detailpane .panehint") !== null`);
+  await app.page.waitFor(`location.hash === "#/" && document.querySelector("#view:not(.tiled) .todospane") !== null && document.querySelector(".todoview") === null`);
   assert.equal(await app.page.evaluate<string | undefined>(`document.querySelector(".tree").dataset.mark`), "kept");
   await app.page.viewport(PHONE[0], PHONE[1]);
 });

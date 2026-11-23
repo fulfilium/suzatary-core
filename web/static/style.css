@@ -62,17 +62,7 @@
   --f-display: "Crimson Pro", Georgia, serif;
   --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* --- space: `--s-N` is N×4px, `--s-Nh` half a step more ---------------- */
-  --s-0h: 0.125rem;
-  --s-1: 0.25rem;
-  --s-1h: 0.375rem;
-  --s-2: 0.5rem;
-  --s-2h: 0.625rem;
-  --s-3: 0.75rem;
-  --s-3h: 0.875rem;
-  --s-4: 1rem;
-  --s-6: 1.5rem;
-  --s-8: 2rem;
+  /* The spacing scale (`--s-N`) and the measures (`--m-*`) are tokens.typ's, in ./tokens.css. */
 
   /* --- shape --------------------------------------------------------------- */
   --r-sm: 5px;
@@ -81,7 +71,7 @@
   --r-pill: 999px;
 
   /* Every target a thumb lands on is at least this: 44px at the 16px root. */
-  --tap: 2.75rem;
+  --tap: var(--m-tap);
   /* The phone's tab bar, above the home indicator: what a thing pinned to the foot rides above. */
   --tabbar: max(var(--tap), 3.5rem);
   /* What a page or a sheet leaves free at a phone's foot: the tab bar, a step, the home indicator. */
@@ -279,7 +269,7 @@ body {
   margin: 0;
   /* The tab bar is fixed over the bottom of the page; nothing may hide beneath
      it, home indicator included. */
-  padding: 0 var(--s-4) var(--foot-room);
+  padding: 0 var(--m-gutter) var(--foot-room);
   background: var(--ground);
   color: var(--ink);
   font: var(--t-body)/1.55 var(--f-serif);
@@ -464,6 +454,8 @@ header::before {
 @media (min-width: 62rem) {
   :root {
     --aside: 0px;
+    /* The header's height: its padding round one row of targets. The panel pins under it. */
+    --head: calc(var(--s-3h) + var(--tap) + var(--s-2) + env(safe-area-inset-top));
   }
 
   body {
@@ -492,7 +484,12 @@ header::before {
   }
 }
 
+/* The notice is the window's: in the flow under the header at a page's top, and over the header's line once the page
+   scrolls, so it is in view however far a page scrolls and never changes the header's height. */
 .toast {
+  position: sticky;
+  top: 0;
+  z-index: 21;
   margin-top: var(--s-2);
   padding: var(--s-2) var(--s-3);
   border: 1px solid var(--primary);
@@ -527,7 +524,7 @@ header::before {
 /* A reading column for the pages made of cards. `main` is 74rem wide because
    the chain table wants it; a todo body set that wide is a 120-character line. */
 .column {
-  max-width: 50rem;
+  max-width: var(--m-reading);
   margin: 0 auto;
 }
 
@@ -547,7 +544,7 @@ h1,
   color: var(--ink);
 }
 
-@media (min-width: 900px) {
+@container tile (min-width: 900px) {
   .pagetitle.destination {
     font-size: var(--t-title-wide);
   }
@@ -1692,14 +1689,21 @@ dl.facts dd {
   background: rgba(0, 0, 0, 0.38);
 }
 
+/* The sheet is placed against the window, under the bar's own rule, so its
+   width rules are the window's until it rises inside its tile (the note's §6). */
 @media (max-width: 61.99rem) {
+  /* How far above the window's foot the docked sheet stands, and how much of it shows. */
+  :root {
+    --dock: 3.25rem;
+  }
+
   /* The add sheet docks above the tab bar as a handle, and pulls up over the
      list — so adding a todo never pushes the list off the screen. */
   .picker {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: calc(3.25rem + env(safe-area-inset-bottom));
+    bottom: calc(var(--dock) + env(safe-area-inset-bottom));
     z-index: 18;
     max-height: 72vh;
     display: flex;
@@ -1708,12 +1712,17 @@ dl.facts dd {
     border-bottom: 0;
     /* Docked over the list, so opaque: glass would let the rows read through it. */
     background: var(--ground);
-    transform: translateY(calc(100% - 3.25rem));
+    transform: translateY(calc(100% - var(--dock)));
     transition: transform 0.22s ease;
   }
 
   .picker.open {
     transform: none;
+  }
+
+  /* Tiles under a phone's bar end above the add sheet's docked handle, which is the window's. */
+  body:has(#view.tiled .picker) {
+    padding-bottom: calc(2 * var(--dock) + env(safe-area-inset-bottom));
   }
 
   .pickerbody {
@@ -1837,91 +1846,105 @@ footer {
   padding-top: var(--s-2h);
 }
 
-/* --- master and detail ----------------------------------------------------- */
-/* Under 62rem `.split` is nothing at all: the list is the reading column it has
-   always been and there is no pane, because the router sends a todo to its own
-   pushed screen at that width (web/src/shell/layout.ts). At 62rem and up it is two
-   tracks that scroll independently, so a list scrolled a long way down stays
-   where it is while the todo beside it is read from the top. */
+/* --- tiles ------------------------------------------------------------------
+   The host (web/src/shell/tiles.ts) places each tile, crumb row and divider by
+   its rectangle. A tile is a query container: a page asks its tile's width,
+   never the window's. One tile alone flows and the document scrolls; tiles
+   drawn together (only under the wide chrome) stand in what the chrome leaves
+   of the window, each scrolling itself. */
 
-.listpane {
-  max-width: 50rem;
-  margin: 0 auto;
+.tile {
+  container: tile / inline-size;
 }
 
-.detailpane {
+/* Tiles drawn together take what the window's chrome leaves of the window:
+   the body is a column one window tall, and `main` its rest. */
+body:has(#view.tiled) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.tiled {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  /* Its children are all placed, so without a width its auto margins would shrink it to nothing in the column. The
+     open panel's room (`--aside`, the wide chrome's) is the one margin it keeps. */
+  width: calc(100% - var(--aside, 0px));
+}
+
+.tiled > .tile,
+.tiled > .tilelines > * {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.tiled > .tile {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Room for a focus ring against the scroller. */
+  padding: 0 var(--s-1h);
+}
+
+/* With no crumb row and no divider, the layer holds no box at all. */
+.tilelines:empty {
   display: none;
 }
 
-.panehint {
-  padding: var(--s-8) var(--s-4);
-  text-align: center;
+.tiled > .tilelines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-.panehintlead {
-  font-size: var(--t-body);
-  color: var(--ink-muted);
-  margin: 0 0 var(--s-1);
+.tiled > .tilelines > * {
+  pointer-events: auto;
 }
 
-@media (min-width: 62rem) {
-  .split {
-    display: grid;
-    /* `minmax(0, …)` on the detail track, not `1fr`: a plain `1fr` has an AUTO
-       minimum, and one unbroken hash in the timeline would widen it. */
-    grid-template-columns: 27rem minmax(0, 1fr);
-    gap: var(--s-6);
-    align-items: start;
-  }
+/* A divider is a hairline down the middle of the gap the desk leaves. */
+.tileline[data-axis="Across"] {
+  background: linear-gradient(var(--rule), var(--rule)) center / 1px 100% no-repeat;
+}
 
-  .split > * {
-    min-width: 0;
-  }
+.tileline[data-axis="Down"] {
+  background: linear-gradient(var(--rule), var(--rule)) center / 100% 1px no-repeat;
+}
 
-  .listpane,
-  .detailpane {
-    /* Each column is its own scroller, pinned under the header. The page itself
-       then barely scrolls, which is what makes the two independent. */
-    position: sticky;
-    top: calc(4.2rem + env(safe-area-inset-top));
-    max-height: calc(100vh - 5.2rem - env(safe-area-inset-top));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+/* A tile IS its column; a second max-width inside it would strand the page
+   against the left edge of a wide window. */
+.tiled .column {
+  max-width: none;
+}
 
-  /* The panes are the scrollers, so the page under them keeps no room at its foot to scroll into. */
-  body:has(#view .split) {
-    padding-bottom: 0;
-  }
+/* The tile scrolls itself, so what pins inside it pins to the tile. */
+.tiled .actrow {
+  top: 0;
+  margin-top: 0;
+}
 
-  .listpane {
-    max-width: none;
-    margin: 0;
-    /* Room for a focus ring against the scroller. */
-    padding: 0 var(--s-1h);
-  }
+.tiled .pagetitle {
+  margin-top: var(--s-1);
+}
 
-  .detailpane {
-    display: block;
-    border-left: 1px solid var(--rule);
-    padding-left: var(--s-6);
-  }
+/* A crumb row over a tile drawn alone stands where a page's own Back stood: at the top of its column. */
+.tilelines > .crumbs {
+  max-width: var(--m-reading);
+  margin: 0 auto;
+}
 
-  /* The pane IS the column; a second max-width inside it would strand the
-     detail against the left edge of a wide window. */
-  .detailpane .column {
-    max-width: none;
-  }
+.crumbafter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--tap);
+  margin-left: auto;
+  color: var(--primary);
+}
 
-  /* The pane scrolls itself, so what pins inside it pins to the pane. */
-  .detailpane .actrow {
-    top: 0;
-    margin-top: 0;
-  }
-
-  .detailpane .pagetitle {
-    margin-top: var(--s-1);
-  }
+.crumbs {
+  display: flex;
+  align-items: center;
 }
 
 /* ---------------------------------------------------------------- rendered
@@ -2465,7 +2488,7 @@ a.chipbtn {
   font-weight: 600;
 }
 
-@media (min-width: 62rem) {
+@container tile (min-width: 62rem) {
   .mailrow {
     padding: var(--s-2h) var(--s-3h);
   }
@@ -5166,15 +5189,9 @@ h1[tabindex="-1"]:focus {
   font-size: var(--t-head);
 }
 
-@media (min-width: 62rem) {
-  /* The todo beside the list is what is read, so it takes what the list leaves, its prose held to a measure. */
-  .split.todosplit {
-    grid-template-columns: minmax(16rem, min(27rem, 40%)) minmax(0, 1fr);
-  }
-
-  .detailpane :is(p, li) {
-    max-width: 70ch;
-  }
+/* A todo beside the list holds its prose to a measure. */
+.tiled .todoview :is(p, li) {
+  max-width: 70ch;
 }
 
 /* --- the secretary layer: ONE DOOR ON EACH WIDTH.
@@ -5214,9 +5231,9 @@ body:has(> .secretarypanel) .askrow {
     flex-direction: column;
     position: fixed;
     right: 0;
-    top: calc(4.2rem + env(safe-area-inset-top));
+    top: var(--head);
     bottom: 0;
-    width: 22rem;
+    width: var(--m-beside);
     z-index: 24;
     border-left: 1px solid var(--rule);
     background: var(--ground);
@@ -5300,7 +5317,7 @@ body:has(> .secretarypanel) .askrow {
 
   /* The page under the header leaves the open panel its width; a closed panel is only its toggle, in the header's room. */
   body:has(> .secretarypanel:not(.panelclosed)) {
-    --aside: calc(22rem - 1rem + var(--s-4));
+    --aside: var(--m-beside);
   }
 }
 
@@ -5895,28 +5912,27 @@ body:has(> .secretarypanel) .askrow {
   display: none;
 }
 
-@media (min-width: 62rem) {
-  .chatswide {
-    display: grid;
-    grid-template-columns: 20rem minmax(0, 1fr);
-    gap: var(--s-6);
-  }
+/* Where the arrangement has room beside the conversation, its column stands there (`Context.opens`). */
+.chatswide.beside {
+  display: grid;
+  grid-template-columns: var(--m-list) minmax(0, 1fr);
+  gap: var(--s-6);
+}
 
-  /* Beside the column, the conversation starts at its edge rather than centring in what is left. */
-  .chatswide > .conversation {
-    margin: 0;
-  }
+/* Beside the column, the conversation starts at its edge rather than centring in what is left. */
+.chatswide.beside > .conversation {
+  margin: 0;
+}
 
-  .chatsaside {
-    display: block;
-    position: sticky;
-    top: var(--sticky-top);
-    align-self: start;
-    max-height: calc(100vh - var(--sticky-top));
-    overflow-y: auto;
-    padding: var(--s-4) var(--s-4) var(--s-4) 0;
-    border-right: 2px solid var(--line);
-  }
+.chatswide.beside > .chatsaside {
+  display: block;
+  position: sticky;
+  top: var(--sticky-top);
+  align-self: start;
+  max-height: calc(100vh - var(--sticky-top));
+  overflow-y: auto;
+  padding: var(--s-4) var(--s-4) var(--s-4) 0;
+  border-right: 2px solid var(--line);
 }
 
 /* --- Settings: what is connected, by group. A line is its label, one sentence of what it is and one of
@@ -6461,7 +6477,8 @@ body:has(> .secretarypanel) .askrow {
     margin-right: 0;
   }
 
-  .column {
+  .column,
+  .tilelines > .crumbs {
     margin-left: 0;
   }
 }

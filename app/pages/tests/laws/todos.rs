@@ -130,15 +130,6 @@ fn list_host() -> impl Strategy<Value = todos::Msg> {
             ask: Listen::Keys,
             frame: k.to_string()
         })),
-        (prop::sample::select(vec!["a", "b"]), todo_asked()).prop_map(
-            move |(todo, (ask, answer))| host(Input::Answered {
-                ask: Ask::Pane {
-                    todo: todo.to_owned(),
-                    ask
-                },
-                answer
-            })
-        ),
         any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
     ]
 }
@@ -168,7 +159,6 @@ fn list_person() -> impl Strategy<Value = todos::Msg> {
         words().prop_map(|w| Msg::Sheet(SheetMsg::Body(w))),
         Just(Msg::Sheet(SheetMsg::Category("home".to_owned()))),
         Just(Msg::Sheet(SheetMsg::Add)),
-        Just(Msg::Pane(todo::Msg::Provenance(true))),
         Just(Msg::Retry),
     ]
 }
@@ -181,37 +171,14 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    fn list_laws(writes: bool, wide: bool, msgs in proptest::collection::vec(list_msg(), 0..24)) {
+    fn list_laws(writes: bool, beside: bool, msgs in proptest::collection::vec(list_msg(), 0..24)) {
+        let opens = if beside { suzatary_pages::runtime::Opens::Beside } else { suzatary_pages::runtime::Opens::Over };
         page_laws::<todos::Todos>(|| todos::Flags {
-            context: Context { wide, ..context(writes) },
+            context: Context { opens, ..context(writes) },
             chain: "life".to_owned(),
             title: "Todos".to_owned(),
             now: 1_788_000_000_000,
         }, &msgs);
-    }
-
-    #[test]
-    fn a_pane_answer_never_acts_on_the_todo_shown_now(asked in proptest::collection::vec(todo_asked(), 1..6)) {
-        let route = |selected: &str| todos::Msg::Host(Box::new(Input::Held {
-            ask: todos::Hold::Route,
-            reading: Reading::Val { v: Answer::Done { body: Text::printed(&json!({"page": "todos", "conversation": "", "selected": selected, "shared": ""})) } },
-            behind: None,
-        }));
-        let (mut page, _) = Runtime::<todos::Todos>::start(todos::Flags {
-            context: Context { wide: true, ..context(true) },
-            chain: "life".to_owned(),
-            title: "Todos".to_owned(),
-            now: 1_788_000_000_000,
-        });
-        page.send(route("shownnow"));
-        for (ask, answer) in asked {
-            let said = page.send(todos::Msg::Host(Box::new(Input::Answered {
-                ask: todos::Ask::Pane { todo: "askedfirst".to_owned(), ask },
-                answer,
-            })));
-            let effects = format!("{:?}", said.effects);
-            prop_assert!(!effects.contains("shownnow"), "{effects}");
-        }
     }
 }
 

@@ -23,6 +23,7 @@ import d from "../wire/decoder"
 import { drawnProposals } from "../wire/api"
 import lanes from "../prodrome/lanes"
 import text from "../wire/text"
+import share from "../todo/share"
 
 export namespace local {
   type Kind = Local["type"]
@@ -120,17 +121,15 @@ export namespace local {
 
   const route = reading.held(
     () => {
-      const a = app.now()
-      const r = app.route(a)
-      const s = app.screen(a)
+      const r = app.route(app.now())
       return {
         page: r.type,
         conversation: r.type === "conversation" ? r.id : "",
-        selected: s.type === "todos" ? s.selected : s.type === "typst" ? s.open : "",
-        shared: s.type === "todos" ? s.prefill : "",
+        selected: r.type === "todo" ? r.id : r.type === "typst" ? r.open : "",
+        shared: r.type === "add" ? share.body(r.text, r.title) : "",
       }
     },
-    heard => app.hear(a => JSON.stringify([app.route(a), app.screen(a)]), heard),
+    heard => app.hear(a => JSON.stringify(app.route(a)), heard),
   )
 
   // The open chain's rows as the tab's fold shows them; a kept copy asks the box for a fold about now.

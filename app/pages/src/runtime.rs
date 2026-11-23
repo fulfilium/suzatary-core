@@ -24,14 +24,29 @@ pub struct Context {
     pub reach: Reach,
     /// Oldest first, each from the instant it starts.
     pub offsets: Vec<Offset>,
-    /// The tab is 62rem wide or more.
-    pub wide: bool,
+    pub keys: Keys,
+    /// Whether a page this tile opens would be drawn beside it (`tiles::Opens`).
+    pub opens: Opens,
     /// This deployment's categories, in its order.
     pub categories: Vec<String>,
     /// How many seconds this device's clock reads ahead of the box's (behind where negative), as
     /// the last answer said; none before any did.
     #[ts(type = "number | null")]
     pub clock: Option<i64>,
+}
+
+/// Whether the device has a keyboard beside a fine pointer, or is touched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+pub enum Keys {
+    Physical,
+    Touch,
+}
+
+/// Whether a page the tile opens would be drawn beside it, on this viewport.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub enum Opens {
+    Beside,
+    Over,
 }
 
 /// What a login that may not write is told where a box to write in would be.
@@ -384,72 +399,6 @@ pub(crate) enum ActName {
     Cancel,
     Reopen,
     Confirm,
-}
-
-impl<H, A, S> Effect<H, A, S> {
-    /// The same effect asked by a page holding the page that asked it.
-    pub(crate) fn map<H2, A2, S2>(
-        self,
-        h: impl Fn(H) -> H2,
-        a: impl Fn(A) -> A2,
-        s: impl Fn(S) -> S2,
-    ) -> Effect<H2, A2, S2> {
-        match self {
-            Effect::Hold { ask, path } => Effect::Hold { ask: h(ask), path },
-            Effect::Again { path } => Effect::Again { path },
-            Effect::Rendered { pairs } => Effect::Rendered { pairs },
-            Effect::Get { ask, path } => Effect::Get { ask: a(ask), path },
-            Effect::Post { ask, path, body } => Effect::Post {
-                ask: a(ask),
-                path,
-                body,
-            },
-            Effect::NewKey { ask } => Effect::NewKey { ask: a(ask) },
-            Effect::Watch { ask, local } => Effect::Watch { ask: h(ask), local },
-            Effect::Keep { register, value } => Effect::Keep { register, value },
-            Effect::Listen { ask, path } => Effect::Listen { ask: s(ask), path },
-            Effect::Keys { ask, keys } => Effect::Keys { ask: s(ask), keys },
-            Effect::Sync => Effect::Sync,
-            Effect::Act {
-                ask,
-                act,
-                secret,
-                told,
-            } => Effect::Act {
-                ask: a(ask),
-                act,
-                secret,
-                told,
-            },
-            Effect::Endorse { ask, actor, key } => Effect::Endorse {
-                ask: a(ask),
-                actor,
-                key,
-            },
-            Effect::Timer { ask, after } => Effect::Timer { ask: a(ask), after },
-            Effect::Frame { ask } => Effect::Frame { ask: a(ask) },
-            Effect::Focus { field } => Effect::Focus { field },
-            Effect::Scroll { to } => Effect::Scroll { to },
-            Effect::Copy { text } => Effect::Copy { text },
-            Effect::Go { href } => Effect::Go { href },
-            Effect::Leave { href } => Effect::Leave { href },
-            Effect::Replace { href } => Effect::Replace { href },
-            Effect::Back { fallback } => Effect::Back { fallback },
-            Effect::Toast { words } => Effect::Toast { words },
-            Effect::Offer { words, label, ask } => Effect::Offer {
-                words,
-                label,
-                ask: a(ask),
-            },
-            Effect::Core { ask, question } => Effect::Core {
-                ask: a(ask),
-                question,
-            },
-            Effect::Reset { losses } => Effect::Reset { losses },
-            Effect::Mark { name } => Effect::Mark { name },
-            Effect::Tell { said } => Effect::Tell { said },
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

@@ -294,7 +294,7 @@ impl Program for Draft {
         let head =
             view! { Div "convhead" [head, refused::view(&m.refused, Msg::Copy, Msg::Dismissed)] };
         let compose =
-            composer::view(&m.composer, &m.context.reach, m.context.wide).map(Msg::Composer);
+            composer::view(&m.composer, &m.context.reach, m.context.keys).map(Msg::Composer);
         chrome::page_headed(chrome, head, Status::Quiet, vec![compose])
     }
 }
@@ -312,7 +312,8 @@ mod tests {
             gate: Gate::Writes,
             reach: Reach::Writes,
             offsets: Vec::new(),
-            wide: false,
+            keys: crate::runtime::Keys::Touch,
+            opens: crate::runtime::Opens::Over,
             categories: Vec::new(),
             clock: None,
         };

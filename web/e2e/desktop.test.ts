@@ -2,7 +2,8 @@
  * THE WIDE LAYOUT, AT DESKTOP SIZE: what the owner's browser at a desk sees, where the phone's tests do not look.
  *
  * More drops a sheet whose links a press reaches. The secretary panel's toggle keeps one place, open or closed, and
- * a closed panel takes no width. The Todos page fits the window, so only its panes scroll.
+ * a closed panel takes no width. A list drawn alone scrolls the document; tiles drawn together each scroll themselves,
+ * and the page under them fits the window.
  */
 
 import assert from "node:assert/strict";
@@ -59,40 +60,42 @@ app.scene("at 1440 px the header holds still across pages, the todo read is the 
   }
   assert.deepEqual(brands.slice(1), brands.slice(0, -1), "the brand is where it was on every page");
   await app.page.navigate(`${BASE}/#/todo/${todos.flat.id}`);
-  await app.page.waitFor(`document.querySelector(".detailpane .todoview .todobody") !== null`);
+  await app.page.waitFor(`document.querySelector("#view.tiled .todoview .todobody") !== null`);
   await app.page.waitFor(`document.querySelector(".secretarypanel .frameheader")?.textContent.includes("Nothing about") === true`);
   assert.equal(await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`), "false", "nothing in it is about this todo");
   assert.equal((await box(".secretarypanel")).width, 0);
-  const list = await box(".listpane");
-  const pane = await box(".detailpane");
+  const list = await box(".tile:has(.todospane)");
+  const pane = await box(".tile:has(.todoview)");
   assert.ok(pane.width > list.width, `the todo (${pane.width} px) is wider than the list (${list.width} px)`);
   assert.equal(list.x, brands[0]?.x, "the list starts under the brand");
   await app.resize(DESKTOP);
 });
 
 /**
- * AT A MIDDLE WIDTH WITH THE PANEL OPEN the todo is still the wider column: the list gives way first, down to 16rem,
- * so the thing being read keeps its room.
+ * AT A MIDDLE WIDTH WITH THE PANEL OPEN the todo keeps its room: the panel takes its width from the room the tiles
+ * stand in, where the list no longer fits beside the todo, so the todo is read alone under the Todos crumb, never
+ * squeezed under its least.
  */
-app.scene("at 1100 px with the panel open, the todo is wider than the list", async () => {
+app.scene("at 1100 px with the panel open, the todo stands alone under its crumb, and closing the panel brings the list back", async () => {
   await app.resize(MIDDLE);
   await app.page.navigate(`${BASE}/#/todo/${todos.flat.id}`);
-  await app.page.waitFor(`document.querySelector(".detailpane .todoview .todobody") !== null`);
+  await app.page.waitFor(`document.querySelector("#view.tiled .todoview .todobody") !== null`);
   await app.page.waitFor(`document.querySelector(".secretarypanel .panelcollapse")?.textContent !== ""`);
   if ((await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") {
     await app.page.click(".panelcollapse");
   }
   await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "true"`);
-  const list = await box(".listpane");
-  const pane = await box(".detailpane");
-  assert.ok(pane.width > list.width, `the todo (${pane.width} px) is wider than the list (${list.width} px)`);
+  await app.page.waitFor(`document.querySelector("#view:not(.tiled) .todoview .todobody") !== null && document.querySelector(".tilelines .crumbs .back") !== null`);
+  const pane = await box(".tile:has(.todoview)");
+  assert.ok(pane.x + pane.width <= (await box(".secretarypanel")).x + 0.5, "the todo stands clear of the panel");
   await app.page.click(".panelcollapse");
   await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "false"`);
+  await app.page.waitFor(`document.querySelector("#view.tiled .tile .todospane") !== null`);
   await app.resize(DESKTOP);
 });
 
-app.scene("the panel's toggle keeps its place, a closed panel takes no width, and the Todos page fits the window", async () => {
-  await app.open(WRITE_BASE);
+app.scene("the panel's toggle keeps its place, a closed panel takes no width, and tiles drawn together fit the window", async () => {
+  await app.open(WRITE_BASE, `#/todo/${todos.flat.id}`);
   await app.page.waitFor(`document.querySelector(".secretarypanel .panelcollapse") !== null`);
   if ((await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") {
     await app.page.click(".panelcollapse");
@@ -104,12 +107,13 @@ app.scene("the panel's toggle keeps its place, a closed panel takes no width, an
   assert.deepEqual(await box(".panelcollapse"), open, "the toggle is where it was");
   assert.equal((await box(".secretarypanel")).width, 0, "a closed panel takes no width");
   assert.equal(await app.page.evaluate<boolean>(`document.activeElement === document.querySelector(".panelcollapse")`), true, "the toggle keeps the focus");
-  // The panel's column closes before the page's height settles, so wait for the height itself.
-  const fits = `document.documentElement.scrollHeight <= innerHeight`;
+  // Closed, the list stands beside the todo, and the page does not scroll: its tiles do.
+  const fits = `document.querySelector("#view").classList.contains("tiled") && document.documentElement.scrollHeight <= innerHeight`;
   await app.page.waitFor(fits);
-  assert.equal(await app.page.evaluate<boolean>(fits), true, "closed, the page does not scroll; its panes do");
   await app.page.click(".panelcollapse");
   await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "true"`);
   assert.deepEqual(await box(".panelcollapse"), open, "and back where it was");
-  assert.equal(await app.page.evaluate<boolean>(fits), true, "open, the page does not scroll either");
+  // Open, the room at this width still holds the list beside the todo, and the page still fits.
+  await app.page.evaluate(`new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())))`);
+  await app.page.waitFor(fits);
 });

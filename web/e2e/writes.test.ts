@@ -15,7 +15,7 @@
 
 import assert from "node:assert/strict";
 
-import { WRITE_BASE, doneFromList, everyTodo, fold, openInPlace, openTodo, row, suite, untilReplica, pickCategory } from "./harness";
+import { WRITE_BASE, addTodo, doneFromList, everyTodo, fold, openInPlace, openTodo, row, suite, untilReplica, pickCategory } from "./harness";
 import cast from "../test/cast";
 
 const { todos, owner } = cast.world;
@@ -232,7 +232,7 @@ app.scene("a recurring todo offers Did it instead of Done, and stays open once t
 
 app.scene("editing a body changes the line and the chain follows", async () => {
   await app.open(WRITE_BASE);
-  const id = await addTodo("Edit me please", "home");
+  const id = await addTodo(app.page, "Edit me please", "home");
   await openTodo(app.page, id);
   await app.page.waitFor(`document.querySelector(".editbox summary") !== null`, { timeout: 4000 });
   await app.page.click(".editbox summary");
@@ -259,7 +259,7 @@ app.scene("editing a body changes the line and the chain follows", async () => {
     `fetch("/api/todo/${id}").then((r) => r.json()).then((b) => b.entry.authored.body === "Edit me please, updated")`,
     { timeout: 15000 },
   );
-  await app.page.click(".todoview .back");
+  await app.page.click(".tilelines .crumbs .back");
   await app.page.waitFor(
     `document.querySelector('${row(id)} .rowtitle')?.textContent?.includes("updated") === true`,
     { timeout: 4000 },
@@ -279,7 +279,7 @@ const typeInto = (selector: string, text: string): Promise<unknown> =>
 
 app.scene("the editor highlights markup, previews it live, refuses what does not compile, and the list draws it", async () => {
   await app.open(WRITE_BASE);
-  const id = await addTodo("Renew the passport", "home");
+  const id = await addTodo(app.page, "Renew the passport", "home");
   await openTodo(app.page, id);
   await app.page.waitFor(`document.querySelector(".editbox summary") !== null`, { timeout: 4000 });
   await app.page.click(".editbox summary");
@@ -315,7 +315,7 @@ app.scene("the editor highlights markup, previews it live, refuses what does not
     { timeout: 15000 },
   );
   // The row's HTML is the box's, carried by its fold: rendered when the box adopted the object, read on the next fetch.
-  await app.page.click(".todoview .back");
+  await app.page.click(".tilelines .crumbs .back");
   await app.page.reload();
   await app.page.waitFor(`document.querySelector('${row(id)} .rowtitle strong')?.textContent === "passport"`, { timeout: 20000 });
 
@@ -353,7 +353,7 @@ app.scene("ticking a subtodo moves the chip", async () => {
 
 app.scene("deferring a todo takes it to the bottom of the list, fully fulfilled until the day", async () => {
   await app.open(WRITE_BASE);
-  const id = await addTodo("Defer me until later", "home");
+  const id = await addTodo(app.page, "Defer me until later", "home");
   const before = await everyTodo(app.page);
   const indexBefore = before.indexOf(id);
   assert.ok(indexBefore >= 0);
@@ -380,7 +380,7 @@ app.scene("deferring a todo takes it to the bottom of the list, fully fulfilled 
     `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.find((e) => e.todo === "${id}")?.value === 1)`,
     { timeout: 8000 },
   );
-  await app.page.click(".todoview .back");
+  await app.page.click(".tilelines .crumbs .back");
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`, { timeout: 4000 });
   const after = await everyTodo(app.page);
   const indexAfter = after.indexOf(id);
@@ -393,7 +393,7 @@ app.scene("deferring a todo takes it to the bottom of the list, fully fulfilled 
 
 app.scene("a deferral to a date not after today is refused in the box's own words", async () => {
   await app.open(WRITE_BASE);
-  const id = await addTodo("Do not defer me into the past", "home");
+  const id = await addTodo(app.page, "Do not defer me into the past", "home");
   await openTodo(app.page, id);
   await app.page.waitFor(`document.querySelector(".deferbox summary") !== null`, { timeout: 4000 });
   await app.page.click(".deferbox summary");
@@ -423,22 +423,6 @@ app.scene("a deferral to a date not after today is refused in the box's own word
  * its id (the body's slug) once the box's fold holds it, so a scene that asks
  * the box about it asks after the push. A FRESH id is collision-proof by
  * construction — the todo store derives it from text this call chose. */
-async function addTodo(body: string, category: string): Promise<string> {
-  await app.page.click(".addsheet .pickerhandle");
-  await app.page.waitFor(`document.querySelector(".addsheet.open") !== null`);
-  await app.page.waitFor(`document.activeElement?.className.includes("draftbody") === true`);
-  await app.page.type(".draftbody", body);
-  await pickCategory(app.page, category);
-  await app.page.click(".addbtn");
-  const id = body.toLowerCase().replace(/[^a-z0-9]+/g, "");
-  await app.page.waitFor(`document.querySelector('${row(id)}') !== null`, { timeout: 8000 });
-  await app.page.waitFor(`document.querySelector(".addsheet.open") === null`, { timeout: 2000 });
-  await app.page.waitFor(
-    `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${id}" && e.state === "open"))`,
-    { timeout: 15000 },
-  );
-  return id;
-}
 
 /** How far behind the box's clock this scene sets the tab's. A phone's clock runs behind the box's by some amount, and an
  * undo is the one act the box stamps, so for that long every reading the tab draws holds the undo's object and does
@@ -507,7 +491,7 @@ app.scene("the toast's Undo button reopens what was just completed, and U redoes
 app.scene("Done with a line lands on the sealed event and the default conversation", async () => {
   await app.open(WRITE_BASE);
   await untilReplica(app.page);
-  const id = await addTodo("Call the insurer", "work");
+  const id = await addTodo(app.page, "Call the insurer", "work");
   await app.page.navigate(`${WRITE_BASE}/#/todo/${id}`);
   await app.page.waitFor(`document.querySelector(".actrow .act-done") !== null`, { timeout: 8000 });
   await app.page.type(".actrow .noteline", "the meeting moved to October");

@@ -1,9 +1,8 @@
 // A page that is a Rust program (`app/pages`): its patches painted, and every effect of the runtime's sum
 // (`app/pages/src/runtime.rs`) performed here, the same for each page. Nothing here knows a page.
 
-import type { Act, ActName, Answer, Basis as CoreBasis, BriefingAt, CalendarAt, Context, ConversationFlags, Core, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt, TodoFlags, TodosFlags, TypstFlags, Keyed } from "../wire/generated/pages"
+import type { Act, ActName, Answer, Basis as CoreBasis, BriefingAt, CalendarAt, Context, ConversationFlags, Opens, Core, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt, TodoFlags, TodosFlags, TypstFlags, Keyed } from "../wire/generated/pages"
 import type { Draw } from "../view/page"
-import type { Screen } from "../shell/layout"
 import http from "../wire/http"
 import d from "../wire/decoder"
 import asked from "../app/asked"
@@ -13,6 +12,8 @@ import lo from "../algebra/lo"
 import once from "../algebra/once"
 import stream from "../algebra/stream"
 import { toast } from "../view/toast"
+import { UNDO_WINDOW_MS } from "../todo/undo"
+import drain from "./drain"
 import frame from "../view/frame"
 import address from "../shell/address"
 import { parseRoute } from "../shell/route"
@@ -71,16 +72,24 @@ export namespace program {
     return made
   }
 
-  type Who = { readonly me: string | null; readonly reach: app.Reach; readonly wide: boolean }
-  const whoOf = (a: app.App): Who => ({ me: app.actor(a), reach: app.reach(a), wide: a.wide })
-  const same = (w: Who, was: Who): boolean => w.me === was.me && w.wide === was.wide && app.sameReach(w.reach, was.reach)
+  type Who = { readonly me: string | null; readonly reach: app.Reach }
+  const whoOf = (a: app.App): Who => ({ me: app.actor(a), reach: app.reach(a) })
+  const same = (w: Who, was: Who): boolean => w.me === was.me && app.sameReach(w.reach, was.reach)
 
-  const context = (): Context => {
+  // Where a page stands: whether a page it opens would stand beside it, told again when that moves.
+  export type Placed = { readonly opens: () => Opens; readonly hear: (moved: () => void) => () => void }
+  const OVER: Placed = { opens: () => "Over", hear: () => () => {} }
+
+  const context = (placed: Placed): Context => {
     const a = app.now()
     const w = whoOf(a)
     const key = a.who.type === "Writes" && (a.who.key.type === "Untrusted" || a.who.key.type === "Revoked") ? a.who.key.type === "Untrusted" ? "untrusted" : "revoked" : "not_the_key"
     return {
-      wide: a.wide,
+      // A device whose only pointer is a finger is touched. Any other has keys: a mouse, a pen, a tablet's keyboard
+      // case with a trackpad (a fine pointer beside the finger), or no pointer at all. A keyboard with no trackpad
+      // cannot be seen from a page, so on a tablet it gets the Send button and Enter's new line.
+      keys: window.matchMedia("(pointer: coarse)").matches && !window.matchMedia("(any-pointer: fine)").matches ? "Touch" : "Physical",
+      opens: placed.opens(),
       gate: w.reach.type === "Writes" ? "writes" : w.me !== null ? "reads" : "views",
       reach: w.reach.type === "Reads" ? { type: "Reads", said: w.reach.said, settings: w.reach.settings, key } : { type: w.reach.type },
       offsets: [...offsetsOf(a.zone)],
@@ -191,13 +200,14 @@ export namespace program {
   type Out = Effect<unknown, unknown, unknown>
 
   // The scroll box is the document's, or one the page draws itself, found once drawn; `lane` is the shell's behind the page.
-  export type Around = { readonly box?: () => Element; readonly lane?: lanes.Lane; readonly told?: (said: unknown) => void; readonly absorbs?: (screen: Screen) => boolean }
+  export type Around = { readonly box?: () => Element; readonly lane?: lanes.Lane; readonly told?: (said: unknown) => void; readonly placed?: Placed }
   const page_ = (): Element => document.scrollingElement ?? document.documentElement
 
   // Only the module is awaited: the page draws when the caller calls what this returns.
   export const mount = async <P extends Page>(page: P, args: Args[P], around: Around = {}): Promise<Draw> => {
     const box = around.box ?? page_
     const lane = around.lane ?? lanes.FIRST
+    const placed = around.placed ?? OVER
     const glue = await module()
     return root => {
       const held_ = new Map<string, () => void>()
@@ -222,8 +232,21 @@ export namespace program {
         })
         return () => ((gone = true), unheard())
       }
+      // Left with a write in flight, the program keeps running until the write answers (`drain`).
+      let life: drain.State = drain.LIVE
+      // Gone only after `Left`, which `destroy` steps once the program has started.
+      const lived = (e: drain.Event): void => {
+        life = drain.step(life, e)
+        if (life.type === "Gone") running.destroy()
+      }
       const handle: run.Handler<In, Out> = (e, send) => {
-        const answered = (name: unknown) => (a: Answer): void => send({ type: "Answered", ask: name, answer: a })
+        if (!drain.performs(life, e.type)) return
+        const write = drain.writes(e.type)
+        if (write) lived("Wrote")
+        const answered = (name: unknown) => (a: Answer): void => {
+          send({ type: "Answered", ask: name, answer: a })
+          if (write) lived("Answered")
+        }
         switch (e.type) {
           case "Hold": {
             const q = held(e.path)
@@ -330,6 +353,8 @@ export namespace program {
           case "Toast":
             return void toast(e.words)
           case "Offer":
+            lived("Offered")
+            setTimeout(() => lived("Expired"), UNDO_WINDOW_MS)
             return void toast(e.words, { label: e.label, onClick: () => answered(e.ask)(done(null)) })
           case "Core":
             return void settled(core(e.question, lane)).then(answered(e.ask))
@@ -346,7 +371,7 @@ export namespace program {
       // Its parts, in ms: the flags printed (the context, its zone's offsets among it), the class made (the flags read and
       // the first view drawn), and the first step painted with its effects handed out.
       const t0 = performance.now()
-      const flags = JSON.stringify({ ...args, context: context(), now: time.now() })
+      const flags = JSON.stringify({ ...args, context: context(placed), now: time.now() })
       const t1 = performance.now()
       const program = new glue[page](flags)
       const t2 = performance.now()
@@ -354,17 +379,19 @@ export namespace program {
       const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, keeps, parts.gone, box, parts.refresh)
       const t3 = performance.now()
       performance.measure("page:draw", { start: t0, end: t3, detail: { page, read: "Program", flags: Math.round(t1 - t0), made: Math.round(t2 - t1), first: Math.round(t3 - t2) } })
-      const unheard = app.hear(whoOf, () => running.send({ type: "Context", ...context() }), same)
-      const unclocked = http.heardClock(() => running.send({ type: "Context", ...context() }))
+      const told = (): void => running.send({ type: "Context", ...context(placed) })
+      const unheard = app.hear(whoOf, told, same)
+      const unclocked = http.heardClock(told)
+      const unplaced = placed.hear(told)
       return {
-        ...(around.absorbs === undefined ? {} : { absorb: around.absorbs }),
         destroy: () => {
           unheard()
+          unplaced()
           unclocked()
           held_.forEach(stop => stop())
           timers.forEach(t => clearTimeout(t))
           frames.forEach(f => cancelAnimationFrame(f))
-          running.destroy()
+          lived("Left")
         },
       }
     }

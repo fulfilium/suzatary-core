@@ -12,6 +12,21 @@
 
 #let ground-dark = neutral(16%, chroma: 4%)
 
+// The spacing scale: `s-N` is N quarter-rems, `s-Nh` half a step more; in `em`
+// of the root, printed as `rem`.
+#let space = (
+  s-0h: 0.125em,
+  s-1: 0.25em,
+  s-1h: 0.375em,
+  s-2: 0.5em,
+  s-2h: 0.625em,
+  s-3: 0.75em,
+  s-3h: 0.875em,
+  s-4: 1em,
+  s-6: 1.5em,
+  s-8: 2em,
+)
+
 #let tokens = (
   light: (
     ground: quiet(ramps.sienna, 98%),
@@ -64,4 +79,20 @@
   ),
   // A fulfillment's colour, the same in both themes: the package's one scale, bad to good.
   fulfillment: fulfillment,
+  // The lengths the layout reads (docs/TILEDLAYOUT-PLAN-2026-11-22.md §2, §8.1): a thumb's
+  // target, the divider, the body's gutter on each side, the window's edge (the bar across the
+  // top from it, at the foot below it), the least width a list and a page read as a column each
+  // read well at, the secretary beside a page, and the reading column's measure. The tiles ask
+  // the room they stand in and the chrome asks the window: two questions, no length ties them.
+  space: space,
+  measure: (
+    tap: 2.75em,
+    divider: space.s-6,
+    gutter: space.s-4,
+    wide: 62em,
+    list: 20em,
+    column: 30em,
+    beside: 22em,
+    reading: 50em,
+  ),
 )

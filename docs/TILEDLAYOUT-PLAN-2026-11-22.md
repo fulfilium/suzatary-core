@@ -752,3 +752,84 @@ case the app has today is one of its instances.
 | Inbox | 9 | 0.018 ms | 0.050 ms | 0.276 ms |
 | Needs you | 5 | 0.003 ms | 0.011 ms | 0.039 ms |
 | Settings | 7 | 0.010 ms | 0.035 ms | 0.170 ms |
+
+## 13. Stage b: what the face gave, and what it did not
+
+Stage b instantiates `Page` with the app's route (`app/pages/src/route.rs`). It holds the tiles in a desk (`desk.rs`),
+and a host (`web/src/shell/tiles.ts`) draws what `arrange` answers. The figures of §2 changed in three ways when they
+met the window:
+
+- **The arrangement is given the room, not the window.** The tiles stand in `main`, which is the window less the
+  body's gutters (1rem each side) and less the secretary's panel when it is open (22rem). `arrange` is given that
+  box, read in root-font units and floored as a media query compares, so no tile is drawn under its least width.
+- **Two questions, no tie.** The window's chrome (the bar across the top, the header, the panel, the add sheet's dock)
+  keeps its 62rem media queries: it is placed against the window and asks the window alone. The tiles ask the room.
+  A column's least width is its own token, 30rem, what a page read as a column needs; a list's is 20rem. So two tiles
+  stand together wherever the room holds 824 px: from a window of 856 px with the panel closed, under a phone's
+  chrome up to 991 px, and from 1,208 px with the panel open. A first version tied the two (the column's least
+  width defined from the edge, 38.5rem); the review undid it, because it cost the list beside a todo at every window
+  from 992 to 1,343 px with the panel open. The law that replaces the tie: **no tile is ever under a bar, in either
+  chrome**: tiles under a phone's chrome end above the bar and the add sheet's docked handle, which are the
+  window's (`web/e2e/tiles.test.ts` sweeps 840 to 1,010 px, with the panel and without, at two text sizes).
+- **The room never depends on the document's scrollbar.** `html` keeps a classic scrollbar's gutter
+  (`scrollbar-gutter: stable`), so whether the document scrolls (one tile alone) or not (tiles together) does not
+  move the room, and the arrangement is not bistable near the threshold.
+- **Height takes no tile away** (`Measures::tall` is zero). Every tile scrolls itself, and a tablet's keyboard or
+  docked developer tools must not unmount the list beside a todo. A node down (`Below`, stage c) brings a least
+  height back.
+
+The face was enough for every layout stage b draws. What it did not give, and what stage b did instead:
+
+- **The page of a drawn tile.** `Placed` names an `Id`, and `Tiles::page` answers an `Option`. The desk joins the two
+  with `filter_map`. A `Placed` that carried its leaf's page, `Arranged<P>`, would make the join total. Stage c should
+  add it with a law: every placed page is its leaf's.
+- **The bar's band.** The root's row is the bar, which the window's chrome draws until stage d. The desk arranges the
+  room with the bar's band above it (`foot` zero) and cuts the band off every rectangle, so the host never sees it.
+- **Keeping a live tile across an address.** `parse` mints fresh ids (§5), so the host matches each new leaf to a
+  live tile of the same page. §5 places this in stage d, but stage b needs it already: the list beside a todo is not
+  mounted again when the todo changes. The host also keeps a tile whose page takes the move on itself (the list a
+  share opens, the Typst list's open todo).
+- **A conversation's column** is a list, so the conversation declares that it opens pages a list wide. Its column
+  stands where `opens` is `Beside`, as the list beside a todo does.
+
+**The host is a function of the drawing.** It keeps one element per tile, crumb row (by `Row.node`) and divider (by
+`Divider.node` and the tile before it), writes a style or a row's crumbs only where they differ, and never moves a
+tile's element. When a kept tile's scroller changes (alone it scrolls the document, beside another it scrolls itself),
+the host scrolls the new box so what the person sees stays where it stood on the screen: what they last pressed in the
+tile while it is on screen (the row clicked), else the element crossing the top of what the tile shows. Not what has
+the keyboard: Safari and a tablet's tap focus no button, and a click in the todo takes the keyboard from the list. A page draws into its tile's element, with no wrapper between. What CSS still decides is the window's: when
+tiles stand together the body is a column one window tall, and `main`, where the tiles stand, takes what the chrome
+(the header, the banners) leaves of it.
+
+**The notice is the window's**: `#toast` stands in the flow under the header at a page's top and sticks to the window's top, over the header's line, once the page scrolls: in view however far a lone list scrolls, and never a change to the header's height, which the page reads.
+
+**A page left with a write in flight drains** (`web/src/pages/drain.ts`): its program keeps running, undrawn and
+holding nothing, until each write has answered and each Undo it offered has expired, and performs only the write's
+effects and what says how it went. That is §6's rule for a closed tile, in the page framework, and it replaces
+`unshown`. It has no bound, on purpose: a write waiting offline is held by the intent set until the box answers, and
+its program (one page's model, nothing drawn, nothing held) waits with it, so the answer can still be said.
+
+**Engines.** A tile is a query container. Engines before late 2024 made such an element the containing block of its
+fixed children, which would pin the add sheet, its scrim and the topic sheet to the tile. The application supports
+current Chromium, Firefox and Safari; the scenes prove the sheet docked to the window only in the suite's Chromium.
+Moving those layers out of the tiles is stage c's.
+
+What stage b did not reach, on purpose, and the stage each goes in:
+
+- **The secretary panel as the pinned leaf: stage c, after hidden tiles are kept and fed.** The panel's opening rule
+  needs the conversation's talk about the page, which only a running panel can tell. Without §6's kept-and-fed hidden
+  tiles a closed panel would run nothing, so the panel stays the fixed overlay. Its rule reads the window's chrome
+  (`tiles.room`, the same media query as the chrome) and nothing else, and it takes its width from the room.
+- **Hidden tiles kept and fed (§6): stage c,** with the panel, which is their first consumer. The host mounts only
+  drawn tiles; on a phone, Back mounts the list again and restores its scroll through `routelog.Kept`, as before.
+- **The conversations column as a tile: stage c,** with the open rule for links between pages, since its column is a
+  list a conversation opens from. Until then it is page content that follows the tile's `opens`.
+- **The Typst list's pane as a tile: stage c,** for the same reason; until then it follows its frame's container query.
+- **The add sheet rising inside its tile: stage c,** once a sheet belongs to its tile (§6). Until then the sheet is
+  placed against the window, so its width rules stay the window's media queries at the edge.
+- **`Route` and `places::Place`** print the same hashes twice in Rust. One should become a view of the other, in
+  stage d, which also deletes `parseRoute` in TypeScript.
+
+Every page is under exactly one mechanism: the address names a leaf, the desk arranges it, and the host mounts it in
+a tile. The panel, the More sheet, the add sheet and the toast are the window's chrome, not tiles, and none of them is
+placed by the arrangement.

@@ -7,10 +7,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { readFileSync } from "node:fs";
 import { hrefOf, parseRoute } from "../src/shell/route";
-import { isWide, screenFor } from "../src/shell/layout";
 import { reconcile } from "../src/algebra/reconcile";
-import { forAll, keys, reshuffled, route, width } from "./gen";
+import { forAll, keys, reshuffled, route } from "./gen";
 
 // --- The address ---------------------------------------------------------------
 
@@ -22,41 +22,20 @@ test("law: a route survives print and parse (hrefOf then parseRoute)", () => {
   });
 });
 
+// The one list of hashes both parsers read (`app/pages/tests/laws/route.rs` reads it too): hand-written cases, the
+// first a signed escape Rust once took, and strings drawn by Rust's generator.
+test("law: every hash of the shared list prints as listed, as Rust's parser prints it", () => {
+  const pairs = JSON.parse(readFileSync("app/pages/tests/hashes.json", "utf8")) as { hash: string; href: string }[];
+  assert.ok(pairs.length > 100);
+  assert.deepEqual(pairs.filter((p) => hrefOf(parseRoute(p.hash)) !== p.href).map((p) => [p.hash, p.href, hrefOf(parseRoute(p.hash))]), []);
+});
+
 test("law: parsing is total — any hash yields a route, and an unknown one names itself", () => {
   forAll(300, (r) => {
     const hash = `#/${r.string("abcdefghijklmnopqrstuvwxyz/?=&%-", r.int(24))}`;
     const parsed = parseRoute(hash);
     assert.ok(typeof parsed.type === "string");
     if (parsed.type === "unknown") assert.equal(parsed.hash, hash);
-  });
-});
-
-// --- The screen -----------------------------------------------------------------
-
-test("law: screenFor is total, and a todo is a pane at 62rem and a page below it", () => {
-  forAll(400, (r) => {
-    const at = route(r);
-    const px = width(r);
-    const screen = screenFor(at, isWide(px));
-    if (at.type === "todo") {
-      if (isWide(px)) {
-        assert.equal(screen.type, "todos", `${hrefOf(at)} at ${px}px`);
-        if (screen.type === "todos") assert.equal(screen.selected, at.id);
-      } else {
-        assert.equal(screen.type, "todo", `${hrefOf(at)} at ${px}px`);
-      }
-    }
-    if (screen.type === "todos" && !isWide(px)) {
-      assert.equal(screen.selected, "", `${hrefOf(at)} at ${px}px: a narrow list selects nothing`);
-    }
-  });
-});
-
-test("law: the same route at the same width always resolves to the same screen", () => {
-  forAll(200, (r) => {
-    const at = route(r);
-    const px = width(r);
-    assert.deepEqual(screenFor(at, isWide(px)), screenFor(at, isWide(px)));
   });
 });
 

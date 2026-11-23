@@ -197,11 +197,6 @@ export function route(r: Rng): Route {
   }
 }
 
-/** A viewport width, spanning both sides of the 62rem rule. */
-export function width(r: Rng): number {
-  return r.pick([320, 390, 414, 600, 991, 992, 1024, 1280, 1920]);
-}
-
 /** A value on its way over `value`, each arm equally likely. */
 export function loState<S>(r: Rng, value: () => S): lo.T<S> {
   return r.pick<() => lo.T<S>>([

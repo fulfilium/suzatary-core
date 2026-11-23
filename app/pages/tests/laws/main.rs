@@ -16,6 +16,7 @@ mod message;
 mod needsyou;
 mod reaches;
 mod rehearsals;
+mod route;
 mod secretary;
 mod settings;
 mod thread;

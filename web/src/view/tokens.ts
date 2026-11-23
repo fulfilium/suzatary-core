@@ -11,5 +11,28 @@ export namespace tokens {
     { at: 0.78, colour: { l: 62, c: 0.13, h: 145 } },
     { at: 1, colour: { l: 58, c: 0.11, h: 185 } },
   ]
+  // The layout's lengths, in CSS pixels at the 16px root.
+  export const measure = {
+    "tap": 44,
+    "divider": 24,
+    "gutter": 16,
+    "wide": 992,
+    "list": 320,
+    "column": 480,
+    "beside": 352,
+    "reading": 800,
+  }
+  export const space = {
+    "s-0h": 2,
+    "s-1": 4,
+    "s-1h": 6,
+    "s-2": 8,
+    "s-2h": 10,
+    "s-3": 12,
+    "s-3h": 14,
+    "s-4": 16,
+    "s-6": 24,
+    "s-8": 32,
+  }
 }
 export default tokens

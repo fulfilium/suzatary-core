@@ -55,6 +55,7 @@ fn generates_the_pages_boundary_types() {
     d.visit::<suzatary_pages::todos::Flags>();
     d.visit::<runtime::Keyed>();
     d.visit::<suzatary_pages::typstlist::Flags>();
+    d.visit::<suzatary_pages::desk::Drawing>();
     let mut out = String::from(
         "// GENERATED FROM app/pages/src BY `cargo test -p suzatary-pages`. DO NOT EDIT.\n",
     );
@@ -78,7 +79,8 @@ fn an_act_runs_once_until_it_is_answered() {
             gate: Gate::Writes,
             reach: Reach::Writes,
             offsets: Vec::new(),
-            wide: false,
+            keys: suzatary_pages::runtime::Keys::Touch,
+            opens: suzatary_pages::runtime::Opens::Over,
             categories: vec!["home".to_owned(), "work".to_owned()],
             clock: None,
         },

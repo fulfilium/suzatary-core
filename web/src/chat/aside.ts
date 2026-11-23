@@ -5,6 +5,7 @@ import app from "../app/app"
 import nav from "../shell/nav"
 import { referenceInView } from "./inview"
 import { print, type Reference } from "./refs"
+import type { Opens } from "../wire/generated/pages"
 
 export namespace aside {
   // A page of many things is keyed by its destination, so a calendar's next week is still the same page.
@@ -22,10 +23,11 @@ export namespace aside {
 
   export type Presses = { readonly [key: string]: Press }
 
-  export const placement = (a: app.App): Placement => {
+  // `room` is whether the window has room for the panel beside the page.
+  export const placement = (a: app.App, room: Opens): Placement => {
     const at = nav.activeFor(app.route(a))
-    if (!a.wide || at === "secretary") return { type: "Absent" }
-    const r = referenceInView(app.screen(a), a.chain)
+    if (room === "Over" || at === "secretary") return { type: "Absent" }
+    const r = referenceInView(app.route(a), a.chain)
     return { type: "Beside", page: r.type === "one" ? { type: "One", key: print(r.reference), reference: r.reference } : { type: "Many", key: at } }
   }
 

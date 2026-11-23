@@ -1,16 +1,13 @@
-// What a mounted page answers to: a destroy when it is left, and maybe a hash it can absorb. The box moving is heard
-// by what the page reads, never told to the page.
+// What a mounted page answers to: a destroy when it is left. The box moving is heard by what the page reads, never told
+// to the page.
 
 import { el } from "./dom"
 import { chevronIcon } from "./icons"
-import type { Screen } from "../shell/layout"
 import type { Route } from "../shell/route"
 import address from "../shell/address"
 
 export interface Mounted {
   readonly destroy: () => void
-  // True when the page took the change on itself (the list selecting a todo on a wide screen) and stays mounted.
-  readonly absorb?: (screen: Screen) => boolean
 }
 
 export const inert: Mounted = { destroy: () => {} }

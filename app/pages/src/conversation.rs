@@ -28,7 +28,8 @@ use crate::part::Who;
 use crate::places::Place;
 use crate::refused;
 use crate::runtime::{
-    self, Act, Answer, Context, Local, Outcome, Reach, Said, Scroll, Secret, Window, answered, read,
+    self, Act, Answer, Context, Local, Opens, Outcome, Reach, Said, Scroll, Secret, Window,
+    answered, read,
 };
 use crate::slices::Slices;
 use crate::zone;
@@ -498,7 +499,7 @@ impl Program for Conversation {
                 local: draft,
             },
         ];
-        if m.context.wide && matches!(m.at, At::Page { .. }) {
+        if m.context.opens == Opens::Beside && matches!(m.at, At::Page { .. }) {
             effects.push(Effect::Watch {
                 ask: Hold::Chats,
                 local: Local::Conversations,
@@ -606,7 +607,7 @@ impl Program for Conversation {
     fn view(m: &Model) -> Node<Msg> {
         let transcript = transcript(m);
         let compose =
-            composer::view(&m.composer, &m.context.reach, m.context.wide).map(Msg::Composer);
+            composer::view(&m.composer, &m.context.reach, m.context.keys).map(Msg::Composer);
         match &m.at {
             At::Panel { about } => view! { Div "panelbody" [
                 view! { Div "panelheader" [panel_header(m, about)] },
@@ -628,7 +629,11 @@ impl Program for Conversation {
                 };
                 let page =
                     chrome::page_headed(chrome, head(m), Status::Quiet, vec![transcript, compose]);
-                view! { Div "chatswide" [column(m), page] }
+                let class = match m.context.opens {
+                    Opens::Beside => "chatswide beside",
+                    Opens::Over => "chatswide",
+                };
+                view! { Div {Class => class} [column(m), page] }
             }
         }
     }
@@ -794,8 +799,8 @@ fn moved(m: &mut Model, to: Option<Scroll>) -> Vec<Effect> {
 fn host(m: &mut Model, input: Input) -> Vec<Effect> {
     match input {
         Input::Context(c) => {
-            let wide = c.wide
-                && !m.context.wide
+            let wide = c.opens == Opens::Beside
+                && m.context.opens == Opens::Over
                 && matches!(m.at, At::Page { .. })
                 && matches!(m.chats.rows, Reading::Loading);
             m.context = c;
@@ -1308,7 +1313,7 @@ fn panel_header(m: &Model, about: &str) -> Node<Msg> {
     view! { Div "frameheader" [line] }
 }
 
-/// Shown at 62rem and up; a phone reads no list.
+/// Shown where a page would stand beside the conversation; a phone reads no list.
 fn column(m: &Model) -> Node<Msg> {
     let today = zone::day_ms(&m.context.offsets, m.now);
     let body = match &m.search.search {
@@ -1316,7 +1321,7 @@ fn column(m: &Model) -> Node<Msg> {
         chats::Search::Off => chats::view(&m.chats, &m.id, &m.context.offsets, today, Msg::Chats),
     };
     view! { Aside "chatsaside" {AriaLabel => "Conversations"} [
-        m.context.wide.then(|| vec![chats::head(&m.search, &m.context.reach, Msg::Searched), view! { Div "chatbody" [body] }]),
+        (m.context.opens == Opens::Beside).then(|| vec![chats::head(&m.search, &m.context.reach, Msg::Searched), view! { Div "chatbody" [body] }]),
     ] }
 }
 
@@ -2348,7 +2353,8 @@ mod tests {
             gate: runtime::Gate::Writes,
             reach: Reach::Writes,
             offsets: Vec::new(),
-            wide: false,
+            keys: runtime::Keys::Touch,
+            opens: runtime::Opens::Over,
             categories: vec!["home".to_owned(), "work".to_owned()],
             clock: None,
         };

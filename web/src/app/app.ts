@@ -4,9 +4,8 @@ import { isChainName, remembered } from "./chain"
 import shell from "./shell"
 import source from "../algebra/source"
 import heads from "../prodrome/heads"
-import { HOME, type Route } from "../shell/route"
+import { HOME, type Route, forwarded } from "../shell/route"
 import routelog from "../shell/routelog"
-import { type Screen, forwarded, screenFor } from "../shell/layout"
 import time from "./time"
 import type { WaitingPayload } from "../wire/generated/wire"
 import ownerzone from "./ownerzone"
@@ -18,7 +17,6 @@ export namespace app {
     log: routelog.Log
     // Whether the place read now was reached by moving the log's pointer (back, forward), so it is read again.
     again: boolean
-    wide: boolean
     chain: string
     who: Who
     served: readonly string[]
@@ -53,7 +51,6 @@ export namespace app {
     | { type: "Replaced"; route: Route }
     | { type: "Moved"; at: number; route: Route }
     | { type: "Kept"; kept: routelog.Kept }
-    | { type: "Resized"; wide: boolean }
     | { type: "Pinned"; chain: string }
     | { type: "Met"; me: login.Met; served: readonly string[]; categories: readonly string[]; zone: time.Zone }
     | { type: "Unmet" }
@@ -70,10 +67,9 @@ export namespace app {
   export const QUIET: Stream = { heads: heads.NONE, link: { type: "Quiet" } }
   export const NO_LINE: shell.Line = { type: "None" }
 
-  export const initial = (route: Route, wide: boolean, chain: string, zone: time.Zone = time.UTC): App => ({
+  export const initial = (route: Route, chain: string, zone: time.Zone = time.UTC): App => ({
     log: routelog.of(forwarded(route)),
     again: false,
-    wide,
     chain,
     who: ASKING,
     served: [],
@@ -95,9 +91,9 @@ export namespace app {
   const via = (a: App, b: App, again: boolean): App => (b.log === a.log || b.again === again ? b : { ...b, again })
 
   // A new place closes the sheet.
-  const placed = (a: App, log: routelog.Log, wide: boolean): App => {
+  const placed = (a: App, log: routelog.Log): App => {
     const moved = !routelog.same(routelog.route(log), route(a))
-    return log === a.log && wide === a.wide ? a : { ...a, log, wide, more: a.more && !moved }
+    return log === a.log ? a : { ...a, log, more: a.more && !moved }
   }
 
   // The writer named again keeps what its key was read to be; anyone else is who the box says.
@@ -150,15 +146,13 @@ export namespace app {
   export const step = (a: App, e: Event): App => {
     switch (e.type) {
       case "Went":
-        return via(a, placed(a, routelog.go(a.log, forwarded(e.route)), a.wide), false)
+        return via(a, placed(a, routelog.go(a.log, forwarded(e.route))), false)
       case "Replaced":
-        return via(a, placed(a, routelog.replace(a.log, forwarded(e.route)), a.wide), false)
+        return via(a, placed(a, routelog.replace(a.log, forwarded(e.route))), false)
       case "Moved":
-        return via(a, placed(a, routelog.to(a.log, e.at, forwarded(e.route)), a.wide), true)
+        return via(a, placed(a, routelog.to(a.log, e.at, forwarded(e.route))), true)
       case "Kept":
-        return placed(a, routelog.keep(a.log, e.kept), a.wide)
-      case "Resized":
-        return placed(a, a.log, e.wide)
+        return placed(a, routelog.keep(a.log, e.kept))
       case "Pinned":
         return pin(a, e.chain)
       case "Met":
@@ -187,7 +181,6 @@ export namespace app {
   }
 
   export const route = (a: App): Route => routelog.route(a.log)
-  export const screen = (a: App): Screen => screenFor(route(a), a.wide)
   export const actor = (a: App): string | null => actorOf(a.who)
   const WRITES: Reach = { type: "Writes" }
   const WAITS: Reach = { type: "Waits" }
@@ -239,7 +232,7 @@ export namespace app {
   export const apiBase = (a: App): string => `/api/${encodeURIComponent(a.chain)}`
 
   // This tab's App. The shell dispatches what it hears; every other module reads it, or hears one value of it move.
-  export const tab = source.create(initial(HOME, false, remembered(), ownerzone.remembered()), step)
+  export const tab = source.create(initial(HOME, remembered(), ownerzone.remembered()), step)
   export const now = (): App => tab.state()
   export const dispatch = (e: Event): void => tab.dispatch(e)
   export const hear = <T>(of: (a: App) => T, heard: (t: T) => void, same: (t: T, was: T) => boolean = Object.is): (() => void) => {

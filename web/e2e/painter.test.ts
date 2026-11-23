@@ -72,7 +72,8 @@ const overview = (r: Rng, lines: ReadonlyMap<string, readonly OverviewLine[]>): 
 const context = (r: Rng): Context => {
   const gate = r.pick(["writes", "reads", "views"] as const);
   return {
-    wide: r.bool(),
+    keys: r.pick(["Physical", "Touch"] as const),
+    opens: r.pick(["Beside", "Over"] as const),
     categories: ["home", "work"],
     gate,
     reach: gate === "writes" ? { type: "Writes" } : { type: "Reads", said: "This device reads only.", settings: r.bool(), key: r.pick(["untrusted", "revoked", "not_the_key"] as const) },

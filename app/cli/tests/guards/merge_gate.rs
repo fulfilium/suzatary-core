@@ -344,6 +344,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/inbox/src/secretary/card.rs", "memory"),
     ("app/io-chains/src/objects.rs", "memory"),
     ("app/pages/src/places.rs", "memory"),
+    ("app/pages/src/route.rs", "memory"),
     ("app/pages/tests/laws/memory.rs", "memory"),
     // The gate run in a throwaway checkout writes a file under each path a step may skip.
     ("app/script-guards/tests/guards/gate_runs.rs", "android"),

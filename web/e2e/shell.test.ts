@@ -139,6 +139,10 @@ app.scene("a page whose code will not load says so in words and offers to load i
     const said = await app.page.evaluate<string>(`document.getElementById("view").textContent`)
     assert.match(said, /This page could not be loaded/, said)
     assert.equal(/TypeError|import|views\.js/.test(said), false, said)
+    // The message is the tiles' host's to draw: a rotation, or any resize, keeps it.
+    await app.resize([PHONE[1], PHONE[0]])
+    await app.resize(PHONE)
+    assert.equal(await app.page.evaluate<boolean>(`document.querySelector("#view .problem .retry") !== null`), true, "a resize took the message away")
   } finally {
     await app.page.resumeRequests()
   }

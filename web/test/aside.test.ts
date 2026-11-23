@@ -12,7 +12,7 @@ import app from "../src/app/app";
 import { parseRoute } from "../src/shell/route";
 import { forAll } from "./gen";
 
-const at = (hash: string): aside.Placement => aside.placement(app.initial(parseRoute(hash), true, "life"));
+const at = (hash: string): aside.Placement => aside.placement(app.initial(parseRoute(hash), "life"), "Beside");
 const page = (hash: string): aside.Page => {
   const p = at(hash);
   assert.equal(p.type, "Beside", hash);

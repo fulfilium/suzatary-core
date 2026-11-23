@@ -67,6 +67,8 @@ function list(value: string): readonly string[] {
 
 export function parseRoute(hash: string): Route {
   const trimmed = hash.startsWith("#") ? hash.slice(1) : hash;
+  // An unknown address names itself as a hash, with or without its `#` written (as `Route::parse`).
+  const unknown: Route = { type: "unknown", hash: `#${trimmed}` };
   const whole = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
   const mark = whole.indexOf("?");
   const path = mark === -1 ? whole : whole.slice(0, mark);
@@ -85,21 +87,21 @@ export function parseRoute(hash: string): Route {
       return query["open"] === undefined || query["open"] === "" ? { type: "inbox" } : { type: "inbox", open: query["open"] };
     case "todo": {
       const id = decode(rest);
-      return id === null || id === "" ? { type: "unknown", hash } : { type: "todo", id };
+      return id === null || id === "" ? unknown : { type: "todo", id };
     }
     case "typst": {
       const open = decode(rest);
-      return open === null ? { type: "unknown", hash } : { type: "typst", open };
+      return open === null ? unknown : { type: "typst", open };
     }
     case "mail": {
       if (rest === "") return { type: "mail", query: query["q"] ?? "", account: query["account"] ?? "" };
       // `thread/` cannot collide with an id: an id's slashes arrive as `%2F`.
       if (rest.startsWith("thread/")) {
         const id = decode(rest.slice("thread/".length));
-        return id === null || id === "" ? { type: "unknown", hash } : { type: "thread", id };
+        return id === null || id === "" ? unknown : { type: "thread", id };
       }
       const id = decode(rest);
-      return id === null || id === "" ? { type: "unknown", hash } : { type: "message", id };
+      return id === null || id === "" ? unknown : { type: "message", id };
     }
     case "secretary": {
       const refs = list(query["ref"] ?? "");
@@ -109,26 +111,27 @@ export function parseRoute(hash: string): Route {
       if (rest === "memory") return { type: "memory" };
       if (rest === "new") return { type: "newtopic" };
       const id = decode(rest);
-      const at = /^\d+$/.test(query["at"] ?? "") ? { at: Number(query["at"]) } : {};
+      // Digits a number holds exactly, as `Route::parse` reads them; past 2^53 − 1 it is absent.
+      const at = /^\d+$/.test(query["at"] ?? "") && Number.isSafeInteger(Number(query["at"])) ? { at: Number(query["at"]) } : {};
       return id === null || id === ""
-        ? { type: "unknown", hash }
+        ? unknown
         : { type: "conversation", id, refs, ...focus, ...at };
     }
     case "about":
-      return rest === "" ? { type: "about" } : { type: "unknown", hash };
+      return rest === "" ? { type: "about" } : unknown;
     case "settings":
-      return rest === "" ? { type: "settings" } : { type: "unknown", hash };
+      return rest === "" ? { type: "settings" } : unknown;
     case "calendar": {
       const day = decode(rest);
-      return day === null ? { type: "unknown", hash } : { type: "calendar", date: day };
+      return day === null ? unknown : { type: "calendar", date: day };
     }
     case "briefings": {
       if (rest === "") return { type: "briefings" };
       const day = decode(rest);
-      return day === null || day === "" ? { type: "unknown", hash } : { type: "briefing", date: day };
+      return day === null || day === "" ? unknown : { type: "briefing", date: day };
     }
     default:
-      return { type: "unknown", hash };
+      return unknown;
   }
 }
 
@@ -176,3 +179,10 @@ export function hrefOf(route: Route): string {
       return route.hash;
   }
 }
+
+// "Ask the secretary" with something to ask is the default conversation, so the place written is that one and the
+// log never holds a route that only forwards.
+export const forwarded = (route: Route): Route =>
+  route.type === "secretary" && (route.refs.length > 0 || route.focus === true)
+    ? { type: "conversation", id: "default", refs: route.refs, ...(route.focus === true ? { focus: true } : {}) }
+    : route

@@ -105,7 +105,11 @@ function cpuCap(): string | null {
  * nothing here compares pixels, but a hinted glyph can change a line count and
  * therefore a clamped card's height.
  */
-function flags(profile: string): string[] {
+/** Whether the browser draws classic scrollbars, which take width from the page as on desktop Linux and Windows. The
+ * suites hide them; a scene about the room a scrollbar leaves launches a browser of its own that shows them. */
+export type Scrollbars = "Hidden" | "Shown";
+
+function flags(profile: string, scrollbars: Scrollbars = "Hidden"): string[] {
   return [
     "--headless=new",
     "--no-sandbox",
@@ -130,7 +134,7 @@ function flags(profile: string): string[] {
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
-    "--hide-scrollbars",
+    ...(scrollbars === "Hidden" ? ["--hide-scrollbars"] : []),
     "--force-device-scale-factor=1",
     "--font-render-hinting=none",
     `--user-data-dir=${profile}`,
@@ -1260,6 +1264,12 @@ export class Page {
     await this.command("Storage.overrideQuotaForOrigin", bytes === null ? { origin } : { origin, quotaSize: bytes });
   }
 
+  /** The browser's default text size in CSS pixels, as a person sets it (16 is the browser's own): what `rem` and a
+   * media query's `rem` are measured in. */
+  async textSize(px: number): Promise<void> {
+    await this.command("Page.setFontSizes", { fontSizes: { standard: px } });
+  }
+
   /** A phone-class main thread: Chromium runs this page's main thread `rate` times slower (1 is none), and no worker. */
   async throttle(rate: number): Promise<void> {
     await this.command("Emulation.setCPUThrottlingRate", { rate });
@@ -1388,14 +1398,14 @@ async function devtoolsUrl(profile: string, child: ChildProcess, stderr: () => s
 }
 
 /** Launch one browser with one page attached. */
-export async function launch(): Promise<Browser> {
+export async function launch(scrollbars: Scrollbars = "Hidden"): Promise<Browser> {
   const profile = mkdtempSync(join(tmpdir(), "suzatary-e2e-profile-"));
   const group = cpuCap();
   // In the group before it execs, so every process it starts is born in it.
   const child =
     group === null
-      ? spawn(chromiumBinary(), flags(profile), { stdio: ["ignore", "pipe", "pipe"] })
-      : spawn("sh", ["-c", 'echo $$ > "$0/cgroup.procs" && exec "$@"', group, chromiumBinary(), ...flags(profile)], { stdio: ["ignore", "pipe", "pipe"] });
+      ? spawn(chromiumBinary(), flags(profile, scrollbars), { stdio: ["ignore", "pipe", "pipe"] })
+      : spawn("sh", ["-c", 'echo $$ > "$0/cgroup.procs" && exec "$@"', group, chromiumBinary(), ...flags(profile, scrollbars)], { stdio: ["ignore", "pipe", "pipe"] });
   let said = "";
   child.stderr?.on("data", (chunk) => {
     said += chunk.toString();

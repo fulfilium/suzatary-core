@@ -23,7 +23,7 @@
 
 import assert from "node:assert/strict";
 
-import { WRITE_BASE, chainKept, shownTodos, suite, switchChain, untilReplica, pickCategory } from "./harness";
+import { PHONE, WRITE_BASE, chainKept, shownTodos, suite, switchChain, untilReplica, pickCategory } from "./harness";
 
 const app = await suite("chains");
 
@@ -49,6 +49,22 @@ app.scene("switching to suzatary shows an empty list", async () => {
 
   // And back, without losing anything: the other chain's cache and replica were
   // never evicted, they were just not being read.
+  await switchChain(app.page, "life");
+  await app.page.waitFor(`document.querySelectorAll(".tree .row").length >= 5`, { timeout: 10000 });
+});
+
+// The list's title is read when the list is made, from the chains the box serves, which land after the first paint:
+// wherever the list is drawn (here beside a todo, at a desk), it is drawn again when they land.
+app.scene("a cold link to a todo on the second chain, at a desk, titles the list beside it with that chain", async () => {
+  await app.open(WRITE_BASE);
+  await switchChain(app.page, "suzatary");
+  await app.resize([1440, 900]);
+  // Cold: a new document, so the chains the box serves land after the list is first drawn.
+  await app.page.navigate("about:blank");
+  await app.page.navigate(`${WRITE_BASE}/#/todo/ada`);
+  await app.page.waitFor(`document.querySelector("#view.tiled .todospane .pagetitle")?.textContent.trim() === "suzatary"`, { timeout: 15000 });
+  await app.resize(PHONE);
+  await app.page.navigate(`${WRITE_BASE}/#/`);
   await switchChain(app.page, "life");
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length >= 5`, { timeout: 10000 });
 });

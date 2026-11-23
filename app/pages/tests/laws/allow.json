@@ -50,7 +50,8 @@
     "type": "Writes"
    },
    "type": "Context",
-   "wide": false
+   "keys": "Touch",
+   "opens": "Over"
   },
   {
    "ask": {

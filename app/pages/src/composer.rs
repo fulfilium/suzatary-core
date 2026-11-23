@@ -18,7 +18,7 @@ use viewtree::{Key, Node, Picked, view};
 use crate::chats::readonly;
 use crate::chrome::mark;
 use crate::places::Place;
-use crate::runtime::{Answer, Local, Reach, Register, answered, read};
+use crate::runtime::{Answer, Keys, Local, Reach, Register, answered, read};
 
 /// The most files one turn holds, as the box takes it.
 const MAX_FILES: usize = suzatary_lines::secretary::lines_rule::MAX_ATTACHMENTS_PER_TURN;
@@ -562,16 +562,16 @@ pub(crate) fn attachment<M>(f: &AttachmentRow) -> Node<M> {
     }
 }
 
-/// Ctrl/⌘-Enter sends at every width, a bare Enter on a wide screen too; Escape stops; ↑ in an
-/// empty box edits.
+/// Ctrl/⌘-Enter sends on every device, a bare Enter where there is a keyboard too; Escape stops;
+/// ↑ in an empty box edits.
 #[derive(Debug, Clone, Copy)]
-struct Keys {
-    wide: bool,
+struct Pressing {
+    keys: Keys,
     empty: bool,
 }
 
 fn key(
-    k: Keys,
+    k: Pressing,
     Key {
         name,
         ctrl,
@@ -584,12 +584,12 @@ fn key(
         "Escape" => Some(Ev::Stop),
         "ArrowUp" if k.empty && !ctrl && !meta && !shift => Some(Ev::Up),
         "Enter" if ctrl || meta => Some(Ev::Send),
-        "Enter" if k.wide && !shift => Some(Ev::Send),
+        "Enter" if k.keys == Keys::Physical && !shift => Some(Ev::Send),
         _ => None,
     }
 }
 
-pub(crate) fn view(c: &Composer, reach: &Reach, wide: bool) -> Node<Ev> {
+pub(crate) fn view(c: &Composer, reach: &Reach, keys: Keys) -> Node<Ev> {
     match reach {
         Reach::Writes => {}
         Reach::Waits => return view! { Div "compose" },
@@ -632,8 +632,8 @@ pub(crate) fn view(c: &Composer, reach: &Reach, wide: bool) -> Node<Ev> {
             c.others.iter().map(|o| view! { Button "composeuse" {Type => "button"} @click(Ev::Take(o.clone())) [if o.is_empty() { "(nothing)" } else { o.as_str() }] }).collect::<Vec<_>>(),
         ] }
     });
-    let keys = Keys {
-        wide,
+    let pressing = Pressing {
+        keys,
         empty: c.empty(),
     };
     let textbox = viewtree::node::el(viewtree::Tag::Textarea)
@@ -643,7 +643,7 @@ pub(crate) fn view(c: &Composer, reach: &Reach, wide: bool) -> Node<Ev> {
         .set(Value, &c.text)
         .set(Data("field"), "compose")
         .input(Ev::Typed)
-        .keydown_of(keys, key)
+        .keydown_of(pressing, key)
         .node();
     view! { Div "compose" [
         view! { Div "composeediting" {Hidden => !c.editing()} [
@@ -691,21 +691,21 @@ mod tests {
         }
     }
 
-    /// Bare Enter sends only on a wide screen; Shift-Enter is a new line; ↑ edits only an empty
-    /// box.
+    /// Bare Enter sends only where there is a keyboard; Shift-Enter is a new line; ↑ edits only an
+    /// empty box.
     #[test]
     fn what_each_key_does() {
         let (phone, wide, written) = (
-            Keys {
-                wide: false,
+            Pressing {
+                keys: Keys::Touch,
                 empty: true,
             },
-            Keys {
-                wide: true,
+            Pressing {
+                keys: Keys::Physical,
                 empty: true,
             },
-            Keys {
-                wide: true,
+            Pressing {
+                keys: Keys::Physical,
                 empty: false,
             },
         );

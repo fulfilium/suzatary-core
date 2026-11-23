@@ -1,4 +1,4 @@
-//! One todo as a page: pushed on a phone, a pane beside the list on a wide screen.
+//! One todo as a page: a tile beside the list it is opened from, or over it on a phone.
 
 use crate::part::Mark;
 use std::collections::BTreeSet;
@@ -43,8 +43,6 @@ pub struct Flags {
     pub context: Context,
     pub chain: String,
     pub id: String,
-    /// Whether the page was pushed over the list, so it has somewhere to go back to.
-    pub pushed: bool,
     /// When it was opened, in epoch milliseconds.
     #[ts(type = "number")]
     pub now: i64,
@@ -161,7 +159,6 @@ pub struct Model {
     context: Context,
     chain: String,
     id: String,
-    pushed: bool,
     today: NaiveDate,
     page: Held<TodoPayload>,
     fold: Reading<Option<Folded>>,
@@ -203,7 +200,6 @@ pub enum DeferMsg {
 #[derive(Debug, Clone)]
 pub enum Msg {
     Host(Box<Input<Hold, Ask>>),
-    Back,
     Retry,
     Run(Verb),
     Note(String),
@@ -229,7 +225,6 @@ impl Model {
             context: f.context,
             chain: f.chain,
             id: f.id,
-            pushed: f.pushed,
             page: Held::loading(),
             fold: Reading::Loading,
             unsent: Reading::Loading,
@@ -262,11 +257,6 @@ impl Model {
             },
         ];
         (m, effects)
-    }
-
-    #[must_use]
-    pub(crate) fn id(&self) -> &str {
-        &self.id
     }
 
     fn path(&self) -> String {
@@ -335,9 +325,6 @@ impl Model {
     pub(crate) fn update(&mut self, msg: Msg) -> Vec<Fx> {
         match msg {
             Msg::Host(input) => self.heard(*input),
-            Msg::Back => vec![Effect::Back {
-                fallback: Place::Todos.href(),
-            }],
             Msg::Retry => vec![Effect::Again { path: self.path() }],
             Msg::Note(words) => {
                 self.note = words;
@@ -719,7 +706,7 @@ impl Model {
             width: Width::Column,
             title: String::new(),
             masthead: Masthead::Page,
-            back: self.pushed.then_some(("Todos", Msg::Back)),
+            back: None,
             legend: None,
             now: Vec::new(),
             shape: Shape::Lines,

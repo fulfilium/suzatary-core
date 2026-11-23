@@ -1,0 +1,682 @@
+[
+ {
+  "hash": "#/todo/%+1",
+  "href": "#/todo/%+1"
+ },
+ {
+  "hash": "#/todo/%-1",
+  "href": "#/todo/%-1"
+ },
+ {
+  "hash": "#/todo/%2",
+  "href": "#/todo/%2"
+ },
+ {
+  "hash": "#/todo/%zz",
+  "href": "#/todo/%zz"
+ },
+ {
+  "hash": "#/todo/%E2%80%94",
+  "href": "#/todo/%E2%80%94"
+ },
+ {
+  "hash": "#/todo/%ED%A0%80",
+  "href": "#/todo/%ED%A0%80"
+ },
+ {
+  "hash": "",
+  "href": "#/"
+ },
+ {
+  "hash": "#",
+  "href": "#/"
+ },
+ {
+  "hash": "#/",
+  "href": "#/"
+ },
+ {
+  "hash": "#/todos",
+  "href": "#/"
+ },
+ {
+  "hash": "#/todo/x",
+  "href": "#/todo/x"
+ },
+ {
+  "hash": "#/todo/",
+  "href": "#/todo/"
+ },
+ {
+  "hash": "#/add?text=a%20b&title=t",
+  "href": "#/add?text=a%20b&title=t"
+ },
+ {
+  "hash": "#/typst",
+  "href": "#/typst"
+ },
+ {
+  "hash": "#/typst/x",
+  "href": "#/typst/x"
+ },
+ {
+  "hash": "#/inbox",
+  "href": "#/inbox"
+ },
+ {
+  "hash": "#/inbox?open=m",
+  "href": "#/inbox?open=m"
+ },
+ {
+  "hash": "#/inbox?open=",
+  "href": "#/inbox"
+ },
+ {
+  "hash": "#/mail",
+  "href": "#/mail"
+ },
+ {
+  "hash": "#/mail?q=from%3Aa&account=w",
+  "href": "#/mail?q=from%3Aa&account=w"
+ },
+ {
+  "hash": "#/mail/m1",
+  "href": "#/mail/m1"
+ },
+ {
+  "hash": "#/mail/thread/t1",
+  "href": "#/mail/thread/t1"
+ },
+ {
+  "hash": "#/mail/thread/",
+  "href": "#/mail/thread/"
+ },
+ {
+  "hash": "#/about",
+  "href": "#/about"
+ },
+ {
+  "hash": "#/about/x",
+  "href": "#/about/x"
+ },
+ {
+  "hash": "#/settings",
+  "href": "#/settings"
+ },
+ {
+  "hash": "#/briefings",
+  "href": "#/briefings"
+ },
+ {
+  "hash": "#/briefings/2026-11-23",
+  "href": "#/briefings/2026-11-23"
+ },
+ {
+  "hash": "#/calendar",
+  "href": "#/calendar"
+ },
+ {
+  "hash": "#/calendar/2026-11-23",
+  "href": "#/calendar/2026-11-23"
+ },
+ {
+  "hash": "#/secretary",
+  "href": "#/secretary"
+ },
+ {
+  "hash": "#/secretary?ref=todo%3Alife%2Fx,&topics=a,b&focus=1",
+  "href": "#/secretary?ref=todo%3Alife%2Fx&topics=a%2Cb&focus=1"
+ },
+ {
+  "hash": "#/secretary/memory",
+  "href": "#/secretary/memory"
+ },
+ {
+  "hash": "#/secretary/new",
+  "href": "#/secretary/new"
+ },
+ {
+  "hash": "#/secretary/default?ref=a&focus=1&at=12",
+  "href": "#/secretary/default?ref=a&focus=1&at=12"
+ },
+ {
+  "hash": "#/secretary/default?at=-1",
+  "href": "#/secretary/default"
+ },
+ {
+  "hash": "#/secretary/default?at=%2B1",
+  "href": "#/secretary/default"
+ },
+ {
+  "hash": "#/secretary/default?at=1e3",
+  "href": "#/secretary/default"
+ },
+ {
+  "hash": "#/secretary/x?at=9007199254740991",
+  "href": "#/secretary/x?at=9007199254740991"
+ },
+ {
+  "hash": "#/secretary/x?at=9007199254740993",
+  "href": "#/secretary/x"
+ },
+ {
+  "hash": "#/nowhere",
+  "href": "#/nowhere"
+ },
+ {
+  "hash": "#/todo/x~|!(|(%2F,2*))",
+  "href": "#/todo/x~%7C!(%7C(%2F%2C2*))"
+ },
+ {
+  "hash": "#/todo/a|b!c",
+  "href": "#/todo/a%7Cb!c"
+ },
+ {
+  "hash": "#/mail/3-",
+  "href": "#/mail/3-"
+ },
+ {
+  "hash": "#/br",
+  "href": "#/br"
+ },
+ {
+  "hash": "%2F|-",
+  "href": "#%2F|-"
+ },
+ {
+  "hash": "#/add",
+  "href": "#/add"
+ },
+ {
+  "hash": "new+",
+  "href": "#new+"
+ },
+ {
+  "hash": "newmemory",
+  "href": "#newmemory"
+ },
+ {
+  "hash": "new'",
+  "href": "#new'"
+ },
+ {
+  "hash": "!",
+  "href": "#!"
+ },
+ {
+  "hash": "#/calendar/thread%26-",
+  "href": "#/calendar/thread%26-"
+ },
+ {
+  "hash": "#/briefings/new(%25E2%2580%2594",
+  "href": "#/briefings/new(%25E2%2580%2594"
+ },
+ {
+  "hash": "#/mail/th",
+  "href": "#/mail/th"
+ },
+ {
+  "hash": "#/calendar'?(",
+  "href": "#/calendar'?("
+ },
+ {
+  "hash": "#/typst/%7C!",
+  "href": "#/typst/%7C!"
+ },
+ {
+  "hash": "%ZZ~&",
+  "href": "#%ZZ~&"
+ },
+ {
+  "hash": "#/mail/",
+  "href": "#/mail"
+ },
+ {
+  "hash": "#/secretary/new%-1%memory",
+  "href": "#/secretary/new%-1%memory"
+ },
+ {
+  "hash": "#/secretary?ref=*%25ZZ%2C%2Cnew%25-1%25E2%2580%2594-%2F|",
+  "href": "#/secretary?ref=*%25ZZ%2Cnew%25-1%25E2%2580%2594-%2F%7C"
+ },
+ {
+  "hash": "-",
+  "href": "#-"
+ },
+ {
+  "hash": "#/inbox?open=%2B%26",
+  "href": "#/inbox?open=%2B%26"
+ },
+ {
+  "hash": "#/about,",
+  "href": "#/about,"
+ },
+ {
+  "hash": "#/sett",
+  "href": "#/sett"
+ },
+ {
+  "hash": "#/mail/.!%2F",
+  "href": "#/mail/.!%2F"
+ },
+ {
+  "hash": ",|%2F",
+  "href": "#,|%2F"
+ },
+ {
+  "hash": "%+1",
+  "href": "#%+1"
+ },
+ {
+  "hash": "#/mail/%",
+  "href": "#/mail/%"
+ },
+ {
+  "hash": "*.new",
+  "href": "#*.new"
+ },
+ {
+  "hash": "#/memory=",
+  "href": "#/memory="
+ },
+ {
+  "hash": "#/briefing",
+  "href": "#/briefing"
+ },
+ {
+  "hash": "#/typst/--%7Cmemory%ZZ",
+  "href": "#/typst/--%7Cmemory%ZZ"
+ },
+ {
+  "hash": "!**",
+  "href": "#!**"
+ },
+ {
+  "hash": "#/ca",
+  "href": "#/ca"
+ },
+ {
+  "hash": "#/calendar%2F(",
+  "href": "#/calendar%2F("
+ },
+ {
+  "hash": "#/mail/.%7C(%ZZ=",
+  "href": "#/mail/.%7C(%ZZ="
+ },
+ {
+  "hash": "-memory",
+  "href": "#-memory"
+ },
+ {
+  "hash": "#/secretary?topics=%25ZZ%25%25E2%2580%2594%2C~%2F%2C&focus=1%ZZ%2F",
+  "href": "#/secretary?topics=%25ZZ%25%25E2%2580%2594%2C~%2F"
+ },
+ {
+  "hash": "#/calendar/%25E2%2580%2594!%2F",
+  "href": "#/calendar/%25E2%2580%2594!%2F"
+ },
+ {
+  "hash": "#,%ZZ'",
+  "href": "#,%ZZ'"
+ },
+ {
+  "hash": "-%2F-",
+  "href": "#-%2F-"
+ },
+ {
+  "hash": ".newthread",
+  "href": "#.newthread"
+ },
+ {
+  "hash": "#/s",
+  "href": "#/s"
+ },
+ {
+  "hash": "#/secretary/'-%2C?ref=*900%2C%2C%252Fthread&focus=1",
+  "href": "#/secretary/'-%2C?ref=*900%2C%252Fthread&focus=1"
+ },
+ {
+  "hash": "thread",
+  "href": "#thread"
+ },
+ {
+  "hash": "new",
+  "href": "#new"
+ },
+ {
+  "hash": "'*",
+  "href": "#'*"
+ },
+ {
+  "hash": "%2F",
+  "href": "#%2F"
+ },
+ {
+  "hash": "#'|",
+  "href": "#'|"
+ },
+ {
+  "hash": "&?",
+  "href": "#&?"
+ },
+ {
+  "hash": "memory",
+  "href": "#memory"
+ },
+ {
+  "hash": "#memory",
+  "href": "#memory"
+ },
+ {
+  "hash": "?&",
+  "href": "#/"
+ },
+ {
+  "hash": "#/mail/thre",
+  "href": "#/mail/thre"
+ },
+ {
+  "hash": "#/inbox?open=%252F%252F%7C|",
+  "href": "#/inbox?open=%252F%252F%7C%7C"
+ },
+ {
+  "hash": "#%+—",
+  "href": "#%+—"
+ },
+ {
+  "hash": "#/briefi",
+  "href": "#/briefi"
+ },
+ {
+  "hash": "#/typst/",
+  "href": "#/typst"
+ },
+ {
+  "hash": ".*+",
+  "href": "#.*+"
+ },
+ {
+  "hash": "#/aboutthread'+",
+  "href": "#/aboutthread'+"
+ },
+ {
+  "hash": "#/secretary/%3D%25.?ref=%2C%25%2B1%25ZZnew",
+  "href": "#/secretary/%3D%25.?ref=%25%2B1%25ZZnew"
+ },
+ {
+  "hash": "#/secretary/new-",
+  "href": "#/secretary/new-"
+ },
+ {
+  "hash": ".new",
+  "href": "#.new"
+ },
+ {
+  "hash": "#/m",
+  "href": "#/m"
+ },
+ {
+  "hash": "#/secretary/new%+1%-1*",
+  "href": "#/secretary/new%+1%-1*"
+ },
+ {
+  "hash": "#/typst/.",
+  "href": "#/typst/."
+ },
+ {
+  "hash": "#/briefin",
+  "href": "#/briefin"
+ },
+ {
+  "hash": "%!",
+  "href": "#%!"
+ },
+ {
+  "hash": "#/-",
+  "href": "#/-"
+ },
+ {
+  "hash": "#/todo/%252F%2C",
+  "href": "#/todo/%252F%2C"
+ },
+ {
+  "hash": "#/typst/%3D",
+  "href": "#/typst/%3D"
+ },
+ {
+  "hash": "#/secretary?ref='&topics=%7C%3F%2C%2C%+1",
+  "href": "#/secretary?ref='"
+ },
+ {
+  "hash": "#//",
+  "href": "#/"
+ },
+ {
+  "hash": "-%",
+  "href": "#-%"
+ },
+ {
+  "hash": "#/briefings/thread%252F'new",
+  "href": "#/briefings/thread%252F'new"
+ },
+ {
+  "hash": "*//",
+  "href": "#*//"
+ },
+ {
+  "hash": "thread?",
+  "href": "#thread?"
+ },
+ {
+  "hash": "#/secretary/new-=?",
+  "href": "#/secretary/new-%3D"
+ },
+ {
+  "hash": "#/mail/memory",
+  "href": "#/mail/memory"
+ },
+ {
+  "hash": "'-%",
+  "href": "#'-%"
+ },
+ {
+  "hash": "#/sec",
+  "href": "#/sec"
+ },
+ {
+  "hash": "~(%+1",
+  "href": "#~(%+1"
+ },
+ {
+  "hash": "=",
+  "href": "#="
+ },
+ {
+  "hash": "#/calendar/!",
+  "href": "#/calendar/!"
+ },
+ {
+  "hash": "#/typst/~",
+  "href": "#/typst/~"
+ },
+ {
+  "hash": "#/mail/thread/%25-1%2C",
+  "href": "#/mail/thread/%25-1%2C"
+ },
+ {
+  "hash": "='",
+  "href": "#='"
+ },
+ {
+  "hash": "#/inbox/*",
+  "href": "#/inbox"
+ },
+ {
+  "hash": "%2F=",
+  "href": "#%2F="
+ },
+ {
+  "hash": "#/secretary?focus=1,",
+  "href": "#/secretary"
+ },
+ {
+  "hash": "#/add?text=%3D%25-1&title=%2C%25ZZ",
+  "href": "#/add?text=%3D%25-1&title=%2C%25ZZ"
+ },
+ {
+  "hash": "#/mail/thread/.'%25!",
+  "href": "#/mail/thread/.'%25!"
+ },
+ {
+  "hash": ",(",
+  "href": "#,("
+ },
+ {
+  "hash": "#/secretary/newnew",
+  "href": "#/secretary/newnew"
+ },
+ {
+  "hash": "#/mail/-",
+  "href": "#/mail/-"
+ },
+ {
+  "hash": "#/briefingsnew*",
+  "href": "#/briefingsnew*"
+ },
+ {
+  "hash": "#/briefings'%-1",
+  "href": "#/briefings'%-1"
+ },
+ {
+  "hash": "new!",
+  "href": "#new!"
+ },
+ {
+  "hash": "thread,",
+  "href": "#thread,"
+ },
+ {
+  "hash": "#/mail/thread/r%25-1%26",
+  "href": "#/mail/thread/r%25-1%26"
+ },
+ {
+  "hash": "#/inbox*/new",
+  "href": "#/inbox*/new"
+ },
+ {
+  "hash": "#/inbox/+.",
+  "href": "#/inbox"
+ },
+ {
+  "hash": "%-1",
+  "href": "#%-1"
+ },
+ {
+  "hash": "#/secretary/07newthread?ref=%2C%3F%2Cmemory(%25&focus=1",
+  "href": "#/secretary/07newthread?ref=%3F%2Cmemory(%25&focus=1"
+ },
+ {
+  "hash": "#/secretar",
+  "href": "#/secretar"
+ },
+ {
+  "hash": "/%+1,",
+  "href": "#/%+1,"
+ },
+ {
+  "hash": "#—%-1~",
+  "href": "#—%-1~"
+ },
+ {
+  "hash": "#/secretary?topics=!%25%2B1%26%2C*",
+  "href": "#/secretary?topics=!%25%2B1%26%2C*"
+ },
+ {
+  "hash": "#/secretary/memory*",
+  "href": "#/secretary/memory*"
+ },
+ {
+  "hash": "#thread/!",
+  "href": "#thread/!"
+ },
+ {
+  "hash": "%",
+  "href": "#%"
+ },
+ {
+  "hash": "#/typst/!",
+  "href": "#/typst/!"
+ },
+ {
+  "hash": "memorythread",
+  "href": "#memorythread"
+ },
+ {
+  "hash": "#/inbox!*",
+  "href": "#/inbox!*"
+ },
+ {
+  "hash": "%2Fnew/",
+  "href": "#%2Fnew/"
+ },
+ {
+  "hash": "*&",
+  "href": "#*&"
+ },
+ {
+  "hash": "#/in",
+  "href": "#/in"
+ },
+ {
+  "hash": "#/inb",
+  "href": "#/inb"
+ },
+ {
+  "hash": "—",
+  "href": "#—"
+ },
+ {
+  "hash": ".",
+  "href": "#."
+ },
+ {
+  "hash": "#/mail?q=%25-1%2F+",
+  "href": "#/mail?q=%25-1%2F%2B"
+ },
+ {
+  "hash": "#-!",
+  "href": "#-!"
+ },
+ {
+  "hash": "#/typst/%26'thread!",
+  "href": "#/typst/%26'thread!"
+ },
+ {
+  "hash": "#/secretary/%3F%25-1%25?ref=!%2B&focus=1~/",
+  "href": "#/secretary/%3F%25-1%25?ref=!%2B"
+ },
+ {
+  "hash": "#/mail/-newthread%ZZ",
+  "href": "#/mail/-newthread%ZZ"
+ },
+ {
+  "hash": "#/todo/new%25-1%25-1",
+  "href": "#/todo/new%25-1%25-1"
+ },
+ {
+  "hash": "#/secretary?ref=%25ZZ&topics=''~&focus=1(",
+  "href": "#/secretary?ref=%25ZZ&topics=''~"
+ },
+ {
+  "hash": "#/typst/-fnew",
+  "href": "#/typst/-fnew"
+ },
+ {
+  "hash": "#/0bm",
+  "href": "#/0bm"
+ },
+ {
+  "hash": "#/i",
+  "href": "#/i"
+ }
+]

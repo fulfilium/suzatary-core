@@ -21,17 +21,15 @@ import type stores from "./prodrome/stores";
 import once from "./algebra/once";
 import program from "./pages/program";
 import { installPresence } from "./app/presence";
-import { byId, clear, el } from "./view/dom";
+import { byId, el } from "./view/dom";
 import { announce } from "./view/focus";
 import { aside, toast } from "./view/toast";
 import outbox from "./shell/outbox";
-import { WIDE_MIN_PX, isWide } from "./shell/layout";
 import { installKeyboard, setPaletteOpener } from "./shell/keyboard";
 import nav from "./shell/nav";
 import { openPalette } from "./shell/palette";
 import { updatePanel } from "./chat/panel";
-import type { Mounted } from "./view/page";
-import { inert } from "./view/page";
+import tiles from "./shell/tiles";
 import pages from "./pages/table";
 import frame from "./view/frame";
 import { hrefOf } from "./shell/route";
@@ -59,13 +57,13 @@ import due from "./app/due";
 import ownerzone from "./app/ownerzone";
 import login from "./app/login";
 import page from "./shell/page";
-import soon from "./painter/soon";
 
 // Drawn before anything reads a host by its id.
 await page.draw(import.meta.url);
 
-let current: Mounted = inert;
-
+const desk = once.of(async () => new (await program.module()).Desk()).get;
+// The room moved (the window, the open panel): the chrome is drawn again, as the panel reads it.
+const host = tiles.install(byId("view"), desk, () => paint(chrome.of(app.now(), seen())));
 
 const paint = chrome.painter({
   nav: (now, was) => nav.paint(byId("tabbar"), now, was, app.dispatch),
@@ -99,21 +97,15 @@ let latest = 0;
 
 async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean, turn: number): Promise<void> {
   const view = byId("view");
-  const screen = app.screen(a);
-  if (!fresh && current.absorb?.(screen) === true) return;
+  const route = app.route(a);
   // The box's fold, which carries what it rendered, is asked for beside a page's module, not after it (once per tab).
-  if (pages.folds[screen.type] === "Shown") void ensureFold().catch(() => {});
-  const draw = await pages.load(screen);
-  if (turn !== latest) return;
-  current.destroy();
-  current = inert;
-  // Freeing the page before is a long task of its own; the next page draws in the task after.
-  await new Promise<void>((done) => soon.run(done));
-  if (turn !== latest) return;
-  if (!again) window.scrollTo(0, 0);
-  current = draw(view);
+  if (pages.folds[route.type] === "Shown") void ensureFold().catch(() => {});
+  const made = await host.go(route, fresh, again);
+  paint(chrome.of(app.now(), seen()));
+  // No page drawn anew: the pages on screen took the move on themselves.
+  if (turn !== latest || made.length === 0) return;
   // In its own task, since focusing the heading lays the page out; a page that took the focus keeps it.
-  if (heard) setTimeout(() => (view.contains(document.activeElement) ? undefined : announce(view)), 0);
+  if (heard) setTimeout(() => (view.contains(document.activeElement) ? undefined : announce(made[made.length - 1] ?? view)), 0);
   if (again) kept.restore(routelog.here(a.log).kept, () => drawn !== null && drawn.log === a.log);
 }
 
@@ -126,9 +118,7 @@ function go(a: app.App, fresh: boolean, heard: boolean, again = false): void {
     console.warn("the page did not load", error);
     void builds.lost().then((l) => {
       if (turn !== latest) return;
-      const view = byId("view");
-      clear(view);
-      view.appendChild(
+      host.failed(
         l.type === "Moved"
           ? el("p", { class: "problem" }, "Suzatary was updated: opening this page in the new version.")
           : el(
@@ -245,7 +235,7 @@ function switched(): void {
   askWhoAndWhere();
 }
 
-const seen = (): chrome.Seen => ({ fold: store.state(), excluded: readings.left(), theme: theme() });
+const seen = (): chrome.Seen => ({ fold: store.state(), excluded: readings.left(), theme: theme(), room: host.room() });
 
 let drawn: app.App | null = null;
 
@@ -253,7 +243,7 @@ let drawn: app.App | null = null;
 const idle = (f: () => void): void => void ("requestIdleCallback" in window ? requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 1000));
 // The shell's own reads wait until a page has drawn and the thread is idle.
 shellAsksAfter(frame.firstDrawn.then(() => new Promise<void>((done) => idle(done))));
-foldWhere(() => (pages.folds[app.screen(app.now()).type] === "Shown" ? "Page" : "Shell"));
+foldWhere(() => (pages.folds[app.route(app.now()).type] === "Shown" ? "Page" : "Shell"));
 
 function draw(a: app.App): void {
   const was = drawn;
@@ -265,10 +255,10 @@ function draw(a: app.App): void {
   if (was === null) {
     go(a, true, false);
     idle(() => void time.date(a.zone, time.now()));
-  } else if (moved || hrefOf(app.route(was)) !== hrefOf(app.route(a)) || was.wide !== a.wide)
-    go(a, moved, true, !moved && a.again && hrefOf(app.route(was)) !== hrefOf(app.route(a)));
-  // The served chains land after the first paint, and the list's title is drawn from them.
-  else if (app.screen(a).type === "todos" && listTitle(was.chain, was.served) !== listTitle(a.chain, a.served)) go(a, true, false, true);
+  } else if (moved || hrefOf(app.route(was)) !== hrefOf(app.route(a)))
+    go(a, moved, true, !moved && a.again);
+  // The served chains land after the first paint, and the list's title is drawn from them, wherever the list is drawn.
+  else if (host.drawn().some(pages.lists) && listTitle(was.chain, was.served) !== listTitle(a.chain, a.served)) go(a, true, false, true);
 }
 
 // Before the rest of startup, so a failure in any of it reaches the box.
@@ -301,7 +291,6 @@ setPaletteOpener(openPalette);
 // The first route may pin another chain than the remembered one the replica was loaded with.
 const loaded = app.now();
 app.dispatch({ type: "Replaced", route: address.install() });
-app.dispatch({ type: "Resized", wide: isWide(window.innerWidth) });
 address.settle();
 if (app.now().chain !== loaded.chain) forgetChainReplica();
 // Before the first route, so the first paint is the last fold seen, in the right colours.
@@ -318,8 +307,7 @@ bfcache.across(window, {
     closeStores();
     close();
     close = () => {};
-    current.destroy();
-    current = inert;
+    host.destroy();
   },
   open: () => {
     closeStores = storesync.listen(heardStore);
@@ -390,8 +378,6 @@ document.addEventListener("visibilitychange", woke);
 window.addEventListener("pageshow", (e) => void (e.persisted ? woke() : undefined));
 // Closes the More sheet; its own controls stop the click.
 document.addEventListener("click", () => app.dispatch({ type: "More", open: false }));
-// The same route is a different page either side of the breakpoint; `matchMedia` fires once at the edge.
-window.matchMedia(`(min-width: ${WIDE_MIN_PX}px)`).addEventListener("change", () => app.dispatch({ type: "Resized", wide: isWide(window.innerWidth) }));
 draw(app.now());
 connect();
 installPresence();

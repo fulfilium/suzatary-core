@@ -105,7 +105,7 @@ export interface Suite {
   open: (base: string, hash?: string) => Promise<void>;
   /** This browser's key trusted on the writer's server, once per suite: what `open` does first there. */
   trust: () => Promise<string>;
-  /** Resize, and wait for the route to be resolved again against the width. */
+  /** Resize, and wait for the tiles to be arranged again for the room it leaves. */
   resize: (size: readonly [number, number]) => Promise<void>;
 }
 
@@ -355,6 +355,9 @@ export function pairAtTheBox(): string {
  * file that only reads (the live smoke, against a server whose writer is nobody) does not ask for. */
 export type Reach = "Reads" | "Writes"
 
+/** Two frames and a task: the tiles' host arranges a resized room in the frame after it hears it (`shell/tiles.ts`). */
+export const SETTLED = `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 0))))`;
+
 export async function suite(prefix: string, size: readonly [number, number] = PHONE, reach: Reach = "Writes"): Promise<Suite> {
   mkdirSync(SHOTS, { recursive: true });
   // EVERY SERVER, BEFORE THE BROWSER. `open` waits too, but half the files
@@ -446,11 +449,29 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
     trust: () => (trusted ??= trustThisDevice(page, WRITE_BASE)),
     async resize(next: readonly [number, number]): Promise<void> {
       await page.viewport(next[0], next[1]);
-      // `main.ts` re-routes on the breakpoint's matchMedia change, which fires
-      // after the metrics land; nothing here may assert before it has.
       await page.waitFor(`window.innerWidth === ${next[0]}`);
+      await page.evaluate(SETTLED);
     },
   };
+}
+
+/** A todo added through the list's add sheet, its id once the box holds it open. The sheet is a phone's; at a desk the
+ * form stands under the list, and its handle is the same button. */
+export async function addTodo(page: Page, body: string, category: string): Promise<string> {
+  await page.click(".addsheet .pickerhandle");
+  await page.waitFor(`document.querySelector(".addsheet.open") !== null`);
+  await page.waitFor(`document.activeElement?.className.includes("draftbody") === true`);
+  await page.type(".draftbody", body);
+  await pickCategory(page, category);
+  await page.click(".addbtn");
+  const id = body.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  await page.waitFor(`document.querySelector('${row(id)}') !== null`, { timeout: 8000 });
+  await page.waitFor(`document.querySelector(".addsheet.open") === null`, { timeout: 2000 });
+  await page.waitFor(
+    `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${id}" && e.state === "open"))`,
+    { timeout: 15000 },
+  );
+  return id;
 }
 
 /** The todo ids the list is showing, in the order it is showing them. */

@@ -54,6 +54,26 @@ export namespace scroll {
     room.hidden = next === 0
   }
 
+  // One listener for every box: a scroll key moves a box around the key's target, or the document's. Each box once had
+  // its own on `window`, which nothing removed and which held the box after its page was gone.
+  let listening = false
+  const keyed = (): void => {
+    if (listening) return
+    listening = true
+    window.addEventListener("keydown", e => {
+      const t = e.target
+      if (!KEYS.has(e.key) || (t instanceof HTMLElement && t.closest("input, textarea, select, [contenteditable]") !== null)) return
+      const now = performance.now()
+      for (let n = t instanceof Element ? t : null; n !== null; n = n.parentElement) {
+        const b = boxes.get(n)
+        if (b !== undefined) b.readerAt = now
+      }
+      const doc = document.scrollingElement
+      const b = doc === null ? undefined : boxes.get(doc)
+      if (b !== undefined) b.readerAt = now
+    })
+  }
+
   const of_ = (box: Element): Box => {
     const known = boxes.get(box)
     if (known !== undefined) return known
@@ -63,10 +83,7 @@ export namespace scroll {
     on.addEventListener("wheel", read, { passive: true })
     on.addEventListener("touchmove", read, { passive: true })
     on.addEventListener("pointerdown", e => (e.target === box ? read() : undefined), { passive: true })
-    window.addEventListener("keydown", e => {
-      const t = e.target
-      if (KEYS.has(e.key) && !(t instanceof HTMLElement && t.closest("input, textarea, select, [contenteditable]") !== null)) read()
-    })
+    keyed()
     on.addEventListener("scroll", () => {
       const by: Mover = performance.now() - b.readerAt < READER_MS ? "reader" : "page"
       if (by === "reader") read()

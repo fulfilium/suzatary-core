@@ -25,6 +25,7 @@ const event = (r: Rng): app.Event =>
     () => ({ type: "Build", line: r.pick<shell.Line>([{ type: "None" }, { type: "Ready", version: "0.18.0" }]) }),
   ])()
 const seen = (r: Rng): chrome.Seen => ({
+  room: r.pick(["Beside", "Over"] as const),
   fold: r.pick<() => onscreen.Fold>([
     () => onscreen.UNLOADED,
     () => ({ type: "Shown", entries: [], at: "t", by: { type: "Box", heads: ["a1"], fetchedAt: r.int(1e9), next: null, fresh: r.bool() } }),
@@ -34,7 +35,7 @@ const seen = (r: Rng): chrome.Seen => ({
   excluded: r.pick([excluded.NOTHING, excluded.left([{ name: "a1", why: "not held", resting: ["b2"] }]), excluded.left([], [{ chain: "suzatary", why: "a hole" }])]),
   theme: r.pick(["auto", "light", "dark"] as const),
 })
-const walk = (r: Rng): app.App => r.array(r.int(30), () => event(r)).reduce(app.step, app.initial(route(r), r.bool(), "life"))
+const walk = (r: Rng): app.App => r.array(r.int(30), () => event(r)).reduce(app.step, app.initial(route(r), "life"))
 
 test("law: a drawn shell is a function of App — plain data, the same for equal Apps, whatever else the tab holds", () => {
   forAll(300, r => {
@@ -59,15 +60,15 @@ test("a part is painted only when its value moved", () => {
     signing: () => void painted.push("signing"),
     build: () => void painted.push("build"),
   })
-  // A login that writes; leaving for the conversation page takes the panel away on a wide screen only.
-  const a = app.step(app.initial({ type: "inbox" }, false, "life"), { type: "Met", me: { type: "Writes", login: "ada@example.invalid", actor: "ada" }, served: ["life"], categories: [], zone: time.UTC })
-  const fold = { fold: onscreen.UNLOADED, excluded: excluded.NOTHING, theme: "auto" as const }
+  // A login that writes, on a page with no room beside it: leaving for the conversation moves no panel.
+  const a = app.step(app.initial({ type: "inbox" }, "life"), { type: "Met", me: { type: "Writes", login: "ada@example.invalid", actor: "ada" }, served: ["life"], categories: [], zone: time.UTC })
+  const fold = { fold: onscreen.UNLOADED, excluded: excluded.NOTHING, theme: "auto" as const, room: "Over" as const }
   const loaded: onscreen.Fold = { type: "Shown", entries: [], at: "t", by: { type: "Cached", fetchedAt: 0 } }
   paint(chrome.of(a, fold))
   paint(chrome.of(app.step(a, { type: "Waiting", waiting: { count: 0, unplaced: {} } }), fold))
   paint(chrome.of(app.step(a, { type: "Went", route: { type: "conversation", id: "default", refs: [] } }), fold))
-  paint(chrome.of(a, { fold: loaded, excluded: excluded.NOTHING, theme: "auto" }))
-  paint(chrome.of(a, { fold: loaded, excluded: excluded.left([{ name: "a1", why: "not held", resting: [] }]), theme: "auto" }))
+  paint(chrome.of(a, { fold: loaded, excluded: excluded.NOTHING, theme: "auto", room: "Over" }))
+  paint(chrome.of(a, { fold: loaded, excluded: excluded.left([{ name: "a1", why: "not held", resting: [] }]), theme: "auto", room: "Over" }))
   assert.deepEqual(painted, ["nav", "panel", "live", "stale", "excluded", "signing", "build", "nav", "nav", "stale", "excluded"])
 })
 
@@ -95,10 +96,11 @@ test("an act on its way raises no banner, and no banner names an object", () => 
   })
 })
 
-test("law: one door to the secretary on each width: the panel beside every wide page but its own, and no floating Ask", () => {
+test("law: one door to the secretary on each width: the panel beside every page with room but its own, and no floating Ask", () => {
   forAll(300, r => {
     const a = walk(r)
-    const drawn = chrome.of(a, seen(r))
-    assert.equal(drawn.panel.type === "Beside", a.wide && nav.activeFor(app.route(a)) !== "secretary")
+    const s = seen(r)
+    const drawn = chrome.of(a, s)
+    assert.equal(drawn.panel.type === "Beside", s.room === "Beside" && nav.activeFor(app.route(a)) !== "secretary")
   })
 })

@@ -5,7 +5,6 @@ import placeholder from "./placeholder"
 import typed from "./typed"
 import type { Mounted } from "./page"
 import { backButton } from "./page"
-import type { Screen } from "../shell/layout"
 import type { Route } from "../shell/route"
 import lo from "../algebra/lo"
 import type reading from "../algebra/reading"
@@ -21,7 +20,6 @@ export namespace frame {
 
   export type Page<S, E = never, K extends string = never> = {
     readonly className: string
-    readonly wide?: boolean
     readonly title: string | ((v: S | null) => string)
     // A masthead drawn from the value replaces the title's once there is one.
     readonly masthead?: "destination" | ((v: S, at: At<K>) => Child)
@@ -38,8 +36,6 @@ export namespace frame {
     readonly islands?: (dispatch: (e: E) => void, again: () => void) => { readonly [k in K]: Island<S> }
     // What stands around the column, drawn once: a column beside it.
     readonly around?: (column: HTMLElement, at: At<K>) => HTMLElement
-    // A route change the page takes on itself, staying mounted with its value, its scroll and its focus.
-    readonly absorb?: (screen: Screen, dispatch: (e: E) => void) => boolean
     // The shape of what the page draws, for the placeholder shown while it waits; a page of text by default.
     readonly shape?: placeholder.Shape
     // Whether a value read still waits on more before it has anything to show (the box asked, the chain folding): the
@@ -106,7 +102,7 @@ export namespace frame {
   const skeleton = <S, E, K extends string>(f: Page<S, E, K>): Parts => {
     const heading = el("h1", { class: f.masthead === "destination" ? "pagetitle destination" : "pagetitle" })
     return {
-      column: el("div", { class: f.wide === true ? f.className : `column ${f.className}` }),
+      column: el("div", { class: `column ${f.className}` }),
       back: f.back === undefined ? null : backButton(f.back.label, f.back.fallback),
       heading,
       head: marks.head(heading),
@@ -228,7 +224,6 @@ export namespace frame {
     heard()
     return {
       destroy: () => (unsubscribe(), unheard(), unlisten?.(), all.forEach(i => i.destroy?.()), f.destroy?.()),
-      ...(f.absorb === undefined ? {} : { absorb: (screen: Screen) => f.absorb?.(screen, fx.dispatch) === true }),
     }
   }
 }

@@ -49,7 +49,16 @@ pub(crate) fn context(writes: bool) -> Context {
                 minutes: 120,
             },
         ],
-        wide: writes,
+        keys: if writes {
+            suzatary_pages::runtime::Keys::Physical
+        } else {
+            suzatary_pages::runtime::Keys::Touch
+        },
+        opens: if writes {
+            suzatary_pages::runtime::Opens::Beside
+        } else {
+            suzatary_pages::runtime::Opens::Over
+        },
         categories: vec!["home".to_owned(), "work".to_owned()],
         clock: None,
     }

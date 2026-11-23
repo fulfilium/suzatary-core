@@ -113,12 +113,11 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    fn todo_laws(writes: bool, pushed: bool, msgs in proptest::collection::vec(todo_msg(), 0..16)) {
+    fn todo_laws(writes: bool, msgs in proptest::collection::vec(todo_msg(), 0..16)) {
         page_laws::<todo::Todo>(|| todo::Flags {
             context: context(writes),
             chain: "life".to_owned(),
             id: "renewcard".to_owned(),
-            pushed,
             now: 1_788_000_000_000,
         }, &msgs);
     }

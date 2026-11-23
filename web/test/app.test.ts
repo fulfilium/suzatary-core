@@ -16,7 +16,6 @@ const arms: { [K in app.Event["type"]]: (r: Rng) => Extract<app.Event, { type: K
   Replaced: r => ({ type: "Replaced", route: route(r) }),
   Moved: r => ({ type: "Moved", at: r.int(4), route: route(r) }),
   Kept: r => ({ type: "Kept", kept: { scroll: r.int(900), focus: r.pick(["", "row/a", "row/b"]) } }),
-  Resized: r => ({ type: "Resized", wide: r.bool() }),
   Pinned: r => ({ type: "Pinned", chain: r.pick(CHAINS) }),
   Met: r => ({ type: "Met", me: login.of({ login: r.pick(["", "ada@example.invalid", "grace@example.invalid"]), actor: r.pick([null, "ada", "grace"]) }), served: r.array(r.int(3), () => r.pick(["life", "suzatary"])), categories: r.array(r.int(3), () => r.pick(["work", "home"])), zone: { name: r.pick(["UTC", "America/New_York", "Europe/London", "Europe/Berlin", "Pacific/Chatham"]) } }),
   Unmet: () => ({ type: "Unmet" }),
@@ -35,11 +34,11 @@ const arms: { [K in app.Event["type"]]: (r: Rng) => Extract<app.Event, { type: K
 const TAGS = Object.keys(arms) as app.Event["type"][]
 const event = (r: Rng): app.Event => arms[r.pick(TAGS)](r)
 const walk = (r: Rng, n = 30): app.App =>
-  r.array(n, () => event(r)).reduce(app.step, app.initial(route(r), r.bool(), r.pick(["life", "suzatary"])))
+  r.array(n, () => event(r)).reduce(app.step, app.initial(route(r), r.pick(["life", "suzatary"])))
 // A walk of a device that deleted what every revoked key left: no `Undeleted`, after which nothing writes again.
 const KEPT_TAGS = TAGS.filter(tag => tag !== "Undeleted")
 const walkKept = (r: Rng, n = 30): app.App =>
-  r.array(n, () => arms[r.pick(KEPT_TAGS)](r)).reduce(app.step, app.initial(route(r), r.bool(), r.pick(["life", "suzatary"])))
+  r.array(n, () => arms[r.pick(KEPT_TAGS)](r)).reduce(app.step, app.initial(route(r), r.pick(["life", "suzatary"])))
 
 const frozen = <T>(v: T): T => {
   if (typeof v === "object" && v !== null) {
@@ -79,7 +78,7 @@ test("law: said twice is said once — every arm is idempotent, and a repeat ret
   })
 })
 
-const PLACES = ["Went", "Replaced", "Moved", "Kept", "Resized"] as const
+const PLACES = ["Went", "Replaced", "Moved", "Kept"] as const
 
 test("law: a place never moves the chain, a new place closes the sheet, and only the route register's arms move the log", () => {
   forAll(300, r => {
@@ -121,7 +120,7 @@ test("law: a chain switch starts a new connection's heads and keeps what the liv
 })
 
 test("who writes and the build's line are App's, read through its derived values", () => {
-  const a = app.initial({ type: "todos" }, false, "life")
+  const a = app.initial({ type: "todos" }, "life")
   assert.equal(app.writes(a), false)
   const b = app.step(a, { type: "Met", me: ADA, served: ["life", "suzatary"], categories: [], zone: { name: "America/New_York" } })
   assert.deepEqual(b.zone, { name: "America/New_York" }, "the owner's zone is the box's answer")
@@ -175,7 +174,7 @@ test("/api/me is parsed once: no login is this box's own node, a login with no a
 })
 
 test("a tab that may not write says so and where to write from; one still asking says nothing", () => {
-  const a = app.initial({ type: "todos" }, false, "life")
+  const a = app.initial({ type: "todos" }, "life")
   const met = (me: login.Met) => app.step(a, { type: "Met", me, served: [], categories: [], zone: { name: "UTC" } })
   const said = (b: app.App): string => { const r = app.reach(b); return r.type === "Reads" ? r.said : "" }
   const toSettings = (b: app.App): boolean => { const r = app.reach(b); return r.type === "Reads" && r.settings }

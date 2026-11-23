@@ -44,3 +44,13 @@ export class TodoPage extends Page {}
 export class TodosPage extends Page {}
 /** The list drawn by Typst (`app/pages/src/typstlist.rs`). */
 export class TypstPage extends Page {}
+
+/** The tiles of the app's pages (`app/pages/src/desk.rs`): the address moves them, and a viewport draws them. */
+export class Desk {
+  /** Throws where the bar's destinations are not a well-formed home. */
+  constructor();
+  go(hash: string): void;
+  /** JSON of `Drawing`, for a viewport in pixels at the 16px root. */
+  drawing(w: number, h: number): string;
+  free(): void;
+}

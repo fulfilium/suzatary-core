@@ -1,6 +1,5 @@
-//! Home: the open chain's todos as one tree, grown and priced by the core in the tab's worker,
-//! and on a wide screen the selected todo in a pane. The last tree drawn stays while the next is
-//! asked.
+//! Home: the open chain's todos as one tree, grown and priced by the core in the tab's worker.
+//! The last tree drawn stays while the next is asked.
 
 use crate::part::Mark;
 use std::collections::{BTreeMap, BTreeSet};
@@ -28,10 +27,9 @@ use crate::held::{Folded, Own, Unsent, Unsents};
 use crate::needsyou::Route;
 use crate::places::{Place as To, Question};
 use crate::runtime::{
-    ActName, Answer, Context, Core, Effect, Gate, Input, KeyKind, Keyed, Local, Outcome, Placed,
-    PlacedWorth, Register, Said, answered, read,
+    ActName, Answer, Context, Core, Effect, Gate, Input, KeyKind, Keyed, Local, Opens, Outcome,
+    Placed, PlacedWorth, Register, Said, answered, read,
 };
-use crate::todo;
 use crate::todoparts::{
     Acting, Came, Phase, Seal, Verb, applicable, begin, came, conflicts, finish, headline, is_open,
     kind, said,
@@ -63,7 +61,6 @@ pub enum Hold {
     Briefings,
     /// What is connected, for whether setup is finished.
     Overview,
-    Pane(todo::Hold),
 }
 
 /// A register the list keeps of its own: on this device across loads, or in this tab.
@@ -118,11 +115,6 @@ pub enum Ask {
     },
     Undo {
         todo: String,
-    },
-    /// Named by the todo whose pane asked, so the answer reaches that pane alone.
-    Pane {
-        todo: String,
-        ask: todo::Ask,
     },
 }
 
@@ -612,13 +604,6 @@ impl Sheet {
     }
 }
 
-/// The pane beside the list: the hint, or the selected todo's page.
-#[derive(Debug, Clone)]
-enum Pane {
-    Hint,
-    Todo(Box<todo::Model>),
-}
-
 #[derive(Debug, Clone)]
 pub struct Model {
     context: Context,
@@ -654,7 +639,6 @@ pub struct Model {
     sheet: Sheet,
     running: BTreeSet<(String, Acting)>,
     keys: Vec<KeyKind>,
-    pane: Pane,
 }
 
 #[derive(Debug, Clone)]
@@ -681,7 +665,6 @@ pub enum Msg {
     Act(String, Verb),
     Under(String),
     Sheet(SheetMsg),
-    Pane(todo::Msg),
     Retry,
 }
 
@@ -725,25 +708,6 @@ pub enum Todos {}
 
 type Fx = Effect<Hold, Ask, Listen>;
 
-fn pane_fx(todo: &str, e: Effect<todo::Hold, todo::Ask>) -> Fx {
-    e.map(
-        Hold::Pane,
-        |ask| Ask::Pane {
-            todo: todo.to_owned(),
-            ask,
-        },
-        |n| match n {},
-    )
-}
-
-fn stepped(p: &mut todo::Model, msg: todo::Msg) -> Vec<Fx> {
-    let todo = p.id().to_owned();
-    p.update(msg)
-        .into_iter()
-        .map(|e| pane_fx(&todo, e))
-        .collect()
-}
-
 impl Model {
     fn open(f: Flags) -> (Model, Vec<Fx>) {
         let m = Model {
@@ -777,7 +741,6 @@ impl Model {
             sheet: Sheet::blank(),
             running: BTreeSet::new(),
             keys: Vec::new(),
-            pane: Pane::Hint,
         };
         let watch = |ask: Hold, local: Local| Effect::Watch { ask, local };
         let mut effects = vec![
@@ -1073,7 +1036,7 @@ impl Model {
             }
             Msg::Tap(todo, at) => {
                 self.cursor = at;
-                if self.context.wide {
+                if self.context.opens == Opens::Beside {
                     return vec![Effect::Go {
                         href: To::Todo(&todo).href(),
                     }];
@@ -1119,10 +1082,6 @@ impl Model {
             }
             Msg::Sheet(m) => self.sheeted(m),
             Msg::Retry => self.reread(),
-            Msg::Pane(m) => match &mut self.pane {
-                Pane::Todo(p) => stepped(p, m),
-                Pane::Hint => Vec::new(),
-            },
         }
     }
 
@@ -1254,18 +1213,10 @@ impl Model {
     fn heard(&mut self, input: Input<Hold, Ask, Listen>) -> Vec<Fx> {
         match input {
             Input::Context(c) => {
-                let mut out = Vec::new();
-                if let Pane::Todo(p) = &mut self.pane {
-                    out = stepped(p, todo::Msg::Host(Box::new(Input::Context(c.clone()))));
-                }
                 self.context = c;
-                out
+                Vec::new()
             }
-            Input::Held {
-                ask,
-                reading,
-                behind,
-            } => self.held(ask, reading, behind),
+            Input::Held { ask, reading, .. } => self.held(ask, reading),
             Input::Answered { ask, answer } => self.answered(ask, answer),
             Input::Heard {
                 ask: Listen::Keys,
@@ -1316,12 +1267,7 @@ impl Model {
         }
     }
 
-    fn held(
-        &mut self,
-        ask: Hold,
-        reading: Reading<Answer>,
-        behind: Option<crate::runtime::Behind>,
-    ) -> Vec<Fx> {
+    fn held(&mut self, ask: Hold, reading: Reading<Answer>) -> Vec<Fx> {
         let value = |r: Reading<Answer>| match read::<Value>(r) {
             Reading::Val { v } => Some(v),
             Reading::Loading | Reading::Error { .. } => None,
@@ -1407,17 +1353,6 @@ impl Model {
                 }
                 Vec::new()
             }
-            Hold::Pane(h) => match &mut self.pane {
-                Pane::Todo(p) => stepped(
-                    p,
-                    todo::Msg::Host(Box::new(Input::Held {
-                        ask: h,
-                        reading,
-                        behind,
-                    })),
-                ),
-                Pane::Hint => Vec::new(),
-            },
         }
     }
 
@@ -1435,28 +1370,10 @@ impl Model {
             .collect()
     }
 
-    /// Where the app went: a todo selected for the pane, or text shared into the sheet.
+    /// Where the app went: the todo beside the list, marked as its selected row, or text shared
+    /// into the sheet.
     fn routed(&mut self, r: Route) -> Vec<Fx> {
         let mut out = Vec::new();
-        let shown = match &self.pane {
-            Pane::Todo(p) => p.id().to_owned(),
-            Pane::Hint => String::new(),
-        };
-        if r.selected != shown {
-            if r.selected.is_empty() {
-                self.pane = Pane::Hint;
-            } else {
-                let (p, effects) = todo::Model::open(todo::Flags {
-                    context: self.context.clone(),
-                    chain: self.chain.clone(),
-                    id: r.selected.clone(),
-                    pushed: false,
-                    now: self.now,
-                });
-                self.pane = Pane::Todo(Box::new(p));
-                out.extend(effects.into_iter().map(|e| pane_fx(&r.selected, e)));
-            }
-        }
         // A share is consumed: its words go into the sheet, and the address back to the list's.
         if r.shared.is_empty() {
             self.shared.clear();
@@ -1498,42 +1415,6 @@ impl Model {
                 phase,
             } => self.lined(todo, acting, phase, answer),
             Ask::Undo { todo } => self.act(&todo, Acting::Undo),
-            Ask::Pane { todo, ask } => match &mut self.pane {
-                Pane::Todo(p) if p.id() == todo => stepped(
-                    p,
-                    todo::Msg::Host(Box::new(Input::Answered { ask, answer })),
-                ),
-                Pane::Todo(_) | Pane::Hint => self.unshown(todo, ask, answer),
-            },
-        }
-    }
-
-    /// For a pane that no longer shows `todo`: its write still lands, said as a line's is.
-    fn unshown(&mut self, todo: String, ask: todo::Ask, answer: Answer) -> Vec<Fx> {
-        let (phase, write) = match ask {
-            todo::Ask::Printed {
-                write: todo::Write::Act { acting },
-            } => return self.lined(todo, acting, Phase::Printed, answer),
-            todo::Ask::Sealed {
-                write: todo::Write::Act { acting },
-                seal,
-            } => return self.lined(todo, acting, Phase::Sealed(seal), answer),
-            todo::Ask::Undo => return self.act(&todo, Acting::Undo),
-            todo::Ask::Built | todo::Ask::Thirty => return Vec::new(),
-            todo::Ask::Printed { write } => (Phase::Printed, write),
-            todo::Ask::Sealed { write, seal } => (Phase::Sealed(seal), write),
-        };
-        let named = |phase| Ask::Pane {
-            todo: todo.clone(),
-            ask: match phase {
-                Phase::Printed => todo::Ask::Printed { write },
-                Phase::Sealed(seal) => todo::Ask::Sealed { write, seal },
-            },
-        };
-        match came(&self.chain, phase, answer, named) {
-            Came::Seals(seals) => seals,
-            Came::Taken | Came::Already => Vec::new(),
-            Came::Refused(words) => vec![Effect::Toast { words }],
         }
     }
 
@@ -1668,7 +1549,8 @@ impl Model {
         Vec::new()
     }
 
-    /// `l`, Enter: unfold, then open in place (a pane when wide), then go to the todo.
+    /// `l`, Enter: unfold, then open in place (beside, where the todo would stand beside the
+    /// list), then go to the todo.
     fn open_at(&mut self, at: Option<&At>) -> Vec<Fx> {
         match at {
             Some(At::Card(k, false)) => self.step(Msg::Fold(k.clone(), true)),
@@ -1678,7 +1560,7 @@ impl Model {
                 let id = todo_of(&l.place).unwrap_or_default().to_owned();
                 if l.below && !is_open_at(&folds, &fk, &l.worth) {
                     self.step(Msg::Fold(fk, true))
-                } else if self.context.wide || self.opened == id {
+                } else if self.context.opens == Opens::Beside || self.opened == id {
                     vec![Effect::Go {
                         href: To::Todo(&id).href(),
                     }]
@@ -2254,8 +2136,8 @@ impl Model {
             (_, false) => chrome::Status::Quiet,
         };
         let c = Chrome {
-            class: "listpane todospane",
-            width: Width::Wide,
+            class: "todospane",
+            width: Width::Column,
             title: String::new(),
             masthead: Masthead::Page,
             back: None,
@@ -2292,15 +2174,7 @@ impl Model {
         .chain(self.sheet_view())
         .collect();
         let head = view! { Div "listhead" [self.head()] };
-        let column = chrome::page_headed(c, head, status, body);
-        let pane = match &self.pane {
-            Pane::Hint => view! { Div "panehint" [
-                para("panehintlead", "Pick a todo."),
-                para("legend", "Its detail, what it costs, why that number, and every event on the chain that made it."),
-            ] },
-            Pane::Todo(p) => p.view().map(Msg::Pane),
-        };
-        view! { Div "split todosplit" [column, view! { Div "detailpane" [pane] }] }
+        chrome::page_headed(c, head, status, body)
     }
 }
 
@@ -2366,7 +2240,6 @@ mod tests {
     // not read back as itself is an answer the page never hears.
     #[test]
     fn every_ask_reads_back_as_itself() {
-        let write = todo::Write::Defer;
         for ask in [
             Ask::Tree { n: 3 },
             Ask::Sealed {
@@ -2375,21 +2248,6 @@ mod tests {
             },
             Ask::Reading {
                 at: "2026-09-04T12:00:00".to_owned(),
-            },
-            Ask::Pane {
-                todo: "renewcard".to_owned(),
-                ask: todo::Ask::Printed { write },
-            },
-            Ask::Pane {
-                todo: "renewcard".to_owned(),
-                ask: todo::Ask::Sealed {
-                    write,
-                    seal: Seal::Event,
-                },
-            },
-            Ask::Pane {
-                todo: "renewcard".to_owned(),
-                ask: todo::Ask::Thirty,
             },
         ] {
             let printed = serde_json::to_string(&ask).expect("an ask prints");
@@ -2408,7 +2266,8 @@ mod tests {
                 gate: Gate::Writes,
                 reach: crate::runtime::Reach::Writes,
                 offsets: Vec::new(),
-                wide: false,
+                keys: crate::runtime::Keys::Touch,
+                opens: crate::runtime::Opens::Over,
                 categories: Vec::new(),
                 clock: None,
             },
