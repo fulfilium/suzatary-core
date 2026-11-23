@@ -7,7 +7,9 @@ use common::Fakes;
 use prodrome_core::declared::Declaration;
 use prodrome_core::event::Actor;
 use suzatary_base::capability::Datetime;
-use suzatary_google::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
+use suzatary_google::calendar::{
+    Attendees, CalendarName, Content, Occurrence, OccurrenceId, Status, When,
+};
 use suzatary_io::plugin_store::PluginStore;
 use suzatary_store::store::learn;
 
@@ -25,7 +27,7 @@ fn occurrence(uid: &str, start: &str, title: &str, status: Status) -> Occurrence
             title.to_owned(),
             When::timed(begins, begins + chrono::Duration::hours(1)).expect("a span"),
             String::new(),
-            Vec::new(),
+            Attendees::of([], 0),
             status,
         )
         .expect("content"),

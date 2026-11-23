@@ -22,6 +22,12 @@ impl Plugins {
         self.beside(name).join("store")
     }
 
+    /// The directory of every plugin's store and cursor, one directory each.
+    #[must_use]
+    pub fn root(&self) -> PathBuf {
+        self.cache.join("plugins")
+    }
+
     /// Every declared plugin's store.
     #[must_use]
     pub fn stores(&self) -> Vec<PathBuf> {
@@ -31,10 +37,8 @@ impl Plugins {
             .collect()
     }
 
-    /// Where `name`'s cursor and store live.
-    #[must_use]
-    pub fn beside(&self, name: &PluginName) -> PathBuf {
-        self.cache.join("plugins").join(name.as_str())
+    fn beside(&self, name: &PluginName) -> PathBuf {
+        self.root().join(name.as_str())
     }
 
     #[must_use]

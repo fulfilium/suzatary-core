@@ -1,50 +1,50 @@
 2026-09-28
-  13:00–13:30 | PLUGIN_ICS_GOOGLE 20260928T130000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira | confirmed | timed
+  13:00–13:30 | PLUGIN_ICS_GOOGLE 20260928T130000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira +1 | confirmed | timed
 2026-10-05
-  13:00–13:30 | PLUGIN_ICS_GOOGLE 20261005T130000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira | confirmed | timed
+  13:00–13:30 | PLUGIN_ICS_GOOGLE 20261005T130000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira +1 | confirmed | timed
 2026-10-06
-  15:00–15:30 | PLUGIN_ICS_PROTON 20261006T150000Z call-88d@proton.example | Call with the bank |  | Ada | confirmed | timed
+  15:00–15:30 | PLUGIN_ICS_PROTON 20261006T150000Z call-88d@proton.example | Call with the bank |  | Ada +0 | confirmed | timed
 2026-10-07
-  16:30–17:30 | PLUGIN_ICS_GOOGLE 20261007T163000Z dentist-2b@google.example | Dentist |  |  | tentative | timed
+  16:30–17:30 | PLUGIN_ICS_GOOGLE 20261007T163000Z dentist-2b@google.example | Dentist |  |  +0 | tentative | timed
 2026-10-09
-  all day | PLUGIN_ICS_GOOGLE 20261009 retreat-91c@google.example | Team retreat |  |  | confirmed | all_day
+  all day | PLUGIN_ICS_GOOGLE 20261009 retreat-91c@google.example | Team retreat |  |  +0 | confirmed | all_day
 2026-10-10
-  all day | PLUGIN_ICS_GOOGLE 20261009 retreat-91c@google.example | Team retreat |  |  | confirmed | all_day
+  all day | PLUGIN_ICS_GOOGLE 20261009 retreat-91c@google.example | Team retreat |  |  +0 | confirmed | all_day
 2026-10-12
-  all day | PLUGIN_ICS_MICROSOFT 20261012 040000008200E00074C5B7101A82E00800000000B1 | Holiday |  |  | confirmed | all_day
+  all day | PLUGIN_ICS_MICROSOFT 20261012 040000008200E00074C5B7101A82E00800000000B1 | Holiday |  |  +0 | confirmed | all_day
 2026-10-13
-  17:00–18:30 | PLUGIN_ICS_MICROSOFT 20261013T170000Z 040000008200E00074C5B7101A82E00800000000A0F4C2B1D0C1DC01000000000000000010000000AAAAAAAAAAAAAAAAAAAAAAAAA | Lab meeting: quarterly review of the instruments | Building 7 |  | confirmed | timed
+  17:00–18:30 | PLUGIN_ICS_MICROSOFT 20261013T170000Z 040000008200E00074C5B7101A82E00800000000A0F4C2B1D0C1DC01000000000000000010000000AAAAAAAAAAAAAAAAAAAAAAAAA | Lab meeting: quarterly review of the instruments | Building 7 |  +0 | confirmed | timed
 2026-10-20
-  05:30–06:30 | PLUGIN_ICS_PROTON 20261020T053000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
-  18:00–18:30 | PLUGIN_ICS_GOOGLE 20261019T130000Z standup-7f3a@google.example | Weekly standup (moved to Tuesday) | Room 4, east wing | Ada; Solberg, Mira | confirmed | timed
+  05:30–06:30 | PLUGIN_ICS_PROTON 20261020T053000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
+  18:00–18:30 | PLUGIN_ICS_GOOGLE 20261019T130000Z standup-7f3a@google.example | Weekly standup (moved to Tuesday) | Room 4, east wing | Ada; Solberg, Mira +1 | confirmed | timed
 2026-10-21
-  05:30–06:30 | PLUGIN_ICS_PROTON 20261021T053000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
+  05:30–06:30 | PLUGIN_ICS_PROTON 20261021T053000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
 2026-10-22
-  05:30–06:30 | PLUGIN_ICS_PROTON 20261022T053000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
+  05:30–06:30 | PLUGIN_ICS_PROTON 20261022T053000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
 2026-10-23
-  05:30–06:30 | PLUGIN_ICS_PROTON 20261023T053000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
+  05:30–06:30 | PLUGIN_ICS_PROTON 20261023T053000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
 2026-10-24
-  05:30–06:30 | PLUGIN_ICS_PROTON 20261024T053000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
+  05:30–06:30 | PLUGIN_ICS_PROTON 20261024T053000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
 2026-10-25
-  06:30–07:30 | PLUGIN_ICS_PROTON 20261025T063000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
+  06:30–07:30 | PLUGIN_ICS_PROTON 20261025T063000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
 2026-10-26
-  06:30–07:30 | PLUGIN_ICS_PROTON 20261026T063000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
-  13:00–13:30 | PLUGIN_ICS_GOOGLE 20261026T130000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira | cancelled | timed
+  06:30–07:30 | PLUGIN_ICS_PROTON 20261026T063000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
+  13:00–13:30 | PLUGIN_ICS_GOOGLE 20261026T130000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira +1 | cancelled | timed
 2026-10-27
-  06:30–07:30 | PLUGIN_ICS_PROTON 20261027T063000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
+  06:30–07:30 | PLUGIN_ICS_PROTON 20261027T063000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
 2026-10-28
-  06:30–07:30 | PLUGIN_ICS_PROTON 20261028T063000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
+  06:30–07:30 | PLUGIN_ICS_PROTON 20261028T063000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
 2026-10-29
-  06:30–07:30 | PLUGIN_ICS_PROTON 20261029T063000Z yoga-c1e0@proton.example | Yoga | Studio |  | confirmed | timed
+  06:30–07:30 | PLUGIN_ICS_PROTON 20261029T063000Z yoga-c1e0@proton.example | Yoga | Studio |  +0 | confirmed | timed
 2026-11-02
-  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261102T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira | confirmed | timed
+  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261102T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira +1 | confirmed | timed
 2026-11-09
-  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261109T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira | confirmed | timed
+  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261109T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira +1 | confirmed | timed
 2026-11-10
-  18:00–19:30 | PLUGIN_ICS_MICROSOFT 20261110T180000Z 040000008200E00074C5B7101A82E00800000000A0F4C2B1D0C1DC01000000000000000010000000AAAAAAAAAAAAAAAAAAAAAAAAA | Lab meeting: quarterly review of the instruments | Building 7 |  | confirmed | timed
+  18:00–19:30 | PLUGIN_ICS_MICROSOFT 20261110T180000Z 040000008200E00074C5B7101A82E00800000000A0F4C2B1D0C1DC01000000000000000010000000AAAAAAAAAAAAAAAAAAAAAAAAA | Lab meeting: quarterly review of the instruments | Building 7 |  +0 | confirmed | timed
 2026-11-16
-  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261116T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira | confirmed | timed
+  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261116T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira +1 | confirmed | timed
 2026-11-23
-  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261123T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira | confirmed | timed
+  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261123T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira +1 | confirmed | timed
 2026-11-30
-  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261130T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira | confirmed | timed
+  14:00–14:30 | PLUGIN_ICS_GOOGLE 20261130T140000Z standup-7f3a@google.example | Weekly standup | Room 4, east wing | Ada; Solberg, Mira +1 | confirmed | timed

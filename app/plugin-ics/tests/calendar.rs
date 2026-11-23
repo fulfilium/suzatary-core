@@ -16,13 +16,13 @@ const HOME: &str = "PLUGIN_ICS_HOME";
 const WORK: &str = "PLUGIN_ICS_WORK";
 const NOTHING: [Item; 0] = [];
 
-/// Every call to the core's plugin API: each event admitted by the host's door and read as an
-/// occurrence, then learned into a store, read as the calendar reads it.
+/// Every call to the core's plugin API: each event admitted by the host's door, learned through
+/// `learn_kept` into a store, read as the calendar reads it; an item left unread fails here.
 fn hosted(events: &[Vec<u8>]) -> Result<Calendar, String> {
     use prodrome_core::declared::{Declaration, Declared};
     use suzatary_health::health::plugin::PluginName;
     use suzatary_services::plugin::admit;
-    use suzatary_store::store::{Reads, learn};
+    use suzatary_store::store::Reads;
     use suzatary_stores::stores::InMemory;
     let ics = PluginName::parse("ics").map_err(|refused| refused.to_string())?;
     let schema =
@@ -34,11 +34,13 @@ fn hosted(events: &[Vec<u8>]) -> Result<Calendar, String> {
     for bytes in events {
         let event = admit(&schema, &ics, bytes)
             .map_err(|refused| format!("{refused}: {}", String::from_utf8_lossy(bytes)))?;
-        Occurrence::of(&event).map_err(|refused| refused.to_string())?;
         admitted.push(event);
     }
     let store = InMemory::<Declared>::at(schema);
-    learn(&store, admitted).map_err(|refused| refused.to_string())?;
+    let kept = calendar::learn_kept(&store, &admitted).map_err(|refused| refused.to_string())?;
+    if kept.unread > 0 {
+        return Err(format!("{} items the calendar cannot read", kept.unread));
+    }
     Ok(Calendar::of(
         &store.nodes().map_err(|refused| refused.to_string())?,
     ))
@@ -135,6 +137,7 @@ fn google() -> Checks {
         same(&standup[0].title, "Weekly standup"),
         same(&standup[0].place, "Room 4, east wing"),
         same(&standup[0].attendees, ["Ada", "Solberg, Mira"]),
+        same(standup[0].unnamed, 1),
         same(standup[0].status, Status::Confirmed),
         same(&standup[2].title, "Weekly standup (moved to Tuesday)"),
         same(start(standup[2]), "2026-10-20T18:00:00Z"),
@@ -483,6 +486,16 @@ fn each_feed_and_each_change_of_one_reads_as_the_calendar_says() {
     }
 }
 
+/// The names, then how many are counted without one.
+fn attendees(attendees: &calendar::Attendees) -> String {
+    let names: Vec<&str> = attendees
+        .named()
+        .iter()
+        .map(calendar::AttendeeName::as_str)
+        .collect();
+    format!("{} +{}", names.join("; "), attendees.unnamed())
+}
+
 /// Every day of the window, each occurrence on it with all it says, in UTC.
 fn printed(read: &Calendar) -> String {
     let first = NaiveDate::from_ymd_opt(2026, 9, 27).expect("a literal day");
@@ -503,7 +516,7 @@ fn printed(read: &Calendar) -> String {
                 entry.id.uid(),
                 content.title(),
                 content.place(),
-                content.attendees().join("; "),
+                attendees(content.attendees()),
                 content.status().as_str(),
                 match content.when() {
                     calendar::When::Timed { .. } => "timed",
@@ -543,6 +556,125 @@ fn every_reading_of_the_fixture_feeds_is_pinned() {
     let events: Vec<Vec<u8>> = learned.items.iter().map(|item| item.event(now)).collect();
     let read = hosted(&events).unwrap_or_else(|refused| panic!("{refused}"));
     assert_eq!(printed(&read), include_str!("readings.txt"));
+}
+
+/// The plugin and the Google reader keep the same attendees: a long name ending in an address
+/// crosses the bound and is counted, never cut, and fifty addresses before ten names leave no
+/// name on either path. No item names an address.
+#[test]
+fn the_plugin_and_the_google_reader_keep_the_same_attendees() {
+    let address = |n: usize| format!("p{n}@example.invalid");
+    let long = format!("{} {}", "a".repeat(190), address(0));
+    let lists: [(Vec<String>, u32); 2] = [
+        (vec![long], 1),
+        (
+            (1..=50)
+                .map(address)
+                .chain((0..10).map(|n| format!("Ada {n}")))
+                .collect(),
+            60,
+        ),
+    ];
+    for (list, unnamed) in lists {
+        let attendees = list.iter().fold(String::new(), |mut out, name| {
+            let _ = write!(out, "ATTENDEE;CN=\"{name}\":mailto:x@example.test\r\n");
+            out
+        });
+        let feed = format!(
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:big@example.test\r\n\
+             DTSTART:20261006T150000Z\r\nDTEND:20261006T153000Z\r\nSUMMARY:All hands\r\n\
+             {attendees}END:VEVENT\r\nEND:VCALENDAR\r\n"
+        );
+        let items = sync_one(None, &feed, monday()).items;
+        assert_eq!(
+            (items[0].attendees.as_slice(), items[0].unnamed),
+            (&[] as &[String], unnamed)
+        );
+        let now = item::at(monday()).expect("a literal instant");
+        let read = hosted(&[items[0].event(now)]).unwrap_or_else(|refused| panic!("{refused}"));
+        let day = NaiveDate::from_ymd_opt(2026, 10, 6).expect("a literal day");
+        let days = read.days(day, 1, &|utc: NaiveDateTime| utc);
+        assert_eq!(
+            days[0].entries[0].content.attendees(),
+            &calendar::Attendees::of(list.iter().map(String::as_str), 0)
+        );
+    }
+}
+
+/// An event with an empty `UID`, or one holding a control character, is left out and said, as
+/// one with no `UID` is, so it never reaches the host as an item it cannot read.
+#[test]
+fn an_event_whose_uid_no_store_keeps_is_left_out_and_said() {
+    let event = |uid: &str| {
+        format!(
+            "BEGIN:VEVENT\r\nUID:{uid}\r\nDTSTART:20261006T150000Z\r\nDTEND:20261006T153000Z\r\n\
+             SUMMARY:Call\r\nEND:VEVENT\r\n"
+        )
+    };
+    let feed = format!(
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n{}{}{}END:VCALENDAR\r\n",
+        event(""),
+        event("bad\u{7}uid@example.test"),
+        event("good@example.test")
+    );
+    let (learned, said) = sync_of(None, &[HOME], monday(), &|_| Ok(answered(&feed)));
+    let uids: Vec<&str> = learned.items.iter().map(|item| item.uid.as_str()).collect();
+    assert_eq!(uids, ["good@example.test"]);
+    assert!(
+        said.iter()
+            .any(|line| line.contains(": 2 events with no UID")),
+        "{said:?}"
+    );
+}
+
+/// The host's door, `learn_kept`: a plugin's item that names an address as an attendee is stored
+/// with that attendee counted, and an item the calendar cannot read is counted and left out while
+/// the rest are learned.
+#[test]
+fn the_host_learns_each_item_as_the_calendar_keeps_it() {
+    use prodrome_core::declared::{Declaration, Declared};
+    use prodrome_core::event::canonical;
+    use suzatary_health::health::plugin::PluginName;
+    use suzatary_store::store::Reads as _;
+    use suzatary_stores::stores::InMemory;
+    let address = format!("{}@{}", "mira", "example.invalid");
+    let feed = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:one@example.test\r\n\
+        DTSTART:20261006T150000Z\r\nDTEND:20261006T153000Z\r\nSUMMARY:Call\r\n\
+        ATTENDEE;CN=Ada:mailto:x@example.test\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    let now = item::at(monday()).expect("a literal instant");
+    let fine = sync_one(None, feed, monday()).items.remove(0);
+    let mut hostile = fine.clone();
+    hostile.uid = "two@example.test".to_owned();
+    hostile.attendees.push(address.clone());
+    let mut unreadable = fine.clone();
+    unreadable.uid = String::new();
+    let schema = Declaration::admit(include_str!("../ics.schema")).expect("the schema");
+    let ics = PluginName::parse("ics").expect("a name");
+    let items: Vec<Declared> = [fine, hostile, unreadable]
+        .iter()
+        .map(|item| {
+            suzatary_services::plugin::admit(&schema, &ics, &item.event(now)).expect("admitted")
+        })
+        .collect();
+    assert!(canonical(&items[1]).contains(&address));
+    let store = InMemory::<Declared>::at(schema);
+    let kept = calendar::learn_kept(&store, &items).expect("learns");
+    assert_eq!((kept.learnt.written, kept.unread), (2, 1));
+    let nodes = store.nodes().expect("reads");
+    for node in nodes.iter() {
+        if let Some(event) = node.event() {
+            assert!(!canonical(event).contains(&address), "{}", canonical(event));
+        }
+    }
+    let read = Calendar::of(&nodes);
+    let day = NaiveDate::from_ymd_opt(2026, 10, 6).expect("a literal day");
+    let entries = &read.days(day, 1, &|utc: NaiveDateTime| utc)[0].entries;
+    let counts: Vec<(usize, u32)> = entries
+        .iter()
+        .map(|entry| entry.content.attendees())
+        .map(|attendees| (attendees.named().len(), attendees.unnamed()))
+        .collect();
+    assert_eq!(counts, [(1, 0), (1, 1)]);
 }
 
 /// The host admits every item each fixture's sync emits, at every instant it may be learned.

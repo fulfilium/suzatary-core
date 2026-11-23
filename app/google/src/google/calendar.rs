@@ -3,17 +3,17 @@
 //!
 //! Every read is bounded where it is asked and where it is read. What is stored is held to the
 //! calendar's own limits: a longer title or place is cut, and attendees past the list's limit
-//! are left out, so a meeting with a long invitation is still a meeting.
+//! are counted without their names, so a meeting with a long invitation is still a meeting.
 
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime};
 
 use super::Endpoints;
-use crate::calendar::{CalendarName, Content, Occurrence, OccurrenceId, Status, When};
+use crate::calendar::{Attendees, CalendarName, Content, Occurrence, OccurrenceId, Status, When};
 use suzatary_mail::mail::address::EmailAddress;
 
 /// The text the calendar plugin declares (`app/plugin-ics/ics.schema`, which a test holds this
 /// to), so the calendar reads what this source writes as it reads the plugin's.
-pub const SCHEMA: &str = "Schema(key='occurrence', events=(Event(name='Learned', fields=(Field(name='occurrence', type=Text()), Field(name='at', type=Instant()), Field(name='actor', type=Text()), Field(name='title', type=Text()), Field(name='when', type=Text()), Field(name='place', type=Text()), Field(name='attendees', type=List(item=Text())), Field(name='status', type=Enum(alternatives=('cancelled', 'confirmed', 'tentative'))))),), registers=(Register(name='attendees', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='attendees'),)), Register(name='place', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='place'),)), Register(name='status', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='status'),)), Register(name='title', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='title'),)), Register(name='when', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='when'),))))";
+pub const SCHEMA: &str = "Schema(key='occurrence', events=(Event(name='Learned', fields=(Field(name='occurrence', type=Text()), Field(name='at', type=Instant()), Field(name='actor', type=Text()), Field(name='title', type=Text()), Field(name='when', type=Text()), Field(name='place', type=Text()), Field(name='attendees', type=List(item=Text())), Field(name='unnamed', type=Integer()), Field(name='status', type=Enum(alternatives=('cancelled', 'confirmed', 'tentative'))))),), registers=(Register(name='attendees', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='attendees'),)), Register(name='place', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='place'),)), Register(name='status', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='status'),)), Register(name='title', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='title'),)), Register(name='unnamed', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='unnamed'),)), Register(name='when', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='when'),))))";
 
 /// The actor a Google account's occurrences are written as, which names their calendars.
 pub const ACTOR: &str = "google";
@@ -24,7 +24,7 @@ pub const CALENDARS: usize = 20;
 /// The most events of one calendar a sync reads.
 pub const EVENTS: usize = 250;
 
-/// The most bytes of one answer the box reads; a longer answer is not read.
+/// The most bytes of one answer the box reads.
 pub const MAX_ANSWER: usize = 1 << 20;
 
 /// The span a sync reads: a week back, for what just happened, and ninety days ahead.
@@ -202,23 +202,20 @@ fn occurrence(item: &serde_json::Value, name: &CalendarName) -> Option<Occurrenc
         Point::At(at) => at.format("%Y%m%dT%H%M%SZ").to_string(),
         Point::Day(day) => day.format("%Y%m%d").to_string(),
     };
-    let attendees = item
-        .get("attendees")
-        .and_then(serde_json::Value::as_array)
-        .map(|attendees| {
-            attendees
-                .iter()
-                .filter_map(|attendee| {
-                    attendee
-                        .get("displayName")
-                        .or_else(|| attendee.get("email"))
-                        .and_then(serde_json::Value::as_str)
-                })
-                .take(crate::calendar::MAX_ATTENDEES)
-                .map(|attendee| cut(attendee, crate::calendar::MAX_NAME))
-                .collect()
-        })
-        .unwrap_or_default();
+    // An attendee's `email` is never read: one with no `displayName` is counted unnamed.
+    let attendees = Attendees::of(
+        item.get("attendees")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(|attendee| {
+                attendee
+                    .get("displayName")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+            }),
+        0,
+    );
     let status = match text("status") {
         Some("cancelled") => Status::Cancelled,
         Some("tentative") => Status::Tentative,
@@ -438,8 +435,14 @@ mod tests {
 
     #[test]
     fn an_event_is_read_in_utc_and_held_to_the_calendars_limits() {
+        let address = |n: usize| format!("p{n}@example.test");
         let attendees: Vec<serde_json::Value> = (0..80)
-            .map(|n| serde_json::json!({"email": format!("p{n}@example.test")}))
+            .map(|n| match n {
+                0..10 => serde_json::json!({"email": address(n)}),
+                10..15 => serde_json::json!({"email": address(n), "displayName": address(n)}),
+                15 => serde_json::json!({"email": address(n), "displayName": "Room 4", "resource": true}),
+                _ => serde_json::json!({"email": address(n), "displayName": format!("Ada {n}")}),
+            })
             .collect();
         let body = serde_json::json!({"items": [{
             "id": "abc_20261019T070000Z",
@@ -475,10 +478,20 @@ mod tests {
             meeting.content.title().chars().count(),
             crate::calendar::MAX_TEXT
         );
+        let attendees = meeting.content.attendees();
+        let named: Vec<&str> = attendees
+            .named()
+            .iter()
+            .map(crate::calendar::AttendeeName::as_str)
+            .collect();
+        assert_eq!(named.len(), 35, "the named among the first fifty");
+        assert_eq!((named[0], named[1]), ("Room 4", "Ada 16"));
         assert_eq!(
-            meeting.content.attendees().len(),
-            crate::calendar::MAX_ATTENDEES
+            named.len() + attendees.unnamed() as usize,
+            80,
+            "every attendee is counted"
         );
+        assert!(named.iter().all(|name| !name.contains('@')), "{named:?}");
         assert_eq!(meeting.content.status(), Status::Tentative);
         assert_eq!(read[1].content.when().print(), "2026-10-23/2026-10-24");
     }

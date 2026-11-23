@@ -7,7 +7,9 @@ use std::collections::BTreeMap;
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use icalendar::parser::{Component, ParseString, Property};
 
-use crate::item::{DAY, INSTANT, Item, MAX_ATTENDEES, MAX_NAME, MAX_TEXT, Status, When, Window};
+use suzatary_address::AttendeeName;
+
+use crate::item::{DAY, INSTANT, Item, MAX_ATTENDEES, MAX_TEXT, Status, When, Window};
 use crate::recurrence;
 use crate::zone::{Zone, Zones};
 
@@ -115,10 +117,11 @@ pub fn occurrences(
     let events: Vec<_> = all
         .iter()
         .filter_map(|event| Some((text(event, "UID")?, *event)))
+        .filter(|(uid, _)| !uid.is_empty() && !uid.chars().any(char::is_control))
         .collect();
     if events.len() < all.len() {
         said(format!(
-            "{} events with no UID were left out",
+            "{} events with no UID, an empty one or one holding a control character were left out",
             all.len() - events.len()
         ));
     }
@@ -282,9 +285,7 @@ impl Zones {
             (true, Some(master)) => props(master, "ATTENDEE"),
             (true, None) | (false, _) => props(event, "ATTENDEE"),
         };
-        let name = |attendee: &&Property<'_>| clipped(param(attendee, "CN"), MAX_NAME);
-        let names = attendees.iter().filter_map(name);
-        let names: Vec<String> = names.take(MAX_ATTENDEES).collect();
+        let (names, unnamed) = named(&attendees);
         for local in starts {
             let instance = match start {
                 Moment::Date(_) => Moment::Date(local.date()),
@@ -304,11 +305,28 @@ impl Zones {
                 when,
                 place: read("LOCATION").unwrap_or_default(),
                 attendees: names.clone(),
+                unnamed,
                 status,
             };
             out.insert((uid.to_owned(), item.occurrence.clone()), item);
         }
     }
+}
+
+/// The `CN` of each of the first [`MAX_ATTENDEES`] attendees that is an [`AttendeeName`], and
+/// how many others there are: no item names an address, so neither does the cursor.
+fn named(attendees: &[&Property<'_>]) -> (Vec<String>, u32) {
+    let name = |attendee: &&Property<'_>| {
+        let name = AttendeeName::parse(param(attendee, "CN")?).ok()?;
+        Some(name.as_str().to_owned())
+    };
+    let names: Vec<String> = attendees
+        .iter()
+        .take(MAX_ATTENDEES)
+        .filter_map(name)
+        .collect();
+    let unnamed = u32::try_from(attendees.len() - names.len()).unwrap_or(u32::MAX);
+    (names, unnamed)
 }
 
 /// The first `max` characters of `text`, trimmed, or `None` for none.

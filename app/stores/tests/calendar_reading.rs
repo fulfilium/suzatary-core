@@ -5,7 +5,7 @@ use prodrome_core::event::Actor;
 use prodrome_core::literal::Datetime;
 
 use suzatary_google::calendar::{
-    Calendar, CalendarName, Content, Occurrence, OccurrenceId, Status, When,
+    Attendees, Calendar, CalendarName, Content, Occurrence, OccurrenceId, Status, When,
 };
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::learn;
@@ -27,7 +27,7 @@ fn occurrence(uid: &str, key: &str, title: &str, when: &str, status: Status) -> 
             title.to_owned(),
             When::parse(when).expect("a span"),
             String::new(),
-            Vec::new(),
+            Attendees::of([], 0),
             status,
         )
         .expect("content"),

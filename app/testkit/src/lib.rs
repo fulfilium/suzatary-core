@@ -87,6 +87,31 @@ fn by_child(script: &str, args: &[&Path]) -> Command {
     command
 }
 
+/// Every file under `dir`, at any depth, whose bytes hold `needle` in any ASCII case. An entry
+/// that cannot be read fails the test, so a file it could not open never reads as one without it.
+#[must_use]
+pub fn files_holding(dir: &Path, needle: &str) -> Vec<PathBuf> {
+    let mut holding = Vec::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        for entry in std::fs::read_dir(&next).expect("a directory that lists") {
+            let path = entry.expect("an entry that reads").path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                let bytes = std::fs::read(&path).expect("a file that reads");
+                if bytes
+                    .windows(needle.len())
+                    .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+                {
+                    holding.push(path);
+                }
+            }
+        }
+    }
+    holding
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

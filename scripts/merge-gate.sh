@@ -603,7 +603,7 @@ step history growth       unkept history  scripts/context.sh growth
 lane=live
 # Kept by the code that reads the data and, under the train, by the stores' digest it hands
 # (SUZATARY_GATE_DATA); merge_gate.rs holds the list to the paths their sources name.
-live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/base app/record app/release
+live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/address app/base app/record app/release
   app/store app/signatures app/todo app/plan app/held app/memory app/mail app/health app/triage
   app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/stores app/cards app/secretary app/api app/server app/os app/io app/plugin app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src

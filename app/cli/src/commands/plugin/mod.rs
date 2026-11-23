@@ -10,6 +10,7 @@ use clap::{Args as ClapArgs, Subcommand};
 use prodrome_core::declared::Declared;
 use prodrome_core::fpl::instant_of;
 use suzatary_base::capability::Clock as _;
+use suzatary_google::calendar::{Occurrence, learn_kept};
 use suzatary_health::health::plugin::CredentialName;
 use suzatary_io::clock::SystemClock;
 use suzatary_io::http::Ureq;
@@ -75,6 +76,20 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
     };
     let health = suzatary_io::source_health::beside(&instance.mail.heartbeat);
     let (google, calendars_stored) = if args.names.is_empty() {
+        let declared: Vec<&str> = (plugins.manifests.iter())
+            .map(|manifest| manifest.name().as_str())
+            .collect();
+        match super::google::remove_unowned(&plugins.root(), &declared) {
+            Ok(0) => {}
+            Ok(removed) => {
+                println!("plugin: removed the stores of {removed} plugin(s) no longer declared");
+            }
+            Err(failed) => {
+                println!(
+                    "plugin: a store of a plugin no longer declared was not removed: {failed}"
+                );
+            }
+        }
         probe_drive(&instance, &health);
         super::google::sync_calendars(
             &instance,
@@ -193,7 +208,6 @@ fn sync_once(
     effects: &Effects,
 ) -> (Report, Vec<(CredentialName, Answer)>) {
     let name = manifest.name();
-    let dir = plugins.beside(name);
     let failed = |why: String| {
         let line = format!("plugin {name}: {why}");
         (Report { line, learnt: None }, Vec::new())
@@ -206,7 +220,8 @@ fn sync_once(
         Err(why) => return failed(why),
     };
     // Held until the run's writes end, so no sync at another schema empties the store under it.
-    let begun = match PluginStore::at(plugins.store(name)).begin(source.schema()) {
+    let place = PluginStore::at(plugins.store(name));
+    let begun = match place.begin(source.schema()) {
         Ok(begun) => begun,
         Err(err) => return failed(format!("its store could not begin: {err}")),
     };
@@ -214,7 +229,7 @@ fn sync_once(
         // A store begun afresh holds nothing its cursor says was learned, so the run starts
         // from no cursor and reports everything in its window again.
         How::Afresh => None,
-        How::Kept => match std::fs::read(dir.join("cursor")).present() {
+        How::Kept => match std::fs::read(place.cursor()).present() {
             Ok(cursor) => cursor,
             Err(err) => return failed(format!("its cursor could not be read: {err}")),
         },
@@ -225,7 +240,7 @@ fn sync_once(
         eprintln!("plugin {name} said: {said}");
     }
     let fetches: Vec<(CredentialName, Answer)> = run.fetches.iter().filter_map(link).collect();
-    let (learnt, what) = match learned(&source, store, &dir, &run) {
+    let (learnt, what) = match learned(&source, store, &place.cursor(), &run) {
         Ok((learnt, what)) => (Some(learnt), what),
         Err(what) => (None, what),
     };
@@ -285,7 +300,7 @@ fn inside(root: &Path, relative: &str) -> Result<PathBuf, String> {
 fn learned(
     source: &Source,
     store: &Objects<Declared>,
-    dir: &Path,
+    cursor: &Path,
     run: &Run,
 ) -> Result<(Learnt, String), String> {
     let synced = run
@@ -298,15 +313,24 @@ fn learned(
         .map(|item| admit(source.schema(), source.manifest().name(), item))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|refused| format!("refused an item: {refused}"))?;
-    let learnt = learn(store, events).map_err(|err| format!("its store refused: {err}"))?;
+    let (learnt, unread) = if Occurrence::reads(source.schema()) {
+        learn_kept(store, &events).map(|kept| (kept.learnt, kept.unread))
+    } else {
+        learn(store, events).map(|learnt| (learnt, 0))
+    }
+    .map_err(|err| format!("its store refused: {err}"))?;
     let what = format!(
-        "{} item{}, {} written, {} known",
+        "{} item{}, {} written, {} known{}",
         synced.items.len(),
         if synced.items.len() == 1 { "" } else { "s" },
         learnt.written,
         learnt.known,
+        match unread {
+            0 => String::new(),
+            unread => format!(", {unread} the calendar cannot read left out"),
+        },
     );
-    match durable::replace(&dir.join("cursor"), &synced.cursor, durable::Mode::Readable) {
+    match durable::replace(cursor, &synced.cursor, durable::Mode::Readable) {
         Ok(()) => Ok((learnt, what)),
         // Learnt and not saved: the next run reports the same items again and learns nothing.
         Err(err) => Ok((learnt, format!("{what}, its cursor unsaved ({err})"))),

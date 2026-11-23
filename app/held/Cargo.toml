@@ -19,6 +19,7 @@ serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true
 regex.workspace = true
+suzatary-address.workspace = true
 regex-syntax.workspace = true
 unicode-normalization = "0.1"
 base64.workspace = true

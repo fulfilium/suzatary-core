@@ -1,14 +1,9 @@
 //! What an occurrence says: the content register's value.
 
-use super::When;
+use super::{Attendees, When};
 
 /// The most characters of a title or a place.
 pub const MAX_TEXT: usize = 500;
-
-/// The most characters of one attendee's name.
-pub const MAX_NAME: usize = 200;
-
-pub(crate) const MAX_ATTENDEES: usize = 50;
 
 /// Whether it is happening, as its feed says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -45,7 +40,7 @@ pub struct Content {
     title: String,
     when: When,
     place: String,
-    attendees: Vec<String>,
+    attendees: Attendees,
     status: Status,
 }
 
@@ -71,6 +66,8 @@ pub enum NotAnOccurrence {
     /// A field the calendar reads is not in the schema, or holds a value of another type.
     #[error("the schema gives no {0} a calendar reads")]
     Field(&'static str),
+    #[error("the occurrence does not print at its schema: {0}")]
+    Unprinted(String),
 }
 
 impl Content {
@@ -79,7 +76,7 @@ impl Content {
         title: String,
         when: When,
         place: String,
-        attendees: Vec<String>,
+        attendees: Attendees,
         status: Status,
     ) -> Result<Self, NotAnOccurrence> {
         if title.chars().count() > MAX_TEXT {
@@ -87,12 +84,6 @@ impl Content {
         }
         if place.chars().count() > MAX_TEXT {
             return Err(NotAnOccurrence::TooLong("a place"));
-        }
-        if attendees.len() > MAX_ATTENDEES {
-            return Err(NotAnOccurrence::TooLong("the attendee list"));
-        }
-        if attendees.iter().any(|name| name.chars().count() > MAX_NAME) {
-            return Err(NotAnOccurrence::TooLong("an attendee's name"));
         }
         Ok(Self {
             title,
@@ -120,9 +111,8 @@ impl Content {
         &self.place
     }
 
-    /// The attendees' names.
     #[must_use]
-    pub fn attendees(&self) -> &[String] {
+    pub fn attendees(&self) -> &Attendees {
         &self.attendees
     }
 

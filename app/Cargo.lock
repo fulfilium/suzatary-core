@@ -4220,6 +4220,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "suzatary-address"
+version = "0.0.0"
+dependencies = [
+ "regex",
+ "thiserror",
+]
+
+[[package]]
 name = "suzatary-api"
 version = "0.0.0"
 dependencies = [
@@ -4390,9 +4398,11 @@ dependencies = [
  "chrono",
  "hex",
  "prodrome-core",
+ "proptest",
  "serde",
  "serde_json",
  "sha2",
+ "suzatary-address",
  "suzatary-base",
  "suzatary-google",
  "suzatary-mail",
@@ -4432,6 +4442,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "suzatary-address",
  "suzatary-base",
  "suzatary-held",
  "suzatary-store",
@@ -4694,6 +4705,7 @@ dependencies = [
  "rrule",
  "serde",
  "serde_json",
+ "suzatary-address",
  "suzatary-google",
  "suzatary-health",
  "suzatary-services",

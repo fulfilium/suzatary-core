@@ -54,6 +54,9 @@
 # `reaches`, its tagged sums decoded in the tab, and the closed card's line drawn from it), so both
 # views lines rise by 40,000; prodrome 5,072,408 (+3,111 over master's 5,069,297: the same card
 # built in the tab's reading), so both prodrome lines rise by 10,000.
+# attendeeaddress, merged with 2.1.221: prodrome 5,074,430 (+2,022 over master's: an attendee's
+# name and its address check, the attendees' count, the calendar's door for a plugin's items) and
+# views 3,760,435, each within its line.
 views_bg.wasm x86_64-linux 3770000
 prodrome_bg.wasm x86_64-linux 5080000
 typst_bg.wasm x86_64-linux 22020000

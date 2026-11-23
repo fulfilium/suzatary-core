@@ -604,4 +604,71 @@ mod tests {
             Inserted::Unknown(_)
         ));
     }
+
+    #[test]
+    fn a_store_that_kept_an_address_is_emptied_before_any_fetch() {
+        use prodrome_core::declared::Declaration;
+        use suzatary_google::calendar::{
+            Attendees, CalendarName, Content, Occurrence, OccurrenceId, Status, When,
+        };
+        let address = format!("{}@{}", "mira", "example.invalid");
+        let schema = suzatary_google::google::SCHEMA;
+        let before = schema
+            .replace("Field(name='unnamed', type=Integer()), ", "")
+            .replace(
+                "Register(name='unnamed', order=Discrete(), inflationary=False, \
+                 writes=(Write(event='Learned', field='unnamed'),)), ",
+                "",
+            );
+        assert_ne!(before, schema);
+        let before = Declaration::admit(&before).expect("the schema before");
+        let dir = suzatary_testkit::scratch("calendar-address");
+        let root = dir.path().join("store");
+        let kept = prodrome_core::event::parse_event(
+            &before,
+            &format!(
+                "Learned(occurrence='PLUGIN_GOOGLE_ADA 20261019T090000Z review@example.test', \
+                 at=datetime(2026, 10, 18, 9, 0, 0), actor='google', title='Review', \
+                 when='2026-10-19T09:00:00Z/2026-10-19T10:00:00Z', place='', \
+                 attendees=('Ada', '{address}'), status='confirmed')"
+            ),
+        )
+        .expect("an event of the schema before");
+        let begun = crate::plugin_store::PluginStore::at(&root)
+            .begin(&before)
+            .expect("begins");
+        suzatary_store::store::learn(begun.store(), vec![kept]).expect("learns");
+        drop(begun);
+        let holding = || suzatary_testkit::files_holding(dir.path(), &address).len();
+        assert_eq!(holding(), 1, "the store before holds the address");
+        crate::plugin_store::PluginStore::at(&root)
+            .settle(&Declaration::admit(schema).expect("the calendar's schema"))
+            .expect("settles");
+        assert_eq!(
+            holding(),
+            0,
+            "no file holds the address, and nothing was fetched"
+        );
+        let review = Occurrence {
+            id: OccurrenceId::new(
+                CalendarName::parse("PLUGIN_GOOGLE_ADA").expect("a name"),
+                "review@example.test",
+                "20261019T090000Z",
+            )
+            .expect("an id"),
+            content: Content::new(
+                "Review".to_owned(),
+                When::parse("2026-10-19T09:00:00Z/2026-10-19T10:00:00Z").expect("a span"),
+                String::new(),
+                Attendees::of(["Ada", address.as_str()], 0),
+                Status::Confirmed,
+            )
+            .expect("content"),
+        };
+        let at =
+            suzatary_base::capability::Datetime::new(2026, 10, 19, 8, 0, 0, 0).expect("an instant");
+        let learnt = learn(&root, &[review], at).expect("learns");
+        assert_eq!(learnt.written, 1, "the occurrence is learned again");
+        assert_eq!(holding(), 0, "no file holds the address");
+    }
 }

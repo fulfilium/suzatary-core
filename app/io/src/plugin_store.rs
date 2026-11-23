@@ -51,6 +51,9 @@ impl Begun {
 
 const SCHEMA: &str = "schema";
 
+/// A plugin's cursor holds what it last reported, so it goes wherever the store is emptied.
+const CURSOR: &str = "cursor";
+
 impl PluginStore {
     #[must_use]
     pub fn at(root: impl Into<PathBuf>) -> Self {
@@ -78,6 +81,22 @@ impl PluginStore {
         };
         let schema = Declaration::admit(&text).map_err(|refused| self.unreadable(refused))?;
         Ok(Some(Objects::plugin(&self.root, schema)))
+    }
+
+    #[must_use]
+    pub fn cursor(&self) -> PathBuf {
+        self.root.with_file_name(CURSOR)
+    }
+
+    /// Empty the store and its cursor where it holds another schema; write nothing where none is.
+    ///
+    /// # Errors
+    /// As [`PluginStore::begin`].
+    pub fn settle(&self, schema: &Declaration) -> Result<(), StoreError> {
+        match self.schema()? {
+            Some(text) if text != schema.text() => self.begin(schema).map(drop),
+            Some(_) | None => Ok(()),
+        }
     }
 
     /// The store at the schema beside it, held as a sync holds it, so no sync at another schema
@@ -127,6 +146,7 @@ impl PluginStore {
         std::fs::remove_dir_all(&self.root)
             .present()
             .map_err(unwritable)?;
+        suzatary_os::durable::remove(&self.cursor()).map_err(unwritable)?;
         suzatary_os::durable::replace(
             &self.root.join(SCHEMA),
             schema.text().as_bytes(),
@@ -222,6 +242,36 @@ mod tests {
             std::fs::read_to_string(dir.path().join("store/schema")).expect("reads"),
             other.text()
         );
+    }
+
+    /// A store at another schema is emptied where it is found, its cursor with it, and nothing
+    /// is written where no store was.
+    #[test]
+    fn settling_empties_a_store_at_another_schema_and_its_cursor() {
+        let dir = suzatary_testkit::scratch("plugin-store");
+        let place = PluginStore::at(dir.path().join("store"));
+        let schema = Declaration::admit(SCHEMA).expect("lawful");
+        place.settle(&schema).expect("settles");
+        assert!(!dir.path().join("store").exists(), "no store is written");
+        let begun = place.begin(&schema).expect("begins");
+        let seen = parse_event(
+            &schema,
+            "Seen(door='front', at=datetime(2026, 10, 5, 10, 0, 0), actor='probe', state='open')",
+        )
+        .expect("an event");
+        learn(begun.store(), vec![seen]).expect("learns");
+        drop(begun);
+        std::fs::write(place.cursor(), b"what was reported").expect("writes");
+        place.settle(&schema).expect("settles");
+        assert!(
+            place.cursor().exists(),
+            "a store at its schema keeps its cursor"
+        );
+        let other = Declaration::admit(&SCHEMA.replace("'shut'", "'wide'")).expect("lawful");
+        place.settle(&other).expect("settles");
+        assert!(!place.cursor().exists(), "the cursor goes with the store");
+        let read = place.read().expect("reads").expect("a store");
+        assert!(read.objects().expect("reads").is_empty());
     }
 
     /// LAW: a `begin` at another schema, asked while a sync holds the store, waits for it: the

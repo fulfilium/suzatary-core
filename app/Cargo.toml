@@ -8,7 +8,7 @@
 # program, which depends on no member, so `-p` builds it alone.
 [workspace]
 resolver = "3"
-members = ["base", "record", "release", "store", "signatures", "todo", "plan", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "os", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages", "tooling"]
+members = ["address", "base", "record", "release", "store", "signatures", "todo", "plan", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "os", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages", "tooling"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -29,6 +29,7 @@ prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium
 prodrome_data = { package = "prodrome-data", git = "https://github.com/fulfilium/prodrome", rev = "588e30670dcf06ccfd59da55de26e972d1240444" }
 # The Prodrome's exports generic over a schema, which `wasm` instantiates at this application's.
 prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "588e30670dcf06ccfd59da55de26e972d1240444" }
+suzatary-address = { path = "address" }
 suzatary-base = { path = "base" }
 suzatary-record = { path = "record" }
 suzatary-release = { path = "release" }

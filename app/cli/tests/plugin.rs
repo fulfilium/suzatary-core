@@ -76,14 +76,39 @@ impl Resolves for Links {
     }
 }
 
+/// The addresses the review's attendees are given by: as a name, inside a quoted display name,
+/// in mixed case, and as a `mailto:` alone.
+const ADDRESSES: [&str; 4] = [
+    concat!("mira", "@", "example.invalid"),
+    concat!("bo", "@", "example.invalid"),
+    concat!("Cy", "@", "Example.Invalid"),
+    concat!("dee", "@", "example.invalid"),
+];
+
+/// Ada is named and the four others counted, and no file under `dir` holds an address in any case.
+fn no_address_is_kept(dir: &Path, attendees: &suzatary_google::calendar::Attendees) {
+    assert_eq!((attendees.named().len(), attendees.unnamed()), (1, 4));
+    for address in ADDRESSES {
+        assert_eq!(
+            suzatary_testkit::files_holding(dir, address),
+            Vec::<PathBuf>::new()
+        );
+    }
+}
+
 /// Every day at nine since 2020, and a meeting today that the second feed cancels.
 fn calendar(standup: &str) -> String {
+    let [mira, bo, cy, dee] = ADDRESSES;
     let today = chrono::Utc::now().date_naive().format("%Y%m%d");
     format!(
         "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:daily@example.test\r\nDTSTART:20200101T090000Z\r\n\
          DURATION:PT30M\r\nRRULE:FREQ=DAILY\r\nSUMMARY:Daily\r\nEND:VEVENT\r\n\
          BEGIN:VEVENT\r\nUID:review@example.test\r\nDTSTART:{today}T150000Z\r\nDTEND:{today}T160000Z\r\n\
-         SUMMARY:Review\r\nSTATUS:{standup}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+         SUMMARY:Review\r\nSTATUS:{standup}\r\nATTENDEE;CN=Ada:mailto:x@example.test\r\n\
+         ATTENDEE;CN={mira}:mailto:x@example.test\r\n\
+         ATTENDEE;CN=\"Bo Example <{bo}>\":mailto:x@example.test\r\n\
+         ATTENDEE;CN={cy}:mailto:x@example.test\r\nATTENDEE:mailto:{dee}\r\n\
+         END:VEVENT\r\nEND:VCALENDAR\r\n"
     )
 }
 
@@ -220,6 +245,7 @@ fn a_sync_learns_once_keeps_its_health_and_reads_a_cancellation() {
         .find(|entry| entry.content.title() == "Review")
         .expect("today's review");
     assert_eq!(review.content.status(), Status::Cancelled);
+    no_address_is_kept(&ics, review.content.attendees());
 
     std::fs::write(plugins.cache.join("plugins/ics/cursor"), b"not a cursor").expect("writes");
     let restarted = sync();

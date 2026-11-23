@@ -16,6 +16,7 @@ suzatary-base.workspace = true
 suzatary-store.workspace = true
 suzatary-todo.workspace = true
 suzatary-mail.workspace = true
+suzatary-address.workspace = true
 suzatary-services.workspace = true
 thiserror.workspace = true
 serde.workspace = true
@@ -30,6 +31,7 @@ nothing = ["suzatary-base/nothing", "suzatary-store/nothing", "suzatary-todo/not
 
 [dev-dependencies]
 suzatary-google = { path = ".", features = ["nothing"] }
+proptest.workspace = true
 
 [lints]
 workspace = true

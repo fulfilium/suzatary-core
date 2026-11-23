@@ -19,12 +19,25 @@ pub fn sync_calendars(
     health: &suzatary_io::source_health::Health,
 ) -> (Vec<String>, bool) {
     let grants = suzatary_io::google::Grants::new(google, std::sync::Arc::new(instance.secrets()));
+    let accounts: Vec<&str> = (instance.mail.accounts.accounts().iter())
+        .map(|account| account.subdir.as_str())
+        .collect();
+    let removed = remove_unowned(&instance.google_calendars(), &accounts);
     let (mut lines, healths, stored) = read_calendars(
         instance.mail.accounts.accounts(),
         &grants,
         |account| instance.google_calendar(account),
         suzatary_io::clock::SystemClock.now(),
     );
+    match removed {
+        Ok(0) => {}
+        Ok(removed) => lines.push(format!(
+            "google: removed the calendars of {removed} account(s) no longer read"
+        )),
+        Err(failed) => lines.push(format!(
+            "google: a removed account's calendar was not removed: {failed}"
+        )),
+    }
     if let Err(failed) = health.join(&healths) {
         lines.push(format!(
             "google: the calendars' health was not recorded: {failed}"
@@ -33,8 +46,9 @@ pub fn sync_calendars(
     (lines, stored)
 }
 
-/// A line and a health for each account the box reads calendars for (`google::reads_calendars`),
-/// and whether every one was stored; a lieer account is read through its calendar grant alone.
+/// Empty each account's store held at another schema, before any fetch; then a line and a health
+/// for each account the box reads calendars for (`google::reads_calendars`), and whether every one
+/// was stored; a lieer account is read through its calendar grant alone.
 pub fn read_calendars(
     accounts: &[suzatary_mail::mail::account::MailAccount],
     grants: &suzatary_io::google::Grants,
@@ -46,6 +60,13 @@ pub fn read_calendars(
     let mut stored = true;
     let mut lines = Vec::new();
     for account in accounts {
+        if let Err(failed) = settle(&store_of(account)) {
+            stored = false;
+            lines.push(format!(
+                "google {}: its calendar store was not emptied: {failed}",
+                account.email
+            ));
+        }
         // A store that does not answer reads as no grant: the account's next sync says why.
         let held = grants
             .held(account.email.address())
@@ -94,4 +115,67 @@ pub fn read_calendars(
         lines.push(format!("google {}: {words}", account.email));
     }
     (lines, healths, stored)
+}
+
+/// Empty the calendar store at `root` where it holds another schema, before any fetch.
+///
+/// # Errors
+/// The calendar's schema refused, or the store not emptied.
+fn settle(root: &std::path::Path) -> Result<(), String> {
+    let schema = prodrome_core::declared::Declaration::admit(suzatary_google::google::SCHEMA)
+        .map_err(|refused| format!("the calendar's schema: {refused}"))?;
+    suzatary_io::plugin_store::PluginStore::at(root)
+        .settle(&schema)
+        .map_err(|failed| failed.to_string())
+}
+
+/// Remove each directory under `root` that none of `names` names (a store no sync begins again:
+/// a removed account's calendar, an undeclared plugin's); answers how many.
+///
+/// # Errors
+/// `root` unlisted, or a directory not removed.
+pub(crate) fn remove_unowned(root: &std::path::Path, names: &[&str]) -> Result<usize, String> {
+    let failed = |why: std::io::Error| format!("{}: {why}", root.display());
+    let Some(entries) =
+        suzatary_os::present::Present::present(std::fs::read_dir(root)).map_err(failed)?
+    else {
+        return Ok(0);
+    };
+    let mut removed = 0;
+    for entry in entries {
+        let entry = entry.map_err(failed)?;
+        let owned = names.iter().any(|name| entry.file_name() == **name);
+        if !owned && entry.file_type().map_err(failed)?.is_dir() {
+            std::fs::remove_dir_all(entry.path()).map_err(failed)?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_removed_accounts_calendar_store_is_removed() {
+        let dir = suzatary_testkit::scratch("calendar-accounts");
+        for account in ["ada-at-example-test", "bo-at-example-test"] {
+            std::fs::create_dir_all(dir.path().join(account).join("store/objects"))
+                .expect("a store");
+        }
+        std::fs::write(dir.path().join("note"), b"not a store").expect("writes");
+        assert_eq!(remove_unowned(dir.path(), &["ada-at-example-test"]), Ok(1));
+        assert!(dir.path().join("ada-at-example-test/store").exists());
+        assert!(!dir.path().join("bo-at-example-test").exists());
+        assert!(
+            dir.path().join("note").exists(),
+            "only directories are stores"
+        );
+        assert_eq!(
+            remove_unowned(&dir.path().join("none"), &[]),
+            Ok(0),
+            "no directory, nothing to remove"
+        );
+    }
 }

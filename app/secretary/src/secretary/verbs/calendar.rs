@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::{Refusal, shown};
-use suzatary_google::calendar::Day;
+use suzatary_google::calendar::{AttendeeName, Day};
 
 /// The owner's calendars, day by day.
 pub struct Calendar;
@@ -34,9 +34,11 @@ impl Verb for Calendar {
     type Answer = Value;
     const NAME: &'static str = "calendar";
     const DESCRIPTION: &'static str = "The owner's calendars, day by day, as the calendar plugin last \
-        synced them (every 15 minutes): each occurrence's time, title, place, calendar, status \
-        and attendees' names. `from` is the first day (YYYY-MM-DD, today when absent) and `days` \
-        how many (1 to 60, two when absent). The morning brief's short Today list comes from \
+        synced them (every 15 minutes): each occurrence's time, title, place, calendar, status, \
+        attendees' names, and `unnamed`, how many more attendees it lists whose names it does not \
+        keep (none given, a name holding an email address or too long, or past the first fifty; \
+        the owner counts as an attendee where the calendar lists them). `from` is the first day (YYYY-MM-DD, today when absent) and `days` how many (1 to 60, \
+        two when absent). The morning brief's short Today list comes from \
         here, and a deadline is priced against what that week holds. A meeting is never a todo.";
 
     fn run(call: &Call<'_>, args: CalendarArgs) -> Result<Value, Refusal> {
@@ -79,7 +81,9 @@ pub fn listed(days: &[Day]) -> Value {
                         "place": entry.content.place(),
                         "calendar": entry.id.calendar().label(),
                         "status": entry.content.status().as_str(),
-                        "attendees": entry.content.attendees(),
+                        "attendees": entry.content.attendees().named().iter()
+                            .map(AttendeeName::as_str).collect::<Vec<_>>(),
+                        "unnamed": entry.content.attendees().unnamed(),
                         "conflicted": entry.conflicted,
                     })).collect::<Vec<_>>(),
                 })

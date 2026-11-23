@@ -1,0 +1,20 @@
+[package]
+name = "suzatary-address"
+description = "Suzatary's address recogniser, and an attendee's name, which holds no address"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "suzatary_address"
+path = "src/lib.rs"
+
+# The calendar plugin's wasm32 component links this crate, so `regex` takes only what the
+# pattern needs beyond what `rrule` already enables (`std`, `perf`): `unicode-case`, for `(?i)`.
+[dependencies]
+regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-case"] }
+thiserror.workspace = true
+
+[lints]
+workspace = true

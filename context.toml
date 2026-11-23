@@ -215,6 +215,13 @@ task = "tiledlayout"
 # production source. `scripts` are the scripts an agent reads to build and test it.
 
 [[unit]]
+name = "address"
+path = "app/address"
+shape = "crate"
+depends = []
+scripts = []
+
+[[unit]]
 name = "base"
 path = "app/base"
 shape = "crate"
@@ -267,7 +274,7 @@ scripts = []
 name = "held"
 path = "app/held"
 shape = "crate"
-depends = ["base", "prodrome-data", "store"]
+depends = ["address", "base", "prodrome-data", "store"]
 scripts = []
 
 [[unit]]
@@ -309,7 +316,7 @@ scripts = []
 name = "google"
 path = "app/google"
 shape = "crate"
-depends = ["base", "mail", "prodrome-core", "services", "store", "todo"]
+depends = ["address", "base", "mail", "prodrome-core", "services", "store", "todo"]
 scripts = []
 
 [[unit]]
@@ -442,7 +449,7 @@ scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
 name = "plugin-ics"
 path = "app/plugin-ics"
 shape = "crate"
-depends = ["prodrome-data"]
+depends = ["address", "prodrome-data"]
 scripts = ["scripts/plugin-sync.sh"]
 
 [[unit]]

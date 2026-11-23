@@ -6,15 +6,12 @@ use prodrome_data::literal::{Datetime, ProdromeError, Value, print_literal};
 use serde::{Deserialize, Serialize};
 
 /// The schema every item is in, by its content name: the hash of `ics.schema`'s text.
-pub const SCHEMA: &str = "c97b894305a4977cde486b7d2db899c97a36e078e48de408373cb8a188a9a143";
+pub const SCHEMA: &str = "71d06919a0112e1917770119830bb9e7d9873bd3c0a9ce208760a8f2fed3f868";
 
 /// The most characters of a title, a place or a UID kept.
 pub const MAX_TEXT: usize = 500;
 
-/// The most characters of one attendee's name kept.
-pub const MAX_NAME: usize = 200;
-
-/// The most attendees kept.
+/// How many attendees, by their place in the feed, may be named.
 pub const MAX_ATTENDEES: usize = 50;
 
 /// A span of UTC time, `[from, to)`.
@@ -32,12 +29,14 @@ pub struct Item {
     pub occurrence: String,
     /// `SUMMARY`, or `""`.
     pub title: String,
-    /// When it is.
     pub when: When,
     /// `LOCATION`, or `""`.
     pub place: String,
-    /// Each attendee's `CN`, in order; an attendee with no name is left out, never its address.
+    /// Each `CN` among the first [`MAX_ATTENDEES`] attendees that is an attendee's name: never an
+    /// address, given as a name or as `mailto:`.
     pub attendees: Vec<String>,
+    /// How many other attendees there are: no `CN`, one that is not a name, or past the first.
+    pub unnamed: u32,
     /// `STATUS`.
     pub status: Status,
 }
@@ -47,15 +46,9 @@ pub struct Item {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum When {
     /// From `start` until `end`, both `YYYY-MM-DDTHH:MM:SSZ`, the end at or after the start.
-    Timed {
-        /// The start.
-        start: String,
-        /// The end.
-        end: String,
-    },
+    Timed { start: String, end: String },
     /// From the day `start` until the day before `end`, both `YYYY-MM-DD`.
     AllDay {
-        /// The first day.
         start: String,
         /// The day after the last.
         end: String,
@@ -134,6 +127,7 @@ impl Item {
             ("when", Value::str(format!("{start}/{end}"))),
             ("place", Value::str(&self.place)),
             ("attendees", attendees),
+            ("unnamed", Value::int(i64::from(self.unnamed))),
             ("status", Value::str(self.status.as_str())),
         ];
         let fields = fields.map(|(name, value)| (name.to_owned(), value));

@@ -22,6 +22,7 @@ chrono-tz.workspace = true
 icalendar = { version = "0.17", default-features = false, features = ["parser"] }
 iso8601 = "0.6"
 prodrome_data.workspace = true
+suzatary-address.workspace = true
 rrule = "0.14"
 serde.workspace = true
 serde_json.workspace = true

@@ -6,7 +6,7 @@ use prodrome_core::event::Actor;
 use prodrome_core::literal::{Datetime, ProdromeError, Value};
 use prodrome_core::schema::Schema;
 
-use super::{Content, NotAnOccurrence, OccurrenceId, Status, When};
+use super::{Attendees, Content, NotAnOccurrence, OccurrenceId, Status, When};
 
 /// An occurrence a plugin reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,7 +19,7 @@ pub struct Occurrence {
 const LEARNED: &str = "Learned";
 
 /// The registers a calendar reads, each written by the field of its name.
-const REGISTERS: [&str; 5] = ["attendees", "place", "status", "title", "when"];
+const REGISTERS: [&str; 6] = ["attendees", "place", "status", "title", "unnamed", "when"];
 
 fn text(event: &Declared, field: &'static str) -> Result<String, NotAnOccurrence> {
     match written(event, field)? {
@@ -53,13 +53,18 @@ impl Occurrence {
         let Datum::List(attendees) = written(event, "attendees")? else {
             return Err(NotAnOccurrence::Field("attendees"));
         };
-        let attendees = attendees
+        let names = attendees
             .iter()
             .map(|name| match name {
-                Datum::Text(name) => Ok(name.clone()),
+                Datum::Text(name) => Ok(name.as_str()),
                 _ => Err(NotAnOccurrence::Field("attendees")),
             })
-            .collect::<Result<_, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
+        let Datum::Integer(unnamed) = written(event, "unnamed")? else {
+            return Err(NotAnOccurrence::Field("unnamed"));
+        };
+        let unnamed = u32::try_from(*unnamed).map_err(|_| NotAnOccurrence::Field("unnamed"))?;
+        let attendees = Attendees::of(names, unnamed);
         let content = Content::new(
             text(event, "title")?,
             When::parse(&text(event, "when")?)?,
@@ -70,6 +75,15 @@ impl Occurrence {
         Ok(Self { id, content })
     }
 
+    /// `event` as a store keeps it: read as an occurrence and printed again, so an attendee whose
+    /// name is not an [`AttendeeName`](super::AttendeeName) is counted and never stored. The host
+    /// asks this of a plugin's item, since the plugin is the less trusted side of its door.
+    pub fn kept(event: &Declared) -> Result<Declared, NotAnOccurrence> {
+        Self::of(event)?
+            .event(event.schema(), event.at(), event.actor())
+            .map_err(|refused| NotAnOccurrence::Unprinted(refused.to_string()))
+    }
+
     /// The event a sync by `actor` at `at` learns this occurrence by, at `schema`: what
     /// [`Occurrence::of`] reads back as this occurrence.
     pub fn event(
@@ -78,6 +92,7 @@ impl Occurrence {
         at: Datetime,
         actor: &Actor,
     ) -> Result<Declared, ProdromeError> {
+        let attendees = self.content.attendees();
         let fields = [
             ("occurrence", Value::str(self.id.key())),
             ("at", Value::Datetime(at)),
@@ -87,8 +102,15 @@ impl Occurrence {
             ("place", Value::str(self.content.place())),
             (
                 "attendees",
-                Value::Tuple(self.content.attendees().iter().map(Value::str).collect()),
+                Value::Tuple(
+                    attendees
+                        .named()
+                        .iter()
+                        .map(|name| Value::str(name.as_str()))
+                        .collect(),
+                ),
             ),
+            ("unnamed", Value::int(i64::from(attendees.unnamed()))),
             ("status", Value::str(self.content.status().as_str())),
         ];
         Declared::from_value(
@@ -128,7 +150,7 @@ mod tests {
                 title.to_owned(),
                 When::parse("2026-10-05T13:00:00Z/2026-10-05T13:30:00Z").expect("a span"),
                 String::new(),
-                attendees.iter().map(|name| (*name).to_owned()).collect(),
+                Attendees::of(attendees.iter().copied(), 1),
                 Status::Confirmed,
             )
             .expect("content"),
@@ -148,6 +170,7 @@ mod tests {
             ("Standup", vec!["Ada", "Solberg, Mira"]),
             ("", vec![]),
             ("')\nLearned(occurrence='PLUGIN_X_Y' #evil", vec!["\\"]),
+            ("Review", vec!["", "Ada", "mira@example.invalid"]),
         ] {
             let occurrence = standup(title, &attendees, "PLUGIN_ICS_HOME");
             let event = occurrence.event(&schema, at(), &ics).expect("an event");
@@ -155,6 +178,27 @@ mod tests {
             let back: Declared = parse_event(&schema, &printed).expect("parses");
             assert_eq!(Occurrence::of(&back), Ok(occurrence), "{printed}");
         }
+    }
+
+    #[test]
+    fn a_stored_name_that_is_an_address_reads_as_an_attendee_unnamed() {
+        let schema = schema();
+        let ics = Actor::new("ics").expect("an actor");
+        let printed = canonical(
+            &standup("Standup", &["Ada"], "PLUGIN_ICS_HOME")
+                .event(&schema, at(), &ics)
+                .expect("an event"),
+        );
+        let address = format!("{}@example.invalid", "mira");
+        let stored = printed.replace("('Ada',)", &format!("('Ada', '{address}')"));
+        assert_ne!(stored, printed);
+        let read = Occurrence::of(&parse_event(&schema, &stored).expect("parses")).expect("reads");
+        let attendees = read.content.attendees();
+        assert_eq!(
+            (attendees.named().len(), attendees.unnamed()),
+            (1, 2),
+            "{stored}"
+        );
     }
 
     #[test]

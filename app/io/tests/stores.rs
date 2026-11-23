@@ -469,7 +469,7 @@ fn memories(root: &Path) {
 /// The calendar plugin's store: one occurrence learned, learned again unchanged, then cancelled.
 fn calendar(root: &Path) {
     use suzatary_google::calendar::{
-        CalendarName, Content, Occurrence, OccurrenceId, Status, When,
+        Attendees, CalendarName, Content, Occurrence, OccurrenceId, Status, When,
     };
     use suzatary_store::store::learn;
 
@@ -489,7 +489,7 @@ fn calendar(root: &Path) {
             "Quarterly review".to_owned(),
             When::parse("2026-09-21T13:00:00Z/2026-09-21T14:00:00Z").expect("a span"),
             "Room 4".to_owned(),
-            vec![CAST.owner.name.to_owned(), CAST.accountant.name.to_owned()],
+            Attendees::of([CAST.owner.name, CAST.accountant.name], 0),
             status,
         )
         .expect("content"),

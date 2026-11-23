@@ -135,11 +135,13 @@ impl Instance {
     /// Where a Google account's calendars are kept, in the cache tier.
     #[must_use]
     pub fn google_calendar(&self, account: &suzatary_mail::mail::account::MailAccount) -> PathBuf {
-        self.plugins
-            .cache
-            .join("google")
-            .join(&account.subdir)
-            .join("store")
+        self.google_calendars().join(&account.subdir).join("store")
+    }
+
+    /// The directory of every account's Google calendar store, one directory each.
+    #[must_use]
+    pub fn google_calendars(&self) -> PathBuf {
+        self.plugins.cache.join("google")
     }
 
     /// Every store the calendar reads: each declared plugin's, and each account's Google calendar's.

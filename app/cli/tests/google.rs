@@ -1028,6 +1028,13 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
     let scratch = suzatary_testkit::scratch("google");
     let root = scratch.path();
     let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
+    // The unsigned account's store, written at an older schema, holds an address; it is not
+    // fetched, and is emptied all the same.
+    let address = format!("{}@{}", "mira", "example.invalid");
+    let older = root.join(&unsigned.subdir);
+    std::fs::create_dir_all(older.join("objects")).expect("a store");
+    std::fs::write(older.join("schema"), "an older schema").expect("writes");
+    std::fs::write(older.join("objects/kept.py"), &address).expect("writes");
     let (lines, healths, stored) = suzatary_cli::commands::google::read_calendars(
         &[account(sync.clone()), unsigned],
         &grants,
@@ -1052,6 +1059,11 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
     assert!(
         root.join("ada-at-example-test").exists(),
         "its store is written"
+    );
+    assert_eq!(
+        suzatary_testkit::files_holding(root, &address),
+        Vec::<std::path::PathBuf>::new(),
+        "a store at another schema is emptied though its account is not fetched"
     );
     assert_eq!(
         suzatary_connect::settings::Configuration::declared(serving.edits.as_ref())

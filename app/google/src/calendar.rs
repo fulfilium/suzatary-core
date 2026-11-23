@@ -8,17 +8,22 @@
 //! Meetings are never todos: nothing here writes to a chain, and a reader marks every title as
 //! other people's words, as mail is.
 
+mod attendees;
 mod content;
 pub mod effect;
+mod kept;
 mod name;
 mod occurrence;
 pub mod page;
 mod reading;
 mod when;
 
-pub use content::{Content, MAX_NAME, MAX_TEXT, Status};
-pub(crate) use content::{MAX_ATTENDEES, NotAnOccurrence};
+pub use attendees::{Attendees, MAX_ATTENDEES};
+pub(crate) use content::NotAnOccurrence;
+pub use content::{Content, MAX_TEXT, Status};
+pub use kept::{Kept, learn_kept};
 pub use name::{CalendarName, OccurrenceId};
 pub use occurrence::Occurrence;
 pub use reading::{Calendar, Day, Entry};
+pub use suzatary_address::{AttendeeName, MAX_NAME, NotAName};
 pub use when::When;

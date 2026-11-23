@@ -146,7 +146,7 @@
 
         # The model crates, the application's library (`merge_gate.rs`'s `LIBRARY_CRATES`): each
         # fileset below names the part of each it reads, so a new crate is one word here.
-        library = part: map (crate: ./app + "/${crate}${part}") [ "base" "record" "release" "store"
+        library = part: map (crate: ./app + "/${crate}${part}") [ "address" "base" "record" "release" "store"
           "signatures" "todo" "plan" "held" "memory" "mail" "health" "triage" "services" "google"
           "connect" "inbox" "conversations" "lines" "topics" "digest" "stores" "cards" "secretary" "api" ];
         # The test supports their libraries include, of the crates that have one.
@@ -442,6 +442,8 @@
               ./app/Cargo.toml
               ./app/Cargo.lock
               ./app/plugin-ics
+              # The address recogniser and the attendee's name, which the plugin links.
+              ./app/address/src
               ./app/wit
             ] ++ members "/Cargo.toml" [ "plugin-ics" ] ++ library "/Cargo.toml");
           };

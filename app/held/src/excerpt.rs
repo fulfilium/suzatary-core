@@ -17,11 +17,6 @@ pub(crate) const ADDRESS: &str = "[address]";
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Excerpt(String);
 
-/// An email address, loosely: a local part, `@`, a dotted domain.
-static EMAIL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)[a-z0-9._%+\-]+@[a-z0-9\-]+(?:\.[a-z0-9\-]+)+").expect("a valid pattern")
-});
-
 /// What might be an IP address: dotted digits, or hex groups joined by colons, replaced only
 /// where [`is_ip`] holds.
 static IP: LazyLock<Regex> = LazyLock::new(|| {
@@ -106,7 +101,7 @@ impl fmt::Display for Excerpt {
 fn scrubbed(text: &str) -> String {
     let text = crate::redact::redact(text);
     let text = crate::redact::unlink(text.as_str());
-    let text = EMAIL.replace_all(&text, ADDRESS);
+    let text = suzatary_address::replace_addresses(&text, ADDRESS);
     IP.replace_all(&text, |found: &regex::Captures<'_>| {
         // A dotted quad after a `/` is a product's version (`Chrome/154.0.0.0`), not a host.
         let versioned = text[..found.get(0).map_or(0, |m| m.start())].ends_with('/');
