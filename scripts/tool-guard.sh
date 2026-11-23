@@ -11,7 +11,8 @@ set -uo pipefail
 
 ALLOWED_PREFIX="mcp__suzatary__"
 
-# Never deny ToolSearch: the suzatary verbs are deferred tools whose schemas load through it.
+# Never deny ToolSearch: the verbs of a server that misses the CLI's wait at start are deferred,
+# and their schemas then load through it.
 # It only fetches a schema; any resulting call comes back through this hook.
 ALLOWED_EXACT="ToolSearch"
 

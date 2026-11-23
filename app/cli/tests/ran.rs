@@ -73,9 +73,16 @@ fn a_stream_that_called_a_verb_passes_and_prints_no_word_of_its_mail() {
 }
 
 #[test]
-fn a_stream_that_called_no_verb_fails_and_an_invented_name_counts_for_nothing() {
+fn a_stream_that_called_no_verb_fails_as_offered_or_not_and_an_invented_name_counts_for_nothing() {
     let (code, said) = ran(&[offered(), answered(), ended(false, "Nothing to do.")]);
     assert_eq!(code, Some(11), "{said}");
+    let tool_search_alone =
+        serde_json::json!({"type": "system", "subtype": "init", "tools": ["ToolSearch"]});
+    let (code, said) = ran(&[
+        tool_search_alone.to_string(),
+        ended(false, "Nothing to do."),
+    ]);
+    assert_eq!(code, Some(15), "never offered a verb: {said}");
     let (code, said) = ran(&[
         offered(),
         called("mcp__suzatary__PRIVATE-BODY-7731@example.org_x"),

@@ -59,6 +59,8 @@ mod scratch;
 use scratch::{Scratch, repo};
 #[path = "guards/triage_auth.rs"]
 mod triage_auth;
+#[path = "guards/triage_pass.rs"]
+mod triage_pass;
 #[path = "guards/wasm_budget.rs"]
 mod wasm_budget;
 

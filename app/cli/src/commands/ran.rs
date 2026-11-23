@@ -12,9 +12,10 @@ pub struct Args {
     /// printed it.
     output: PathBuf,
     /// The prefix of the tools the run had to call (`mcp__suzatary__`); with it, the run's
-    /// verdict is the exit code: 10 the CLI is not signed in, 11 it called none of them, 12 it
-    /// printed no result, 13 its result is not a shape this box reads. Above the codes the
-    /// shell and a failed verb take for their own.
+    /// verdict is the exit code: 10 the CLI is not signed in, 11 it was offered them and called
+    /// none, 12 it printed no result, 13 its result is not a shape this box reads, 15 its `init`
+    /// event offered none of them, the tooling's failure and never the model's. Above the codes
+    /// the shell and a failed verb take for their own.
     #[arg(long)]
     needs: Option<String>,
     /// The model the run asked (`claude-sonnet-5`): a run that failed for a limit joins the limit
@@ -32,6 +33,7 @@ enum Failed {
     NoResult = 12,
     Unreadable = 13,
     Limited = 14,
+    NotOffered = 15,
 }
 
 /// Print the run's summary line; a file that holds no result object says only how long it is.
@@ -63,6 +65,9 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Err(_) => Some(Failed::Unreadable),
         Ok(None) => Some(Failed::NoResult),
         Ok(Some(summary)) if summary.outcome == Outcome::SignedOut => Some(Failed::SignedOut),
+        Ok(Some(summary)) if !summary.offered.iter().any(|name| name.starts_with(needs)) => {
+            Some(Failed::NotOffered)
+        }
         Ok(Some(summary)) if !summary.called.keys().any(|name| name.starts_with(needs)) => {
             Some(Failed::CalledNone)
         }

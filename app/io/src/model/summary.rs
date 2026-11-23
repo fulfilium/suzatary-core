@@ -18,6 +18,8 @@ pub struct Summary {
     pub duration_ms: u64,
     /// `None` where the result did not say.
     pub usage: Option<Usage>,
+    /// The tools the session's `init` event offered: empty where the run printed none.
+    pub offered: BTreeSet<String>,
     /// The tools a permission refused, in order, among those the session was offered.
     pub refused: Vec<String>,
     /// The tools it called, with how often, among those the session's `init` event offered: a
@@ -129,6 +131,7 @@ pub fn summary_of(text: &str) -> Result<Option<Summary>, Unreadable> {
         turns: ended.num_turns,
         duration_ms: ended.duration_ms,
         usage: ended.usage,
+        offered: offered.into_iter().map(str::to_owned).collect(),
         refused,
         called,
         unknown,
@@ -160,6 +163,7 @@ impl std::fmt::Display for Summary {
             )?,
             None => write!(f, "tokens: not reported")?,
         }
+        write!(f, "; offered {} tool(s)", self.offered.len())?;
         write!(f, "; {} tool call(s) refused", self.refused.len())?;
         if !self.refused.is_empty() {
             write!(f, " ({})", self.refused.join(", "))?;

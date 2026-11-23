@@ -103,6 +103,16 @@
         # invoke one store path.
         services = import ./nix/services.nix { inherit pkgs; };
 
+        # The mail programs the verbs run, one list for the `.#triage` shell and for `.#suzatary`,
+        # which links them at `libexec/suzatary/bin`: the triage pass puts that directory on its
+        # model's PATH, so a deploy brings them and no unit's PATH needs them.
+        mailTools = with pkgs; [ notmuch isync lieer ];
+        mailToolsBin = pkgs.buildEnv {
+          name = "suzatary-mail-tools";
+          paths = mailTools;
+          pathsToLink = [ "/bin" ];
+        };
+
         # The Android portal. It takes `nixpkgs`, not `pkgs`: the SDK is unfree, and nix/apk.nix
         # imports its own pkgs so that permission stays in the one file that needs it.
         apk = import ./nix/apk.nix {
@@ -272,6 +282,7 @@
           cp $release $out/share/suzatary/release.toml
           cp $rules $out/share/suzatary/secret-rules.toml
           ln -s ${pkgs.gitleaks}/bin/gitleaks $out/libexec/suzatary/gitleaks
+          ln -s ${mailToolsBin}/bin $out/libexec/suzatary/bin
           ln -s ${typstPackages} $out/share/suzatary/typst-packages
           [ "$($out/bin/suzatary --version)" = "suzatary ${appVersion}" ] \
             || { echo "the binary does not read its release file as ${appVersion}" >&2; exit 1; }
@@ -788,7 +799,7 @@
             # CDP, with node 24's global WebSocket as the client.
             chromium
             # typst and poppler-utils come with testTools, below.
-            notmuch lieer isync openssl curl
+            openssl curl
             protonmail-bridge pass gnupg  # Proton: Bridge serves localhost IMAP; pass/gnupg back its keyring on this headless box
             # Resolves secretspec.toml's secrets from `pass`; the `keyring` provider needs a DBus
             # secret service, which this headless box does not run.
@@ -812,7 +823,7 @@
             # The nightly unit has no login profile, so every tool train.sh and the gate call is
             # here, and both scripts check theirs at their start.
             gh git openssh systemdMinimal
-          ] ++ rustToolchain.packages ++ testTools.packages;
+          ] ++ mailTools ++ rustToolchain.packages ++ testTools.packages;
         });
       }
     );

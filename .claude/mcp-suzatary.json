@@ -1,14 +1,9 @@
 {
   "mcpServers": {
     "suzatary": {
-      "command": "nix",
-      "args": [
-        "develop",
-        ".#triage",
-        "--command",
-        "scripts/app-bin.sh",
-        "mcp"
-      ]
+      "command": "@SUZATARY_BIN@",
+      "args": ["mcp"],
+      "alwaysLoad": true
     }
   }
 }

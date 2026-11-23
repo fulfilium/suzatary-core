@@ -224,13 +224,20 @@ fi
 FENCE="$(scripts/triage-fence.sh "$REPO")" || {
   echo "hourly-triage: the fence did not pass its preflight — refusing to run the agent" >&2; exit 1; }
 
+# The CLI starts the verbs' server from this package's binary and waits up to 5 seconds for it
+# before the first turn (`alwaysLoad`); a slower server's verbs are deferred, and `ran` reports
+# them as not offered. The server's mail programs come with the package (`libexec/suzatary/bin`,
+# first on the CLI's PATH), so a deploy brings them.
+SUZATARY_APP="$(scripts/app-bin.sh)"
+MCP="$(sed "s|@SUZATARY_BIN@|$SUZATARY_APP/bin/suzatary|" .claude/mcp-suzatary.json)"
+
 # Pinned model, so it cannot drift with the CLI default. Its writes are cards the secretary
 # reviews and only the owner's tap performs. If `suzatary secretary reviews --since <date>` shows
 # rejection and hold rates climbing, a weaker model is costing the review more than it saves.
 TRIAGE_MODEL=claude-sonnet-5
 #
-# --tools ToolSearch leaves only ToolSearch of the built-in tools (the MCP verbs arrive through
-# it), so a shell or file tool is absent, not just denied; the hook stays the belt.
+# --tools ToolSearch leaves only ToolSearch of the built-in tools, so a shell or file tool is
+# absent, not just denied; the hook stays the belt.
 #
 # Containment is declared at this call, never in .claude/settings.json, which every interactive
 # session in this repo loads.
@@ -250,9 +257,9 @@ export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_TELEMETRY=1 \
   DISABLE_ERROR_REPORTING=1 DISABLE_GROWTHBOOK=1 DISABLE_AUTOUPDATER=1 \
   DISABLE_BUG_COMMAND=1 DISABLE_FEEDBACK_COMMAND=1 \
   CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY=1 DO_NOT_TRACK=1
-claude -p "$PROMPT" \
+PATH="$SUZATARY_APP/libexec/suzatary/bin:$PATH" claude -p "$PROMPT" \
   --model "$TRIAGE_MODEL" \
-  --mcp-config .claude/mcp-suzatary.json \
+  --mcp-config "$MCP" \
   --strict-mcp-config \
   --settings "$FENCE" \
   --tools ToolSearch \
@@ -263,7 +270,8 @@ claude -p "$PROMPT" \
   > "$SESSION" 2> "$SESSION.err" || CLAUDE_STATUS=$?
 
 # The journal gets the run's counts and ids, never its words: the stream quotes the mail.
-# `--needs` fails a pass that called no verb; `--model` records a limit the run met (exit 14).
+# `--needs` fails a pass whose verbs were not offered (exit 15) or that called none (exit 11);
+# `--model` records a limit the run met (exit 14).
 RAN_STATUS=0
 RAN="$(app ran --needs mcp__suzatary__ --model "$TRIAGE_MODEL" "$SESSION")" || RAN_STATUS=$?
 echo "hourly-triage: $RAN"
@@ -282,8 +290,10 @@ elif [ "$RAN_STATUS" -eq 10 ] || grep -qiE '^not logged in|please run /login' "$
   AGENT_FAILED="claude is not authenticated — run 'claude' interactively and /login"
 elif [ "${CLAUDE_STATUS:-0}" -ne 0 ]; then
   AGENT_FAILED="claude exited ${CLAUDE_STATUS}"
+elif [ "$RAN_STATUS" -eq 15 ]; then
+  AGENT_FAILED="the suzatary verbs were not offered to claude (its init event lists none): the tooling failed, not the model"
 elif [ "$RAN_STATUS" -eq 11 ]; then
-  AGENT_FAILED="claude called no suzatary verb on new mail — the verbs did not reach it"
+  AGENT_FAILED="claude was offered the suzatary verbs and called none on new mail: the model failed"
 elif [ "$RAN_STATUS" -eq 12 ]; then
   AGENT_FAILED="claude's session did not end with a result"
 elif [ "$RAN_STATUS" -ne 0 ]; then

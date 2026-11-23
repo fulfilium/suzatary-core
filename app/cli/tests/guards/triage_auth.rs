@@ -79,7 +79,7 @@ fn the_triage_agent_runs_quiet_and_reads_no_main_session_memory() {
     let exported: String = wrapper
         .lines()
         .skip_while(|line| !line.starts_with("export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"))
-        .take_while(|line| !line.starts_with("claude "))
+        .take_while(|line| !line.contains("claude -p \"$PROMPT\""))
         .collect::<Vec<_>>()
         .join(" ");
     for (name, value) in suzatary_io::model::QUIET {
@@ -94,7 +94,7 @@ fn the_triage_agent_runs_quiet_and_reads_no_main_session_memory() {
     );
     let call: Vec<&str> = wrapper
         .lines()
-        .skip_while(|line| !line.starts_with("claude -p"))
+        .skip_while(|line| !line.contains("claude -p \"$PROMPT\""))
         .take_while(|line| line.trim_end().ends_with('\\'))
         .collect();
     assert!(

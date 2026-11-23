@@ -123,7 +123,7 @@ pub const STDERR_KEPT: usize = 64 << 10;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunError {
-    #[error("{program} could not be run: {source}")]
+    #[error("{program} could not be run: {source}{}", missing(source))]
     Spawn {
         program: String,
         source: std::io::Error,
@@ -145,6 +145,14 @@ pub enum RunError {
         /// The end of its stderr.
         stderr: Excerpt,
     },
+}
+
+/// What a spawn's `NotFound` means on a box: the program was not installed with the app.
+fn missing(source: &std::io::Error) -> &'static str {
+    match source.kind() {
+        ErrorKind::NotFound => " (no such program here: the deploy did not bring it)",
+        _ => "",
+    }
 }
 
 impl Cmd {

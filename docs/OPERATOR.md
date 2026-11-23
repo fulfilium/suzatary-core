@@ -304,3 +304,16 @@ The units that run the app for longer than one job are the ones part of
 and once the roots run links the new app a deploy try-restarts each of
 them that is running and checks that it runs the new app (today the web and
 the IMAP watcher).
+
+## The triage says its verbs were not offered
+
+The line means `suzatary ran` exited 15: the CLI's `init` event listed no `mcp__suzatary__` tool,
+a failure of the tooling and not of the model (that is exit 11, "called none"), and the mail
+waits for the next pass. The CLI waits 5 seconds for the server `.claude/mcp-suzatary.json`
+marks `alwaysLoad`; look at `mcp_servers` and `mcp_server_errors` in the first line of
+`~/.local/state/suzatary/triage-session.jsonl`, and time the resolved binary's `mcp` start.
+
+A third way it can look: the verbs are offered and called, and each one that reads mail fails
+with `notmuch could not be run: … (no such program here: the deploy did not bring it)`. The
+server's mail programs come from the package's `libexec/suzatary/bin`, which the pass puts first
+on the CLI's PATH; check that directory under the store path `scripts/app-bin.sh` prints.
