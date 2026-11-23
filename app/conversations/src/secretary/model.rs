@@ -188,7 +188,7 @@ pub struct Halt(std::sync::Arc<Pulled>);
 
 #[derive(Debug, Default)]
 struct Pulled {
-    by: std::sync::OnceLock<prodrome_core::event::Actor>,
+    by: std::sync::OnceLock<prodrome_data::event::Actor>,
     run: std::sync::OnceLock<crate::secretary::store::RunId>,
 }
 
@@ -199,7 +199,7 @@ impl Halt {
     }
 
     /// Pull it, as `by`; only the first pull counts.
-    pub fn stop(&self, by: prodrome_core::event::Actor) {
+    pub fn stop(&self, by: prodrome_data::event::Actor) {
         let _first = self.0.by.set(by);
     }
 
@@ -215,7 +215,7 @@ impl Halt {
     }
 
     #[must_use]
-    pub fn by(&self) -> Option<&prodrome_core::event::Actor> {
+    pub fn by(&self) -> Option<&prodrome_data::event::Actor> {
         self.0.by.get()
     }
 
@@ -263,7 +263,7 @@ pub mod pulled {
     }
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     SessionId => |id| id.as_str().to_owned(),
 );
 

@@ -115,7 +115,7 @@ fn file(
     owed.file(
         conversations.conversations(),
         inbox_store,
-        prodrome_core::fpl::datetime_of(at(hour)).expect("in range"),
+        prodrome_data::instant::datetime_of(at(hour)).expect("in range"),
     )
     .expect("filed");
 }
@@ -186,8 +186,8 @@ proptest::proptest! {
             if dismiss
                 && let Some(open) = fold.objects().find(|object| object.reading.open())
             {
-                let owner = prodrome_core::event::Actor::new("ada").expect("an actor");
-                let when = prodrome_core::fpl::datetime_of(at(hour)).expect("in range");
+                let owner = prodrome_data::event::Actor::new("ada").expect("an actor");
+                let when = prodrome_data::instant::datetime_of(at(hour)).expect("in range");
                 inbox::dismiss(&inbox_store, &open.id, &owner, when, "not now").expect("dismissed");
             }
         }

@@ -6,7 +6,7 @@ use suzatary_base::capability::Datetime;
 use suzatary_lines::secretary::{conversations, transcript};
 
 use chrono::NaiveDateTime;
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 
 use suzatary_google::google::KeptGrant;
 use suzatary_google::google::{Client, Exchanged, RedirectUri, Scope, Scopes, State, Verifier};

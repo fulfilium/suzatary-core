@@ -22,4 +22,4 @@ impl Rewind {
     }
 }
 
-prodrome_core::word_literal!(Rewind: Rewind::ALL => |how| how.as_str());
+prodrome_data::word_literal!(Rewind: Rewind::ALL => |how| how.as_str());

@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::event::TodoId;
+use prodrome_data::event::TodoId;
 use serde::{Deserialize, Serialize};
 
 use suzatary_mail::mail::Disposed;

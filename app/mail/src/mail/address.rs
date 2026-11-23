@@ -87,7 +87,7 @@ impl From<EmailAddress> for String {
 }
 
 // The literal of each is its text, as an inbox act stores it.
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     EmailAddress => |address| String::from(address.clone()),
 );
 

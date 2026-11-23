@@ -61,7 +61,7 @@ impl World {
 
     #[must_use]
     pub fn deployment(&self) -> Deployment {
-        let actor = |name: &str| prodrome_core::event::Actor::new(name).expect("an actor");
+        let actor = |name: &str| prodrome_data::event::Actor::new(name).expect("an actor");
         let chain = suzatary_base::chains::ChainPolicy {
             name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
             untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),

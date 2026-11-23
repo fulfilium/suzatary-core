@@ -137,7 +137,7 @@ mod tests {
         InboxEvent {
             proposal: ProposalId::new(proposal).expect("an id"),
             at: at(1),
-            actor: prodrome_core::event::Actor::new("assistant").expect("an actor"),
+            actor: prodrome_data::event::Actor::new("assistant").expect("an actor"),
             said: Said::Asked(Box::new(asked)),
         }
     }

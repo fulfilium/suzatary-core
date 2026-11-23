@@ -24,11 +24,11 @@ license = "MIT OR Apache-2.0"
 # NEVER BY BRANCH: the four `rev`s here, `app/Cargo.lock`, `flake.nix`'s `inputs.prodrome.url`
 # and `flake.lock` move together, ONE sha, so the binary and the browser's wasm read SPEC.md
 # alike. ⚠️ No default features: the reference payload is not linked; the record is ours.
-prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "30ce2c05d8bf8ed40157f5f05cb784618862c6d8", default-features = false }
+prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "588e30670dcf06ccfd59da55de26e972d1240444", default-features = false }
 # The data a store holds, which the core re-exports; derive with `#[literal(crate = prodrome_data)]`.
-prodrome_data = { package = "prodrome-data", git = "https://github.com/fulfilium/prodrome", rev = "30ce2c05d8bf8ed40157f5f05cb784618862c6d8" }
+prodrome_data = { package = "prodrome-data", git = "https://github.com/fulfilium/prodrome", rev = "588e30670dcf06ccfd59da55de26e972d1240444" }
 # The Prodrome's exports generic over a schema, which `wasm` instantiates at this application's.
-prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "30ce2c05d8bf8ed40157f5f05cb784618862c6d8" }
+prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "588e30670dcf06ccfd59da55de26e972d1240444" }
 suzatary-base = { path = "base" }
 suzatary-record = { path = "record" }
 suzatary-release = { path = "release" }
@@ -142,7 +142,7 @@ ts-rs = "11"
 typst-syntax = "=0.15.1"
 # THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm without `html` and
 # `plugin`, the crate the tab fetches, at `prodrome_core`'s revision.
-prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "30ce2c05d8bf8ed40157f5f05cb784618862c6d8", default-features = false }
+prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "588e30670dcf06ccfd59da55de26e972d1240444", default-features = false }
 # THE FACES A DRAWING IS SET IN (`prodrome draw`): typst's own, at the typst this lock links, in
 # the binary, so no font the machine holds reaches a picture.
 typst-assets = { version = "=0.15.1", features = ["fonts"] }

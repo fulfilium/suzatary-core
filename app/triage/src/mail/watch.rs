@@ -3,7 +3,7 @@
 //! A watch's log is one [`Line::Set`], then at most one [`Line::Rang`] or [`Line::Cancelled`],
 //! then at most one [`Line::Delivered`]; an expiry writes nothing.
 
-use prodrome_core::fpl::Instant;
+use prodrome_data::instant::Instant;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
@@ -432,8 +432,8 @@ pub fn listed(
             Part::Subject => crate::wire::triage::WatchOn::Subject,
         },
         text: watch.set.on.text.as_str().to_owned(),
-        set: prodrome_core::fpl::iso(watch.set.at),
-        until: prodrome_core::fpl::iso(watch.set.until),
+        set: prodrome_data::instant::iso(watch.set.at),
+        until: prodrome_data::instant::iso(watch.set.until),
         id: watch.id.0,
     };
     Ok(crate::wire::triage::WatchesPayload {

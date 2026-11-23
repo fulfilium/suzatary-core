@@ -60,9 +60,9 @@ impl Report {
 /// The last sync, when it finished within [`WINDOW`] before `now`.
 #[must_use]
 pub fn fresh(last: Option<Synced>, now: Datetime) -> Option<Synced> {
-    let now = prodrome_core::fpl::instant_of(now);
+    let now = prodrome_data::instant::instant_of(now);
     last.filter(|synced| {
-        let age = now - prodrome_core::fpl::instant_of(synced.at);
+        let age = now - prodrome_data::instant::instant_of(synced.at);
         age >= chrono::TimeDelta::zero() && age < WINDOW
     })
 }
@@ -77,5 +77,5 @@ pub fn pending(at: Datetime) -> SyncNow {
 }
 
 fn iso(at: Datetime) -> String {
-    prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(at))
+    prodrome_data::instant::iso(prodrome_data::instant::instant_of(at))
 }

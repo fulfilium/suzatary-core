@@ -466,7 +466,7 @@ mod tests {
             health: None,
             heard: Some(&std::collections::BTreeSet::new()),
             pushed: &suzatary_connect::settings::remote::Pushed::Nowhere,
-            now: prodrome_core::fpl::instant_of(at(0)),
+            now: prodrome_data::instant::instant_of(at(0)),
             redirect: None,
         };
         let owed = due(&seen, &inbox::Fold::default());

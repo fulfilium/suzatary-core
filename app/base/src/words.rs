@@ -5,29 +5,43 @@
 #[macro_export]
 macro_rules! words {
     ($($ty:ty: $all:expr => $print:expr),+ $(,)?) => {$(
-        prodrome_core::word_literal!($ty: $all => $print);
+        $crate::words::expansion::word_literal!($ty: $all => $print);
 
-        impl serde::Serialize for $ty {
-            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        impl $crate::words::expansion::serde::Serialize for $ty {
+            fn serialize<S: $crate::words::expansion::serde::Serializer>(
+                &self,
+                serializer: S,
+            ) -> Result<S::Ok, S::Error> {
                 let print: fn(&$ty) -> &str = $print;
                 serializer.serialize_str(print(self))
             }
         }
 
-        impl<'de> serde::Deserialize<'de> for $ty {
-            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-                let text = <String as serde::Deserialize>::deserialize(deserializer)?;
-                prodrome_core::literal::codec::word(
-                    &prodrome_core::literal::Value::str(text),
+        impl<'de> $crate::words::expansion::serde::Deserialize<'de> for $ty {
+            fn deserialize<D: $crate::words::expansion::serde::Deserializer<'de>>(
+                deserializer: D,
+            ) -> Result<Self, D::Error> {
+                let text =
+                    <String as $crate::words::expansion::serde::Deserialize>::deserialize(deserializer)?;
+                $crate::words::expansion::word(
+                    &$crate::words::expansion::Value::str(text),
                     $all,
                     $print,
                 )
-                .map_err(serde::de::Error::custom)
+                .map_err($crate::words::expansion::serde::de::Error::custom)
             }
         }
     )+};
 }
 pub use words;
+
+/// What [`words!`] expands to name, so its caller needs no crate of its own for it.
+#[doc(hidden)]
+pub mod expansion {
+    pub use prodrome_core::literal::{Value, codec::word};
+    pub use prodrome_core::word_literal;
+    pub use serde;
+}
 
 /// The value of `all` that `print` spells as `text`.
 pub fn of_word<T: Copy, const N: usize>(

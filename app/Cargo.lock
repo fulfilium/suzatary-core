@@ -3184,7 +3184,7 @@ dependencies = [
 [[package]]
 name = "prodrome-core"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=30ce2c05d8bf8ed40157f5f05cb784618862c6d8#30ce2c05d8bf8ed40157f5f05cb784618862c6d8"
+source = "git+https://github.com/fulfilium/prodrome?rev=588e30670dcf06ccfd59da55de26e972d1240444#588e30670dcf06ccfd59da55de26e972d1240444"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -3199,7 +3199,7 @@ dependencies = [
 [[package]]
 name = "prodrome-data"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=30ce2c05d8bf8ed40157f5f05cb784618862c6d8#30ce2c05d8bf8ed40157f5f05cb784618862c6d8"
+source = "git+https://github.com/fulfilium/prodrome?rev=588e30670dcf06ccfd59da55de26e972d1240444#588e30670dcf06ccfd59da55de26e972d1240444"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -3212,7 +3212,7 @@ dependencies = [
 [[package]]
 name = "prodrome-derive"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=30ce2c05d8bf8ed40157f5f05cb784618862c6d8#30ce2c05d8bf8ed40157f5f05cb784618862c6d8"
+source = "git+https://github.com/fulfilium/prodrome?rev=588e30670dcf06ccfd59da55de26e972d1240444#588e30670dcf06ccfd59da55de26e972d1240444"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3222,7 +3222,7 @@ dependencies = [
 [[package]]
 name = "prodrome-typst-wasm"
 version = "0.1.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=30ce2c05d8bf8ed40157f5f05cb784618862c6d8#30ce2c05d8bf8ed40157f5f05cb784618862c6d8"
+source = "git+https://github.com/fulfilium/prodrome?rev=588e30670dcf06ccfd59da55de26e972d1240444#588e30670dcf06ccfd59da55de26e972d1240444"
 dependencies = [
  "serde",
  "serde_json",
@@ -3234,7 +3234,7 @@ dependencies = [
 [[package]]
 name = "prodrome-wasm-exports"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=30ce2c05d8bf8ed40157f5f05cb784618862c6d8#30ce2c05d8bf8ed40157f5f05cb784618862c6d8"
+source = "git+https://github.com/fulfilium/prodrome?rev=588e30670dcf06ccfd59da55de26e972d1240444#588e30670dcf06ccfd59da55de26e972d1240444"
 dependencies = [
  "prodrome-core",
  "serde",
@@ -4284,6 +4284,7 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "prodrome-core",
+ "prodrome-data",
  "proptest",
  "serde",
  "serde_json",
@@ -4339,7 +4340,7 @@ name = "suzatary-conversations"
 version = "0.0.0"
 dependencies = [
  "hex",
- "prodrome-core",
+ "prodrome-data",
  "proptest",
  "serde",
  "serde_json",
@@ -4567,7 +4568,7 @@ dependencies = [
  "hex",
  "hmac",
  "mail-builder",
- "prodrome-core",
+ "prodrome-data",
  "proptest",
  "serde",
  "serde_json",
@@ -4989,7 +4990,7 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "hex",
- "prodrome-core",
+ "prodrome-data",
  "proptest",
  "serde",
  "serde_json",

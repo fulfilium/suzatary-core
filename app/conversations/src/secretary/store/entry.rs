@@ -185,7 +185,7 @@ pub enum Entry {
         at: Datetime,
         /// The question asked again, by its line's name.
         #[serde(serialize_with = "line_name")]
-        question: prodrome_core::event::Hash,
+        question: prodrome_data::event::Hash,
         how: super::Rewind,
         /// Who asked again: the line's writer.
         by: String,
@@ -348,7 +348,7 @@ pub(super) fn named(title: &Words<Title>) -> Words<String> {
 }
 
 fn line_name<S: serde::Serializer>(
-    name: &prodrome_core::event::Hash,
+    name: &prodrome_data::event::Hash,
     to: S,
 ) -> Result<S::Ok, S::Error> {
     to.serialize_str(name.as_str())

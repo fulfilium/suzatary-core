@@ -1,9 +1,9 @@
 //! What a `Began` line names: the run that claims a round, and each turn it covers with the box's
 //! judgment of it.
 
-use prodrome_core::event::Hash;
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
-use prodrome_core::literal::{ProdromeError, Value};
+use prodrome_data::event::Hash;
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, record};
+use prodrome_data::literal::{ProdromeError, Value};
 
 use crate::secretary::taint::Taint;
 

@@ -64,7 +64,7 @@ impl Failing {
     /// for a remedy no tap gives, or one its connection has no step for.
     #[must_use]
     pub fn fix(&self, settables: &Settables) -> Option<Owed> {
-        let episode = prodrome_core::fpl::datetime_of(self.since).ok()?;
+        let episode = prodrome_data::instant::datetime_of(self.since).ok()?;
         let since = utc(self.since);
         let connection = &self.connection;
         let act = match self.remedy() {
@@ -237,7 +237,7 @@ fn unused(observed: &Observed<'_>, failing: &[Failing]) -> Owed {
                     utc(since)
                 ),
             )
-            .since(prodrome_core::fpl::datetime_of(since).ok()?),
+            .since(prodrome_data::instant::datetime_of(since).ok()?),
         )
     });
     let calendars = match observed.heard {

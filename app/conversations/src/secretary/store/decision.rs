@@ -1,6 +1,6 @@
 //! What a review did about one triage card.
 
-use prodrome_core::literal::ProdromeError;
+use prodrome_data::literal::ProdromeError;
 use serde::{Deserialize, Serialize};
 
 use crate::nonempty::NonEmpty;
@@ -100,7 +100,7 @@ impl Decision {
             "held" => Err(ProdromeError::invalid(
                 "a hold settles no object, and this one names some",
             )),
-            other => Err(prodrome_core::literal::codec::no_arm("Decision", other)),
+            other => Err(prodrome_data::literal::codec::no_arm("Decision", other)),
         }
     }
 }

@@ -153,14 +153,14 @@ pub struct StoredPart {
     pub sha256: suzatary_held::attachment::AttachmentId,
 }
 
-pub const STORED_MESSAGE: prodrome_core::literal::codec::Constructor =
+pub const STORED_MESSAGE: prodrome_data::literal::codec::Constructor =
     ("StoredMessage", &["id", "size", "sha256", "held", "parts"]);
-pub const STORED_PART: prodrome_core::literal::codec::Constructor =
+pub const STORED_PART: prodrome_data::literal::codec::Constructor =
     ("StoredPart", &["name", "media", "size", "sha256"]);
 
-impl prodrome_core::literal::codec::Literal for StoredMessage {
-    fn to_value(&self) -> prodrome_core::literal::Value {
-        prodrome_core::literal::codec::record(
+impl prodrome_data::literal::codec::Literal for StoredMessage {
+    fn to_value(&self) -> prodrome_data::literal::Value {
+        prodrome_data::literal::codec::record(
             STORED_MESSAGE,
             vec![
                 self.id.to_value(),
@@ -173,9 +173,9 @@ impl prodrome_core::literal::codec::Literal for StoredMessage {
     }
 
     fn from_value(
-        value: &prodrome_core::literal::Value,
-    ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let fields = prodrome_core::literal::codec::Fields::of(value, STORED_MESSAGE)?;
+        value: &prodrome_data::literal::Value,
+    ) -> Result<Self, prodrome_data::literal::ProdromeError> {
+        let fields = prodrome_data::literal::codec::Fields::of(value, STORED_MESSAGE)?;
         Ok(StoredMessage {
             id: fields.get("id")?,
             size: fields.get("size")?,
@@ -186,9 +186,9 @@ impl prodrome_core::literal::codec::Literal for StoredMessage {
     }
 }
 
-impl prodrome_core::literal::codec::Literal for StoredPart {
-    fn to_value(&self) -> prodrome_core::literal::Value {
-        prodrome_core::literal::codec::record(
+impl prodrome_data::literal::codec::Literal for StoredPart {
+    fn to_value(&self) -> prodrome_data::literal::Value {
+        prodrome_data::literal::codec::record(
             STORED_PART,
             vec![
                 self.name.to_value(),
@@ -200,9 +200,9 @@ impl prodrome_core::literal::codec::Literal for StoredPart {
     }
 
     fn from_value(
-        value: &prodrome_core::literal::Value,
-    ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let fields = prodrome_core::literal::codec::Fields::of(value, STORED_PART)?;
+        value: &prodrome_data::literal::Value,
+    ) -> Result<Self, prodrome_data::literal::ProdromeError> {
+        let fields = prodrome_data::literal::codec::Fields::of(value, STORED_PART)?;
         Ok(StoredPart {
             name: fields.get("name")?,
             media: fields.get("media")?,
@@ -257,7 +257,7 @@ pub fn headers_of(headers: &[(String, String)]) -> Vec<MailHeader> {
 }
 
 mod date {
-    use prodrome_core::fpl::{datetime_of, instant_of, iso, parse_iso};
+    use prodrome_data::instant::{datetime_of, instant_of, iso, parse_iso};
     use serde::{Deserialize, Deserializer, Serializer};
 
     use suzatary_base::capability::Datetime;

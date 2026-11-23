@@ -130,7 +130,7 @@ impl TryFrom<String> for Lacking {
     }
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     Lacking => ToString::to_string,
 );
 

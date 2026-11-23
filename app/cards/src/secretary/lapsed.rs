@@ -14,7 +14,7 @@ use suzatary_store::store::Prodrome;
 /// Close every waiting calendar card whose event ended by `at`; an all-day event ends when the
 /// owner's day after its last begins, in `zone`.
 pub fn sweep(inbox: &dyn Prodrome<InboxEvent>, zone: Zone, at: Datetime) -> Result<Swept, Refusal> {
-    let now = prodrome_core::fpl::instant_of(at);
+    let now = prodrome_data::instant::instant_of(at);
     done_elsewhere::sweep(inbox, at, |proposal| {
         let Proposal::Act(Act::CalendarEvent { event, .. }) = proposal else {
             return Ok(Seen::Waits);

@@ -48,7 +48,7 @@ impl Taint {
     }
 }
 
-prodrome_core::word_literal!(Taint: Taint::ALL => |taint| taint.as_str());
+prodrome_data::word_literal!(Taint: Taint::ALL => |taint| taint.as_str());
 
 /// One turn's class. A verb answer under a name the surface lacks is tainted, and so are a
 /// person's photos and PDFs.

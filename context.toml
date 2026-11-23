@@ -281,7 +281,7 @@ scripts = []
 name = "mail"
 path = "app/mail"
 shape = "crate"
-depends = ["base", "held", "prodrome-core", "signatures"]
+depends = ["base", "held", "prodrome-data", "signatures"]
 scripts = []
 
 [[unit]]
@@ -295,7 +295,7 @@ scripts = []
 name = "triage"
 path = "app/triage"
 shape = "crate"
-depends = ["base", "held", "mail", "prodrome-core", "store"]
+depends = ["base", "held", "mail", "prodrome-data", "store"]
 scripts = []
 
 [[unit]]
@@ -330,7 +330,7 @@ scripts = []
 name = "conversations"
 path = "app/conversations"
 shape = "crate"
-depends = ["base", "connect", "health", "held", "inbox", "mail", "memory", "prodrome-core"]
+depends = ["base", "connect", "health", "held", "inbox", "mail", "memory", "prodrome-data"]
 scripts = []
 
 [[unit]]
@@ -365,7 +365,7 @@ scripts = []
 name = "cards"
 path = "app/cards"
 shape = "crate"
-depends = ["base", "connect", "conversations", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "services", "store", "todo", "topics"]
+depends = ["base", "connect", "conversations", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "prodrome-data", "record", "services", "store", "todo", "topics"]
 scripts = []
 
 [[unit]]
@@ -499,14 +499,14 @@ scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh
 
 [[library]]
 source = "https://github.com/fulfilium/prodrome"
-rev = "30ce2c05d8bf8ed40157f5f05cb784618862c6d8"
+rev = "588e30670dcf06ccfd59da55de26e972d1240444"
 pinned_in = "app/Cargo.toml"
 
 [[library.external]]
 name = "prodrome-data"
 path = "data"
 shape = "crate"
-use = 26318
+use = 21864
 
 [[library.external]]
 name = "prodrome-core"
@@ -514,7 +514,7 @@ path = "core"
 shape = "crate"
 # Every item the data crate holds is also at its old path in the core.
 reexports = ["prodrome-data"]
-use = 88877
+use = 88591
 
 [[library.external]]
 name = "prodrome-wasm-exports"

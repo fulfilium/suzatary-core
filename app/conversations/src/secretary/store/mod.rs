@@ -62,8 +62,8 @@ pub fn instant(at: &str) -> suzatary_base::capability::Datetime {
     }) {
         Some(n) => suzatary_base::capability::Datetime::new(2026, 9, 9, 9, n / 60, n % 60, 0)
             .expect("an instant"),
-        None => prodrome_core::fpl::datetime_of(
-            prodrome_core::fpl::parse_iso(at).expect("an ISO stamp"),
+        None => prodrome_data::instant::datetime_of(
+            prodrome_data::instant::parse_iso(at).expect("an ISO stamp"),
         )
         .expect("an instant"),
     }

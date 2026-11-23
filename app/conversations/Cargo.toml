@@ -12,7 +12,7 @@ name = "suzatary_conversations"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_data.workspace = true
 suzatary-base.workspace = true
 suzatary-held.workspace = true
 suzatary-memory.workspace = true

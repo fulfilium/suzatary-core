@@ -46,7 +46,7 @@ pub fn offer_withdrawn(
     now: Datetime,
 ) -> Result<usize, Refusal> {
     let fold = inbox::fold(inbox)?;
-    let since = prodrome_core::fpl::instant_of(now) - chrono::Duration::seconds(DAY_SECONDS);
+    let since = prodrome_data::instant::instant_of(now) - chrono::Duration::seconds(DAY_SECONDS);
     let mut filed = 0;
     for object in fold.objects() {
         let Some((_, why, at)) = withdrawn_by_the_secretary(object) else {
@@ -56,7 +56,7 @@ pub fn offer_withdrawn(
             card: object.asked.asked.clone(),
         });
         let offered = fold.objects().any(|other| other.asked.proposal == restore);
-        if prodrome_core::fpl::instant_of(at) < since || offered {
+        if prodrome_data::instant::instant_of(at) < since || offered {
             continue;
         }
         let card = Reference::Proposal(object.asked.asked.clone());

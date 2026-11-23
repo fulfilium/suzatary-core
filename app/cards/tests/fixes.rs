@@ -91,7 +91,7 @@ impl World {
     /// The owner taps the card for `name`, and the value is stored.
     fn tap(&mut self, name: &str, minute: u32) {
         let id = self.card_for(name).expect("a card");
-        let owner = prodrome_core::event::Actor::new("ada").expect("an actor");
+        let owner = prodrome_data::event::Actor::new("ada").expect("an actor");
         inbox::submit(&self.inbox, &id, &owner, at(minute), |_| {
             Ok(Performed::Done(Done::Acted {
                 what: format!("stored {name}"),
@@ -103,7 +103,7 @@ impl World {
 
     fn dismiss(&self, name: &str, minute: u32) {
         let id = self.card_for(name).expect("a card");
-        let owner = prodrome_core::event::Actor::new("ada").expect("an actor");
+        let owner = prodrome_data::event::Actor::new("ada").expect("an actor");
         inbox::dismiss(&self.inbox, &id, &owner, at(minute), "not now").expect("dismissed");
     }
 }

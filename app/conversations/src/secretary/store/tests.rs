@@ -54,11 +54,11 @@ fn inbox_of(responses: &[Responded]) -> suzatary_inbox::secretary::inbox::Fold {
         asked: "proposal:2026-09-09-1/0".parse().expect("a reference"),
         price: suzatary_inbox::secretary::inbox::Price::unpriced(),
     };
-    let by = prodrome_core::event::Actor::new("ada").expect("an actor");
+    let by = prodrome_data::event::Actor::new("ada").expect("an actor");
     let mut events = vec![suzatary_inbox::secretary::inbox_event::InboxEvent {
         proposal: object(),
         at: now(),
-        actor: prodrome_core::event::Actor::new("assistant").expect("an actor"),
+        actor: prodrome_data::event::Actor::new("assistant").expect("an actor"),
         said: suzatary_inbox::secretary::inbox_event::Said::Asked(Box::new(asked)),
     }];
     events.extend(responses.iter().map(|responded| {

@@ -253,7 +253,7 @@ fn noticed(
         health: Some(&suzatary_health::health::Healths::default()),
         heard: Some(&std::collections::BTreeSet::new()),
         pushed: &suzatary_connect::settings::remote::Pushed::Nowhere,
-        now: prodrome_core::fpl::instant_of(at(minute)),
+        now: prodrome_data::instant::instant_of(at(minute)),
         redirect: None,
     };
     notice(
@@ -384,7 +384,7 @@ fn a_failing_link_whose_secret_is_lost_is_asked_for_once() {
     let link = work.secrets().into_iter().next().expect("a link's secret");
     let health = suzatary_health::health::Healths::one(
         work.sources().into_iter().next().expect("a link's source"),
-        prodrome_core::fpl::instant_of(at(0)),
+        prodrome_data::instant::instant_of(at(0)),
         suzatary_health::health::Outcome::Failed(suzatary_health::health::Failure::of_status(401)),
         "it answered 401",
     );
@@ -401,7 +401,7 @@ fn a_failing_link_whose_secret_is_lost_is_asked_for_once() {
             health: Some(&health),
             heard: Some(&std::collections::BTreeSet::new()),
             pushed: &suzatary_connect::settings::remote::Pushed::Nowhere,
-            now: prodrome_core::fpl::instant_of(at(minute)),
+            now: prodrome_data::instant::instant_of(at(minute)),
             redirect: None,
         };
         notice(
@@ -486,7 +486,7 @@ fn a_link_pasted_as_a_google_calendar_is_retired_once_the_account_reads_its_cale
             health: Some(&suzatary_health::health::Healths::default()),
             heard: Some(&std::collections::BTreeSet::new()),
             pushed: &suzatary_connect::settings::remote::Pushed::Nowhere,
-            now: prodrome_core::fpl::instant_of(at(minute)),
+            now: prodrome_data::instant::instant_of(at(minute)),
             redirect: None,
         };
         notice(
