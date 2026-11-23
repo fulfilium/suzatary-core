@@ -53,13 +53,15 @@ impl ConversationStores {
     /// The same stores opened again, for a second holder of them.
     #[must_use]
     pub fn reopened(&self) -> Self {
-        Self::open(
+        let mut again = Self::open(
             self.lines.inner().root().to_path_buf(),
             self.keys_at.clone(),
             self.runs.dir().to_path_buf(),
             Arc::clone(&self.renders),
             Arc::clone(&self.sessions),
-        )
+        );
+        again.lines = again.lines.watching_as(&self.lines);
+        again
     }
 
     /// The stores as one value, keys drawn from the system's generator.

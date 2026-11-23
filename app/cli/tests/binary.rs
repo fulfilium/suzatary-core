@@ -56,6 +56,37 @@ pub(crate) fn keyed() -> Command {
     command
 }
 
+/// The script at `script` under `bash`, run as [`keyed`] runs the binary, with `code` as its code
+/// repository (`SUZATARY_REPO`), whose `scripts/app-bin.sh` this writes to run this build: a data
+/// push, real or dry, verifies and records with it as with the deployed program.
+pub(crate) fn keyed_script(script: &std::path::Path, code: &std::path::Path) -> Command {
+    let app_bin = code.join("scripts").join("app-bin.sh");
+    std::fs::create_dir_all(code.join("scripts")).expect("a code repository");
+    std::fs::write(&app_bin, format!("#!/bin/sh\nexec '{}' \"$@\"\n", path())).expect("app-bin.sh");
+    let mut permissions = std::fs::metadata(&app_bin)
+        .expect("app-bin.sh")
+        .permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
+    std::fs::set_permissions(&app_bin, permissions).expect("app-bin.sh runs");
+    let mut command = run(std::path::Path::new("bash"));
+    command
+        .arg(script)
+        .env("SUZATARY_REPO", code)
+        .env(
+            suzatary_signatures::signatures::BOX_KEY,
+            suzatary_connect::cast::keys::ROOT,
+        )
+        .env(
+            suzatary_signatures::signatures::AGENT_KEY,
+            suzatary_connect::cast::keys::AGENT,
+        )
+        .env(
+            suzatary_mail::mail::dedup_key::DEDUP_KEY,
+            suzatary_connect::cast::keys::DEDUP,
+        );
+    command
+}
+
 /// The binary's path, for a guard's script that calls only verbs reading no deployment and sets
 /// their environment itself.
 pub(crate) fn path() -> &'static str {

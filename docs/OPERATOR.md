@@ -258,6 +258,33 @@ of heads is older than its objects. `scripts/bootstrap-box.sh` restores before t
 deployed, so it prints this step and does not run it. `scripts/roadmap-push.sh` runs the verb
 itself after it joins origin's commits into a public store's clone.
 
+The lines' store DEPENDS on this step: it is opened as written by this application alone, so
+its writes, not only its reads, trust the mark of its last hold. What the box guarantees where
+the step is skipped: the lines' heads are recorded at the latest by the first data push after
+the box's next write (a push with nothing to commit verifies nothing). In detail:
+
+- Before each of its holds, the box looks at when `secretary-lines/objects/` last gained or lost
+  a file, at the mark of the store's last hold, and at the data tree's `HEAD`, branch and index.
+  A git command (a pull, merge, checkout, reset, rebase or stash) or a file that entered or left
+  `objects/` since the box's last hold, by a door (a copy, an unpack, `git clean`) or by another
+  process's write, makes the box record the heads before that hold decides. A mark that moved
+  with no file, a record by another process, records nothing. Until its next write the server's
+  pages show the lines as they were.
+- The look rests on the directory's time for every door but a git command. It cannot see a door
+  that lands during one of the box's own holds, nor, on a file system whose clock is coarse (Linux
+  before 6.13, or a file system other than ext4, xfs, btrfs and tmpfs), one in the same tick as
+  the box's last write. For such a door, the server rests its next lines on the heads it last
+  read. `verify` then finds the lines' heads stale, and the data push records the stores opened
+  as alone (`prodrome record --opened alone`), verifies again, and commits. A dry run
+  (`safe-push.sh --dry`) records nothing: it says that a push would record, and fails.
+- What such a missed door costs: an added line is never lost; the conversation forks into two
+  heads, which the next line after the record joins. A removed line (a `git clean` of a line not
+  yet pushed) is lost however the store is opened. Where the look missed the removal, the lines
+  the server rested on it before the push's record are cut off from the history: the push's
+  second `verify` names the chain broken at the removed line, and the push commits nothing until
+  a person moves those unpushed lines out of `objects/` and runs `prodrome record`. The removed
+  line cannot be brought back, since git never held it.
+
 A write to a live store by a binary of another pin (a build from a checkout with
 `scripts/app-bin.sh` and no `--deployed`, or a deployed app from before the Prodrome at
 `85e5083`) is seen by no reader that had read the store, and `prodrome record` does not cure it:

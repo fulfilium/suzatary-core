@@ -342,22 +342,28 @@ impl Secretary {
         self.beside("-lines-runs")
     }
 
-    /// The conversations; an erasure also empties `renders` and `sessions`.
+    /// The conversations, the lines watching the data tree `data`; an erasure also empties
+    /// `renders` and `sessions`.
     #[must_use]
     pub fn conversation_stores(
         &self,
+        data: &std::path::Path,
         renders: std::sync::Arc<dyn suzatary_todo::render_cache::RenderCache + Send + Sync>,
         sessions: std::sync::Arc<
             dyn suzatary_conversations::secretary::model_sessions::ModelSessions + Send + Sync,
         >,
     ) -> ConversationStores {
-        ConversationStores::open(
+        let mut stores = ConversationStores::open(
             self.line_store(),
             self.line_keys(),
             self.line_runs(),
             renders,
             sessions,
-        )
+        );
+        stores.lines = stores
+            .lines
+            .in_checkout(suzatary_io::repository::Checkout::new(data));
+        stores
     }
 
     /// The memory's texts, box-local and never pushed.

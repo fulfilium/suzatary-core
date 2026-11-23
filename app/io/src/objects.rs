@@ -21,6 +21,8 @@ use suzatary_store::store::{
 use suzatary_stores::stores::{Kind, Store};
 
 use crate::durable;
+use crate::outside::Outside;
+use crate::repository::Checkout;
 use suzatary_lines::parts;
 
 /// A prodrome's objects, behind the memo and its hold.
@@ -28,9 +30,9 @@ pub struct Objects<E: Schema> {
     events: EventStore<E, Untrusted>,
     remembered: Mutex<Option<Remembered<E>>>,
     reentrant: Reentrant,
-    /// What the store refuses to take, whoever offers it: an appended event, or a received
-    /// object.
+    /// What the store refuses to take: an appended event, or a received object.
     door: Door<E>,
+    outside: Outside,
 }
 
 /// What a store takes.
@@ -121,6 +123,7 @@ impl<E: Schema> Objects<E> {
             remembered: Mutex::new(None),
             reentrant: Reentrant::default(),
             door: Door::Open,
+            outside: Outside::of(E::KIND.doors()),
         }
     }
 
@@ -128,6 +131,21 @@ impl<E: Schema> Objects<E> {
     #[must_use]
     pub fn public(mut self, rule: Rule<E>) -> Self {
         self.door = Door::Public(rule);
+        self
+    }
+
+    /// A store opened as alone watching `checkout`'s git stamp beside `objects/`, where the tree
+    /// has a `.git` (`crate::outside`).
+    #[must_use]
+    pub fn in_checkout(mut self, checkout: Checkout) -> Self {
+        self.outside = self.outside.in_checkout(checkout);
+        self
+    }
+
+    /// Watching what `other` watches, as a second holder of the same store.
+    #[must_use]
+    pub(crate) fn watching_as(mut self, other: &Self) -> Self {
+        self.outside = other.outside.again(self.events.doors());
         self
     }
 
@@ -159,7 +177,10 @@ impl<E: Store + Husking> Objects<E> {
             .zip(self.sizes(&names)?)
             .filter_map(|(name, size)| Some((name, size?)))
             .collect();
-        let husked = self.events.husk(names).map_err(|e| Self::not_appended(e))?;
+        let watching = self.watching()?;
+        let husked = self.events.husk(names);
+        watching.wrote();
+        let husked = husked.map_err(|e| Self::not_appended(e))?;
         let now: usize = self.sizes(&husked)?.into_iter().flatten().sum();
         let before: usize = husked.iter().filter_map(|name| was.get(name)).sum();
         Ok(LetGo {
@@ -170,17 +191,17 @@ impl<E: Store + Husking> Objects<E> {
 }
 
 impl<E: Store> Objects<E> {
-    /// Its `Genesis` written when it holds nothing, so a replica's first change has a prodrome to
-    /// rest on: a replica may not begin one. A begun store stays as it is.
+    /// Its `Genesis` written when it holds nothing, since a replica may not begin one.
     ///
     /// # Errors
     /// The store unreadable, or its `Genesis` not written.
     pub fn begin(&self) -> Result<(), StoreError> {
         let _held = self.locked()?;
         if self.tips()?.is_empty() {
-            self.events
-                .init(E::LABEL)
-                .map_err(|e| Self::not_appended(e))?;
+            let watching = self.watching()?;
+            let begun = self.events.init(E::LABEL);
+            watching.wrote();
+            begun.map_err(|e| Self::not_appended(e))?;
         }
         Ok(())
     }
@@ -190,6 +211,16 @@ impl<E: Store> Objects<E> {
         if E::KIND == Kind::Chain {
             names.iter().for_each(suzatary_store::store::wrote);
         }
+    }
+
+    /// The watch opened for a hold: a door it sees is read first, by a record of the heads.
+    fn watching(&self) -> Result<crate::outside::Watching<'_>, StoreError> {
+        self.outside.before(self.events.root(), || {
+            self.events
+                .record_heads()
+                .map(drop)
+                .map_err(|e| Self::not_appended(e))
+        })
     }
 
     fn unreadable(why: impl std::fmt::Display) -> StoreError {
@@ -233,20 +264,12 @@ impl<E: Store> Objects<E> {
         }
     }
 
-    /// `look` at what this head set reads: what the same heads already produced, or the store
-    /// read again. The heads are the store's record of them where it holds one (the Prodrome's
-    /// `heads()`: one small file and a `stat` per tip, no listing), so a store whose heads have not
-    /// moved is read with no listing of its objects; without a record they are derived.
-    ///
-    /// The record is only the key: what is kept is read from the files themselves, so a handle's
-    /// first read is what the files hold, whatever the record says. A door that changes
-    /// `objects/` without the store (a pull, a copy, a binary of a pin before the mark of the last
-    /// hold) reads, through a handle that already read, as it was until a hold of the store's
-    /// lock lists `objects/` (`prodrome record` takes one), and through a new handle as the files:
-    /// a process that opens a store never serves a reading older than its files. A door that also
-    /// writes a true record (an older binary's write) moves the key while the handle, trusting the
-    /// mark, reads the old history, which is then kept under the new heads until the store's next
-    /// append: only a new handle, a restart of the process, reads it.
+    /// `look` at what this head set reads: what the same heads produced, or the store read again.
+    /// The key is the record of heads (one small file, no listing); what is kept is read from the
+    /// files, so a new handle reads what they hold. A door (a pull, a copy, a binary of an older
+    /// pin) reads, through a handle that already read, as it was until a hold that lists. A door
+    /// that also writes a true record (an older binary) moves the key while the mark keeps the old
+    /// history, kept under the new heads until the store's next append or a restart.
     fn with<T>(&self, look: impl FnOnce(&mut Remembered<E>) -> T) -> Result<T, StoreError> {
         let heads =
             parts::part("record", || self.events.heads()).map_err(|e| Self::unreadable(e))?;
@@ -387,6 +410,7 @@ impl<E: Store> Prodrome<E> for Objects<E> {
         &self,
         next: &mut dyn FnMut() -> Result<Option<E>, StoreError>,
     ) -> Result<Vec<Hash>, StoreError> {
+        let watching = self.watching()?;
         begun(&self.events, E::LABEL).map_err(|e| Self::not_appended(e))?;
         let mut refused = None;
         let events = std::iter::from_fn(|| match next() {
@@ -404,6 +428,7 @@ impl<E: Store> Prodrome<E> for Objects<E> {
             }
         });
         let written = self.events.append_all(events);
+        watching.wrote();
         Self::wrote(match &written {
             Ok(names) => names,
             Err(stopped) => &stopped.placed,
@@ -431,22 +456,27 @@ impl<E: Store> Prodrome<E> for Objects<E> {
         }
         let by_name: BTreeMap<&Hash, &String> =
             objects.iter().map(|(name, print)| (name, print)).collect();
+        let watching = self.watching()?;
         let taken = Replica::receive(
             &self.events,
             by_name.keys().map(|name| (*name).clone()).collect(),
             &|name| by_name.get(name).map(|print| print.as_bytes().to_vec()),
             Sender::Stranger,
-        )
-        .map_err(|e| Self::not_appended(e))?;
+        );
+        watching.wrote();
+        let taken = taken.map_err(|e| Self::not_appended(e))?;
         Self::wrote(&taken);
         Ok(taken)
     }
 
     fn locked(&self) -> Result<Box<dyn WriteLock + '_>, StoreError> {
-        match E::HOLD {
-            Hold::Reentrant => Ok(self.reentrant.hold()),
-            Hold::File(name) => self.file(name),
-        }
+        let held: Box<dyn WriteLock + '_> = match E::HOLD {
+            Hold::Reentrant => self.reentrant.hold(),
+            Hold::File(name) => self.file(name)?,
+        };
+        // A read under the hold reads a door the watch sees.
+        drop(self.watching()?);
+        Ok(held)
     }
 }
 

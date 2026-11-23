@@ -309,6 +309,179 @@ fn every_directory_the_push_stages_is_a_store_verify_reads() {
     }
 }
 
+/// SCENE: a door the box's watch did not see stops no data push. A line lands in the lines'
+/// `objects/` with the record of heads and the mark left as they were (what a door inside one of
+/// the box's holds leaves). A dry push says it would record and writes nothing; the first real
+/// push to a bare remote records the stores opened as their program's alone, verifies again
+/// and commits the door's line, whose name the record then holds; the second records nothing.
+/// No person acts between them.
+#[test]
+fn a_door_the_watch_missed_heals_at_the_next_push() {
+    let instance = fresh_instance("missed-door");
+    let topic = suzatary_conversations::secretary::store::Kind::Topic;
+    conversation(
+        &instance,
+        "2026-10-20-before",
+        "Before",
+        topic,
+        vec![asked("before")],
+    );
+    let data = instance.data().to_path_buf();
+    let remote = data.with_file_name("remote.git");
+    let remote_path = remote.to_string_lossy().into_owned();
+    git_as_ada(&data, &["init", "--quiet", "--bare", &remote_path]);
+    git_as_ada(&data, &["init", "--quiet"]);
+    git_as_ada(&data, &["add", "-A"]);
+    git_as_ada(&data, &["commit", "--quiet", "-m", "the data tree"]);
+    git_as_ada(&data, &["remote", "add", "origin", &remote_path]);
+    git_as_ada(&data, &["push", "--quiet", "-u", "origin", "main"]);
+
+    let lines = instance.secretary.line_store();
+    let before = object_files(&lines);
+    let kept: Vec<(std::path::PathBuf, Vec<u8>)> = [".heads", ".writes"]
+        .iter()
+        .map(|file| {
+            (
+                lines.join(file),
+                std::fs::read(lines.join(file)).expect("the store's"),
+            )
+        })
+        .collect();
+    conversation(
+        &instance,
+        "2026-10-20-door",
+        "Door",
+        topic,
+        vec![asked("by the door")],
+    );
+    for (path, bytes) in &kept {
+        std::fs::write(path, bytes).expect("put back");
+    }
+    let door: Vec<String> = object_files(&lines).difference(&before).cloned().collect();
+    assert!(!door.is_empty());
+    assert!(
+        !verify(&instance).status.success(),
+        "verify finds the heads stale"
+    );
+
+    let push = |how: Push| {
+        data_push(
+            &data.join("instance.toml"),
+            &data.with_file_name("code"),
+            how,
+        )
+    };
+    let dry = push(Push::Dry);
+    let said = String::from_utf8_lossy(&dry.stderr);
+    assert!(
+        !dry.status.success() && said.contains("a push would record"),
+        "{said}"
+    );
+    for (path, bytes) in &kept {
+        assert_eq!(
+            &std::fs::read(path).expect("there"),
+            bytes,
+            "a dry push writes nothing"
+        );
+    }
+
+    let first = push(Push::Real);
+    let said = String::from_utf8_lossy(&first.stderr);
+    assert!(first.status.success(), "{said}");
+    assert!(
+        said.contains("recording the stores opened as their program's alone"),
+        "{said}"
+    );
+    let pushed = git_as_ada(&remote, &["ls-tree", "-r", "--name-only", "main"]);
+    let store = lines
+        .file_name()
+        .expect("a name")
+        .to_string_lossy()
+        .into_owned();
+    for file in &door {
+        assert!(
+            pushed.contains(&format!("{store}/objects/{file}")),
+            "{file} is pushed"
+        );
+    }
+    let record = std::fs::read_to_string(lines.join(".heads")).expect("a record");
+    assert!(
+        door.iter()
+            .any(|file| record.contains(file.trim_end_matches(".py"))),
+        "the record names the door's line: {record}"
+    );
+
+    let second = push(Push::Real);
+    let said = String::from_utf8_lossy(&second.stderr);
+    assert!(
+        second.status.success() && !said.contains("recording"),
+        "{said}"
+    );
+    assert!(verify(&instance).status.success());
+}
+
+/// A data push run dry or for real.
+#[derive(Clone, Copy)]
+enum Push {
+    Dry,
+    Real,
+}
+
+/// `scripts/safe-push.sh` over the instance at `instance_file`, `code` its code repository.
+fn data_push(
+    instance_file: &std::path::Path,
+    code: &std::path::Path,
+    how: Push,
+) -> std::process::Output {
+    let script =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/safe-push.sh");
+    let mut command = crate::binary::keyed_script(&script, code);
+    match how {
+        Push::Dry => command.arg("--dry"),
+        Push::Real => command.arg("the push"),
+    };
+    command
+        .env("SUZATARY_INSTANCE", instance_file)
+        .env("GIT_AUTHOR_NAME", "Ada")
+        .env("GIT_AUTHOR_EMAIL", "ada@example.test")
+        .env("GIT_COMMITTER_NAME", "Ada")
+        .env("GIT_COMMITTER_EMAIL", "ada@example.test")
+        .output()
+        .expect("the push runs")
+}
+
+/// `git` in `dir` as Ada, failing the test where it fails: its standard output.
+fn git_as_ada(dir: &std::path::Path, args: &[&str]) -> String {
+    let ran = std::process::Command::new("git")
+        .args(["-c", "user.name=Ada", "-c", "user.email=ada@example.test"])
+        .args([
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "init.defaultBranch=main",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("git runs");
+    assert!(ran.status.success(), "git {args:?}: {ran:?}");
+    String::from_utf8_lossy(&ran.stdout).into_owned()
+}
+
+/// The file names in the store at `root`'s `objects/`.
+fn object_files(root: &std::path::Path) -> std::collections::BTreeSet<String> {
+    std::fs::read_dir(root.join("objects"))
+        .expect("lists")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect()
+}
+
 /// An environment beside the instance file at `path`, so a test reads none of this process's.
 fn env_beside(path: &std::path::Path) -> suzatary_cli::paths::Env {
     suzatary_cli::paths::Env::under(path.with_file_name("home"), path.with_file_name("run"))

@@ -117,11 +117,24 @@ data_push() {
     exit 1
   fi
 
-  # The stores' fsck; any problem aborts.
-  app verify || {
-    echo "safe-push: verify found the above, so nothing is committed; a .gitignore that does not name .writes is brought by: scripts/app-bin.sh --deployed migrate-ignores" >&2
-    exit 1
-  }
+  # The stores' fsck; any problem aborts. A store opened as its program's alone (the lines') whose
+  # record a door left stale, one the box's watch did not see, is recorded and verified again, so
+  # such a door stops no push; the record writes only the store's own ignored files.
+  if ! app verify; then
+    # A dry run writes nothing, a record included: it says what a push would do and stops.
+    if [ "$DRY" -eq 1 ]; then
+      echo "safe-push: dry run; a push would record the stores opened as their program's alone and verify again; nothing is recorded" >&2
+      exit 1
+    fi
+    echo "safe-push: recording the stores opened as their program's alone, then verifying again" >&2
+    # The second verify judges: a store whose record failed (a plugin's, never pushed) is named
+    # here and stops the push only if it fails that verify too.
+    app prodrome record --opened alone || true
+    app verify || {
+      echo "safe-push: verify found the above, so nothing is committed; a .gitignore that does not name .writes is brought by: scripts/app-bin.sh --deployed migrate-ignores; a record of heads older than its objects (a pull, a copy or a restore) by: scripts/app-bin.sh --deployed prodrome record" >&2
+      exit 1
+    }
+  fi
   # A new line is a whole: a husk enters history only in place of the whole a commit held.
   for path in $(git status --porcelain --untracked-files=all -- secretary-lines/objects \
     | grep -E '^(\?\?|A ) ' | cut -c4-); do

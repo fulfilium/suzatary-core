@@ -1567,8 +1567,17 @@ fn a_rules_change_over_a_stored_digest() {
 /// The lines written by one handle into `dir` and read by another, as the box's serve and a
 /// command share the store: `(reader, writer, push)`, where `push(k)` says line `k`.
 fn two_handles(dir: &Path) -> (Lines, &'static Lines, impl Fn(u32)) {
-    let (reader, _) = lines_at(dir);
+    two_handles_as(dir, |lines| lines)
+}
+
+/// [`two_handles`], each handle as `open` makes it of the store.
+fn two_handles_as(
+    dir: &Path,
+    open: impl Fn(Lines) -> Lines,
+) -> (Lines, &'static Lines, impl Fn(u32)) {
+    let reader = open(lines_at(dir).0);
     let (writer, keys) = lines_at(dir);
+    let writer = open(writer);
     let writer: &'static Lines = Box::leak(Box::new(writer));
     let keys: &'static suzatary_io::text_keys::TextKeys = Box::leak(Box::new(keys));
     let entropy: &'static Counted = Box::leak(Box::default());
@@ -1719,6 +1728,420 @@ fn the_lines_store_records_the_derived_heads() {
     assert!(writer.inner().verify().is_empty(), "no finding");
 }
 
+/// Line `k` of `two_handles`'s conversation, said in a copy of the store at `elsewhere`, whose new
+/// objects are then copied into `dir`'s by hand, as a pull or a copy brings them: their names.
+fn by_a_door(dir: &Path, elsewhere: &Path, k: u32) -> BTreeSet<Hash> {
+    let objects = dir.join(LINES).join("objects");
+    let theirs = elsewhere.join(LINES).join("objects");
+    copy(&objects, &theirs);
+    copy(&dir.join(LINE_KEYS), &elsewhere.join(LINE_KEYS));
+    let (_, _, push_there) = two_handles(elsewhere);
+    push_there(k);
+    let mut brought = BTreeSet::new();
+    for entry in std::fs::read_dir(&theirs).expect("lists") {
+        let entry = entry.expect("an entry");
+        if !objects.join(entry.file_name()).exists() {
+            std::fs::copy(entry.path(), objects.join(entry.file_name())).expect("brought in");
+            let name = entry.path();
+            let name = name
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .expect("a name");
+            brought.insert(Hash::new(name).expect("an object's name"));
+        }
+    }
+    brought
+}
+
+/// The names `lines` reads as history.
+fn read_by(lines: &Lines) -> BTreeSet<Hash> {
+    lines
+        .objects()
+        .expect("reads")
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect()
+}
+
+/// Whether `verify`, as the data push runs it (a fresh process), reports the record as stale.
+fn stale(dir: &Path) -> bool {
+    lines_at(dir)
+        .0
+        .inner()
+        .verify()
+        .iter()
+        .any(|finding| matches!(finding, prodrome_core::dag::Finding::StaleHeads { .. }))
+}
+
+/// The lines of one conversation, as events, and the print of the genesis they rest on: a store
+/// begun from that print and handed these events is the lines' store as the box writes it.
+struct Script {
+    genesis: (String, Vec<u8>),
+    events: Vec<LineEvent>,
+}
+
+fn script() -> &'static Script {
+    static SCRIPT: std::sync::OnceLock<Script> = std::sync::OnceLock::new();
+    SCRIPT.get_or_init(|| {
+        let dir = Box::leak(Box::new(suzatary_testkit::scratch("stores")));
+        let (_, writer, push) = two_handles(dir.path());
+        (1..=8).for_each(push);
+        let mut genesis = None;
+        let mut events = Vec::new();
+        for (name, object) in writer.objects().expect("reads") {
+            match object {
+                prodrome_core::event::Envelope::Change(change) => events.push(change.event),
+                prodrome_core::event::Envelope::Genesis(_) => {
+                    let file = format!("{}.py", name.as_str());
+                    let bytes = std::fs::read(dir.path().join(LINES).join("objects").join(&file))
+                        .expect("the genesis");
+                    genesis = Some((file, bytes));
+                }
+                other => panic!("a conversation holds no {}", other.name()),
+            }
+        }
+        Script {
+            genesis: genesis.expect("a genesis"),
+            events,
+        }
+    })
+}
+
+/// What changes `objects/` without the store's lock.
+#[derive(Debug, Clone, Copy)]
+enum Outside {
+    /// A line another clone wrote, its file copied in.
+    Added,
+    /// The newest line the box wrote, its file removed (`git clean`).
+    Removed,
+}
+
+/// When, against the box's holds.
+#[derive(Debug, Clone, Copy)]
+enum When {
+    /// Between two holds, the directory's time moved.
+    Between,
+    /// Inside a hold, after its look and before its write.
+    InsideAHold,
+    /// After a hold, the directory's time put back to what it was just before the door.
+    SameTick,
+}
+
+impl When {
+    /// The hold that first reads a door drawn before or inside hold `at` (`lines + 1` is the line
+    /// after the script): `None` where only the push's record reads it. A checkout's stamp, which
+    /// the door moves too, shows it at the next hold; another hold before it leaves the
+    /// directory's time moved past what the watch kept; a handle's first hold records whatever
+    /// its look.
+    const fn seen_at(self, at: usize, checkout: bool, other: bool) -> Option<usize> {
+        match self {
+            When::Between => Some(at),
+            When::SameTick if checkout || other || at == 0 => Some(at),
+            When::InsideAHold if checkout => Some(at + 1),
+            When::SameTick | When::InsideAHold => None,
+        }
+    }
+}
+
+/// The time `objects/` last gained or lost a file.
+fn objects_time(objects: &Path) -> std::time::SystemTime {
+    std::fs::metadata(objects)
+        .and_then(|meta| meta.modified())
+        .expect("a time")
+}
+
+/// The directory's time set, as a door that lands in another tick or in the same one leaves it.
+fn set_time(objects: &Path, at: std::time::SystemTime) {
+    std::fs::File::open(objects)
+        .and_then(|dir| dir.set_modified(at))
+        .expect("the directory's time set");
+}
+
+/// The parents of the object `name` in the store at `root`, read from its file.
+fn parents(root: &Path, name: &Hash) -> BTreeSet<Hash> {
+    let fresh = Objects::<LineEvent>::open(root);
+    match fresh
+        .literals(std::slice::from_ref(name))
+        .expect("reads")
+        .pop()
+    {
+        Some(Some(print)) => match prodrome_core::event::parse_envelope::<LineEvent>(
+            prodrome_core::store::Replica::schema(fresh.inner()),
+            &print,
+        )
+        .expect("an object")
+        {
+            prodrome_core::event::Envelope::Change(change) => change.deps.into_iter().collect(),
+            other => panic!("not a line: {}", other.name()),
+        },
+        missing => panic!("no file for {name:?}: {missing:?}"),
+    }
+}
+
+/// A scratch directory on tmpfs where the box has one: the law sets every directory time it
+/// relies on, so no case depends on the file system, and twenty thousand cases sync nothing.
+fn quick_scratch() -> tempfile::TempDir {
+    match std::path::Path::new("/dev/shm") {
+        shm if shm.is_dir() => tempfile::Builder::new()
+            .prefix("suzatary-watch-")
+            .tempdir_in(shm)
+            .expect("a scratch directory"),
+        _ => suzatary_testkit::scratch("stores"),
+    }
+}
+
+/// The names a fresh handle reads at `root`, as a process the push runs reads them.
+fn fresh_reads(root: &Path) -> BTreeSet<Hash> {
+    read_by(&Objects::<LineEvent>::open(root))
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(
+        std::env::var("SUZATARY_WATCH_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(20_000)
+    ))]
+
+    /// LAW (the box's watch over the lines' store, opened as its program's alone, through
+    /// `Objects`): an outside change to `objects/` is drawn at every point of a script of the
+    /// box's lines (before the first, inside a hold, in the same tick as one, after the last),
+    /// with or without a git checkout whose stamp the door moves, and with or without another
+    /// handle's hold and a read of the warm handle just before it. The hold that first reads it
+    /// rests on what is there: it names an added line among its parents, and not a removed one.
+    /// Where no hold of the box can read it, one record (what the push runs where `verify` finds
+    /// the heads stale) heals it. Nothing is lost but a removed line and the lines rested on it
+    /// before it was read, which `verify` then names as a chain broken at the removed line.
+    #[test]
+    fn the_watch_reads_an_outside_change_before_the_next_line_or_at_the_push(
+        lines in 1usize..=5,
+        at in 0usize..=5,
+        outside in proptest::prop_oneof![
+            proptest::strategy::Just(Outside::Added),
+            proptest::strategy::Just(Outside::Removed),
+        ],
+        when in proptest::prop_oneof![
+            proptest::strategy::Just(When::Between),
+            proptest::strategy::Just(When::InsideAHold),
+            proptest::strategy::Just(When::SameTick),
+        ],
+        checkout in proptest::bool::ANY,
+        other in proptest::bool::ANY,
+    ) {
+        let at = at.min(lines);
+        // Nothing to remove before any line: a removal there is an addition.
+        let outside = match (outside, at, other) {
+            (Outside::Removed, 0, false) => Outside::Added,
+            (chosen, _, _) => chosen,
+        };
+        let seen_at = when.seen_at(at, checkout, other);
+        let script = script();
+        let dir = quick_scratch();
+        let root = dir.path().join(LINES);
+        let objects = root.join("objects");
+        std::fs::create_dir_all(&objects).expect("a store");
+        std::fs::write(objects.join(&script.genesis.0), &script.genesis.1).expect("its genesis");
+        let branch = dir.path().join(".git/refs/heads/main");
+        let warm = if checkout {
+            std::fs::create_dir_all(branch.parent().expect("a parent")).expect("a git directory");
+            std::fs::write(dir.path().join(".git/HEAD"), "ref: refs/heads/main\n").expect("HEAD");
+            std::fs::write(&branch, "0\n").expect("a branch");
+            Objects::<LineEvent>::open(&root)
+                .in_checkout(suzatary_io::repository::Checkout::new(dir.path()))
+        } else {
+            Objects::<LineEvent>::open(&root)
+        };
+        let (door_event, other_event) = (script.events[8].clone(), script.events[7].clone());
+
+        let written: std::cell::RefCell<Vec<Hash>> = std::cell::RefCell::new(Vec::new());
+        let door: std::cell::RefCell<Option<Hash>> = std::cell::RefCell::new(None);
+        let removed: std::cell::RefCell<Option<(Hash, usize)>> = std::cell::RefCell::new(None);
+        let open = || {
+            if checkout {
+                std::fs::write(&branch, "1\n").expect("the branch moved");
+            }
+            match outside {
+                Outside::Added => {
+                    let elsewhere = quick_scratch();
+                    let theirs = elsewhere.path().join(LINES);
+                    copy(&objects, &theirs.join("objects"));
+                    let name = Objects::<LineEvent>::open(&theirs)
+                        .append(door_event.clone())
+                        .expect("written elsewhere");
+                    let file = format!("{}.py", name.as_str());
+                    std::fs::copy(theirs.join("objects").join(&file), objects.join(&file)).expect("copied in");
+                    *door.borrow_mut() = Some(name);
+                }
+                Outside::Removed => {
+                    let written = written.borrow();
+                    let newest = written.last().expect("a line").clone();
+                    std::fs::remove_file(objects.join(format!("{}.py", newest.as_str()))).expect("removed");
+                    *removed.borrow_mut() = Some((newest, written.len()));
+                }
+            }
+        };
+        let mut seen_line = None;
+        // `lines` lines, then the line after the script.
+        for k in 0..=lines + 1 {
+            if k == at {
+                if other {
+                    let name = Objects::<LineEvent>::open(&root)
+                        .append(other_event.clone())
+                        .expect("another handle's line");
+                    written.borrow_mut().push(name);
+                    drop(warm.objects().expect("a warm read"));
+                }
+                let before = objects_time(&objects);
+                match when {
+                    When::Between => {
+                        open();
+                        set_time(&objects, before + std::time::Duration::from_secs(1));
+                    }
+                    When::SameTick => {
+                        open();
+                        set_time(&objects, before);
+                    }
+                    When::InsideAHold => {}
+                }
+            }
+            if k == lines + 1 && seen_at.is_none() {
+                proptest::prop_assert!(stale(dir.path()), "verify finds what no hold read");
+                drop(Objects::<LineEvent>::open(&root).inner().record_heads().expect("the push's record"));
+            }
+            let mut event = Some(script.events[k].clone());
+            let inside = k == at && matches!(when, When::InsideAHold);
+            let mut next = || {
+                if inside && event.is_some() {
+                    open();
+                }
+                Ok(event.take())
+            };
+            let name = warm.append_each(&mut next).expect("appends").pop().expect("a line");
+            if seen_at.unwrap_or(lines + 1) == k {
+                let rested = parents(&root, &name);
+                if let Some(door) = door.borrow().as_ref() {
+                    proptest::prop_assert!(rested.contains(door), "the line that reads it rests on the added one");
+                }
+                if let Some((removed, _)) = removed.borrow().as_ref() {
+                    proptest::prop_assert!(!rested.contains(removed), "and not on the removed one");
+                }
+                seen_line = Some(written.borrow().len());
+            }
+            written.borrow_mut().push(name);
+        }
+
+        let (written, door, removed) = (written.into_inner(), door.into_inner(), removed.into_inner());
+        let seen_line = seen_line.expect("a line read it");
+        let read = fresh_reads(&root);
+        proptest::prop_assert!(read.contains(written.last().expect("lines")), "the last line is read");
+        if let Some(door) = &door {
+            proptest::prop_assert!(read.contains(door), "an added line is never lost");
+        }
+        let lost: Vec<&Hash> = written.iter().filter(|name| !read.contains(*name)).collect();
+        let found: Vec<String> = Objects::<LineEvent>::open(&root)
+            .inner()
+            .verify()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        match &removed {
+            None => {
+                proptest::prop_assert!(lost.is_empty(), "nothing lost: {lost:?}");
+                proptest::prop_assert!(found.is_empty(), "{found:?}");
+            }
+            Some((removed, from)) => {
+                let rested_on_it = &written[*from..seen_line];
+                for name in &lost {
+                    proptest::prop_assert!(
+                        *name == removed || rested_on_it.contains(name),
+                        "only the removed line and lines rested on it before it was read"
+                    );
+                }
+                proptest::prop_assert!(
+                    found.iter().all(|finding| finding.contains(removed.as_str())),
+                    "{found:?}"
+                );
+                proptest::prop_assert_eq!(found.is_empty(), lost.len() == 1, "{:?}", found);
+            }
+        }
+    }
+}
+
+/// `git` in `dir`, as a person runs it there, failing the test where it fails.
+fn git(dir: &Path, args: &[&str]) {
+    let ran = std::process::Command::new("git")
+        .args([
+            "-c",
+            "user.name=Ada",
+            "-c",
+            "user.email=ada@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "init.defaultBranch=main",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("git runs");
+    assert!(
+        ran.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&ran.stderr)
+    );
+}
+
+/// LAW: the box's handle of the lines' store watches the data tree's checkout and the store's
+/// `objects/`, so a line a `git pull` brings from another clone, and one copied in by hand, is
+/// read before the box's next line with no record taken by a person, and `verify` finds nothing.
+#[test]
+fn a_door_in_the_data_tree_is_read_before_the_box_s_next_line() {
+    let tree = suzatary_testkit::scratch("stores");
+    let clone = suzatary_testkit::scratch("stores");
+    git(tree.path(), &["init", "--quiet"]);
+    let checkout = suzatary_io::repository::Checkout::new(tree.path());
+    let (_, warm, push) = two_handles_as(tree.path(), |lines| lines.in_checkout(checkout.clone()));
+    push(1);
+    git(tree.path(), &["add", "-A"]);
+    git(tree.path(), &["commit", "--quiet", "-m", "a line"]);
+    let theirs = clone.path().join("tree");
+    git(
+        clone.path(),
+        &["clone", "--quiet", &tree.path().to_string_lossy(), "tree"],
+    );
+    let (_, _, push_there) = two_handles(&theirs);
+    push_there(50);
+    git(&theirs, &["add", "-A"]);
+    git(&theirs, &["commit", "--quiet", "-m", "a line elsewhere"]);
+    let before = read_by(warm);
+
+    git(
+        tree.path(),
+        &[
+            "pull",
+            "--quiet",
+            "--ff-only",
+            &theirs.to_string_lossy(),
+            "main",
+        ],
+    );
+    let pulled: BTreeSet<Hash> = read_by(&lines_at(tree.path()).0)
+        .difference(&before)
+        .cloned()
+        .collect();
+    assert!(!pulled.is_empty(), "the pull brought a line");
+    push(2);
+    assert!(pulled.is_subset(&read_by(warm)), "read under the next hold");
+
+    let elsewhere = suzatary_testkit::scratch("stores");
+    let copied = by_a_door(tree.path(), elsewhere.path(), 45);
+    assert!(read_by(warm).is_disjoint(&copied), "a read takes no hold");
+    push(3);
+    assert!(copied.is_subset(&read_by(warm)), "read under the next hold");
+    assert!(
+        lines_at(tree.path()).0.inner().verify().is_empty(),
+        "{:?}",
+        lines_at(tree.path()).0.inner().verify()
+    );
+}
+
 /// LAW (the Prodrome's 62 and 63, over the lines' store): an object brought into `objects/` by
 /// another door reads as the older heads, and `verify` reports the record, until the heads are
 /// recorded again or the record is deleted; a record naming a head whose file is gone is not
@@ -1730,29 +2153,11 @@ fn another_door_reads_as_the_recorded_heads_until_they_are_recorded_again() {
     let (reader, _, push) = two_handles(dir.path());
     push(1);
     let recorded = derived(dir.path());
-    // The same conversation, one line further, in a copy of the store; its newest object is
-    // then copied in by hand, as a checkout or a copy would bring it.
     let objects = dir.path().join(LINES).join("objects");
-    let theirs = elsewhere.path().join(LINES).join("objects");
-    std::fs::create_dir_all(&theirs).expect("a copy");
-    for entry in std::fs::read_dir(&objects).expect("lists") {
-        let entry = entry.expect("an entry");
-        std::fs::copy(entry.path(), theirs.join(entry.file_name())).expect("copied");
-    }
-    let keys_from = dir.path().join(LINE_KEYS);
-    copy(&keys_from, &elsewhere.path().join(LINE_KEYS));
-    let (_, other, push_there) = two_handles(elsewhere.path());
-    push_there(2);
-    let mut brought = 0;
-    for entry in std::fs::read_dir(&theirs).expect("lists") {
-        let entry = entry.expect("an entry");
-        if !objects.join(entry.file_name()).exists() {
-            std::fs::copy(entry.path(), objects.join(entry.file_name())).expect("brought in");
-            brought += 1;
-        }
-    }
-    assert!(brought > 0, "the other door brought objects in");
-    let _ = other;
+    assert!(
+        !by_a_door(dir.path(), elsewhere.path(), 2).is_empty(),
+        "the other door brought objects in"
+    );
     let heads = || prodrome_core::store::Replica::heads(reader.inner()).expect("heads");
     assert_eq!(heads(), recorded, "the older heads, read with no listing");
     assert!(

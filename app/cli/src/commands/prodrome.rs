@@ -42,6 +42,10 @@ pub enum Action {
     Record {
         #[command(flatten)]
         store: super::store_at::StoreAt,
+        /// Every store, or only those opened as their program's alone, whose heads the data
+        /// push records by itself where `verify` finds them stale.
+        #[arg(long, value_enum, default_value_t = record::Opened::Every)]
+        opened: record::Opened,
     },
     /// For door 2: write what door 1 reads of each object file (`door::Reading`) beside it as
     /// `<object>.texts`, and print each object one of whose markup fields does not draw.
@@ -65,7 +69,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Action::Draw(drawing) => picture::run(drawing),
         Action::Pages(paging) => pages::run(paging),
         Action::Texts { objects } => texts(objects),
-        Action::Record { store } => record::run(path, store),
+        Action::Record { store, opened } => record::run(path, store, *opened),
     }
 }
 

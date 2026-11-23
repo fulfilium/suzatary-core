@@ -198,7 +198,6 @@ impl Kind {
             // In the data repository, which a pull, a checkout or a restore from git changes.
             Kind::Chain
             | Kind::Inbox
-            | Kind::Lines
             | Kind::Memory
             | Kind::Digests
             | Kind::Decisions
@@ -215,10 +214,15 @@ impl Kind {
             | Kind::Uploads
             | Kind::Kept
             | Kind::Requests => Doors::Shared,
-            // Never pushed or vaulted, and written only under a sync's hold, whose one other act,
-            // a sync at another schema, removes the directory with its mark
+            // A plugin's: never pushed or vaulted, and written only under a sync's hold, whose one
+            // other act, a sync at another schema, removes the directory with its mark
             // (`plugin_store::PluginStore::begin`).
-            Kind::Plugin => Doors::Alone,
+            Kind::Plugin
+            // The lines: in the data repository, but written many times an answer. Every handle
+            // of a store opened as alone watches `objects/` and the mark, and the box's the git
+            // checkout too (`suzatary_io::outside`), so a door is read before the next hold; one
+            // the watch misses is recorded by the data push, where `verify` finds it.
+            | Kind::Lines => Doors::Alone,
         }
     }
 

@@ -397,8 +397,12 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   store is written only by a binary at the deployed pin of the store library.
   After a pull, merge or restore of the data tree, run
   `scripts/app-bin.sh --deployed prodrome record` with the deployment's
-  instance, and `verify` names a store left behind; a write by a binary of
-  another pin is cured only by a restart of the server (→ `storemarks`).
+  instance, and `verify` names a store left behind. The lines' store DEPENDS
+  on it, being its program's alone: where it is skipped, the lines' heads
+  are recorded at the latest by the first data push after the box's next
+  write, and a removal the box's watch missed stops the push until a person
+  acts. A write by a binary of another pin is cured only by a restart of the
+  server (→ `storemarks`).
 - **Two roots dirs**: the units link into `~/.local/state/suzatary/roots`
   (`SUZATARY_ROOTS`); `app-bin.sh`, `web-dist.sh` and `root-serving.sh` without
   it link into `…/roots-dev`, so a dev build cannot repoint what the units run.

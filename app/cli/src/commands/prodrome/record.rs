@@ -13,13 +13,37 @@ use suzatary_stores::stores::Kind;
 
 use crate::commands::store_at::StoreAt;
 
+/// Which stores a run records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Opened {
+    Every,
+    /// Those whose kind opens them as their program's alone (`Kind::doors`).
+    Alone,
+}
+
+impl Opened {
+    fn takes(self, kind: Kind) -> bool {
+        match (self, kind.doors()) {
+            (Opened::Every, _) | (Opened::Alone, prodrome_core::store::Doors::Alone) => true,
+            (Opened::Alone, prodrome_core::store::Doors::Shared) => false,
+        }
+    }
+}
+
 /// The todo store `--store` names, refused where it does not read as one; else every store of
-/// the instance ([`crate::instance::Instance::object_stores`]) at its kind's schema. One line
-/// each; a store that fails is said and the rest are recorded, and the run then ends non-zero.
-pub(crate) fn run(path: &Path, at: &StoreAt) -> anyhow::Result<()> {
-    let stores = at.or_instance(
+/// the instance ([`crate::instance::Instance::object_stores`]) at its kind's schema, of those
+/// `opened` takes. One line each; a store that fails is said and the rest are recorded, and the
+/// run then ends non-zero.
+pub(crate) fn run(path: &Path, at: &StoreAt, opened: Opened) -> anyhow::Result<()> {
+    let mut stores = at.or_instance(
         path,
         |dir| {
+            if opened == Opened::Alone {
+                bail!(
+                    "--store names a todo store, which is opened as shared; --opened alone \
+                     records the instance's stores opened as alone"
+                );
+            }
             let store =
                 super::super::chain_at(dir.to_owned(), prodrome_core::policy::Untrusted::none());
             let unread = store
@@ -37,6 +61,7 @@ pub(crate) fn run(path: &Path, at: &StoreAt) -> anyhow::Result<()> {
         },
         |instance| Ok(instance.object_stores()),
     )?;
+    stores.retain(|(kind, _, _)| opened.takes(*kind));
     let failed: Vec<String> = every(&stores)
         .into_iter()
         .filter_map(|(name, said)| match said {

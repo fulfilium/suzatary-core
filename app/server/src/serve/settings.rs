@@ -2,7 +2,6 @@
 //! secret's value.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use suzatary_io::present::Present as _;
 
 use axum::Json;
@@ -17,6 +16,7 @@ use suzatary_connect::settings::remote::{self, Pushed, Tip};
 use suzatary_google::calendar::Occurrence;
 use suzatary_health::health::plugin::PluginName;
 use suzatary_io::plugin_store::PluginStore;
+use suzatary_io::repository::{Checkout, GitDirs};
 use suzatary_lines::timings::{Part, Phase, timed};
 use suzatary_store::store::StoreError;
 
@@ -147,31 +147,13 @@ pub fn pushed_at(root: &std::path::Path) -> Pushed {
     }
 }
 
-/// A worktree's `.git` file names its `gitdir`, whose `commondir` holds the shared one.
-fn git_dirs(root: &std::path::Path) -> std::io::Result<(PathBuf, PathBuf)> {
-    let dot_git = root.join(".git");
-    if !dot_git.is_file() {
-        return Ok((dot_git.clone(), dot_git));
-    }
-    let text = std::fs::read_to_string(&dot_git)?;
-    let named = Pushed::gitdir(&text).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidData, ".git names no gitdir")
-    })?;
-    let dir = root.join(named);
-    let common = match std::fs::read_to_string(dir.join("commondir")).present()? {
-        Some(common) => dir.join(common.trim()),
-        None => dir.clone(),
-    };
-    Ok((dir, common))
-}
-
 fn git_config(root: &std::path::Path) -> std::io::Result<String> {
-    std::fs::read_to_string(git_dirs(root)?.1.join("config"))
+    std::fs::read_to_string(Checkout::new(root).git_dirs()?.common.join("config"))
 }
 
 /// `None` on no branch, or never pushed.
 fn pushes(root: &std::path::Path) -> Option<suzatary_health::health::Health> {
-    let (dir, common) = git_dirs(root).ok()?;
+    let GitDirs { dir, common } = Checkout::new(root).git_dirs().ok()?;
     let head = std::fs::read_to_string(dir.join("HEAD")).ok()?;
     let branch = head.trim().strip_prefix("ref: refs/heads/")?;
     let upstream = tip(&common.join("logs/refs/remotes/origin").join(branch));

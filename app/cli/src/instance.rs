@@ -160,6 +160,7 @@ impl Instance {
     #[must_use]
     pub fn conversation_stores(&self) -> suzatary_io::conversations::ConversationStores {
         self.secretary.conversation_stores(
+            self.data(),
             std::sync::Arc::new(self.answers()),
             std::sync::Arc::new(crate::interpreters::spawner(self, "").sessions()),
         )

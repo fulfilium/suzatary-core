@@ -37,6 +37,7 @@ pub mod notify;
 pub mod oauth;
 pub mod objects;
 pub mod older;
+mod outside;
 pub mod pairing;
 pub mod pdftotext;
 pub mod plugin_store;

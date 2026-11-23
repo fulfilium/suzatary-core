@@ -80,9 +80,8 @@ impl PluginStore {
         Ok(Some(Objects::plugin(&self.root, schema)))
     }
 
-    /// The store as written, at the schema beside it, held as a sync holds it, so no sync at
-    /// another schema empties it while the caller reads or records it; `None` where nothing was
-    /// ever learned.
+    /// The store at the schema beside it, held as a sync holds it, so no sync at another schema
+    /// empties it meanwhile; `None` where nothing was learned.
     ///
     /// # Errors
     /// The hold not taken, or what [`PluginStore::read`] refuses.
@@ -107,10 +106,8 @@ impl PluginStore {
         self.root.with_file_name(format!(".{name}.lock"))
     }
 
-    /// The store at `schema`, held: kept where it already holds that schema, else emptied and
-    /// begun at it, the schema's text written first. The hold is taken first, so a sync that
-    /// empties the store waits for every other sync's writes to end, and none writes into a
-    /// store being emptied.
+    /// The store at `schema`, held: kept where it holds that schema, else emptied and begun at it.
+    /// The hold comes first, so no sync writes into a store being emptied.
     ///
     /// # Errors
     /// The hold not taken, a schema file that cannot be read, a directory that cannot be
