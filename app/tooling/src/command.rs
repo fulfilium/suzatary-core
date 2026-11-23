@@ -152,13 +152,21 @@ impl Command {
     }
 
     fn context(repo: &str, words: &[&str]) -> Result<Command, Error> {
-        use crate::context::{Act, Recording};
+        use crate::context::Act;
+        use crate::context::wasm::Modules;
+        let modules = |words: &[&str]| match words {
+            [] => Ok(None),
+            ["--wasm", system, files @ ..] if !files.is_empty() => Ok(Some(Modules {
+                system: (*system).to_owned(),
+                files: files.iter().map(Into::into).collect(),
+            })),
+            _ => Err(usage("--wasm <system> <module>...")),
+        };
         let act = match words {
             [] => Act::Show,
             ["files"] => Act::Files(None),
             ["files", unit] => Act::Files(Some((*unit).to_owned())),
-            ["record"] => Act::Record(Recording::Lowered),
-            ["record", "--merged"] => Act::Record(Recording::Merged),
+            ["record", rest @ ..] => Act::Record(modules(rest)?),
             ["growth"] => Act::Growth,
             ["external", name, checkout] => Act::External {
                 name: (*name).to_owned(),

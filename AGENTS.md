@@ -70,17 +70,12 @@ An agent must be able to read what it changes. `context.toml` names the units (e
 each unit (its README and public interface, at most 25k) and to DEVELOP it (its source, scripts,
 cited documents and its dependencies' USE, at most 500k). The goal is that no unit is over
 either budget. A unit split into libraries meets the goal when each library does. The table
-names each unit that is still over, and by how much. The guard
-`app/cli/tests/guards/context.rs` refuses a unit's USE over its budget or its ratchet. The
-repository's reading set has a ratchet that only falls. Follow these rules in every pull
-request:
+names each unit that is still over, and by how much. The reading
+set and each unit's USE over the budget are derived figures (below). Follow these rules in every
+pull request:
 
 1. Show the context change. The guard prints each unit's figures against the merge base with
-   `origin/master`. If the reading set grows past 2k tokens, delete as much elsewhere, or say why
-   it pays on a line `Reading-growth: +6000: the record's laws` in two places: the pull
-   request's description, which the train copies into the merge, and a commit message of the
-   branch, which the branch's own gate reads (the guard names the line it lacks). A pull request
-   writes no `reading`: the train's build sets it from the merged tree.
+   `origin/master`. Pay for a growth by deleting as much elsewhere.
 2. Write a comment only for what the code cannot say: an invariant, a hazard, a unit, or a
    reason that the types cannot carry. Do not narrate, argue with the reviewer or tell history.
    Git and the pull request hold the history.
@@ -101,6 +96,25 @@ request:
 7. Use a library through its README and its public interface, and keep each unit's USE under
    its budget (the guard enforces this). Do not reach into another unit's internals. To learn
    which files a unit's figures read, run `scripts/context.sh files <unit>`.
+
+## Derived figures
+
+A derived figure is a number that is a function of the merged tree: the reading set and each
+unit's USE over the budget in `context.toml`'s `[ratchet]`, and each shipped wasm module's line in
+`web/wasm-budget`. A pull request writes none of them; the train's build records them in the
+commit it cuts, after everything else that commit writes, and the two files that hold them count
+in no figure, so each is the measure of exactly that commit's tree. Each merged pull request may grow a figure by its allowance, 2,000 tokens or
+16,000 bytes; a unit the ratchet does not hold gets none over the budget. To grow one by more,
+say why on its own line, in the pull request's description (the train copies it into the merge
+and reads only the merges) and in a commit message of the branch (its own gate reads it, once
+however often it repeats): `Reading-growth: +6000: the record's laws`, `Use-growth: lines +900:
+the rule's view`, `Wasm-growth: views_bg.wasm +19000: the topic sheet`. A carried pull request's
+lines ride its carrier's merge, which counts as one. The gate's `growth` step refuses a tokens
+figure that nothing declares, and a figure written by hand. A module's line holds its bytes in
+the tree the train started from and the train's limit, and the web build refuses a module over
+its limit; a pull request's own build reads the last train's limit. A library's `use` is the
+exception: it is a function of the pinned revision, and the pull request that moves the pin
+writes it.
 
 ## The style rules
 
@@ -437,8 +451,3 @@ found in neither. When the train lands, it marks each todo done where it was fou
 in the land's roadmap commit, listed first in the release's changelog section, and an upkeep todo
 on the private chain, named nowhere public. Name only a todo that your change finishes. A pull
 request that only moves a todo forward has no `Completes:` line.
-
-A pull request that grows a shipped wasm module by more than 16,000 bytes raises its line of
-`web/wasm-budget` (measured on the merged tree, for each Nix system) and says why on its own line
-of the description, which the train copies into the merge commit for the guard to read:
-`Wasm-growth: views_bg.wasm +19000: the topic sheet`.

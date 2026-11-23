@@ -537,6 +537,7 @@
             fileset = lib.fileset.unions [
               ./web
               ./scripts/build-web.sh
+              ./scripts/wasm-limits.sh
               ./scripts/web-inputs.sh
               ./scripts/nix-out.sh
               ./scripts/wire.sh

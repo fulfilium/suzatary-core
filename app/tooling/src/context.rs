@@ -1,6 +1,8 @@
 //! The context budget: the tokens an agent reads to use and to develop each unit, against
-//! `context.toml`. It reads files and git alone, so the train measures a tree without building it.
+//! `context.toml`, and the derived figures (`figures`). It reads files and git alone, and the
+//! bytes of modules a build already made, so the train measures a tree without building it.
 
+mod figures;
 pub mod finding;
 pub mod interface;
 pub mod measure;
@@ -8,19 +10,20 @@ mod order;
 pub mod plan;
 pub mod tokens;
 pub mod tree;
-mod wasm;
+pub mod wasm;
 
-use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail};
 
-use self::finding::{Allowed, Finding, findings};
+use self::figures::{FAMILIES, Family, Figure, Gathered, Refusal};
+use self::finding::{Finding, findings};
 use self::measure::{Report, measure};
 use self::plan::{ExternalShape, FILE, Plan};
 use self::tokens::Kind;
 use self::tree::{Tree, git};
+use self::wasm::{BUDGET, Modules};
 
 /// What to do besides printing the table.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -29,7 +32,10 @@ pub enum Act {
     Show,
     /// List the files a unit's USE and DEVELOP read (the reading set's with none), largest first.
     Files(Option<String>),
-    Record(Recording),
+    /// Write every derived figure of the merged tree, the wasm limits from the base's `Modules`:
+    /// the train's build.
+    Record(Option<Modules>),
+    /// Judge the figures against the merge base.
     Growth,
     /// Measure the external library `name`'s USE from a checkout of its pinned revision.
     External {
@@ -40,16 +46,6 @@ pub enum Act {
         unit: String,
         cut: Option<PathBuf>,
     },
-}
-
-/// Which figure `record` may write as the ratchet.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Recording {
-    /// Only one at or below it: the ratchet falls.
-    Lowered,
-    /// The merged tree's reading set alone, whatever it is: the train's build, whose growth the
-    /// guard judges against the merge base.
-    Merged,
 }
 
 /// The tree a change started from, measured by the same plan, or why there is none.
@@ -110,9 +106,7 @@ pub fn run(repo: &Path, act: &Act) -> anyhow::Result<()> {
                     refused.len()
                 );
             }
-            println!(
-                "growth: the reading set and the wasm budget are within what the commits declare"
-            );
+            println!("growth: every derived figure is within what the commits declare");
             Ok(())
         }
         Act::Files(unit) => {
@@ -120,7 +114,7 @@ pub fn run(repo: &Path, act: &Act) -> anyhow::Result<()> {
             print!("{}", files(&report, unit.as_deref())?);
             Ok(())
         }
-        Act::Record(recording) => record(root, &plan, *recording),
+        Act::Record(modules) => record(root, &plan, modules.as_ref()),
         Act::External { name, checkout } => external(root, &plan, name, checkout),
         Act::Order { unit, cut } => {
             let cut = match cut {
@@ -329,7 +323,7 @@ fn footer(plan: &Plan, report: &Report, base: &Base) -> String {
             .collect();
         let _ = writeln!(
             out,
-            "use ratchet (over budget today, may only fall): {}",
+            "use ratchet (over budget today, recorded by the train): {}",
             held.join(", ")
         );
     }
@@ -409,67 +403,149 @@ fn signed(now: u64, then: u64) -> String {
     }
 }
 
-/// Lower the ratchet to the figures now: the reading set, and the USE of each unit still over
-/// budget; a unit back within budget leaves the ratchet. Refused when a figure is above its
-/// ratchet, or a unit is over budget with no ratchet. `Recording::Merged` writes the reading set
-/// alone, whatever it is.
-fn record(root: &Path, plan: &Plan, recording: Recording) -> anyhow::Result<()> {
-    let report = measure(plan, &Tree::checkout(root)?);
-    let reading = report.reading.total();
-    if recording == Recording::Merged {
-        // The one line the train's build writes; the units' ratchets fall only by hand.
-        edit_plan(root, |document| {
-            document["ratchet"]["reading"] = toml_edit::value(as_toml(reading)?);
-            Ok(())
-        })?;
-        println!("context: the reading set of the merged tree is {reading} tokens");
-        return Ok(());
-    }
-    if reading > plan.ratchet.reading {
-        bail!(
-            "the reading set is {reading} tokens, above the ratchet of {}: the ratchet only falls",
-            plan.ratchet.reading
-        );
-    }
-    let mut uses = BTreeMap::new();
-    for unit in report
-        .units
-        .iter()
-        .filter(|unit| unit.figures.use_ > plan.budget.use_)
-    {
-        match plan.ratchet.use_.get(&unit.name) {
-            Some(&recorded) if unit.figures.use_ <= recorded => {
-                uses.insert(unit.name.clone(), unit.figures.use_);
-            }
-            Some(&recorded) => bail!(
-                "{}: its USE is {} tokens, above its ratchet of {recorded}: the ratchet only falls",
-                unit.name,
-                unit.figures.use_
-            ),
-            None => bail!(
-                "{}: its USE is {} tokens, over the budget of {}, and a unit joins no ratchet",
-                unit.name,
-                unit.figures.use_,
-                plan.budget.use_
-            ),
-        }
-    }
+/// Write every derived figure: the reading set and the USE of each unit over the budget as the
+/// tree measures them (a unit back within it leaves the ratchet), and, given the base's `modules`,
+/// each module's line: its bytes there and its limit (`figures::Rule::limit`). On stdout, a line
+/// for each figure that moved.
+fn record(root: &Path, plan: &Plan, modules: Option<&Modules>) -> anyhow::Result<()> {
+    let was = figures::recorded(&plan.ratchet);
+    let now = figures::measured(plan, &measure(plan, &Tree::checkout(root)?));
     edit_plan(root, |document| {
+        let reading = now.get(&Figure::Reading).copied().unwrap_or(0);
         document["ratchet"]["reading"] = toml_edit::value(as_toml(reading)?);
         let table = document["ratchet"]["use"]
             .or_insert(toml_edit::table())
             .as_table_mut()
             .context("`ratchet.use` is a table")?;
-        table.retain(|name, _| uses.contains_key(name));
-        for (name, tokens) in &uses {
-            table[name.as_str()] = toml_edit::value(as_toml(*tokens)?);
+        table.clear();
+        for (figure, tokens) in &now {
+            if let Figure::Use(unit) = figure {
+                table[unit.as_str()] = toml_edit::value(as_toml(*tokens)?);
+            }
         }
         Ok(())
     })?;
-    println!(
-        "context: the ratchet is now {reading} tokens for the reading set, and {uses:?} for USE"
-    );
+    for moved in figures::moved(&was, &now) {
+        println!("{moved}");
+    }
+    let Some(modules) = modules else {
+        return Ok(());
+    };
+    let range = Range::read(root, plan)?;
+    let base = modules.measure()?;
+    let declared = range.grants.named(Family::Wasm).map(|module| Figure::Wasm {
+        module: module.to_owned(),
+        system: modules.system.clone(),
+    });
+    let budget: wasm::Budget = base
+        .keys()
+        .cloned()
+        .chain(declared)
+        .map(|figure| {
+            let measured = base.get(&figure).copied();
+            let limit = range.rule.limit(&figure, measured, &range.grants);
+            let line = wasm::Line {
+                measured: measured.unwrap_or(0),
+                limit,
+            };
+            (figure, line)
+        })
+        .collect();
+    let old = read_budget(std::fs::read_to_string(root.join(BUDGET)).ok().as_deref())?;
+    std::fs::write(root.join(BUDGET), wasm::print(&budget))
+        .with_context(|| format!("writing {BUDGET}"))?;
+    for moved in figures::moved(&old, &budget) {
+        println!("{moved}");
+    }
     Ok(())
+}
+
+/// The budget of `text`, empty where there is no file.
+fn read_budget(text: Option<&str>) -> anyhow::Result<wasm::Budget> {
+    text.map_or_else(|| Ok(wasm::Budget::new()), wasm::read)
+}
+
+/// The commits since the merge base with `origin/master`, as the rule reads them.
+struct Range {
+    base: String,
+    rule: figures::Rule,
+    grants: figures::Grants,
+    /// The declarations not in their form, or too large.
+    refused: Vec<Refusal>,
+    /// Whether `HEAD` is the train's commit, whose message has the `Figures:` trailer.
+    recorder: bool,
+}
+
+impl Range {
+    /// A train's range has `Merge #` commits on its first-parent chain, and only theirs declare;
+    /// a branch's own range declares in every commit.
+    fn read(root: &Path, plan: &Plan) -> anyhow::Result<Self> {
+        let base = git(root, &["merge-base", "HEAD", "origin/master"])
+            .context("no merge base with origin/master to compare the growth with")?
+            .trim()
+            .to_owned();
+        let range = format!("{base}..HEAD");
+        let first = git(
+            root,
+            &["log", "--first-parent", "--format=%s%x01%B%x00", &range],
+        )?;
+        let merges: Vec<&str> = first
+            .split('\0')
+            .filter_map(|commit| commit.trim_start().split_once('\x01'))
+            .filter(|(subject, _)| subject.starts_with("Merge #"))
+            .map(|(_, body)| body)
+            .collect();
+        let every;
+        let (messages, gathered): (Vec<&str>, _) = if merges.is_empty() {
+            every = git(root, &["log", "--format=%B%x00", &range])?;
+            (every.split('\0').collect(), Gathered::Commits)
+        } else {
+            (merges.clone(), Gathered::Merges)
+        };
+        let mut declared = Vec::new();
+        for message in messages
+            .iter()
+            .map(|m| m.trim_start())
+            .filter(|m| !m.is_empty())
+        {
+            let mut here = Vec::new();
+            for family in FAMILIES {
+                let values = crate::git::trailers(family.trailer(), message)
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                here.extend(values.into_iter().map(|value| (family, value)));
+            }
+            declared.push(here);
+        }
+        let (grants, refused) = figures::grants(&declared, gathered);
+        let head = git(root, &["log", "-1", "--format=%B", "HEAD"])?;
+        let recorder = !crate::git::trailers(FIGURES, &head)
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+            .is_empty();
+        Ok(Self {
+            rule: figures::Rule {
+                tokens: plan.budget.allowance,
+                bytes: wasm::ALLOWANCE,
+                use_budget: plan.budget.use_,
+                merges: merges.len() as u64,
+            },
+            base,
+            grants,
+            refused,
+            recorder,
+        })
+    }
+
+    /// The train's merges since the base that changed `paths`, or every merge for none.
+    fn merges_over(&self, root: &Path, paths: &[&str]) -> anyhow::Result<Vec<String>> {
+        let range = format!("{}..HEAD", self.base);
+        let mut args = vec!["log", "--first-parent", "--format=%s", &range, "--"];
+        args.extend(paths);
+        Ok(git(root, &args)?
+            .lines()
+            .filter(|s| s.starts_with("Merge #"))
+            .map(|s| s.split_once(':').map_or(s, |(n, _)| n).to_owned())
+            .collect())
+    }
 }
 
 /// Measure the external library `name` from `checkout`, and write its USE.
@@ -588,34 +664,75 @@ pub fn check(root: &Path) -> anyhow::Result<(String, Vec<Finding>)> {
     ))
 }
 
-/// Each growth of the reading set or a wasm line the commits since the merge base do not declare,
-/// and each declaration not in its form.
+/// Each refusal of the derived figures' rule (`figures`) over the commits since the merge base:
+/// a declaration not in its form; on a branch, a figure written by hand; on the train's commit,
+/// a tokens figure it records otherwise than the tree measures; and a tokens figure grown past
+/// what the merge base allows, naming the merges that moved it. The wasm modules are judged by
+/// the web build, against the limits the train's commit records.
 ///
 /// # Errors
-/// When the plan, the tree or git cannot be read, or there is no merge base with `origin/master`:
-/// a check that compared nothing is never a pass.
+/// When the plan, the tree, git or a recorded file cannot be read, or there is no merge base with
+/// `origin/master`: a check that compared nothing is never a pass.
 pub(crate) fn growth(root: &Path) -> anyhow::Result<Vec<String>> {
     let plan = read_plan(root)?;
     let report = measure(&plan, &Tree::checkout(root)?);
-    let base = git(root, &["merge-base", "HEAD", "origin/master"])
-        .context("no merge base with origin/master to compare the growth with")?;
-    let base = base.trim();
-    let was = plan::ratchet(&git(root, &["show", &format!("{base}:{FILE}")])?)
-        .with_context(|| format!("reading {FILE} at the merge base"))?;
-    let range = format!("{base}..HEAD");
-    let declared =
-        crate::git::declared(root, &range, "Reading-growth").map_err(|e| anyhow::anyhow!("{e}"))?;
-    let merges = git(root, &["log", "--first-parent", "--format=%s", &range])?
-        .lines()
-        .filter(|s| s.starts_with("Merge #"))
-        .count();
-    let allowed = Allowed::of(was.reading, plan.budget.allowance, merges as u64, &declared);
-    let mut refused = finding::malformed(&declared);
-    refused.extend(
-        finding::reading(plan.ratchet.reading, report.reading.total(), &allowed)
-            .iter()
-            .map(ToString::to_string),
+    let range = Range::read(root, &plan)?;
+    let was = figures::recorded(
+        &plan::ratchet(&git(root, &["show", &format!("{}:{FILE}", range.base)])?)
+            .with_context(|| format!("reading {FILE} at the merge base"))?,
     );
-    refused.extend(wasm::refused(root, base)?);
-    Ok(refused)
+    let head = figures::recorded(&plan.ratchet);
+    let now = figures::measured(&plan, &report);
+    let mut refused = range.refused.clone();
+    if range.recorder {
+        let misrecorded = figures::moved(&head, &now).into_iter();
+        refused.extend(misrecorded.map(|m| Refusal::Misrecorded(m.shown())));
+    } else {
+        let budgets = (
+            read_budget(
+                git(root, &["show", &format!("{}:{BUDGET}", range.base)])
+                    .ok()
+                    .as_deref(),
+            )?,
+            read_budget(std::fs::read_to_string(root.join(BUDGET)).ok().as_deref())?,
+        );
+        let written = figures::moved(&was, &head)
+            .into_iter()
+            .map(figures::Moved::shown);
+        let lines = figures::moved(&budgets.0, &budgets.1)
+            .into_iter()
+            .map(figures::Moved::shown);
+        refused.extend(written.chain(lines).map(Refusal::Written));
+    }
+    for refusal in figures::judge(&was, &now, &range.grants, range.rule) {
+        refused.push(match refusal {
+            Refusal::Undeclared {
+                figure,
+                measured,
+                limit,
+                by: _,
+            } => {
+                let paths: Vec<&str> = match &figure {
+                    Figure::Use(unit) => plan
+                        .units
+                        .iter()
+                        .filter(|u| &u.name == unit)
+                        .map(|u| u.path.as_str())
+                        .collect(),
+                    Figure::Reading | Figure::Wasm { .. } => Vec::new(),
+                };
+                Refusal::Undeclared {
+                    by: range.merges_over(root, &paths)?,
+                    figure,
+                    measured,
+                    limit,
+                }
+            }
+            other => other,
+        });
+    }
+    Ok(refused.iter().map(ToString::to_string).collect())
 }
+
+/// The trailer of the train's commit that records the figures.
+pub(crate) const FIGURES: &str = "Figures";

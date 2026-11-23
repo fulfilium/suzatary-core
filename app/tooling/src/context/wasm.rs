@@ -1,139 +1,131 @@
-//! `web/wasm-budget` against the merge base: a line rises by the allowance or a `Wasm-growth:`.
+//! `web/wasm-budget`: for each shipped wasm module, the bytes of the tree the train started from and
+//! the most the train's tree may ship; `scripts/build-web.sh` refuses a module over its limit.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::fmt::{self, Write as _};
+use std::path::PathBuf;
 
 use anyhow::{Context as _, bail};
 
-use super::tree::git;
+use super::figures::Figure;
 
 pub(crate) const BUDGET: &str = "web/wasm-budget";
 
-/// The bytes a line may rise by against the merge base without a word, per module and system.
-const ALLOWANCE: u64 = 16_000;
+/// The bytes a module may grow by for each merged pull request, undeclared.
+pub(crate) const ALLOWANCE: u64 = 16_000;
 
-type Lines = BTreeMap<(String, String), u64>;
+const HEADER: &str = "\
+# <module> <system> <measured> <limit>, written by the train (AGENTS.md, \"Derived figures\"):
+# `measured` is the module's bytes after wasm-opt in the tree the train started from, one train
+# behind; `limit` adds the allowance for each merged pull request and what they declare.
+";
 
-/// Each line by its module and system: `<module>.wasm <system> <bytes>`.
-fn lines(text: &str) -> anyhow::Result<Lines> {
+/// One module's line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Line {
+    pub(crate) measured: u64,
+    pub(crate) limit: u64,
+}
+
+impl fmt::Display for Line {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "measured {}, limit {}", self.measured, self.limit)
+    }
+}
+
+/// The lines, by module and system.
+pub(crate) type Budget = BTreeMap<Figure, Line>;
+
+/// A wasm module's file name.
+fn is_module(name: &str) -> bool {
+    std::path::Path::new(name)
+        .extension()
+        .is_some_and(|extension| extension == "wasm")
+}
+
+/// The file's text, parsed.
+pub(crate) fn read(text: &str) -> anyhow::Result<Budget> {
+    let number = |word: &str| {
+        word.parse::<u64>()
+            .with_context(|| format!("{BUDGET}: `{word}` is not a number of bytes"))
+    };
     text.lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .map(|l| match l.split_whitespace().collect::<Vec<_>>()[..] {
-            [name, system, bytes] => Ok((
-                (name.to_owned(), system.to_owned()),
-                bytes
-                    .parse()
-                    .with_context(|| format!("{BUDGET}: `{bytes}` is not a number of bytes"))?,
+            [module, system, measured, limit] if is_module(module) => Ok((
+                Figure::Wasm {
+                    module: module.to_owned(),
+                    system: system.to_owned(),
+                },
+                Line {
+                    measured: number(measured)?,
+                    limit: number(limit)?,
+                },
             )),
-            _ => bail!("{BUDGET}: `{l}` is not `<module>.wasm <system> <bytes>`"),
+            _ => bail!("{BUDGET}: `{l}` is not `<module>.wasm <system> <measured> <limit>`"),
         })
         .collect()
 }
 
-/// What the trailers' values declare each module may grow by, summed, and each value not in the
-/// form, refused, so a declaration is never read as something it does not say.
-fn grants(values: &[String]) -> (BTreeMap<String, u64>, Vec<String>) {
-    let (mut grants, mut malformed) = (BTreeMap::new(), Vec::new());
-    for said in values {
-        let parsed = said.split_once(':').and_then(|(head, why)| {
-            let (name, bytes) = head.trim().split_once(" +")?;
-            let bytes: u64 = bytes.trim().parse().ok()?;
-            (!why.trim().is_empty()).then(|| (name.trim().to_owned(), bytes))
-        });
-        match parsed {
-            Some((name, bytes)) => *grants.entry(name).or_insert(0) += bytes,
-            None => malformed.push(format!(
-                "`Wasm-growth: {said}` is not `Wasm-growth: <module> +<bytes>: <reason>`"
-            )),
+/// The file's text for `budget`.
+pub(crate) fn print(budget: &Budget) -> String {
+    let mut out = HEADER.to_owned();
+    for (figure, line) in budget {
+        match figure {
+            Figure::Wasm { module, system } => {
+                let _ = writeln!(out, "{module} {system} {} {}", line.measured, line.limit);
+            }
+            Figure::Reading | Figure::Use(_) => {}
         }
     }
-    (grants, malformed)
+    out
 }
 
-/// Each line raised past the allowance and past what the grants declare for its module.
-fn raised(was: &Lines, now: &Lines, grants: &BTreeMap<String, u64>) -> Vec<String> {
-    was.iter()
-        .filter_map(|((name, system), &before)| {
-            let after = *now.get(&(name.clone(), system.clone()))?;
-            let granted = grants.get(name).copied().unwrap_or(0);
-            (after > before + ALLOWANCE.max(granted)).then(|| {
-                format!(
-                    "{BUDGET}: {name} {system} rises {before} → {after}, past the \
-                     {ALLOWANCE}-byte allowance and the {granted} bytes declared (a `Wasm-growth: \
-                     <module> +<bytes>: <reason>` line in the pull request's description, or in a \
-                     commit)"
-                )
+/// A build's modules, as `scripts/wasm-modules.sh` prints them: the system that built them, and
+/// each module's file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Modules {
+    pub system: String,
+    pub files: Vec<PathBuf>,
+}
+
+impl Modules {
+    /// Each module's bytes, by its file's name.
+    pub(crate) fn measure(&self) -> anyhow::Result<BTreeMap<Figure, u64>> {
+        self.files
+            .iter()
+            .map(|file| {
+                let module = file
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .filter(|name| is_module(name))
+                    .with_context(|| format!("{} is not a wasm module", file.display()))?;
+                let bytes = std::fs::metadata(file)
+                    .with_context(|| format!("measuring {}", file.display()))?
+                    .len();
+                Ok((
+                    Figure::Wasm {
+                        module: module.to_owned(),
+                        system: self.system.clone(),
+                    },
+                    bytes,
+                ))
             })
-        })
-        .collect()
-}
-
-/// Each refused growth of the checkout at `root` against its merge base; none without a merge
-/// base, or where the merge base held no budget.
-///
-/// # Errors
-/// When git or the budget cannot be read.
-pub(crate) fn refused(root: &Path, base: &str) -> anyhow::Result<Vec<String>> {
-    let Ok(was) = git(root, &["show", &format!("{base}:{BUDGET}")]) else {
-        return Ok(Vec::new());
-    };
-    let now =
-        std::fs::read_to_string(root.join(BUDGET)).with_context(|| format!("reading {BUDGET}"))?;
-    let values = crate::git::declared(root, &format!("{base}..HEAD"), "Wasm-growth")
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-    let (grants, mut refused) = grants(&values);
-    refused.extend(raised(&lines(&was)?, &lines(&now)?, &grants));
-    Ok(refused)
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ALLOWANCE, grants, raised};
-    use std::collections::BTreeMap;
+    use super::{print, read};
 
-    /// A line rises by the allowance, or by what is declared for its module; a declaration not in
-    /// its form is refused, and so is a growth past both.
+    /// The file the train writes reads back as the lines it wrote.
     #[test]
-    fn a_line_rises_by_the_allowance_or_by_what_is_declared() {
-        let line = |name: &str, bytes| ((name.to_owned(), "x86_64-linux".to_owned()), bytes);
-        let was = BTreeMap::from([line("views_bg.wasm", 490_000)]);
-        let at = |bytes| BTreeMap::from([line("views_bg.wasm", bytes)]);
-        assert!(raised(&was, &at(490_000 + ALLOWANCE), &BTreeMap::new()).is_empty());
-        assert_eq!(
-            raised(&was, &at(490_001 + ALLOWANCE), &BTreeMap::new()).len(),
-            1
-        );
-        let (said, malformed) = grants(&["views_bg.wasm +19000: the topic bar".to_owned()]);
-        assert!(malformed.is_empty() && raised(&was, &at(509_000), &said).is_empty());
-        assert_eq!(raised(&was, &at(509_001), &said).len(), 1);
-        let both = |views, prodrome| {
-            BTreeMap::from([
-                line("views_bg.wasm", views),
-                line("prodrome_bg.wasm", prodrome),
-            ])
-        };
-        let was = both(490_000, 1_100_000);
-        assert!(
-            raised(&was, &both(490_000, 1_090_000), &BTreeMap::new()).is_empty(),
-            "a fall"
-        );
-        assert_eq!(
-            raised(&was, &both(509_000, 1_119_000), &said).len(),
-            1,
-            "a declaration is its module's alone"
-        );
-        let (_, malformed) = grants(&["views_bg.wasm +19000:".to_owned()]);
-        assert_eq!(malformed.len(), 1, "no reason");
-        let (_, malformed) = grants(&["views_bg.wasm 19000 bytes: why".to_owned()]);
-        assert_eq!(malformed.len(), 1, "no + before the bytes");
-        let prose =
-            "a change\n\nIts lines ride its merge beside\nWasm-growth:. Then the build runs.\n";
-        assert!(
-            crate::git::trailers("Wasm-growth", prose)
-                .expect("git reads")
-                .is_empty(),
-            "a line of prose that begins with the key is no declaration"
-        );
+    fn the_printed_file_reads_back() {
+        let budget = read("views_bg.wasm aarch64-linux 3760404 3776404\n").expect("it reads");
+        assert_eq!(read(&print(&budget)).expect("it reads"), budget);
+        assert!(read("views_bg.wasm aarch64-linux 3760404\n").is_err());
+        assert!(read("views.js aarch64-linux 1 2\n").is_err());
     }
 }

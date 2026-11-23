@@ -1,6 +1,6 @@
-//! The context budget (`context.toml`): the test refuses a unit's USE over its budget or its
-//! ratchet and a plan that no longer matches the code; a reading set grown past what the commits
-//! declare is the gate's history half (`scripts/context.sh growth`), since it reads the commits.
+//! The context budget (`context.toml`): the test refuses a plan that no longer matches the code; a
+//! unit's USE and every other derived figure is the gate's history half (`scripts/context.sh
+//! growth`), against what the commits declare.
 
 use super::repo;
 

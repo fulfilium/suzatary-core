@@ -172,33 +172,12 @@ for br in web/dist/*.br web/dist/*/*.br; do
 done
 echo "    app.js: $(stat -c %s web/dist/app.js) bytes, $(stat -c %s web/dist/app.js.br) bytes brotli"
 
-# Each shipped wasm module's bytes against its line of web/wasm-budget for the system that built it
-# (stdenv's `system`, set in a derivation and in `nix develop` alike); its brotli bytes are printed,
-# not judged. The development modules ship nowhere and have no line.
-case "${SUZATARY_WASM:-optimised}" in
-  optimised) ;;
-  development) echo "==> no budget for the development modules (.#suzatary-web judges the deploy's)"; exit 0 ;;
-  *) echo "build-web.sh: SUZATARY_WASM is optimised or development" >&2; exit 64 ;;
-esac
-echo "==> every wasm module within its budget (web/wasm-budget, ${system:?build-web.sh: no Nix system})"
-over=0
-for wasm in web/dist/*.wasm; do
-  # A module named by its bytes is judged by its plain name.
-  name=$(basename "$wasm" | sed -E 's/-[0-9a-f]{64}\././')
-  budget=$(grep -v '^#' web/wasm-budget | awk -v n="$name" -v s="$system" '$1 == n && $2 == s { print $3 }')
-  size=$(stat -c %s "$wasm")
-  brotli=$(stat -c %s "$wasm.br")
-  if [[ -z "$budget" ]]; then
-    echo "build-web.sh: $name has no line for $system in web/wasm-budget ($size bytes, $brotli brotli)" >&2
-    over=1
-  elif ((size > budget)); then
-    echo "build-web.sh: $name is $size bytes, over its $system budget of $budget (web/wasm-budget; $brotli brotli)" >&2
-    over=1
-  else
-    echo "    $name: $size of $budget bytes, $brotli brotli"
-  fi
-done
-((over == 0)) || exit 1
+# Each shipped wasm module against the limit web/wasm-budget records for this system; the
+# development modules ship nowhere and are not judged.
+if [[ "${SUZATARY_WASM:-optimised}" == optimised ]]; then
+  echo "==> every wasm module within its limit (web/wasm-budget, ${system:?build-web.sh: no Nix system})"
+  bash scripts/wasm-limits.sh web/wasm-budget "$system" web/dist/*.wasm
+fi
 
 echo "built: $(du -sh web/dist | cut -f1) in web/dist/"
 ls -1 web/dist

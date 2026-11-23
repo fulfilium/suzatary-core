@@ -93,13 +93,14 @@ completes_of() {
   done <<<"$body"
 }
 
-# PR <n>'s `Wasm-growth:` and `Reading-growth:` lines, which its merge carries as trailers.
+# PR <n>'s growth lines (`Reading-growth:`, `Use-growth:`, `Wasm-growth:`), which its merge carries
+# as trailers.
 growth_of() {
   local body line
   body="$("$gh" pr view "$1" --json body --jq .body)" || return 1
   while IFS= read -r line; do
     line="${line%$'\r'}"
-    [[ "$line" =~ ^[[:space:]]*(Wasm-growth|Reading-growth):[[:space:]]*(.+)$ ]] || continue
+    [[ "$line" =~ ^[[:space:]]*(Reading-growth|Use-growth|Wasm-growth):[[:space:]]*(.+)$ ]] || continue
     echo "${BASH_REMATCH[1]}: ${BASH_REMATCH[2]}"
   done <<<"$body"
 }
@@ -107,21 +108,21 @@ growth_of() {
 # PR <n>'s growth lines, ready to follow its other trailers.
 grown() { sed '/^$/d' <<<"${growth_lines[$1]}"; }
 
-# context.toml's `reading` set from the merged tree and staged; on stdout, what a commit says of it.
-reading_line() {
+# Every derived figure of the merged tree recorded and staged by the tool, the wasm limits from
+# origin/master's modules as its publication cached them (AGENTS.md, "Derived figures"): no build.
+# On stdout, the figures that moved, for the commit to say.
+figures_line() {
   [[ -e context.toml ]] || return 0
-  local before after commit line
-  figure() { sed -n 's/^reading = \([0-9]*\)$/\1/p' context.toml; }
-  before="$(figure)"
-  "$root/scripts/context.sh" record --merged >&2 && git add -- context.toml \
-    || die "the reading set of the merged tree could not be measured (above), so the train is not built."
-  after="$(figure)"
-  echo "The reading set: $after tokens, from $before on origin/master."
-  for commit in $(git rev-list --first-parent --reverse "origin/master..HEAD"); do
-    while IFS= read -r line; do
-      [[ -z "$line" ]] || echo "#$(pr_of "$commit"): Reading-growth: $line"
-    done < <(git log -1 --format='%(trailers:key=Reading-growth,valueonly,separator=%x0A)' "$commit")
-  done
+  local out modules=() files=(context.toml)
+  if [[ -e web/wasm-budget ]]; then
+    files+=(web/wasm-budget)
+    out="$("${SUZATARY_TRAIN_WASM:-$scripts/wasm-modules.sh}" origin/master)" \
+      || die "origin/master's wasm modules could not be fetched (above), so the train is not built."
+    mapfile -t modules <<<"$out"
+  fi
+  out="$("$tool" context --repo "$root" record ${modules[0]:+--wasm "${modules[@]}"})" && git add -- "${files[@]}" \
+    || die "the derived figures of the merged tree could not be measured (above), so the train is not built."
+  echo "The derived figures of the merged tree: ${out:-none moved}"
 }
 
 # Sets `app_bin`: SUZATARY_TRAIN_BIN, else the named commit's app from a cache, else the deployed one.
@@ -224,8 +225,8 @@ store_at() {
 # The roadmap commit a cut and a check read: what its origin publishes now.
 tasks_head() { git -C "$roadmap" rev-parse --verify origin/master; }
 
-# The train's last commit: the release the roadmap reads once the train's todos are done; $1 says
-# the reading set's line.
+# The train's last commit: the release the roadmap reads once the train's todos are done, with the
+# derived figures.
 cut_release() {
   find_roadmap origin/master
   [[ -n "$roadmap" ]] || return 0
@@ -253,10 +254,12 @@ cut_release() {
   # Else the tag would be refused only at land, after the whole gate.
   ! git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null \
     || die "the chain reads $version, and origin has v$version already (a tag no release on master names): the train is not built. Move or delete that tag, or complete a todo so the chain reads past it."
-  # No crate compiles any of them, so the release moves no gate key. The cut removed every fragment.
+  # The cut removed every fragment. The figures are recorded last, over exactly what commits.
   git add -- CHANGELOG.md app/release.toml && git rm -rq --cached --ignore-unmatch -- changelog.d
-  git commit --quiet -m "release: $version" ${1:+-m "$1"} \
-    -m "$(trailers Release "$version" Completes "${todos[*]}" Tasks "$tasks")" \
+  local said
+  said="$(figures_line)" || exit 1
+  git commit --quiet -m "release: $version" ${said:+-m "$said"} \
+    -m "$(trailers Release "$version" Completes "${todos[*]}" Tasks "$tasks" Figures "$figures")" \
     || die "the release $version did not commit (a hook?)."
   printf 'release %s%s\n' "$version" "$( ((${#todos[@]} == 0)) || printf ', completing %s' "${todos[*]}")"
 }
@@ -368,7 +371,7 @@ build() {
     subject="${subject:0:72}"
     subject="${subject%"${subject##*[![:space:]]}"}"
     trailer=()
-    said="$( (trailers Completes "$todos" Carries "${carried[*]}"; grown "$n") | sed '/^$/d')"
+    said="$( (trailers Completes "$todos" Carries "${carried[*]}"; for m in "$n" "${carried[@]}"; do grown "$m"; done) | sed '/^$/d')"
     [[ -z "$said" ]] || trailer=(-m "$said")
     said=""
     if ! git merge --quiet --no-ff -m "$subject" -m "${url_of[$n]}" "${trailer[@]}" "$head" >/dev/null 2>&1; then
@@ -381,7 +384,7 @@ build() {
       done
       if ((${#conflicts[@]})) && ((${#resolved[@]} == ${#conflicts[@]})) \
         && git commit --quiet -m "$subject" -m "${url_of[$n]}" \
-          -m "$( (trailers Completes "$todos" Carries "${carried[*]}" Joined "${resolved[*]}" Mentions "${resolved[*]}"; grown "$n") | sed '/^$/d')" \
+          -m "$( (trailers Completes "$todos" Carries "${carried[*]}" Joined "${resolved[*]}" Mentions "${resolved[*]}"; for m in "$n" "${carried[@]}"; do grown "$m"; done) | sed '/^$/d')" \
           >/dev/null; then
         said=" (joined ${resolved[*]})"
       else
@@ -407,15 +410,22 @@ build() {
   printf 'train is %s on origin/master %s\n' "$(git rev-parse --short HEAD)" "$(git rev-parse --short origin/master)"
   [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]] \
     || die "no PR merged ($(printf '#%s ' "${prs[@]}")skipped or already on master), so the train is master and there is nothing to gate."
-  local context
-  context="$(reading_line)" || exit 1
-  cut_release "$context"
-  # With no release to say it in, the line rides a commit of its own.
-  git diff --cached --quiet \
-    || git commit --quiet -m "context: the reading set of the merged tree" -m "$context" \
-    || die "the reading set's line did not commit (a hook?)."
+  local said cut
+  # The train's commit's `Figures:` trailer, where context.toml stands.
+  [[ ! -e context.toml ]] || figures="over origin/master $(git rev-parse --short=12 origin/master)"
+  cut="$(git rev-parse HEAD)"
+  cut_release
+  # With no release to say them in, the figures ride a commit of their own: the train's last commit
+  # records them either way, which the growth check reads.
+  if [[ -n "$figures" && "$(git rev-parse HEAD)" == "$cut" ]]; then
+    said="$(figures_line)" || exit 1
+    git commit --quiet --allow-empty -m "figures: the derived figures of the merged tree" -m "$said" \
+      -m "$(trailers Figures "$figures")" \
+      || die "the derived figures did not commit (a hook?)."
+  fi
 }
 
+figures=""
 halves=(tree live)
 
 # reading <var> <commit> [--half <half>] [--full]: <var> := ok, failed, unknown or finding, of one

@@ -597,8 +597,8 @@ changelog_entry() {
   echo "changelog: $added rides the change"
 }
 step tree changelog       unkept history  changelog_entry
-# What the commit messages since the merge base declare of the reading set and the wasm budget,
-# by the train's tool (a build of seconds, no workspace compile).
+# Every derived figure against what the commit messages since the merge base declare, by the
+# train's tool (a build of seconds, no workspace compile).
 step history growth       unkept history  scripts/context.sh growth
 
 lane=live

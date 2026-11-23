@@ -1,74 +1,9 @@
-# The bytes of each wasm module the web app ships, at most, as it ships: after wasm-opt, before
-# compression, by the Nix system that builds it. Each module is `packages.${system}`'s, and an
-# aarch64 build of the same revision is not byte for byte an x86_64 one. The size after wasm-opt
-# moves with the code by about the bytes the code adds; the brotli size of nearly the same code
-# moved by 2.8 KB for 300 bytes added, so build-web.sh prints the brotli bytes, what a first visit
-# downloads, and judges nothing by them.
-#
-# A line is its system's figure for the merged tree, as `nix build` makes it, rounded up to the
-# next multiple of 10,000 bytes. scripts/build-web.sh refuses a module over its system's line, or
-# one with no line. A line only moves down: app/cli/tests/guards/wasm_budget.rs refuses one raised
-# against the merge base by more than 16,000 bytes, unless the pull request says why on a
-# `Wasm-growth: <module> +<bytes>: <reason>` line (AGENTS.md, "Releases and `Completes:`").
-#
-# <module> <system> <bytes>
-# #510 set every line on 2026-11-15: x86_64 by `nix build`, aarch64 from the runners' gate run.
-# localwrites stage 3 (c) raised four lines: the tab's fold reads each conversation as the box's
-# transcript, claims and all, the tab seals a question and a stop, and it keeps its own lines'
-# keys (the pull request's `Wasm-growth:` lines). At its review, prodrome's line was set from the
-# figure of the tree merged with 2.1.174 (4,940,218), with what the review's faults cost: the next
-# 10,000 above it. aarch64 is the x86_64 figure plus the runners' difference, rounded up. At its
-# third review, both lines were set from the tree merged with 2.1.181 (prodrome 4,958,141, views
-# 3,636,774): the next 10,000 above on x86_64, and 10,000 more on aarch64. This round's bytes are
-# `Later` as its own answer, its sentence and the waiting a tab's stores read, and the fold of a post
-# (the box's alone, nothing in the modules). Merged with 2.1.184, whose Prodrome pin set master's
-# x86_64 line at 4,850,000 (its figure 4,847,977), the merged tree's figures are prodrome 4,967,146
-# (this pull request's 119,169 over master's) and views 3,636,647 (31,695 over master's 3,604,952),
-# and the lines are set from them by the same rule. Its pull request (c2) set both lines again from
-# its own figures on the same master (prodrome 4,980,979, views 3,682,901), by the same rule: an own
-# line's ruling and its words, the device's acted refusals, a begun topic's one seal, the clock's
-# bounds and words, and the stream's `Lost` in every page's inputs. At its review, both lines were set
-# again from its figures (prodrome 4,992,615, views 3,704,090): a refusal's words as a sum, the
-# refusals of topics not held, the claim of a take-back, and the draft page's refusals. At its second
-# review, views' lines from its figure 3,712,201: words placed before they are claimed, a draft read
-# before a take-back, and a refused topic's page. At its third, from its figures (prodrome
-# 5,007,638, views 3,707,050): views down with the claim deleted, prodrome up with the one owner
-# of which own records may go moved into the core. At its fourth, prodrome from its figure
-# 5,015,176: a seal answers the own records its line rests on, kept again beside it. The
-# Prodrome pin at 9fe98a4 (huskstoreup) set prodrome's lines from the tree merged with 2.1.189
-# (5,021,662, 2,185 over master's 5,019,477: the husk read where the schema has husks, the sender,
-# and `Trust`'s vouched set), by the same rule.
-# tapsecretflake keeps a value field's place (viewtree's slot): merged with 2.1.192, views
-# 3,711,939 (+4,889 over master's 3,707,050), so both views lines rise by 10,000.
-# localwrites stage 3 (the tab's `Again`, the one-step seal, and the rule asking the fold's question
-# of an edit), merged with 2.1.200 (prodrome 5,024,801, views 3,711,939): prodrome 5,066,712
-# (+41,911: the `Again` seal and its edit's two lines, the rule's reading after a line and the
-# edit it takes up, the seal's tagged answer, the line a ruling is drawn on, a refused edit given
-# back whole, and a refused own line's print let go), so its lines rise by 40,000; views 3,716,279
-# (+4,340: the composer's edit mode, its kept files and the drawn lines it seals over, less the
-# routes' edit and regenerate acts), within its lines.
-# undoflicker, merged with 2.1.215: views 3,726,097 (+7,208 over master's 3,718,889: each
-# unsent act's todo, name and instant read into the todos page, the acts it keeps until a reading
-# holds them, and the owed todos a tree question carries), so both views lines rise by 10,000.
-# cardsaysto, merged with 2.1.219: views 3,760,404 (+33,487 over master's 3,726,917: the card's
-# `reaches`, its tagged sums decoded in the tab, and the closed card's line drawn from it), so both
-# views lines rise by 40,000; prodrome 5,072,408 (+3,111 over master's 5,069,297: the same card
-# built in the tab's reading), so both prodrome lines rise by 10,000.
-# attendeeaddress, merged with 2.1.221: prodrome 5,074,430 (+2,022 over master's: an attendee's
-# name and its address check, the attendees' count, the calendar's door for a plugin's items) and
-# views 3,760,435, each within its line.
-# chainsinworker (the chains held by the core in its worker), merged with 2.1.217: prodrome 5,122,677
-# (+59,878 over 2.1.215's 5,062,799: the todo chain as a store of objects, `Chain`, its policy,
-# let-go, carry and readings), so its lines rise by 60,000. At its second review, prodrome
-# 5,131,058 (+8,381: the policy heard by the box's stamp, the closed check at load, the join of two
-# replicas, the planned act and carry), so its lines rise by 10,000. At its third, prodrome
-# 5,125,556 (-5,502: a plan is made without a copy of the replica, and a hold behind a refusal is
-# derived, never stored), so its lines fall by 5,000. Merged with 2.1.222, prodrome 5,135,596
-# (+63,188 over master's 5,072,408). Merged with 2.1.227, prodrome 5,136,952 and views 3,762,791;
-# prodrome's lines are that figure rounded up to the next 10,000, and the next above it for aarch64.
-views_bg.wasm x86_64-linux 3770000
-prodrome_bg.wasm x86_64-linux 5140000
-typst_bg.wasm x86_64-linux 22020000
-views_bg.wasm aarch64-linux 3780000
-prodrome_bg.wasm aarch64-linux 5150000
-typst_bg.wasm aarch64-linux 22090000
+# <module> <system> <measured> <limit>, written by the train (AGENTS.md, "Derived figures"):
+# `measured` is the module's bytes after wasm-opt in the tree the train started from, one train
+# behind; `limit` adds the allowance for each merged pull request and what they declare.
+prodrome_bg.wasm aarch64-linux 5150000 5150000
+typst_bg.wasm aarch64-linux 22090000 22090000
+views_bg.wasm aarch64-linux 3780000 3780000
+prodrome_bg.wasm x86_64-linux 5140000 5140000
+typst_bg.wasm x86_64-linux 22020000 22020000
+views_bg.wasm x86_64-linux 3770000 3770000

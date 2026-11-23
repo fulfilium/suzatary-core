@@ -678,15 +678,15 @@ fn merge_trailer(t: &Train, n: u32, key: &str) -> String {
     ])
 }
 
-/// A PR's `Wasm-growth:` lines ride on its merge commit as trailers, each as written, where the
-/// wasm budget's guard reads them; a PR declaring none carries none.
+/// A PR's growth lines ride on its merge commit as trailers, each as written, where the growth
+/// check reads them; a PR declaring none carries none.
 #[test]
 fn train_build_carries_a_pr_s_declared_wasm_growth_on_its_merge() {
     let t = Train::new("wasm-growth");
     t.pr(3, "grows the pages", &[("a.txt", "a\n")]);
     std::fs::write(
         t.scratch.join("prs/3.body"),
-        "The topic bar.\n\nWasm-growth: views_bg.wasm +19000: the topic bar's sheet\nWasm-growth: prodrome_bg.wasm +5000: held values\n",
+        "The topic bar.\n\nWasm-growth: views_bg.wasm +19000: the topic bar's sheet\nWasm-growth: prodrome_bg.wasm +5000: held values\nUse-growth: lines +900: the rule's view\n",
     )
     .expect("a body");
     t.pr(4, "beside", &[("c.txt", "c\n")]);
@@ -707,7 +707,8 @@ fn train_build_carries_a_pr_s_declared_wasm_growth_on_its_merge() {
     let grown = merge(3);
     assert!(
         grown.contains("Wasm-growth: views_bg.wasm +19000: the topic bar's sheet")
-            && grown.contains("Wasm-growth: prodrome_bg.wasm +5000: held values"),
+            && grown.contains("Wasm-growth: prodrome_bg.wasm +5000: held values")
+            && grown.contains("Use-growth: lines +900: the rule's view"),
         "both lines, as written: {grown}"
     );
     assert!(
@@ -717,51 +718,342 @@ fn train_build_carries_a_pr_s_declared_wasm_growth_on_its_merge() {
     );
 }
 
-/// The stub of `scripts/context.sh`: the reading set of a tree is the bytes of its `.txt` files.
-const CONTEXT: &str = "#!/bin/sh\n[ \"$1 $2\" = \"record --merged\" ] || exit 64\nn=$(cat ./*.txt 2>/dev/null | wc -c)\nsed -i \"s/^reading = .*/reading = $n/\" context.toml\n";
+/// A `context.toml` the train's tool reads: two units whose USE is their README's characters over
+/// 2.5, over a budget of 10 tokens: `lib`, which the ratchet holds at 40, and `small`. The reading
+/// set holds `changelog.d`, which a release cut empties, and `web`, which holds the budget.
+const CONTEXT_PLAN: &str = r#"in_force = []
+library = []
 
-/// Two PRs that each grow the reading set ride one train, since the build sets `reading` from the
-/// merged tree and its commit carries each declared growth.
+[budget]
+use = 10
+develop = 500000
+tests = 500000
+allowance = 2000
+
+[ratchet]
+reading = 0
+
+[ratchet.use]
+lib = 40
+
+[tokens]
+calibrated = "2026-11-04T07:18:17Z"
+sample = []
+
+[tokens.ratio]
+rust = 2.5
+typescript = 2.5
+markdown = 2.5
+shell = 2.5
+nix = 2.5
+toml = 2.5
+typst = 2.5
+other = 2.5
+
+[repository]
+include = ["changelog.d", "web"]
+records = []
+documents = "docs"
+
+[[unit]]
+name = "lib"
+path = "lib"
+shape = "crate"
+depends = []
+scripts = []
+
+[[unit]]
+name = "small"
+path = "small"
+shape = "crate"
+depends = []
+scripts = []
+"#;
+
+/// The stub of `scripts/wasm-modules.sh <rev>`: one module, `views_bg.wasm`, of 1,000 bytes and the
+/// number each `grow/*` file of `<rev>` holds.
+const WASM: &str = r#"#!/bin/sh
+n=1000
+for f in $(git ls-tree --name-only "$1" grow/); do n=$((n + $(git show "$1:$f"))); done
+mkdir -p "$TRAIN_PROBES.wasm"
+head -c "$n" /dev/zero >"$TRAIN_PROBES.wasm/views_bg.wasm"
+echo test-system
+echo "$TRAIN_PROBES.wasm/views_bg.wasm"
+"#;
+
+/// Master's figures: the plan, `lib`'s README of 100 characters, `small`'s of 20, and the module's
+/// line.
+fn figure_files() -> Vec<(&'static str, String)> {
+    vec![
+        ("context.toml", CONTEXT_PLAN.to_owned()),
+        ("lib/README.md", format!("{}\n", "a".repeat(99))),
+        ("small/README.md", format!("{}\n", "a".repeat(19))),
+        (
+            "web/wasm-budget",
+            "# <module> <system> <measured> <limit>\nviews_bg.wasm test-system 1000 17000\n"
+                .to_owned(),
+        ),
+    ]
+}
+
+impl Train {
+    /// A train over master holding `figure_files`.
+    fn figured(name: &str) -> Self {
+        let t = Train::new(name);
+        let files = figure_files();
+        let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
+        t.master_moves(&files);
+        t
+    }
+
+    /// The pull request's description.
+    fn says(&self, n: u32, body: &str) {
+        std::fs::write(self.scratch.join(format!("prs/{n}.body")), body).expect("a body");
+    }
+
+    /// `SUZATARY_TRAIN_WASM`, the stub of the module fetch.
+    fn wasm_seam(&self) -> (&'static str, String) {
+        let bin = self.scratch.join("bin");
+        let _ = suzatary_testkit::fake_program(&bin, "wasm", WASM);
+        (
+            "SUZATARY_TRAIN_WASM",
+            bin.join("wasm").to_string_lossy().into_owned(),
+        )
+    }
+
+    /// `train build <prs>` with the stub modules.
+    fn build_figured(&self, prs: &[&str]) -> Output {
+        let (key, value) = self.wasm_seam();
+        let mut args = vec!["build"];
+        args.extend(prs);
+        self.train_with(&args, &[(key, value.as_str())])
+    }
+
+    /// `scripts/wasm-limits.sh` on the train's budget for a `views_bg.wasm` of `bytes`, as the web
+    /// build runs it.
+    fn limits(&self, bytes: usize) -> Output {
+        let dir = self.scratch.join(format!("module-{bytes}"));
+        std::fs::create_dir_all(&dir).expect("a directory");
+        std::fs::write(
+            dir.join("budget"),
+            self.git(&["show", "train:web/wasm-budget"]),
+        )
+        .expect("the budget");
+        std::fs::write(dir.join("views_bg.wasm"), vec![0_u8; bytes]).expect("the module");
+        isolated(Command::new(repo().join("scripts/wasm-limits.sh")))
+            .arg(dir.join("budget"))
+            .arg("test-system")
+            .arg(dir.join("views_bg.wasm"))
+            .output()
+            .expect("the script runs")
+    }
+}
+
+/// The train's tool, built where `train.sh` builds it with its seams, judging the growth of
+/// `checkout`.
+fn growth(checkout: &Path) -> Output {
+    static TOOL: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    let tool = TOOL.get_or_init(|| {
+        let common = run_git(
+            &repo(),
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        );
+        let target = Path::new(&common).join("train/tool-seams");
+        let built = Command::new("cargo")
+            .args([
+                "build",
+                "--quiet",
+                "--locked",
+                "-p",
+                "suzatary-tooling",
+                "--features",
+                "seams",
+            ])
+            .arg("--manifest-path")
+            .arg(repo().join("app/Cargo.toml"))
+            .arg("--target-dir")
+            .arg(&target)
+            .status()
+            .expect("cargo runs");
+        assert!(built.success(), "the train's tool builds");
+        target.join("debug/train")
+    });
+    let mut cmd = isolated(Command::new(tool));
+    cmd.args(["context", "--repo"]).arg(checkout).arg("growth");
+    cmd.output().expect("the tool runs")
+}
+
+/// Two pull requests that grow one module and a third that shrinks a unit ride one train with no
+/// conflict, since none writes a figure. The train's commit records the module's limit (master's
+/// bytes, three allowances and both declarations) and the unit's fall, copies no reason, and is
+/// judged within; the web build passes the summed module, and a second gate changes nothing.
 #[test]
-fn train_build_sets_the_reading_set_from_the_merged_tree() {
-    let t = Train::new("reading");
-    t.master_releases(
-        &[
-            ("context.toml", "[ratchet]\nreading = 10\n"),
-            ("scripts/context.sh", CONTEXT),
-        ],
-        "0.1.0",
+fn train_build_records_the_derived_figures_of_the_merged_tree() {
+    let t = Train::figured("figures");
+    t.pr(1, "grows by a", &[("grow/1", "20000\n")]);
+    t.says(
+        1,
+        "The a.\n\nWasm-growth: views_bg.wasm +20000: the a sheet\n",
     );
-    t.pr(1, "grows by a", &[("a.txt", "aaaa\n")]);
-    std::fs::write(
-        t.scratch.join("prs/1.body"),
-        "The a.\n\nReading-growth: +3000: the a's laws\n",
-    )
-    .expect("a body");
-    t.pr(2, "grows by b", &[("b.txt", "bbbbbb\n")]);
-    let out = t.train(&["build", "1", "2"]);
-    assert!(out.status.success(), "build: {}", text(&out.stderr));
-    assert_eq!(
-        t.merges().len(),
+    t.pr(2, "grows by b", &[("grow/2", "30000\n")]);
+    t.says(
+        2,
+        "The b.\n\nWasm-growth: views_bg.wasm +30000: the b sheet\n",
+    );
+    t.pr(
         3,
-        "both merged, and the figure: {:?}",
-        t.merges()
+        "shrinks lib",
+        &[("lib/README.md", &format!("{}\n", "a".repeat(49)))],
+    );
+    let out = t.build_figured(&["1", "2", "3"]);
+    assert!(out.status.success(), "build: {}", text(&out.stderr));
+    let merges = t.merges();
+    assert!(
+        merges.len() == 4 && merges[3] == "figures: the derived figures of the merged tree",
+        "all three merged, and the figures: {merges:?}"
+    );
+    let budget = t.git(&["show", "train:web/wasm-budget"]);
+    assert!(
+        budget
+            .lines()
+            .any(|l| l == "views_bg.wasm test-system 1000 99000"),
+        "1,000 at master, 3 × 16,000 and 20,000 + 30,000 declared: {budget}"
     );
     assert!(
         t.git(&["show", "train:context.toml"])
-            .contains("reading = 12"),
-        "the merged tree's figure"
+            .lines()
+            .any(|l| l == "lib = 20"),
+        "the ratchet falls by itself"
     );
     let said = t.git(&["log", "-1", "--format=%B", "train"]);
     assert!(
-        said.starts_with("context: the reading set of the merged tree")
-            && said.contains("The reading set: 12 tokens, from 10 on origin/master.")
-            && said.contains("#1: Reading-growth: +3000: the a's laws"),
+        said.contains("lib's USE: 20, from 40")
+            && said.contains("Figures: over origin/master ")
+            && !said.contains("the a sheet"),
         "{said}"
     );
+    let judged = growth(&t.work());
+    assert!(judged.status.success(), "growth: {}", text(&judged.stderr));
+    let built = t.limits(51_000);
+    assert!(
+        built.status.success(),
+        "the web build: {}",
+        text(&built.stderr)
+    );
+    let head = t.git(&["rev-parse", "train"]);
+    for _ in 0..2 {
+        let (key, value) = t.wasm_seam();
+        assert!(
+            t.train_with(&["gate"], &[(key, value.as_str())])
+                .status
+                .success()
+        );
+    }
     assert_eq!(
-        merge_trailer(&t, 1, "Reading-growth"),
-        "+3000: the a's laws"
+        t.git(&["rev-parse", "train"]),
+        head,
+        "a gate writes nothing"
+    );
+}
+
+/// What no pull request declares is refused: a module past its limit by the web build, naming the
+/// line to write; a unit that crosses the budget by the growth check, naming the line and the merge
+/// that moved it, though no ratchet held it; and a figure written by hand on a branch.
+#[test]
+fn train_growth_refuses_an_undeclared_growth_a_crossed_budget_and_a_hand_edit() {
+    let t = Train::figured("undeclared");
+    t.pr(1, "grows", &[("grow/1", "40000\n")]);
+    t.pr(
+        2,
+        "grows small",
+        &[("small/README.md", &format!("{}\n", "a".repeat(49)))],
+    );
+    let out = t.build_figured(&["1", "2"]);
+    assert!(out.status.success(), "build: {}", text(&out.stderr));
+    let built = t.limits(41_000);
+    assert!(
+        !built.status.success()
+            && text(&built.stderr)
+                .contains("views_bg.wasm is 41000 bytes, over its limit of 33000")
+            && text(&built.stderr).contains("`Wasm-growth: views_bg.wasm +8000: <reason>`"),
+        "the web build: {}",
+        text(&built.stderr)
+    );
+    let judged = growth(&t.work());
+    let said = text(&judged.stderr);
+    assert!(
+        !judged.status.success()
+            && said.contains("small's USE is 20 tokens, over the 10")
+            && said.contains("`Use-growth: small +10: <reason>`")
+            && said.contains("moved by Merge #2"),
+        "growth: {said}"
+    );
+    t.pr(
+        3,
+        "raises its line",
+        &[(
+            "web/wasm-budget",
+            "# <module> <system> <measured> <limit>\nviews_bg.wasm test-system 1000 90000\n",
+        )],
+    );
+    let judged = growth(&t.author());
+    let said = text(&judged.stderr);
+    assert!(
+        !judged.status.success()
+            && said.contains(
+                "web/wasm-budget: views_bg.wasm on test-system: measured 1000, limit 90000"
+            )
+            && said.contains("`Wasm-growth: <module> +<bytes>: <reason>`"),
+        "growth: {said}"
+    );
+}
+
+/// A branch's own gate grants a declaration once, though two of its commits repeat it beside two
+/// merges of master, which count as no merge.
+#[test]
+fn growth_on_a_branch_grants_a_repeated_declaration_once_through_merges_of_master() {
+    let t = Train::figured("branch");
+    let author = t.author();
+    let grown = |chars: usize| format!("{}\n", "a".repeat(chars - 1));
+    run_git(&author, &["checkout", "-q", "-B", "grows", "origin/master"]);
+    write(&author, "lib/README.md", &grown(12_600));
+    run_git(
+        &author,
+        &[
+            "commit",
+            "-qam",
+            "lib grows\n\nUse-growth: lib +3000: its laws\nReading-growth: +3100: its laws",
+        ],
+    );
+    for file in ["a.txt", "b.txt"] {
+        t.master_moves(&[(file, "moved\n")]);
+        run_git(&author, &["checkout", "-q", "grows"]);
+        run_git(&author, &["merge", "-q", "--no-edit", "origin/master"]);
+    }
+    write(&author, "c.txt", "c\n");
+    run_git(&author, &["add", "c.txt"]);
+    run_git(
+        &author,
+        &[
+            "commit",
+            "-qm",
+            "again\n\nUse-growth: lib +3000: its laws\nReading-growth: +3100: its laws",
+        ],
+    );
+    let judged = growth(&author);
+    assert!(
+        judged.status.success(),
+        "40 + 2,000 + 3,000: {}",
+        text(&judged.stderr)
+    );
+    write(&author, "lib/README.md", &grown(12_603));
+    run_git(&author, &["commit", "-qam", "lib grows a little more"]);
+    let judged = growth(&author);
+    assert!(
+        !judged.status.success()
+            && text(&judged.stderr).contains("lib's USE is 5041 tokens, over the 5040"),
+        "a repeat grants nothing: {}",
+        text(&judged.stderr)
     );
 }
 
@@ -2911,6 +3203,64 @@ fn published_roadmap(data: &Path, name: &str) -> PathBuf {
 /// The release, cut at build from the roadmap commit `Tasks:` names, is pushed with its tag,
 /// published, then recorded in ONE roadmap commit after door 2, which completes the `Completes:`
 /// todos (a private one on the upkeep chain, named nowhere public) once.
+/// Where a roadmap is mounted, the release commit records the figures and carries `Figures:`, and
+/// they are the measure of exactly the tree it commits: the cut removes a fragment the reading set
+/// counts, and the gate's growth check, the real tool's, passes on the commit.
+#[test]
+fn train_release_records_the_derived_figures() {
+    let t = Train::new("release-figures");
+    let data = t.scratch.join("data");
+    std::fs::create_dir_all(&data).expect("a data root");
+    let instance = a_release_deployment(&data);
+    let mut env = release_env(&instance);
+    let (key, value) = t.wasm_seam();
+    env.push((key, value));
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let files: Vec<(&str, String)> = release_files("1.1.0")
+        .into_iter()
+        .chain(figure_files())
+        .collect();
+    let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
+    t.master_moves(&files);
+    t.pr(
+        1,
+        "grows",
+        &[
+            ("grow/1", "5000\n"),
+            ("changelog.d/grows.md", "### Added\n- it\n"),
+        ],
+    );
+    let built = t.train_with(&["build", "1"], &env);
+    assert!(built.status.success(), "build: {}", text(&built.stderr));
+    assert!(
+        t.git(&["log", "-1", "--format=%s", "train"])
+            .starts_with("release: ")
+    );
+    assert!(
+        t.git(&[
+            "log",
+            "-1",
+            "--format=%(trailers:key=Figures,valueonly)",
+            "train"
+        ])
+        .starts_with("over origin/master "),
+        "the release is the train's commit that records the figures"
+    );
+    assert!(
+        t.git(&["show", "train:web/wasm-budget"])
+            .lines()
+            .any(|l| l == "views_bg.wasm test-system 1000 17000"),
+        "one merge's allowance over master's bytes"
+    );
+    assert_eq!(
+        t.git(&["ls-tree", "--name-only", "train", "changelog.d/"]),
+        "",
+        "the cut removed the fragment the reading set counted"
+    );
+    let judged = growth(&t.work());
+    assert!(judged.status.success(), "growth: {}", text(&judged.stderr));
+}
+
 #[test]
 fn train_releases_what_the_roadmap_reads_and_records_it_there() {
     let t = Train::new("release");

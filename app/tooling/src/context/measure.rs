@@ -164,7 +164,10 @@ pub fn measure(plan: &Plan, tree: &Tree) -> Report {
         read.extend(scripts(unit, tree));
     }
     for path in &plan.repository.include {
-        read.extend(tree.under(path).map(|(file, text)| {
+        let files = tree
+            .under(path)
+            .filter(|(file, _)| !RECORDING.contains(file));
+        read.extend(files.map(|(file, text)| {
             if Kind::of(file) == Kind::Rust {
                 (file, interface::production(text))
             } else {
@@ -231,11 +234,18 @@ fn is_plan(path: &str, documents: &str) -> bool {
         })
 }
 
+/// The files that record the derived figures, which no figure counts: the train writes them after
+/// it measures, so a figure is the measure of exactly the tree that records it.
+const RECORDING: [&str; 2] = [super::plan::FILE, super::wasm::BUDGET];
+
 /// The files of `unit`, sorted into its parts.
 fn parts<'a>(unit: &'a Unit, tree: &'a Tree) -> Parts<'a> {
     let mut parts = Parts::default();
     let readme = format!("{}/README.md", unit.path);
-    for (path, text) in tree.under(&unit.path) {
+    for (path, text) in tree
+        .under(&unit.path)
+        .filter(|(path, _)| !RECORDING.contains(path))
+    {
         let inside = &path[unit.path.len() + 1..];
         let tested = inside
             .split_once('/')

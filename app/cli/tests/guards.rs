@@ -61,8 +61,6 @@ use scratch::{Scratch, repo};
 mod triage_auth;
 #[path = "guards/triage_pass.rs"]
 mod triage_pass;
-#[path = "guards/wasm_budget.rs"]
-mod wasm_budget;
 
 fn run(script: &Path, stdin: &str) -> Output {
     let mut child = Command::new(script)

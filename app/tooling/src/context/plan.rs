@@ -37,11 +37,11 @@ pub struct Budget {
     pub use_: u64,
     pub develop: u64,
     pub tests: u64,
-    /// How far a change may grow the reading set past the ratchet.
+    /// How far each merged pull request may grow a tokens figure, undeclared.
     pub allowance: u64,
 }
 
-/// The figures over budget as last recorded, which may only fall.
+/// The tokens figures as the train's build last recorded them (`figures`).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ratchet {
@@ -49,16 +49,6 @@ pub struct Ratchet {
     /// The USE of each unit over `budget.use`; a unit absent here is held to the budget.
     #[serde(rename = "use", default)]
     pub use_: BTreeMap<String, u64>,
-}
-
-impl Ratchet {
-    /// The most USE `unit` may have: its ratchet plus the allowance, or else the budget.
-    #[must_use]
-    pub fn use_limit(&self, unit: &str, budget: &Budget) -> u64 {
-        self.use_
-            .get(unit)
-            .map_or(budget.use_, |recorded| recorded + budget.allowance)
-    }
 }
 
 /// The ratchet of `text`, a `context.toml` whose other tables may be another version's.

@@ -19,8 +19,9 @@ use std::time::Duration;
 
 /// The train's own test seams and signing keys, and the variables it hands its own children: a
 /// gate is handed none.
-pub(crate) const TRAIN_READS: [&str; 13] = [
+pub(crate) const TRAIN_READS: [&str; 14] = [
     "SUZATARY_TRAIN_BIN",
+    "SUZATARY_TRAIN_WASM",
     "SUZATARY_TRAIN_GATE",
     "SUZATARY_TRAIN_GROWTH",
     "SUZATARY_TRAIN_GH",
