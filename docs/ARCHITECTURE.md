@@ -32,7 +32,7 @@ units and their dependencies. The database's contract is the Prodrome's `SPEC.md
    android/ portal (a WebView, push)
 
  scripts/safe-push.sh ─▶ the data repository's remote      vault ─▶ Proton Drive
- suzatary send / a tap ─▶ io::smtp (the one path outward for mail)
+ suzatary send / a tap ─▶ io_mail::smtp (the one path outward for mail)
  plugins timer ─▶ app/plugin host ─▶ plugin-ics ─▶ cache/plugins/<name>/store
 ```
 

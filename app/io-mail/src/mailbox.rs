@@ -877,7 +877,7 @@ impl Mailbox for Notmuch {
 
 /// A file read for the model, a PDF with its `pdftotext` layer; `Err` is a `pdftotext` failure,
 /// a fact about the box, not the file.
-pub(crate) fn read_of(
+pub fn read_of(
     file: &HeldFile,
     name: &str,
     mime: &str,

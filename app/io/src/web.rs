@@ -68,7 +68,7 @@ impl Fetcher {
                 page.status
             )
         } else if page.kind.contains("html") {
-            capped(&crate::mailbox::text::html_to_text(&page.body))
+            capped(&suzatary_io_mail::mailbox::text::html_to_text(&page.body))
         } else if page.kind.starts_with("text/")
             || page.kind.contains("json")
             || page.kind.contains("xml")
@@ -208,7 +208,7 @@ fn attribute(tag: &str, name: &str) -> Option<String> {
 }
 
 fn inline_text(html: &str) -> String {
-    crate::mailbox::text::html_to_text(html)
+    suzatary_io_mail::mailbox::text::html_to_text(html)
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")

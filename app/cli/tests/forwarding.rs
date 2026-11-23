@@ -100,7 +100,9 @@ impl Reveal for Originals {
         } else if self.0.len() as u64 != size {
             Reopened::Resized
         } else {
-            Reopened::Read(suzatary_io::mailbox::forwarded::original(self.0.clone()))
+            Reopened::Read(suzatary_io_mail::mailbox::forwarded::original(
+                self.0.clone(),
+            ))
         })
     }
 }

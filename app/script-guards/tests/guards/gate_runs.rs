@@ -1031,7 +1031,7 @@ fn merge_gate_keys_the_ignored_counterexamples_and_the_time_zone() {
 fn units_fixture(gate: &Gate) {
     gate.write(
         "app/Cargo.toml",
-        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io-local\", \"io-typeset\", \"io-chains\", \"io-model\", \"io\", \"cli\", \"wasm\"]\n",
+        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io-local\", \"io-typeset\", \"io-chains\", \"io-model\", \"io-mail\", \"io\", \"cli\", \"wasm\"]\n",
     );
     for (dir, name, dep) in [
         ("stores", "suzatary-stores", ""),
@@ -1044,6 +1044,7 @@ fn units_fixture(gate: &Gate) {
         ("io-typeset", "suzatary-io-typeset", ""),
         ("io-chains", "suzatary-io-chains", ""),
         ("io-model", "suzatary-io-model", ""),
+        ("io-mail", "suzatary-io-mail", ""),
         (
             "io",
             "suzatary-io",
@@ -1127,11 +1128,12 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
             "suzatary-io",
             "suzatary-io-chains",
             "suzatary-io-model",
+            "suzatary-io-mail",
             "suzatary"
         ]),
         "the member, the member that depends on it and the members whose declared reads are \
-         inside it (io-chains and io-model read io's fixtures), never the stores, the secretary or \
-         the wasm module"
+         inside it (io-chains, io-model and io-mail read io's fixtures), never the stores, the \
+         secretary or the wasm module"
     );
     assert!(!gate.units_ran().contains_key("web-test"));
 

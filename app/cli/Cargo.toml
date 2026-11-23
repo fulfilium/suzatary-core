@@ -61,6 +61,7 @@ suzatary-io-local.workspace = true
 suzatary-io-typeset.workspace = true
 suzatary-io-chains.workspace = true
 suzatary-io-model.workspace = true
+suzatary-io-mail.workspace = true
 suzatary-os.workspace = true
 # The context budget's measure, which the train runs without building this binary.
 suzatary-tooling.workspace = true

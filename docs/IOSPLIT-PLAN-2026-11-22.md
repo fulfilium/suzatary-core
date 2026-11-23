@@ -178,12 +178,14 @@ does not cover.
 Each stage is one pull request that lands alone: `git mv` of whole files, a manifest and a root,
 every path into them rewritten in the same pull request (io's own `crate::` paths, rustdoc links
 among them, and every dependent's `suzatary_io::` paths), and the lists that name crates
-(`app/Cargo.toml`, `flake.nix`'s `members`, `scripts/merge-gate.sh`'s `web_app_skips` and
-`live_reads`, `context.toml`'s unit and its dependents' `depends`). A move changes an item's path,
-never its name or its body; an item that is `pub(crate)` and used across the cut becomes `pub`,
-and the pull request names each one. **No stage leaves a re-export**, so none has one to delete.
-Each stage runs `scripts/context.sh order io docs/IOSPLIT-CUT.toml` first, and deletes its layer
-from the cut.
+(`app/Cargo.toml`, `flake.nix`'s `members`, `scripts/merge-gate.sh`'s `web_app_skips`, `live_reads`
+and, for a crate whose tests read a fixture in another, `crate_reads`, `context.toml`'s unit and its
+dependents' `depends`, the writes guard's crate list in `app/cli/tests/writes.rs` and the gate
+guard's fixture workspace in `app/script-guards/tests/guards/gate_runs.rs`). A move changes an
+item's path, never its name or its body; an item that is `pub(crate)` and used across the cut
+becomes `pub`, and the pull request names each one. **No stage leaves a re-export**, so none has
+one to delete. Each stage runs `scripts/context.sh order io docs/IOSPLIT-CUT.toml` first, and
+deletes its layer from the cut.
 
 | # | crate | files moved | waits for |
 |---|---|---|---|
@@ -192,7 +194,7 @@ from the cut.
 | 3 | `io-local` | 20; `docs::shard`, `Docs::sharded`, `Pdftotext::layer` and `Unlayered` (`mailbox`) become `pub`, and the PDFs tests make move to `suzatary_testkit::pdf` | stage 2 |
 | 4 | `io-typeset` | 5, and `tests/templates.rs` | stage 2 |
 | 5 | `io-chains` | 12, and io's eight store tests, which reach the fixture trees they read in `app/io/tests`; none becomes `pub` | stage 3 (the changes in flight to `objects.rs`, `plugin_store.rs`, `ignores.rs` and the calendar landed by 2.1.232) |
-| 6 | `io-mail` | 21 | stage 5, and the change in flight to `google.rs` |
+| 6 | `io-mail` | 21, and `tests/puller_port.rs`; `smtp::submission`'s tests reach their fixtures in `app/io/tests`; `mailbox::read_of` (`drive`) becomes `pub` | stage 5, and the change in flight to `google.rs` (both landed by 2.1.234) |
 | 7 | `io-model` | 11, and `tests/model_port.rs`; `model::stream`'s test reaches its fixture in `app/io/tests`; none becomes `pub` | stage 3 |
 | 8 | `io-sources` | 8 | stages 6 and 7; it empties `io`, which this pull request deletes |
 
@@ -270,6 +272,29 @@ directory, took 900 s before and 899 s after; `cargo test --workspace --no-run -
 suzatary/fixture` on top of it took 332 s and 335 s, linking 77 and 81 test executables (counted
 in `target/debug/deps`, so not comparable with the count above). The four new ones are each new
 crate's unit tests and its `all` target; neither links Typst.
+
+**Stage 6, measured** (one pull request, at its head against the merge base, 2.1.234; the cut
+still held there, and every module moved with its layer):
+
+| | before | after |
+|---|---|---|
+| `io` USE / DEVELOP / tests | 18,545 / 546.2k / 76.5k | 3,947 / 304.6k / 18.0k |
+| `io-mail` USE / DEVELOP / tests | — | 14,780 / 386.9k / 58.7k |
+| `cli` USE / DEVELOP / tests | 49,664 / 952.5k / 812.2k | 49,682 / 952.8k / 812.3k |
+| `server` USE / DEVELOP / tests | 13.8k / 761.0k / 70.1k | 13.8k / 761.2k / 70.1k |
+| `plugin` USE / DEVELOP / tests | 3.0k / 258.8k / 6.9k | 3.0k / 258.8k / 6.9k |
+
+`cli` and `server` read both crates and pay the new manifest and root; `plugin` reads neither.
+An edit in a moved module reads 387k instead of 546k, and an edit in what stays in `io` reads
+305k. One item crossed the cut: `drive` reads a file through `mailbox::read_of`, which became
+`pub`. `smtp::submission`'s tests read the Bridge certificates in `app/io/tests/fixtures`, which
+stay there for the reason stages 5 and 7 give, and `crate_reads` declares the read. `io` keeps
+`io-chains` and `connect` for its tests alone, as dev-dependencies.
+
+A clean workspace build, one run each in the `.#triage` shell on 4 cores with a fresh worktree
+and target directory, took 728 s before and 749 s after; `cargo test --workspace --no-run
+--features suzatary/fixture` on top of it took 289 s and 290 s, linking 81 and 83 executables in
+`target/debug/deps`. The two new ones are `io-mail`'s unit tests and its `all` target.
 
 ## 6. What argues against it
 

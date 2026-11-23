@@ -15,7 +15,8 @@ pub enum CorpusError {
     Refused(String),
 }
 
-/// The mail corpus as the agent operates it; the interpreter is `suzatary_io::corpus::Operator`.
+/// The mail corpus as the agent operates it; the interpreter is
+/// `suzatary_io_mail::corpus::Operator`.
 pub trait Corpus: Sync {
     fn sync(&self) -> Result<SyncReport, CorpusError>;
 

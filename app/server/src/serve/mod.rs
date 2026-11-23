@@ -81,7 +81,7 @@ use suzatary_conversations::secretary::model;
 use suzatary_digest::secretary::memories::Texts;
 use suzatary_google::google::Endpoints;
 use suzatary_inbox::secretary::sign_in;
-use suzatary_io::google::Google;
+use suzatary_io_mail::google::Google;
 use suzatary_lines::secretary::transcript;
 use suzatary_release::release::{Plan, Released};
 use tower_http::compression::{CompressionLayer, CompressionLevel};

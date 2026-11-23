@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use suzatary_io::google::Grants;
 use suzatary_io_local::state::Ledger;
+use suzatary_io_mail::google::Grants;
 use suzatary_mail::mail::lacking::Grant;
 use suzatary_triage::mail::verbs::NoiseAdded;
 
@@ -16,12 +16,12 @@ use anyhow::{Context as _, bail};
 use clap::Subcommand;
 use suzatary_held::excerpt::Excerpt;
 use suzatary_held::message_part::Attachment;
-use suzatary_io::corpus::Operator;
-use suzatary_io::imap::{IMAP_HOST, IMAP_PORT, Outlook};
-use suzatary_io::mail_sync::{TRIAGE_UNIT, Timer};
-use suzatary_io::mailbox::Notmuch;
-use suzatary_io::oauth::TokenStore;
-use suzatary_io::sync::Syncer;
+use suzatary_io_mail::corpus::Operator;
+use suzatary_io_mail::imap::{IMAP_HOST, IMAP_PORT, Outlook};
+use suzatary_io_mail::mail_sync::{TRIAGE_UNIT, Timer};
+use suzatary_io_mail::mailbox::Notmuch;
+use suzatary_io_mail::oauth::TokenStore;
+use suzatary_io_mail::sync::Syncer;
 use suzatary_mail::mail::account::{AccountName, MailAccount, Sender};
 use suzatary_mail::mail::idle;
 use suzatary_mail::mail::imap::Session as _;
@@ -68,7 +68,7 @@ pub fn syncer(instance: &Instance) -> Syncer {
 #[must_use]
 pub fn google_grants(instance: &Instance) -> Grants {
     Grants::new(
-        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::google()),
+        suzatary_io_mail::google::Google::new(suzatary_google::google::Endpoints::google()),
         std::sync::Arc::new(instance.secrets()),
     )
 }
@@ -133,7 +133,7 @@ pub fn gate(path: &Path) -> anyhow::Result<()> {
     use suzatary_triage::mail::triage::{Mailbox, Queue, Triage};
     let instance = Instance::open(path)?;
     let rows = operator(&instance).queue(None)?;
-    let report = suzatary_io::mail_sync::read_report(&instance.paths.last_sync)
+    let report = suzatary_io_mail::mail_sync::read_report(&instance.paths.last_sync)
         .with_context(|| format!("reading {}", instance.paths.last_sync.display()))?
         .map(|(report, _)| report);
     let queue = Queue::of(&rows, report);
@@ -433,20 +433,20 @@ pub fn deliver(
                         grant: Grant::MicrosoftSend,
                     })
                 })?;
-            suzatary_io::smtp::Microsoft {
+            suzatary_io_mail::smtp::Microsoft {
                 email,
                 token: &token,
             }
             .send(out, message_id, at)
         }
-        Sender::Proton { smtp_user, .. } => suzatary_io::smtp::Bridge {
-            address: suzatary_io::smtp::BRIDGE,
+        Sender::Proton { smtp_user, .. } => suzatary_io_mail::smtp::Bridge {
+            address: suzatary_io_mail::smtp::BRIDGE,
             secrets: &instance.secrets(),
             cert: &instance.paths.bridge_cert,
             smtp_user,
         }
         .send(out, message_id, at),
-        Sender::Gmail { subdir, .. } => suzatary_io::smtp::Gmail {
+        Sender::Gmail { subdir, .. } => suzatary_io_mail::smtp::Gmail {
             maildir: &instance.mail.root.join(subdir),
         }
         .send(out, message_id, at),
@@ -464,7 +464,7 @@ pub fn deliver(
                         Err(words) => auth(words),
                     }
                 })?;
-            suzatary_io::smtp::GoogleApi {
+            suzatary_io_mail::smtp::GoogleApi {
                 token: &token.token,
             }
             .send(out, message_id, at)
@@ -570,7 +570,7 @@ fn message_id(from: &str) -> String {
 }
 
 // `mail idle` never syncs: a debounced wake starts the same unit the timer does, through the one
-// door `suzatary_io::mail_sync` is, and the timing decisions are `mail::idle`'s.
+// door `suzatary_io_mail::mail_sync` is, and the timing decisions are `mail::idle`'s.
 
 /// How long before `IDLE` is re-issued, since RFC 2177 lets a server drop one after 30 minutes.
 const RENEW_AFTER: Duration = Duration::from_mins(29);

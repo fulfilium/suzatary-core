@@ -24,7 +24,7 @@ use crate::instance::{Instance, InstanceEdits, Mounts};
 use crate::interpreters::{self, Brain, CompactorModel, Peers};
 use crate::mail_cache::MailCache;
 use suzatary_connect::settings::Verify;
-use suzatary_io::google::Google;
+use suzatary_io_mail::google::Google;
 use suzatary_server::serve::compaction::Compactor;
 use suzatary_server::serve::live::{self, Live};
 use suzatary_server::serve::models::Models;

@@ -214,8 +214,8 @@ confirm. Everything below derives from this.
   (one file per effect and per record, as `app/secretary/src/agent/record.rs`; its
   `compile_fail` doc tests and the field-by-field destructuring are the pin;
   the verb list's snapshot is `app/secretary/tests/mcp-surface.json`).
-  `suzatary_io::corpus::Operator` holds no send path either. `suzatary send`
-  over `suzatary_io::smtp` is the one command that reaches outward, and the
+  `suzatary_io_mail::corpus::Operator` holds no send path either. `suzatary send`
+  over `suzatary_io_mail::smtp` is the one command that reaches outward, and the
   SMTP grant is a separate consent from the IMAP one, in a separate slot, so a
   leaked IMAP token cannot send; Gmail's one grant reads and sends, so its
   sign-in card sends (`Sending::granting`). Do not "helpfully" add a send MCP tool.

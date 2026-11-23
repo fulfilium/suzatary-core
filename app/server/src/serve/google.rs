@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 use suzatary_base::capability::Datetime;
-use suzatary_io::google::Grant;
+use suzatary_io_mail::google::Grant;
 
 use axum::response::Redirect;
 use suzatary_base::capability::Entropy;
@@ -15,8 +15,8 @@ use suzatary_google::google::{Callback, RedirectUri, Scopes, State as Drawn, Ver
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
 use suzatary_inbox::secretary::stamp::stamp;
-use suzatary_io::google::Google;
 use suzatary_io_access::secrets::Resolves;
+use suzatary_io_mail::google::Google;
 use suzatary_mail::mail::account::Sync as Strategy;
 use suzatary_mail::mail::address::EmailAddress;
 

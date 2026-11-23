@@ -9,11 +9,11 @@ use std::sync::Arc;
 
 use suzatary_base::capability::Secret;
 use suzatary_connect::conformance::puller::{Rig, check};
-use suzatary_io::google::{Google as Api, Grants};
-use suzatary_io::imap::Outlook;
-use suzatary_io::pullers::{Google, Lieer, Mbsync, Microsoft, Open};
 use suzatary_io_access::http::{HttpError, Resp, Scripted};
 use suzatary_io_access::secrets::{Resolves, SecretError};
+use suzatary_io_mail::google::{Google as Api, Grants};
+use suzatary_io_mail::imap::Outlook;
+use suzatary_io_mail::pullers::{Google, Lieer, Mbsync, Microsoft, Open};
 use suzatary_mail::mail::account::{Authority, MailAccount, MsImap, Sync};
 use suzatary_mail::mail::account_email::AccountEmail;
 use suzatary_mail::mail::address::EmailAddress;

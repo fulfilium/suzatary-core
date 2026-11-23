@@ -314,7 +314,7 @@ impl Instance {
             Kind::TopicAliases => once(secretary.topics.aliases.clone()),
             Kind::Asks => once(self.asks()),
             // Each declared plugin's store, and each mail account's Google calendars, which are
-            // learned as a plugin's are (`suzatary_io::google::learn`).
+            // learned as a plugin's are (`suzatary_io_mail::google::learn`).
             Kind::Plugin => self
                 .plugins
                 .manifests

@@ -93,7 +93,7 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
         probe_drive(&instance, &health);
         super::google::sync_calendars(
             &instance,
-            suzatary_io::google::Google::new(suzatary_google::google::Endpoints::google()),
+            suzatary_io_mail::google::Google::new(suzatary_google::google::Endpoints::google()),
             &health,
         )
     } else {

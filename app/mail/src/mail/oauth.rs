@@ -1,4 +1,4 @@
-//! Microsoft `OAuth2` as a sans-I/O state machine; `suzatary_io::oauth` is the transport.
+//! Microsoft `OAuth2` as a sans-I/O state machine; `suzatary_io_mail::oauth` is the transport.
 //!
 //! 1. [`Minted<P>`] carries `P::Token`, so [`ImapToken`] and [`SmtpToken`] cannot be confused.
 //! 2. [`Protocol::SLOT`] keeps grants apart, so a refresh for one scope never yields the other.

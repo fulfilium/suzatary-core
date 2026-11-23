@@ -6,7 +6,7 @@ use suzatary_base::capability::Clock as _;
 use suzatary_health::health::Failure;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::{Healths, Outcome};
-use suzatary_io::google::ReadError;
+use suzatary_io_mail::google::ReadError;
 
 use crate::instance::Instance;
 
@@ -15,10 +15,11 @@ use crate::instance::Instance;
 #[must_use]
 pub fn sync_calendars(
     instance: &Instance,
-    google: suzatary_io::google::Google,
+    google: suzatary_io_mail::google::Google,
     health: &suzatary_io_local::source_health::Health,
 ) -> (Vec<String>, bool) {
-    let grants = suzatary_io::google::Grants::new(google, std::sync::Arc::new(instance.secrets()));
+    let grants =
+        suzatary_io_mail::google::Grants::new(google, std::sync::Arc::new(instance.secrets()));
     let accounts: Vec<&str> = (instance.mail.accounts.accounts().iter())
         .map(|account| account.subdir.as_str())
         .collect();
@@ -51,7 +52,7 @@ pub fn sync_calendars(
 /// was stored; a lieer account is read through its calendar grant alone.
 pub fn read_calendars(
     accounts: &[suzatary_mail::mail::account::MailAccount],
-    grants: &suzatary_io::google::Grants,
+    grants: &suzatary_io_mail::google::Grants,
     store_of: impl Fn(&suzatary_mail::mail::account::MailAccount) -> std::path::PathBuf,
     now: suzatary_base::capability::Datetime,
 ) -> (Vec<String>, Healths<SourceKey>, bool) {
@@ -94,7 +95,7 @@ pub fn read_calendars(
                 })
             })
             .and_then(|occurrences| {
-                suzatary_io::google::learn(&store_of(account), &occurrences, now)
+                suzatary_io_mail::google::learn(&store_of(account), &occurrences, now)
                     .map(|learnt| {
                         format!(
                             "{} occurrences read, {} learned, {} known",

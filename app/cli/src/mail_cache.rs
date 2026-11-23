@@ -20,7 +20,7 @@ pub struct MailCache {
     /// The sync's hold, taken for the delete and the index, so a sync begun before the tap
     /// cannot pull the account's mail back after it, nor refresh a sign-in being revoked.
     lock: PathBuf,
-    tokens: suzatary_io::oauth::TokenStore,
+    tokens: suzatary_io_mail::oauth::TokenStore,
 }
 
 impl MailCache {
@@ -31,7 +31,7 @@ impl MailCache {
         notmuch: PathBuf,
         config: Option<PathBuf>,
         lock: PathBuf,
-        tokens: suzatary_io::oauth::TokenStore,
+        tokens: suzatary_io_mail::oauth::TokenStore,
     ) -> Self {
         Self {
             root,
@@ -49,7 +49,7 @@ impl MailCache {
 
     /// No hook runs, since a hook may sync.
     fn reindex(&self) -> Result<(), String> {
-        let command = suzatary_io::mailbox::indexed_by(
+        let command = suzatary_io_mail::mailbox::indexed_by(
             Cmd::new(&self.notmuch)
                 .args(["new", "--no-hooks"])
                 .timeout(REINDEX),
@@ -109,7 +109,7 @@ impl suzatary_mail::mail::cache::Forget for MailCache {
 }
 
 fn revoked(
-    tokens: &suzatary_io::oauth::TokenStore,
+    tokens: &suzatary_io_mail::oauth::TokenStore,
     account: &MailAccount,
 ) -> Result<suzatary_mail::mail::grants::Revoked, String> {
     use suzatary_mail::mail::grants::Revoked;
@@ -126,7 +126,7 @@ fn revoked(
 }
 
 /// A server that keeps no mail, as a test's is, and the sign-ins `tokens` keeps, if any.
-pub struct Unkept(pub Option<suzatary_io::oauth::TokenStore>);
+pub struct Unkept(pub Option<suzatary_io_mail::oauth::TokenStore>);
 
 impl suzatary_mail::mail::cache::Forget for Unkept {
     fn forget(&self, account: &MailAccount, removal: Removal) -> Forgotten {
@@ -172,7 +172,7 @@ mod tests {
             std::fs::create_dir_all(root.path().join(folder).join("cur")).expect("a maildir");
         }
         let lock = root.path().join("state").join("sync.lock");
-        let tokens = || suzatary_io::oauth::TokenStore::new(root.path().join("oauth"));
+        let tokens = || suzatary_io_mail::oauth::TokenStore::new(root.path().join("oauth"));
         let cache = MailCache::new(
             root.path().to_path_buf(),
             "true".into(),

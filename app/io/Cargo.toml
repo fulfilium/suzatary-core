@@ -15,56 +15,32 @@ path = "src/lib.rs"
 suzatary-os.workspace = true
 suzatary-io-access.workspace = true
 suzatary-io-local.workspace = true
-suzatary-io-chains.workspace = true
+suzatary-io-mail.workspace = true
 suzatary-base.workspace = true
 suzatary-store.workspace = true
 suzatary-signatures.workspace = true
 suzatary-held.workspace = true
 suzatary-memory.workspace = true
-suzatary-mail.workspace = true
-suzatary-health.workspace = true
-suzatary-triage.workspace = true
 suzatary-services.workspace = true
 suzatary-google.workspace = true
-suzatary-connect.workspace = true
 suzatary-cards.workspace = true
 suzatary-inbox.workspace = true
 suzatary-secretary.workspace = true
-prodrome_core.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
-# The JSON this crate parses: the FCM message and notmuch's output.
+# The JSON this crate parses: the FCM message.
 serde.workspace = true
 serde_json.workspace = true
-# The roots IMAP trusts.
-webpki-roots.workspace = true
 jsonwebtoken.workspace = true
 base64.workspace = true
-# The maildir files notmuch names, and the sha256 their headers reduce to.
-mail-parser.workspace = true
-sha2.workspace = true
 hex.workspace = true
-# The Gmail API's search query, percent-encoded into its URL.
-percent-encoding = "2"
-# The html-to-text walk over a body.
-regex.workspace = true
-# --- THE MAIL TRANSPORTS (§8.6).
-# IMAP, with no TLS feature of its own: the stream is built here, from the workspace's rustls.
-imap.workspace = true
-# The TLS both mail transports run over, and the roots they trust.
-# `webpki-roots`, not the platform store: a systemd unit's view of /etc/ssl is one more thing
-# to be wrong about. The Proton Bridge path trusts no store: its verifier accepts ONE pinned
-# self-signed certificate and nothing else (`smtp::submission`).
-rustls.workspace = true
-rustls-pki-types = "1"
-# SMTP + XOAUTH2 + STARTTLS, for Microsoft. The Bridge's SMTP is spoken by hand,
-# because lettre cannot take a verifier of our own.
-lettre.workspace = true
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+suzatary-io-chains.workspace = true
+suzatary-connect.workspace = true
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
 # A test's private scratch directory.

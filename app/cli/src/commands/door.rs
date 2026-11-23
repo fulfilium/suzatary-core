@@ -598,7 +598,7 @@ pub(crate) fn drawing(typeset: &dyn Typeset, source: &str) -> Result<Drawing, Re
         .closed(source)
         .map_err(|rejected| RenderError::Refused(rejected.said(source)))?;
     let html = suzatary_base::narrowing::narrowed(&document)?;
-    let text = suzatary_io::mailbox::text::html_to_text(&html);
+    let text = suzatary_io_mail::mailbox::text::html_to_text(&html);
     Ok(Drawing { html, text })
 }
 

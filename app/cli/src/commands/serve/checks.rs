@@ -42,7 +42,7 @@ impl suzatary_connect::settings::Checks for Synced {
             SourceKey::GoogleCalendar(_) => {
                 let (lines, _) = crate::commands::google::sync_calendars(
                     &instance,
-                    suzatary_io::google::Google::new(self.google.clone()),
+                    suzatary_io_mail::google::Google::new(self.google.clone()),
                     &suzatary_io_local::source_health::beside(&instance.mail.heartbeat),
                 );
                 for line in lines {

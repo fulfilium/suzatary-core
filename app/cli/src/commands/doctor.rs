@@ -54,12 +54,12 @@ const CAPABILITIES: &[Capability] = &[
     Capability {
         name: "Mailbox",
         stage: "6 — mail",
-        interpreter: Some("suzatary_io::mailbox::Notmuch"),
+        interpreter: Some("suzatary_io_mail::mailbox::Notmuch"),
     },
     Capability {
         name: "Corpus",
         stage: "6 — mail",
-        interpreter: Some("suzatary_io::corpus::Operator"),
+        interpreter: Some("suzatary_io_mail::corpus::Operator"),
     },
     Capability {
         name: "Repository",

@@ -18,14 +18,14 @@ use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
 use suzatary_held::held_value::{Filled, HeldFile};
 use suzatary_io::drive::ReadOnly;
-use suzatary_io::google::{Grants, Inserted};
-use suzatary_io::oauth::{Pending, TokenStore};
 use suzatary_io::repos::{Author, Mirrors, Stopped};
 use suzatary_io_chains::conversations::ConversationStores;
 use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::blobs::Blobs;
 use suzatary_io_local::clock::SystemClock;
 use suzatary_io_local::state::Ledger;
+use suzatary_io_mail::google::{Grants, Inserted};
+use suzatary_io_mail::oauth::{Pending, TokenStore};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::{Consent, Protocol};
 use suzatary_secretary::secretary;
@@ -291,7 +291,7 @@ impl Acting {
             }),
             signing,
             google: Arc::new(Grants::new(
-                suzatary_io::google::Google::new(google.clone()),
+                suzatary_io_mail::google::Google::new(google.clone()),
                 Arc::new(instance.secrets()),
             )),
             ledger: Arc::new(crate::commands::mail::ledger(instance)),

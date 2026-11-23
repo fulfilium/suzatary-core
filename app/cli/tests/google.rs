@@ -360,8 +360,8 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
 
     // The sync hands lieer a token minted from the grant, never the grant or the client.
     let maildir = common::scratch("google-lieer");
-    let grants = suzatary_io::google::Grants::new(
-        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(
+    let grants = suzatary_io_mail::google::Grants::new(
+        suzatary_io_mail::google::Google::new(suzatary_google::google::Endpoints::at(
             &serving.fake.base,
         )),
         Arc::clone(&serving.secrets) as _,
@@ -369,7 +369,7 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
     grants
         .ready(&ada(), &maildir)
         .expect("lieer is handed a token");
-    let handed = std::fs::read_to_string(maildir.join(suzatary_io::google::LIEER_CREDENTIALS))
+    let handed = std::fs::read_to_string(maildir.join(suzatary_io_mail::google::LIEER_CREDENTIALS))
         .expect("lieer's file");
     assert!(handed.contains(fake_google::ACCESS), "{handed}");
     for kept in ["fake-refresh", fake_google::CLIENT_SECRET] {
@@ -581,7 +581,7 @@ fn a_declined_consent_ends_the_card_and_keeps_nothing() {
 fn a_code_google_already_redeemed_keeps_nothing() {
     let fake = FakeGoogle::start(0, ADA);
     let google =
-        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base));
+        suzatary_io_mail::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base));
     let redirect =
         suzatary_google::google::RedirectUri::of_app("https://example.test").expect("a callback");
     let verifier =
@@ -659,8 +659,8 @@ fn a_code_google_already_redeemed_keeps_nothing() {
 fn a_revoked_grant_needs_the_sign_in_and_a_missing_client_the_client() {
     let fake = FakeGoogle::start(0, ADA);
     let secrets = Arc::new(SecretRecorder::new());
-    let grants = suzatary_io::google::Grants::new(
-        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base)),
+    let grants = suzatary_io_mail::google::Grants::new(
+        suzatary_io_mail::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base)),
         Arc::clone(&secrets) as _,
     );
     let refused = grants.live(&ada()).expect_err("no client is kept");
@@ -723,7 +723,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     }
     // The grant the fake issues, by its own exchange.
     let google =
-        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base));
+        suzatary_io_mail::google::Google::new(suzatary_google::google::Endpoints::at(&fake.base));
     let redirect =
         suzatary_google::google::RedirectUri::of_app("https://example.test").expect("a callback");
     let verifier =
@@ -731,7 +731,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
             .expect("a verifier");
     let state = suzatary_google::google::State::draw(&suzatary_io_local::texts::SystemEntropy)
         .expect("a state");
-    let client = suzatary_io::google::Grant::client(secrets.as_ref())
+    let client = suzatary_io_mail::google::Grant::client(secrets.as_ref())
         .expect("the store answers")
         .expect("a client");
     let (_, location) = redirected(&suzatary_google::google::authorize(
@@ -755,7 +755,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     let granted = google
         .exchange(&client, &code, &verifier, &redirect, &ada())
         .expect("a grant");
-    let grant = suzatary_io::google::Grant {
+    let grant = suzatary_io_mail::google::Grant {
         account: ada(),
         client,
         refresh: granted.refresh,
@@ -773,9 +773,9 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     );
     let root = common::scratch("google-calendar");
     let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
-    let learnt = suzatary_io::google::learn(&root, &read, at).expect("learned");
+    let learnt = suzatary_io_mail::google::learn(&root, &read, at).expect("learned");
     assert_eq!(learnt.written, read.len());
-    let again = suzatary_io::google::learn(&root, &read, at).expect("learned");
+    let again = suzatary_io_mail::google::learn(&root, &read, at).expect("learned");
     assert_eq!(
         (again.written, again.known),
         (0, read.len()),
@@ -1017,8 +1017,8 @@ fn fixed_from_its_button(tag: &str, sync: &Sync) {
 /// written and its health recorded, while its mail stays where it was read; an account holding
 /// no grant is not read at all.
 fn calendars_are_read(serving: &Serving, sync: &Sync) {
-    let grants = suzatary_io::google::Grants::new(
-        suzatary_io::google::Google::new(suzatary_google::google::Endpoints::at(
+    let grants = suzatary_io_mail::google::Grants::new(
+        suzatary_io_mail::google::Google::new(suzatary_google::google::Endpoints::at(
             &serving.fake.base,
         )),
         Arc::clone(&serving.secrets) as _,

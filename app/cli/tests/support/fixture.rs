@@ -2114,7 +2114,7 @@ mod tests {
             subdir: MAIL_SUBDIR.to_owned(),
             sync: Sync::Gmail,
         };
-        let mailbox = suzatary_io::mailbox::Notmuch::new(
+        let mailbox = suzatary_io_mail::mailbox::Notmuch::new(
             &mail_root,
             suzatary_io_local::state::Ledger::new(
                 root.join("state.json"),
@@ -2126,7 +2126,7 @@ mod tests {
                     .map_err(|refused| refused.to_string())
                 },
             ),
-            suzatary_io::mailbox::located::Located::open(root.join("located")),
+            suzatary_io_mail::mailbox::located::Located::open(root.join("located")),
             Roster::new(vec![account.clone()]).expect("one account is a roster"),
         )
         .with_config(&config);
@@ -2139,7 +2139,7 @@ mod tests {
             PathBuf::from("notmuch"),
             Some(config),
             root.join("sync.lock"),
-            suzatary_io::oauth::TokenStore::new(root.join("oauth")),
+            suzatary_io_mail::oauth::TokenStore::new(root.join("oauth")),
         )
         .forget(&account, suzatary_mail::mail::removal::Removal::Mail);
         assert!(

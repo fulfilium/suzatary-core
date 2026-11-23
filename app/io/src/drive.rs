@@ -133,7 +133,7 @@ impl ProtonDrive {
         };
         let bytes = self.download(file)?;
         let source = suzatary_held::held_value::HeldFile::Drive { path: file.clone() };
-        crate::mailbox::read_of(&source, name, mime, bytes, &self.pdftotext)
+        suzatary_io_mail::mailbox::read_of(&source, name, mime, bytes, &self.pdftotext)
             .map_err(DriveFailure::Unreachable)
     }
 

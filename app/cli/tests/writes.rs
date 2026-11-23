@@ -175,7 +175,7 @@ fn the_smtp_transport_has_exactly_one_calling_site() {
                 walk.push(path);
             } else if path.extension().is_some_and(|ext| ext == "rs")
                 && std::fs::read_to_string(&path)
-                    .is_ok_and(|text| text.contains("suzatary_io::smtp::"))
+                    .is_ok_and(|text| text.contains("suzatary_io_mail::smtp::"))
             {
                 naming.push(
                     path.strip_prefix(app)
@@ -326,7 +326,7 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
     let repo = app.parent().expect("app has a parent").to_path_buf();
     let mut terminal = Vec::new();
     let mut by_tap = Vec::new();
-    // `app/io/src/oauth.rs` may claim `given_at_a_terminal` only from its test module.
+    // `app/io-mail/src/oauth.rs` may claim `given_at_a_terminal` only from its test module.
     let mut oauth_offsets: Vec<usize> = Vec::new();
     let mut oauth_cfg_test_offset: Option<usize> = None;
     let mut walk = vec![app];
@@ -359,7 +359,7 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
                 // Assembled at runtime so this file's prose does not count itself.
                 let at_terminal = ["Consent::", "given_at_a_terminal("].concat();
                 let by_a_tap = ["Consent::", "given_by_tap("].concat();
-                if shown == "app/io/src/oauth.rs" {
+                if shown == "app/io-mail/src/oauth.rs" {
                     oauth_offsets = text.match_indices(&at_terminal).map(|(i, _)| i).collect();
                     oauth_cfg_test_offset = text.find("#[cfg(test)]");
                 }
@@ -379,20 +379,21 @@ fn the_device_flow_consent_is_claimed_in_exactly_the_named_places() {
         terminal,
         vec![
             "app/cli/src/commands/mail.rs".to_owned(),
-            "app/io/src/oauth.rs".to_owned(),
+            "app/io-mail/src/oauth.rs".to_owned(),
         ],
         "given_at_a_terminal callers"
     );
-    let cfg_test_offset = oauth_cfg_test_offset
-        .expect("app/io/src/oauth.rs has a #[cfg(test)] module — it is where this call must live");
+    let cfg_test_offset = oauth_cfg_test_offset.expect(
+        "app/io-mail/src/oauth.rs has a #[cfg(test)] module — it is where this call must live",
+    );
     assert!(
         !oauth_offsets.is_empty(),
-        "app/io/src/oauth.rs was counted as a caller but no occurrence was found"
+        "app/io-mail/src/oauth.rs was counted as a caller but no occurrence was found"
     );
     assert!(
         oauth_offsets.iter().all(|&offset| offset > cfg_test_offset),
-        "every given_at_a_terminal( in app/io/src/oauth.rs must sit after its #[cfg(test)] line \
-         (offset {cfg_test_offset}), so the only NON-TEST caller stays suzatary auth alone: \
+        "every given_at_a_terminal( in app/io-mail/src/oauth.rs must sit after its #[cfg(test)] \
+         line (offset {cfg_test_offset}), so the only NON-TEST caller stays suzatary auth alone: \
          {oauth_offsets:?}"
     );
     assert_eq!(
@@ -448,6 +449,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
         "io-typeset",
         "io-chains",
         "io-model",
+        "io-mail",
         "io",
         "cli",
         "plugin",
@@ -520,7 +522,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
     // and by the token store's own tests.
     assert_eq!(
         revoking,
-        ["cli/src/mail_cache.rs", "io/src/oauth.rs"],
+        ["cli/src/mail_cache.rs", "io-mail/src/oauth.rs"],
         "callers of the sign-ins' delete"
     );
 }

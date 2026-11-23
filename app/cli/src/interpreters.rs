@@ -14,11 +14,6 @@ use suzatary_health::health::Failure;
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
 use suzatary_io::drive::ProtonDrive;
-use suzatary_io::junk::OutlookJunk;
-use suzatary_io::junk::SignedIn;
-use suzatary_io::mail_sync::Timer;
-use suzatary_io::older::Notmuched;
-use suzatary_io::older::Servers;
 use suzatary_io::repos::Mirrors;
 use suzatary_io::web::Fetcher;
 use suzatary_io_access::http::Ureq;
@@ -27,6 +22,11 @@ use suzatary_io_local::blobs::Blobs;
 use suzatary_io_local::clock::SystemClock;
 use suzatary_io_local::model_health::Answered;
 use suzatary_io_local::upload_index::UploadIndexFiles;
+use suzatary_io_mail::junk::OutlookJunk;
+use suzatary_io_mail::junk::SignedIn;
+use suzatary_io_mail::mail_sync::Timer;
+use suzatary_io_mail::older::Notmuched;
+use suzatary_io_mail::older::Servers;
 use suzatary_io_model::model::ClaudeCli;
 use suzatary_io_model::model::Fence;
 use suzatary_io_model::model::TokenSource;
@@ -130,7 +130,7 @@ impl Weather for Forecast {
 /// Whether each declared secret resolves and which mail grants are held, never a value.
 pub struct Declared {
     pub secrets: Secretspec,
-    pub tokens: suzatary_io::oauth::TokenStore,
+    pub tokens: suzatary_io_mail::oauth::TokenStore,
     /// The reason the store's audit records for each question.
     pub asking: &'static str,
 }

@@ -383,11 +383,11 @@ fi
 cli_only=CHANGELOG.md,changelog.d,CLAUDE.md,app/release.toml
 rust_base=web/src,web/test,web/e2e,web/typst,android,docs,memory
 rust=all-but:$rust_base,$cli_only
-web_app_skips=app/cli/src,app/cli/tests,app/io/src,app/io-access/src,app/io-local/src,app/io-typeset/src,app/io-chains/src,app/io-model/src,app/os/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/server/src,app/tooling/src,app/tooling/tests,app/wit
+web_app_skips=app/cli/src,app/cli/tests,app/io/src,app/io-access/src,app/io-local/src,app/io-typeset/src,app/io-chains/src,app/io-model/src,app/io-mail/src,app/os/src,app/plugin/src,app/plugin/tests,app/plugin-fence/src,app/plugin-fence/wit,app/plugin-ics/src,app/plugin-ics/tests,app/server/src,app/tooling/src,app/tooling/tests,app/wit
 web=all-but:android,docs,memory,$cli_only,$web_app_skips
 
 # Paths a member's tests read beyond its cargo dependencies; merge_gate.rs checks them.
-crate_reads=(suzatary-stores=app/plugin-ics suzatary=app suzatary=CLAUDE.md suzatary-io=CLAUDE.md suzatary-io-local=CLAUDE.md suzatary-io-typeset=app/api/tests/web suzatary-io-chains=app/io/tests suzatary-io-model=app/io/tests/fixtures)
+crate_reads=(suzatary-stores=app/plugin-ics suzatary=app suzatary=CLAUDE.md suzatary-io=CLAUDE.md suzatary-io-local=CLAUDE.md suzatary-io-typeset=app/api/tests/web suzatary-io-chains=app/io/tests suzatary-io-model=app/io/tests/fixtures suzatary-io-mail=app/io/tests/fixtures)
 # What every unit skips unless it declares the path, and the step's reads when its graph cannot
 # be read.
 rust_skips="${rust#all-but:}" web_skips="${web#all-but:}"
@@ -606,7 +606,7 @@ lane=live
 # (SUZATARY_GATE_DATA); merge_gate.rs holds the list to the paths their sources name.
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/address app/base app/record app/release
   app/store app/signatures app/todo app/plan app/held app/memory app/mail app/health app/triage
-  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/stores app/cards app/secretary app/api app/server app/os app/io-access app/io-local app/io-typeset app/io-chains app/io-model app/io app/plugin app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
+  app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/stores app/cards app/secretary app/api app/server app/os app/io-access app/io-local app/io-typeset app/io-chains app/io-model app/io-mail app/io app/plugin app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src
   app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs app/cli/tests/live.rs
   app/testkit app/script-guards/Cargo.toml app/viewtree/Cargo.toml app/pages/Cargo.toml app/tooling tokens.typ

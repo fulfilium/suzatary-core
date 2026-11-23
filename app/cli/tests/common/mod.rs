@@ -824,7 +824,9 @@ impl Mailbox for FakeMailbox {
                 size: raw.len() as u64,
             }
         } else {
-            suzatary_mail::mail::Stored::Recorded(suzatary_io::mailbox::forwarded::stored(id, raw))
+            suzatary_mail::mail::Stored::Recorded(suzatary_io_mail::mailbox::forwarded::stored(
+                id, raw,
+            ))
         })
     }
 
@@ -1847,7 +1849,7 @@ pub struct SettingsFixture {
     pub declares: Arc<dyn suzatary_connect::settings::Declares + Send + Sync>,
     pub edits: Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
     /// Where a removed account's sign-ins are kept, `None` for none.
-    pub grants: Option<suzatary_io::oauth::TokenStore>,
+    pub grants: Option<suzatary_io_mail::oauth::TokenStore>,
 }
 
 impl SettingsFixture {
@@ -3070,9 +3072,9 @@ impl Default for Googled {
 
 impl Googled {
     /// What a tapped calendar event is written through.
-    fn grants(&self) -> suzatary_io::google::Grants {
-        suzatary_io::google::Grants::new(
-            suzatary_io::google::Google::new(self.endpoints.clone()),
+    fn grants(&self) -> suzatary_io_mail::google::Grants {
+        suzatary_io_mail::google::Grants::new(
+            suzatary_io_mail::google::Google::new(self.endpoints.clone()),
             Arc::clone(&self.store),
         )
     }
@@ -3438,7 +3440,7 @@ impl Server {
     }
 
     /// The same server deleting a removed account's sign-ins from `tokens`.
-    pub fn grants(mut self, tokens: suzatary_io::oauth::TokenStore) -> Self {
+    pub fn grants(mut self, tokens: suzatary_io_mail::oauth::TokenStore) -> Self {
         self.settings.grants = Some(tokens);
         self
     }
@@ -3480,7 +3482,7 @@ impl Server {
             Arc::new(self.google.grants()),
         );
         let consenting = serve::google::Consenting::new(
-            suzatary_io::google::Google::new(self.google.endpoints.clone()),
+            suzatary_io_mail::google::Google::new(self.google.endpoints.clone()),
             Arc::clone(&self.google.store),
             Arc::clone(&self.settings.edits) as _,
             &self.deploying.app_url,
@@ -3632,7 +3634,7 @@ fn performer(
         Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
     ),
     firing: suzatary_cli::commands::coding::Firing,
-    google: Arc<suzatary_io::google::Grants>,
+    google: Arc<suzatary_io_mail::google::Grants>,
 ) -> Arc<dyn suzatary_server::secretary::routes::Perform + Send + Sync> {
     use suzatary_cli::commands::coding::Coder;
     use suzatary_cli::commands::secretary::Acting;
@@ -3687,7 +3689,7 @@ fn performer(
             };
             let root = scratch(&format!("{tag}-acting-real"));
             let tokens =
-                suzatary_io::oauth::TokenStore::with_http(root.join("oauth"), Arc::new(oauth));
+                suzatary_io_mail::oauth::TokenStore::with_http(root.join("oauth"), Arc::new(oauth));
             let conversations: &'static Conversations = Box::leak(conversations);
             Arc::new(Acting::Real {
                 roster,

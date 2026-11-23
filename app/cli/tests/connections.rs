@@ -878,7 +878,7 @@ fn removing_a_microsoft_account_forgets_its_sign_in() {
         Act::Connect {
             connection: account(),
         },
-        |server, _| server.grants(suzatary_io::oauth::TokenStore::new(tokens.clone())),
+        |server, _| server.grants(suzatary_io_mail::oauth::TokenStore::new(tokens.clone())),
     );
     let (status, after) = tap(&served.base, CONNECT, 0, &serde_json::json!({}));
     assert_eq!(status, 200, "{after}");
