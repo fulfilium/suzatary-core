@@ -47,6 +47,9 @@ pub struct Device {
     pub(crate) usage: Usage,
     pub(crate) budget: f64,
     pub(crate) signing: Signing,
+    /// The copies this device keeps from before the last change of form, by store (`topics`,
+    /// `topic-aliases`, `lines`) or chain (`chain/<name>`).
+    pub(crate) earlier: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, TS)]
@@ -960,5 +963,32 @@ fn device(m: &Model, d: &Device) -> Node<Msg> {
         mb(d.budget),
         d.usage.count
     );
-    view! { Section "settingsdevice" [para("settingsmeta", kept), para("settingsmeta", persist), view! { P "settingsmeta settingskey" {Data("key") => key} [said(&d.signing)] }, acts] }
+    let earlier = earlier(&d.earlier).map(|said| para("settingsmeta settingsearlier", said));
+    view! { Section "settingsdevice" [para("settingsmeta", kept), para("settingsmeta", persist), earlier, view! { P "settingsmeta settingskey" {Data("key") => key} [said(&d.signing)] }, acts] }
+}
+
+/// What the device keeps from before the last change of form, said once and quietly, and true: no
+/// build reads such a copy, so a write in it is never sent and is to be made again; the copy goes by
+/// itself at the next change of form.
+fn earlier(copies: &[String]) -> Option<String> {
+    let named: Vec<String> = copies
+        .iter()
+        .map(|copy| match copy.as_str() {
+            "lines" => "the conversations".to_owned(),
+            "topic-aliases" => "the topic aliases".to_owned(),
+            other => other.strip_prefix("chain/").map_or_else(
+                || format!("the {other}"),
+                |chain| format!("the chain {chain}"),
+            ),
+        })
+        .collect();
+    let (last, rest) = named.split_last()?;
+    let which = if rest.is_empty() {
+        last.clone()
+    } else {
+        format!("{} and {last}", rest.join(", "))
+    };
+    Some(format!(
+        "A copy of {which} from before the last update is kept on this device. A write made here offline before the update and not yet sent was not carried over: if one is missing, make it again. The copy is kept until the next update that changes how that store is kept."
+    ))
 }

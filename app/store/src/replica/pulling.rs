@@ -3,8 +3,17 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 
+use crate::replica::frontier::Frontier;
 use crate::replica::held::{Held, Node, Said};
 use crate::replica::row::{Keys, Row};
+
+/// How a kind lands what it pulls: each piece as it comes, behind the box's heads until the last
+/// (the lines), or the whole pull at once, holding the heads its word names (the stores of objects).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lands {
+    ByPiece,
+    Whole,
+}
 
 /// A replica is the deltas it took, applied in order to [`Pulling::default`].
 #[derive(Debug, Clone, PartialEq)]
@@ -151,6 +160,53 @@ impl<N: Node, K: Keys> Pulling<N, K> {
             .max(self.pending.row.generation())
             .saturating_add(1);
         self.took(Delta::StartedOver { generation })
+    }
+
+    /// What `other` holds joined in: every move but a purge is a join, so this is the state the moves
+    /// of both took together.
+    pub fn join(&mut self, other: &Self) {
+        let landed = std::mem::replace(&mut self.landed, Row::empty(0));
+        self.landed = landed.join(&other.landed);
+        let pending = std::mem::replace(
+            &mut self.pending,
+            Pending {
+                landings: 0,
+                row: Row::empty(0),
+            },
+        );
+        self.pending = pending.join(&other.pending);
+    }
+
+    /// Whether what is held, landed and pending, holds everything a row a pull of this kind can
+    /// leave holds: each node's parents, since the box sends every piece as a prefix of the causal
+    /// order; at least as many nodes as the closure of the frontier it stands at, since a frontier
+    /// names only what the asker held and was sent; and, for a kind that lands only whole pulls,
+    /// the heads of the landed word. A log that lost its early frames, while later ones stayed,
+    /// leaves rows that are not: a frontier with nothing under it, which every pull answers with
+    /// nothing. A pull cut at any piece leaves rows that are.
+    #[must_use]
+    pub fn closed(&self, lands: Lands) -> bool {
+        let holding = self.holding();
+        let held = holding.replica();
+        let parents = held
+            .nodes()
+            .all(|n| n.rests_on().iter().all(|p| held.contains(p)));
+        let counted = match held.frontier() {
+            Frontier::Nothing => true,
+            Frontier::Named { count, .. } => {
+                u64::try_from(held.nodes().count()).is_ok_and(|n| n >= *count)
+            }
+        };
+        let landed = self.landed.replica();
+        parents
+            && counted
+            && match lands {
+                Lands::ByPiece => true,
+                Lands::Whole => landed
+                    .read()
+                    .word()
+                    .is_none_or(|w| w.heads.iter().all(|h| landed.contains(h))),
+            }
     }
 
     pub fn forget(&mut self, gone: BTreeSet<K::Name>) -> Delta<N, K> {

@@ -10,7 +10,7 @@
 //!   epoch holding less), is answered once as unknown, from nothing, and every other piece of a
 //!   pull brings the tab something it lacked: no pull asks again for what it was sent.
 //!
-//! The tab keeps what an answer names as `replica.ts` does: each piece read against the frontier
+//! The tab keeps what an answer names as the core's replica does (`replica::frontier`): each piece read against the frontier
 //! it was asked from, its era moved on by an answer that did not know that one, and the later of
 //! two kept by (era, count, digest).
 
@@ -292,7 +292,7 @@ fn step() -> impl Strategy<Value = Step> {
     ]
 }
 
-/// Where the tab stands with the box, as `replica.ts`'s `Frontier` does: nothing, or a frontier
+/// Where the tab stands with the box, as `replica::frontier::Frontier` does: nothing, or a frontier
 /// an answer named, with the era of answers that did not know the one asked from.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Standing {

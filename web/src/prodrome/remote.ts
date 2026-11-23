@@ -1,19 +1,11 @@
-// The tab's side of the core's worker: each chain's objects sent once, then only the names added and dropped, and a
-// question by message with its answer as a promise. Nothing here reads a chain; what the worker holds is what the last
-// `hold` said, since the messages arrive in the order they were sent.
+// The tab's side of the core's worker: a question by message, with its answer as a promise. Nothing here reads a store.
 
-import type { Named } from "./core"
 import { CoreError } from "./core"
-import questions from "./questions"
+import type questions from "./questions"
 import lanes from "./lanes"
 
 export namespace remote {
-  // A chain as the tab holds it: its objects and its policy.
-  export type Chain = { readonly name: string; readonly objects: readonly Named[]; readonly untrusted: readonly string[] }
-
   export type Remote = {
-    // The chains held, each by what changed since the last holding.
-    readonly hold: (chains: readonly Chain[]) => Promise<questions.Answer<"Hold">>
     // `q` in the lane of whoever asks it (`lanes`).
     readonly ask: <K extends questions.Kind>(q: questions.Of<K>, lane: lanes.Lane) => Promise<questions.Answer<K>>
   }
@@ -22,22 +14,6 @@ export namespace remote {
   let hearer: (s: questions.Said) => void = () => {}
   export const hear = (f: (s: questions.Said) => void): void => {
     hearer = f
-  }
-
-  // What each chain holds as `hold` last told it, by name.
-  // Nothing, once the worker refused a holding: the next is sent whole.
-  type Sent = Map<string, ReadonlySet<string>> | null
-
-  // The change from what was sent to `c`: pure, so a holding is a function of the two sets.
-  const delta = (sent: ReadonlySet<string> | null, c: Chain): questions.Holding => {
-    const now = new Set(c.objects.map(o => o.hash))
-    return {
-      name: c.name,
-      untrusted: c.untrusted,
-      add: sent === null ? c.objects : c.objects.filter(o => !sent.has(o.hash)),
-      drop: sent === null ? [] : [...sent].filter(h => !now.has(h)),
-      whole: sent === null,
-    }
   }
 
   // `broken` is said once the worker is gone (its script did not load, or it threw outside a question): every question
@@ -67,22 +43,7 @@ export namespace remote {
         waiting.set(id, { ok: v => ok(v as questions.Answer<K>), no })
         port.postMessage({ id, lane, question })
       })
-    let sent: Sent = new Map()
-    return {
-      // Sent before it returns, with no wait between reading `sent` and writing it, so two holdings in a row are each the
-      // change from the one before; a refused one makes the next whole. Every holding goes in the first lane, so the
-      // worker takes them in the order they were sent, each before any question asked after it.
-      hold: chains => {
-        const was = sent
-        const holding = chains.map(c => delta(was === null ? null : (was.get(c.name) ?? new Set()), c))
-        sent = new Map(chains.map(c => [c.name, new Set(c.objects.map(o => o.hash))]))
-        return ask({ type: "Hold", chains: holding }, lanes.FIRST).catch((e: unknown) => {
-          sent = null
-          throw e
-        })
-      },
-      ask,
-    }
+    return { ask }
   }
 
   // The tab's one worker, started by the first question.
@@ -94,7 +55,6 @@ export namespace remote {
     return started
   }
 
-  export const hold = (chains: readonly Chain[]): Promise<questions.Answer<"Hold">> => worker().hold(chains)
   export const ask = <K extends questions.Kind>(q: questions.Of<K>, lane: lanes.Lane): Promise<questions.Answer<K>> => worker().ask(q, lane)
 }
 export default remote

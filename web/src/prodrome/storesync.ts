@@ -8,13 +8,14 @@ import type questions from "./questions"
 import type linesync from "./linesync"
 import lanes from "./lanes"
 import type storeset from "./storeset"
-import { askHeld } from "./sync"
+import chains, { heardChain } from "./sync"
+import { ours, sealed } from "../wire/api"
 import heads from "./heads"
 import excluded from "./excluded"
-import handover from "./handover"
+import { told } from "./said"
 import readings from "./readings"
 import progress from "./progress"
-import replicasync from "./replicasync"
+import copies from "./copies"
 import stores from "./stores"
 import type topics from "./topics"
 import type sealing from "./lines"
@@ -56,10 +57,8 @@ export namespace storesync {
 
   // The Inbox's rows at `at` and the chains they were priced through, read from the inbox alone: it never pulls the lines.
   export type Proposals = { readonly payload: InboxProposalsPayload; readonly held: readonly string[] }
-  export const proposals = async (at: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<text.Text<Proposals>> => {
-    const { held, answer } = await askHeld(() => ({ type: "Proposals", at, memory }), lane)
-    return text.object<Proposals>({ payload: answer, held: text.printed(held.held.map(c => c.name)) })
-  }
+  export const proposals = (at: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<text.Text<Proposals>> =>
+    chains.ask({ type: "Proposals", at, memory }, lane)
 
   // Asked of the worker, which answers once every store it reads is ready and every line it reads is held; measured as
   // `ask:<question>`.
@@ -115,6 +114,9 @@ export namespace storesync {
   // Each own line refused for good, with words, of a topic the box refused (`[Waiting]`, JSON).
   export const refused = (): Promise<string> => remote.ask({ type: "Refused" }, "Page")
 
+  // The copies this device keeps from before the last change of form, by store or chain.
+  export const earlier = (): Promise<readonly string[]> => remote.ask({ type: "Earlier" }, "Page")
+
   // One conversation over its own lines, read as the whole store reads it; absent where they hold none of it.
   export type One = questions.One
 
@@ -138,8 +140,14 @@ export namespace storesync {
     throw new CoreError(`no conversation named ${id}`)
   }
 
-  // The store a reading's row names, or none for a chain's.
-  export const named = (key: string): stores.Name | null => stores.NAMES.find(name => replicasync.kept(name) === key) ?? null
+  // The store or chain a reading's row names.
+  export type Named = { readonly type: "Store"; readonly name: stores.Name } | { readonly type: "Chain"; readonly name: string }
+  export const named = (key: string): Named | null => {
+    const store = stores.NAMES.find(name => copies.kept(name) === key)
+    if (store !== undefined) return { type: "Store", name: store }
+    const prefix = copies.kept(copies.chain(""))
+    return key.startsWith(prefix) ? { type: "Chain", name: key.slice(prefix.length) } : null
+  }
 
   // A store's row that does not read, written over by a reset and taken again from the box; a reset that fails is said.
   export const reset = async (name: stores.Name, said: (why: string) => void): Promise<void> =>
@@ -164,7 +172,7 @@ export namespace storesync {
       case "Bars":
         return bars.dispatch(s.e)
       case "Refused":
-        return handover.told(s.why)
+        return told(s.why)
       case "Moved": {
         const was = moving
         moving = was === null ? s.conversations : both(was, s.conversations)
@@ -186,6 +194,12 @@ export namespace storesync {
         return fx.stale()
       case "Unloaded":
         return fx.unloaded(s.why)
+      case "Chain":
+        return heardChain(s.chain, s.box)
+      case "Ours":
+        return ours(heads.of(s.heads))
+      case "Sealed":
+        return sealed(s.chain, s.names)
       default:
         return heardWorker(s)
     }

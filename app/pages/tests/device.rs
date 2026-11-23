@@ -1,5 +1,6 @@
 //! The device section offers a new key wherever this device holds a key row, read or not, and
-//! nowhere else; and the code from the box only to a key nobody trusts yet.
+//! nowhere else; and the code from the box only to a key nobody trusts yet. A copy kept from before
+//! the last change of form is said there once, quietly, asking nothing of the owner.
 
 use suzatary_pages::runtime::{Answer, Context, Gate, Input, Reach, Text};
 use suzatary_pages::settings::{Flags, Hold, Model, Msg, Settings};
@@ -7,6 +8,10 @@ use viewtree::kit::Reading;
 use viewtree::{Attr, Kids, Node, Program};
 
 fn model(signing: &serde_json::Value) -> Model {
+    model_with(signing, &[])
+}
+
+fn model_with(signing: &serde_json::Value, earlier: &[&str]) -> Model {
     let (mut model, _) = Settings::init(Flags {
         context: Context {
             gate: Gate::Writes,
@@ -33,7 +38,8 @@ fn model(signing: &serde_json::Value) -> Model {
         "persist": { "type": "Granted" },
         "usage": { "bytes": 0.0, "count": 0 },
         "budget": 1.0,
-        "signing": signing
+        "signing": signing,
+        "earlier": earlier
     });
     Settings::update(&mut model, held(Hold::Overview, overview));
     Settings::update(&mut model, held(Hold::Device, device));
@@ -55,6 +61,10 @@ fn kids<M>(k: &Kids<M>) -> impl Iterator<Item = &Node<M>> {
 }
 
 fn offered(signing: &serde_json::Value, act: &str) -> Vec<String> {
+    classed(&model(signing), act)
+}
+
+fn classed(model: &Model, act: &str) -> Vec<String> {
     fn walk<M>(n: &Node<M>, act: &str, out: &mut Vec<String>) {
         match n {
             Node::Element(e) => {
@@ -71,10 +81,29 @@ fn offered(signing: &serde_json::Value, act: &str) -> Vec<String> {
             Node::Text(..) | Node::Foreign(..) | Node::Block(..) => {}
         }
     }
-    let model = model(signing);
     let mut out = Vec::new();
-    walk(&Settings::view(&model), act, &mut out);
+    walk(&Settings::view(model), act, &mut out);
     out
+}
+
+#[test]
+fn a_copy_from_before_the_update_is_said_once_quietly_and_none_is_said_without_one() {
+    let signing = serde_json::json!({ "type": "Reads" });
+    let said = classed(
+        &model_with(&signing, &["topics", "topic-aliases"]),
+        "settingsearlier",
+    );
+    assert_eq!(said.len(), 1, "one sentence for every copy");
+    assert!(
+        said[0]
+            .starts_with("A copy of the topics and the topic aliases from before the last update")
+    );
+    assert!(said[0].contains("was not carried over: if one is missing, make it again"));
+    assert!(
+        !said[0].contains("nothing needs doing"),
+        "a write in the copy is never sent"
+    );
+    assert!(classed(&model_with(&signing, &[]), "settingsearlier").is_empty());
 }
 
 #[test]

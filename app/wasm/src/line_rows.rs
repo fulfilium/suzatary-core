@@ -79,6 +79,15 @@ impl Lines {
         self.0.rows().landed().replica().spoken().is_some()
     }
 
+    /// Whether the landed row holds all it says it holds: a log that lost its early frames does not,
+    /// and is taken again.
+    #[must_use]
+    pub fn closed(&self) -> bool {
+        self.0
+            .rows()
+            .closed(suzatary_store::replica::pulling::Lands::ByPiece)
+    }
+
     /// Whether the box's heads `heads` (`[<name>, …]`) name a node what is held does not read.
     pub fn behind(&self, heads: &str) -> Result<bool, JsError> {
         let heads = hashes(heads, "heads")?;
@@ -180,12 +189,11 @@ impl Lines {
         )
     }
 
-    /// A frame another tab appended taken: `moved`. A frame of another form moves nothing.
+    /// A frame another tab appended taken: `moved`. Refused, holding what it held, for a frame
+    /// of another form or one that does not read ([`lines_form`] says which).
     pub fn apply(&mut self, frame: &[u8]) -> Result<String, JsError> {
-        match line_form::unframe(frame).map_err(|e| refused(e.to_string()))? {
-            Some(frame) => moved(&self.0.apply(&frame)),
-            None => moved(&Moved::These(BTreeSet::new())),
-        }
+        let frame = line_form::unframe(frame).map_err(|e| refused(e.to_string()))?;
+        moved(&self.0.apply(&frame))
     }
 
     /// The rows and the husks, whole, in the core's form: what the device keeps, and the log after
@@ -196,17 +204,15 @@ impl Lines {
 
     /// The replica replaced by the snapshot `bytes` (none for the empty one) and then each frame of
     /// `frames` taken in order: `moved`. `frames` is the log's frames one after another, each after
-    /// its length as four little-endian bytes; a frame of another form is passed over. Refused,
-    /// holding what it held, for a snapshot of another form or a frame that does not read.
+    /// its length as four little-endian bytes. Refused, holding what it held, for a snapshot or a
+    /// frame of another form or one that does not read.
     pub fn load(&mut self, bytes: Option<Vec<u8>>, frames: &[u8]) -> Result<String, JsError> {
         let mut kept: LineReplica = match bytes {
             None => LineReplica::default(),
             Some(bytes) => snapshot::from_snapshot(&bytes).map_err(|e| refused(e.to_string()))?,
         };
         for frame in snapshot::frames(frames).map_err(|e| refused(e.to_string()))? {
-            if let Some(frame) = line_form::unframe(frame).map_err(|e| refused(e.to_string()))? {
-                kept.apply(&frame);
-            }
+            kept.apply(&line_form::unframe(frame).map_err(|e| refused(e.to_string()))?);
         }
         moved(&self.0.load(kept))
     }
@@ -296,4 +302,12 @@ pub(crate) fn whole(n: f64, what: &str) -> Result<u64, JsError> {
             "{what}: {n} is no whole number of 0 or more"
         )))
     }
+}
+
+/// `"This"`, `"Other"` or `"None"`: whether `bytes`, a snapshot or a frame of the lines, are of the
+/// form this build reads, of an earlier build's, or too short to name one.
+#[wasm_bindgen]
+#[must_use]
+pub fn lines_form(bytes: &[u8]) -> String {
+    crate::object_rows::form_of(<LineReplica as snapshot::Held>::FORM, bytes).to_owned()
 }

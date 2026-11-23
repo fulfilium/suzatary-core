@@ -288,7 +288,7 @@ proptest! {
         prop_assert_eq!(printed(&rebuilt), printed(&live));
         let mut read = LinePulling::default();
         for d in &deltas {
-            read.apply(&unframe(&frame(&framed(d)).expect("frames")).expect("reads").expect("of this form").delta);
+            read.apply(&unframe(&frame(&framed(d)).expect("frames")).expect("reads").delta);
         }
         prop_assert_eq!(printed(&read), printed(&live));
         let back: LineReplica = from_snapshot(&printed(&live)).expect("reads back");
@@ -332,10 +332,13 @@ proptest! {
 }
 
 #[test]
-fn a_frame_of_another_form_is_passed_over() {
+fn a_frame_of_another_form_reads_as_one() {
     let mut rows = LinePulling::default();
     let mut bytes = frame(&framed(&rows.start_over())).expect("frames");
     bytes[0] ^= 1;
-    assert!(matches!(unframe(&bytes), Ok(None)));
+    assert!(matches!(
+        unframe(&bytes),
+        Err(suzatary_store::snapshot::NotASnapshot::Form { .. })
+    ));
     assert_eq!(rows.landed().replica().frontier(), &Frontier::Nothing);
 }

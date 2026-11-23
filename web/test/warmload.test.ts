@@ -16,11 +16,10 @@ import type { Core, Lines, Named } from "../src/prodrome/core"
 import { barOf, framed, heldOf, holdAdmitted, inboxOf, lackingOf, listOfLines } from "../src/prodrome/core"
 import content from "../src/prodrome/content"
 import questions from "../src/prodrome/questions"
-import { headsOf as objectHeads } from "../src/prodrome/replica"
 import type { ContentPayload, PostedObjects, ReceiptPayload, SkeletonNode, SkeletonPayload, StorePayload, StoredObject } from "../src/wire/generated/wire"
 import { fakeIndexedDB } from "./fakeidb"
 import { forAllAsync } from "./gen"
-import { held as prodromes, storeOf } from "./held"
+import { headsOf as objectHeads, held as prodromes, storeOf } from "./held"
 
 const built = process.env["SUZATARY_PRODROME_WASM"]
 if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
@@ -357,7 +356,7 @@ const storesRead = async (t: Tab): Promise<string> => {
   const stream = await t.ask({ type: "Stream", chosen: [], pages: 1 })
   assert.equal(stream.type, "Held", JSON.stringify(stream))
   const bar: unknown = stream.type === "Held" ? JSON.parse(utf8.decode(stream.v.text.bytes)).read.bar : null
-  return JSON.stringify({ rows: JSON.parse(utf8.decode(rows.bytes)), bar })
+  return JSON.stringify({ rows: (JSON.parse(utf8.decode(rows.bytes)) as { payload: unknown }).payload, bar })
 }
 // The same, as cores handed the box's whole stores, cold, read them.
 const storesCold = (): string => {

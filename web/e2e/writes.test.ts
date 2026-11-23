@@ -152,6 +152,8 @@ app.scene("a page whose write the box refuses as older is never reloaded under t
   // 426. Nothing reloads under the reader (the box serves this page's own build, so nothing is offered), and the
   // build the next load runs sends the act the replica kept.
   await app.page.sendNextAsStale(["/objects"]);
+  // The core's worker posts the act: attached, its requests are journaled with the page's.
+  await app.page.inWorker("prodromework", "true");
   const journal = await app.page.journal();
   await app.page.click(".addsheet .pickerhandle");
   await app.page.waitFor(`document.querySelector(".addsheet.open") !== null`);

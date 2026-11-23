@@ -23,7 +23,7 @@
 
 import assert from "node:assert/strict";
 
-import { WRITE_BASE, shownTodos, suite, switchChain, untilReplica, pickCategory } from "./harness";
+import { WRITE_BASE, chainKept, shownTodos, suite, switchChain, untilReplica, pickCategory } from "./harness";
 
 const app = await suite("chains");
 
@@ -97,21 +97,7 @@ app.scene("the two replicas are independent rows", async () => {
   // ONE ROW PER CHAIN. `life`'s objects are still under its own key while the
   // reader is looking at the other list — a single row would have been
   // overwritten by the switch, which is how acts get lost.
-  const keys = await app.page.evaluate<string[]>(
-    `new Promise((resolve) => {
-      const request = indexedDB.open("suzatary");
-      request.onerror = () => resolve([]);
-      request.onsuccess = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains("chain")) { db.close(); resolve([]); return; }
-        const query = db.transaction("chain", "readonly").objectStore("chain").getAllKeys();
-        query.onerror = () => { db.close(); resolve([]); };
-        query.onsuccess = () => { const found = [...query.result]; db.close(); resolve(found); };
-      };
-    })`,
-  );
-  assert.ok(keys.includes("objects:life"), `life's replica should still be held, keys were ${keys.join(", ")}`);
-  assert.ok(keys.includes("objects:suzatary"), `and the one being read, keys were ${keys.join(", ")}`);
-  assert.ok(!keys.includes("objects"), "the single-chain key is not written any more");
+  assert.ok((await app.page.evaluate<number>(chainKept("life"))) > 0, "life's replica is still held")
+  assert.ok((await app.page.evaluate<number>(chainKept("suzatary"))) > 0, "and the one being read")
   await switchChain(app.page, "life");
 });

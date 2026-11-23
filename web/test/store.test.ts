@@ -6,8 +6,7 @@ import assert from "node:assert/strict"
 
 import type { Entry } from "../src/wire/generated/wire"
 import onscreen, { store } from "../src/app/store"
-import { ancestry } from "../src/prodrome/replica"
-import type { StoredObject } from "../src/wire/generated/wire"
+import heads from "../src/prodrome/heads"
 import fulfillment from "../src/todo/fulfillment"
 import { SLUG, forAll, type Rng } from "./gen"
 
@@ -38,18 +37,29 @@ const entries = (r: Rng): Entry[] => {
 
 // A small history: a root, two writes in a line, a third beside the second, and a merge of the two.
 const hex = (c: string): string => c.repeat(64)
-const sealed = (hash: string, prev: string): StoredObject => ({
-  hash,
-  literal: `Sealed(prev='${prev}', event=Completed(todo='alpha', at=datetime(2026, 9, 7, 12, 0, 0), actor='ada', note=''))`,
-})
 const [G, H1, H2, H3, H4] = ["0", "1", "2", "3", "4"].map(hex) as [string, string, string, string, string]
-const history: StoredObject[] = [
-  sealed(G, ""),
-  sealed(H1, G),
-  sealed(H2, H1),
-  sealed(H3, H1),
-  { hash: H4, literal: `Woven(parents=('${H2}', '${H3}'), event=None)` },
-]
+const history: ReadonlyMap<string, readonly string[]> = new Map([[G, []], [H1, [G]], [H2, [H1]], [H3, [H1]], [H4, [H2, H3]]])
+
+// How two head sets stand, read off `known`, as the core reads them off what a chain holds: a set naming what is not
+// known is unknown to every other.
+const ancestry = (known: ReadonlyMap<string, readonly string[]>): onscreen.Ancestry => {
+  const under = (names: readonly string[]): Set<string> | null => {
+    const seen = new Set<string>()
+    const left = [...names]
+    for (let n = left.pop(); n !== undefined; n = left.pop()) {
+      const parents = known.get(n)
+      if (parents === undefined) return null
+      if (!seen.has(n)) (seen.add(n), left.push(...parents))
+    }
+    return seen
+  }
+  return (a, b) => {
+    if (heads.same(heads.of(a), heads.of(b))) return "Same"
+    const [x, y] = [under(a), under(b)]
+    if (x === null || y === null) return "Unknown"
+    return a.every(n => y.has(n)) ? "Below" : b.every(n => x.has(n)) ? "Above" : "Apart"
+  }
+}
 const read = ancestry(history)
 const FRONTIERS: string[][] = [[G], [H1], [H2], [H3], [H2, H3], [H4]]
 const names = (r: Rng): string[] => r.pick(FRONTIERS)
@@ -93,7 +103,7 @@ test("law: of two concurrent folds by one reader the one shown stays; where the 
     for (const make of [box, local]) {
       const [a, b] = [make(r, [H2]), make(r, [H3])]
       assert.deepEqual(step2(onscreen.UNLOADED, a, b), onscreen.step(onscreen.UNLOADED, a))
-      const unheld = (): onscreen.Event => make(r, names(r), ancestry([]))
+      const unheld = (): onscreen.Event => make(r, names(r), ancestry(new Map()))
       const [x, y] = [unheld(), unheld()]
       assert.deepEqual(step2(onscreen.UNLOADED, x, y), onscreen.step(onscreen.UNLOADED, y))
     }

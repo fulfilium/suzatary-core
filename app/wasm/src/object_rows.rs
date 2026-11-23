@@ -6,11 +6,10 @@ use std::cell::OnceCell;
 use prodrome_core::event::{Envelope, Hash, parse_envelope};
 use prodrome_core::schema::Schema;
 use prodrome_wasm_exports::Replica;
-use suzatary_api::wire::StorePayload;
 use suzatary_lines::secretary::object_stores;
-use suzatary_lines::wire::lines::ReceiptPayload;
+use suzatary_lines::wire::lines::{ObjectsPayload, ReceiptPayload};
 use suzatary_store::replica::held::Node as _;
-use suzatary_store::replica::objects::{self, Move, Object, Objects};
+use suzatary_store::replica::objects::{self, Move, Object, Objects, Policy};
 use suzatary_store::replica::writes::{Answer, Refusal};
 use suzatary_store::{receipt, snapshot};
 use suzatary_stores::asks::{AskEvent, AskVocabulary};
@@ -19,18 +18,24 @@ use wasm_bindgen::JsError;
 use crate::line_rows::{Step, hashes, whole};
 use crate::{json, refused};
 
-pub struct Store<E: Schema> {
+/// `SIGNATURES`: whether a signature is read with what it signs. A todo chain's are, since who
+/// is trusted is read off them; a store's are not, so a signing keeps its reading.
+pub struct Store<E: Schema, const SIGNATURES: bool = false> {
     replica: Objects,
     read: OnceCell<Result<Replica<E>, String>>,
     version: u32,
+    /// The version a move last said moved: a piece that moves the policy alone is said by the
+    /// landing after it.
+    told: u32,
 }
 
-impl<E: Schema<Vocabulary: Default>> Default for Store<E> {
+impl<E: Schema<Vocabulary: Default>, const SIGNATURES: bool> Default for Store<E, SIGNATURES> {
     fn default() -> Self {
         Store {
             replica: Objects::default(),
             read: OnceCell::new(),
             version: 0,
+            told: 0,
         }
     }
 }
@@ -39,7 +44,7 @@ fn said(moved: bool) -> &'static str {
     if moved { "\"All\"" } else { "[]" }
 }
 
-impl<E: Schema<Vocabulary: Default>> Store<E> {
+impl<E: Schema<Vocabulary: Default>, const SIGNATURES: bool> Store<E, SIGNATURES> {
     /// The frontier a pull names as `since`, `""` for none.
     pub fn since(&self) -> String {
         self.replica
@@ -81,14 +86,93 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
         Ok(self.replica.rows().went_back(whole(epoch, "epoch")?))
     }
 
-    /// The box's `StorePayload` kept as a piece beside the landed row: the frame.
+    /// The box's answer kept as a piece beside the landed row: the frame. A store's answer and a
+    /// chain's both hold its `ObjectsPayload`, which is all a piece reads.
     pub fn piece(&mut self, answer: &str, fetched_at: f64) -> Result<Vec<u8>, JsError> {
-        let answer: StorePayload =
+        let answer: ObjectsPayload =
             serde_json::from_str(answer).map_err(|e| refused(format!("answer: {e}")))?;
-        let said = object_stores::said::<E>(&E::Vocabulary::default(), answer.objects)
+        let policy = Policy {
+            untrusted: answer.untrusted.iter().cloned().collect(),
+            root: answer.root.clone(),
+        };
+        let said = object_stores::said::<E>(&E::Vocabulary::default(), answer)
             .map_err(|e| refused(e.to_string()))?;
-        let m = self.replica.piece(said, whole(fetched_at, "fetched_at")?);
+        let fetched_at = whole(fetched_at, "fetched_at")?;
+        let m = self.moved(|r| r.piece(said, policy, fetched_at));
         framed(&m)
+    }
+
+    /// `{untrusted, root}` as the latest word heard said them, or `null` before the box spoke.
+    pub fn policy(&self) -> Result<String, JsError> {
+        json(
+            &self
+                .replica
+                .policy()
+                .map(|p| serde_json::json!({ "untrusted": p.untrusted, "root": p.root })),
+        )
+    }
+
+    /// The frame of letting `names` go, each unsent write named with what rests on it, made and
+    /// not taken: the replica takes it only through [`Store::apply`], once the caller kept the frame.
+    pub fn let_go(&self, names: &str) -> Result<Vec<u8>, JsError> {
+        let names = hashes(names, "names")?;
+        framed(&self.replica.letting_go(&names))
+    }
+
+    /// The frame of `literals`, a JSON array, written as the tab's own: what an earlier build kept
+    /// unsent, made and not taken, as [`Store::let_go`]'s is.
+    pub fn carry(&self, literals: &str) -> Result<Vec<u8>, JsError> {
+        let literals: Vec<String> =
+            serde_json::from_str(literals).map_err(|e| refused(format!("literals: {e}")))?;
+        let schema = E::Vocabulary::default();
+        // What this replica already wrote is carried once: its own answer stands.
+        let own: std::collections::BTreeSet<&Hash> =
+            self.replica.own().map(|o| o.node.name()).collect();
+        let objects = literals
+            .into_iter()
+            .map(|l| Object::read::<E>(&schema, l))
+            .filter(|o| !own.contains(o.name()))
+            .collect();
+        framed(&Objects::writing(objects))
+    }
+
+    /// Whether the landed rows hold all they say they hold: a log that lost its early frames does
+    /// not, and is taken again.
+    #[must_use]
+    pub fn closed(&self) -> bool {
+        self.replica.closed()
+    }
+
+    /// Whether the box holds all this replica holds and the landed row holds all the box said
+    /// it holds: nothing is this tab's alone, and the box's heads are the landed row's.
+    pub fn settled(&self) -> bool {
+        let landed = self.replica.rows().landed();
+        let reading = landed.replica().read();
+        self.replica.untaken().is_empty()
+            && reading.word().is_some_and(|w| w.heads == reading.heads())
+    }
+
+    /// The heads the box last said, as a JSON array, or `null` before it spoke.
+    pub fn box_heads(&self) -> Result<String, JsError> {
+        let landed = self.replica.rows().landed();
+        let reading = landed.replica().read();
+        json(
+            &reading
+                .word()
+                .map(|w| w.heads.iter().map(Hash::as_str).collect::<Vec<_>>()),
+        )
+    }
+
+    /// Every standing object, less each signature where a signature asserts nothing read here.
+    fn read_objects(replica: &Objects) -> impl Iterator<Item = &Object> {
+        replica
+            .standing()
+            .into_iter()
+            .filter(|o| SIGNATURES || !o.is_signature())
+    }
+
+    pub(crate) fn replica(&self) -> &Objects {
+        &self.replica
     }
 
     pub fn land(&mut self) -> Result<Step, JsError> {
@@ -102,16 +186,18 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
 
     /// `event` sealed as a `Change` over the kept reading, and kept unsent; none for a twin. A
     /// failed append leaves no reading kept, so the next question makes one afresh.
-    pub fn append(&mut self, event: &str) -> Result<Option<Step>, JsError> {
+    pub fn append(&mut self, event: &str) -> Result<Option<Vec<u8>>, JsError> {
         let mut read = match self.read.take() {
             Some(read) => read.map_err(refused)?,
             None => self.fresh().map_err(refused)?,
         };
+        // The reading now holds the event, which the replica does not until its frame is kept: the
+        // next reading is made afresh.
         let appended = prodrome_wasm_exports::append(&mut read, event, None).map_err(refused)?;
-        self.read = OnceCell::from(Ok(read));
         let appended: Appended =
             serde_json::from_str(&appended).map_err(|e| refused(format!("append: {e}")))?;
         if appended.objects.is_empty() {
+            self.read = OnceCell::from(Ok(read));
             return Ok(None);
         }
         let schema = E::Vocabulary::default();
@@ -120,9 +206,9 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
             .into_iter()
             .map(|o| Object::read::<E>(&schema, o.text))
             .collect();
-        let m = self.replica.write(objects);
-        self.version = self.version.wrapping_add(1);
-        Ok(Some(Step::of(framed(&m)?, said(true).to_owned())))
+        // Made and not taken: the replica takes it only through [`Store::apply`], once the caller
+        // kept the frame, so a move the device could not keep is not held either.
+        framed(&Objects::writing(objects)).map(Some)
     }
 
     /// `[[{hash, literal, keys}]]`: the unsent, in posts the box takes whole; an object of a store
@@ -200,10 +286,9 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
 
     /// A frame another tab appended taken: whether a reading moved.
     pub fn apply(&mut self, frame: &[u8]) -> Result<String, JsError> {
-        match objects::unframe(frame).map_err(|e| refused(e.to_string()))? {
-            Some(m) => Ok(said(self.moved(|r| r.apply(&m)).1).to_owned()),
-            None => Ok(said(false).to_owned()),
-        }
+        let m = objects::unframe(frame).map_err(|e| refused(e.to_string()))?;
+        self.moved(|r| r.apply(&m));
+        Ok(self.said().to_owned())
     }
 
     pub fn snapshot(&self) -> Result<Vec<u8>, JsError> {
@@ -212,17 +297,19 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
 
     /// The replica replaced by `bytes` and then `frames`: whether a reading moved. Refused,
     /// holding what it held, where one does not read.
+    /// What `bytes` and then `frames` hold joined into what this replica holds, so a move it made
+    /// meanwhile stays: whether a reading moved. Refused, holding what it held, where one does not
+    /// read.
     pub fn load(&mut self, bytes: Option<Vec<u8>>, frames: &[u8]) -> Result<String, JsError> {
         let mut kept: Objects = match bytes {
             None => Objects::default(),
             Some(bytes) => snapshot::from_snapshot(&bytes).map_err(|e| refused(e.to_string()))?,
         };
         for frame in snapshot::frames(frames).map_err(|e| refused(e.to_string()))? {
-            if let Some(m) = objects::unframe(frame).map_err(|e| refused(e.to_string()))? {
-                kept.apply(&m);
-            }
+            kept.apply(&objects::unframe(frame).map_err(|e| refused(e.to_string()))?);
         }
-        Ok(said(self.moved(|r| *r = kept).1).to_owned())
+        self.moved(|r| r.join(&kept));
+        Ok(self.said().to_owned())
     }
 
     /// Counts the moves of what a reading reads.
@@ -250,9 +337,9 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
     }
 
     /// The read objects as the Prodrome's replica reads them, `[{hash, text}]`.
-    fn standing(&self) -> Result<String, String> {
+    pub(crate) fn standing(&self) -> Result<String, String> {
         serde_json::to_string(
-            &read_objects(&self.replica)
+            &Self::read_objects(&self.replica)
                 .map(|o| serde_json::json!({ "hash": o.name().as_str(), "text": o.literal() }))
                 .collect::<Vec<_>>(),
         )
@@ -260,22 +347,32 @@ impl<E: Schema<Vocabulary: Default>> Store<E> {
     }
 
     fn step(&mut self, f: impl FnOnce(&mut Objects) -> Move) -> Result<Step, JsError> {
-        let (m, moved) = self.moved(f);
-        Ok(Step::of(framed(&m)?, said(moved).to_owned()))
+        let m = self.moved(f);
+        Ok(Step::of(framed(&m)?, self.said().to_owned()))
     }
 
-    /// `f` done to the replica: whether the standing objects moved.
-    fn moved<T>(&mut self, f: impl FnOnce(&mut Objects) -> T) -> (T, bool) {
-        let names =
-            |r: &Objects| -> Vec<Hash> { read_objects(r).map(|o| o.name().clone()).collect() };
-        let was = names(&self.replica);
+    /// Whether a reading moved since a move last said so.
+    fn said(&mut self) -> &'static str {
+        let news = self.version != self.told;
+        self.told = self.version;
+        said(news)
+    }
+
+    /// `f` done to the replica; a move of the standing objects or of the policy is a new version.
+    fn moved<T>(&mut self, f: impl FnOnce(&mut Objects) -> T) -> T {
+        let read = |r: &Objects| -> (Vec<Hash>, Option<Policy>) {
+            (
+                Self::read_objects(r).map(|o| o.name().clone()).collect(),
+                r.policy().cloned(),
+            )
+        };
+        let was = read(&self.replica);
         let done = f(&mut self.replica);
-        let moved = names(&self.replica) != was;
-        if moved {
+        if read(&self.replica) != was {
             self.read = OnceCell::new();
             self.version = self.version.wrapping_add(1);
         }
-        (done, moved)
+        done
     }
 }
 
@@ -295,15 +392,17 @@ impl<E: suzatary_stores::stores::Store<Vocabulary: Default>> Store<E> {
     pub fn refused_in(&mut self, asks: &Store<AskEvent>) -> Result<Option<Step>, JsError> {
         let objects = asks.standing_envelopes();
         let refused = receipt::refusals(objects.iter().map(|(name, o)| (name, o)), &E::KIND);
-        let (m, moved) = self.moved(|r| r.refused(refused));
+        let m = self.moved(|r| r.refused(refused));
         match &m {
             Move::Own(owned) if owned.is_empty() => Ok(None),
-            Move::Own(_) | Move::Rows(_) => Ok(Some(Step::of(framed(&m)?, said(moved).to_owned()))),
+            Move::Own(_) | Move::Rows(_) | Move::Piece { .. } => {
+                Ok(Some(Step::of(framed(&m)?, self.said().to_owned())))
+            }
         }
     }
 }
 
-impl<E: suzatary_stores::stores::Written<Vocabulary: Default>> Store<E> {
+impl<E: Schema<Vocabulary: Default>, const SIGNATURES: bool> Store<E, SIGNATURES> {
     /// `[{hash, reason, literal, words, at, signature}]`: what the box has not taken yet, in the
     /// rule's words; `literal`, `words` and `at` are the lines' alone, and null here; a signature
     /// tells nothing of its own, and is marked so.
@@ -317,11 +416,6 @@ impl<E: suzatary_stores::stores::Written<Vocabulary: Default>> Store<E> {
                 .collect::<Vec<_>>(),
         )
     }
-}
-
-/// Every standing object but a signature, which asserts no event, so a signing keeps the reading.
-fn read_objects(replica: &Objects) -> impl Iterator<Item = &Object> {
-    replica.standing().into_iter().filter(|o| !o.is_signature())
 }
 
 fn framed(m: &Move) -> Result<Vec<u8>, JsError> {
@@ -345,13 +439,53 @@ struct Text {
 /// `waiting`; a store not named so is asserted the box's alone.
 macro_rules! objects_store {
     ($name:ident = $schema:ty, written) => {
-        $crate::object_rows::objects_store!(@base $name = $schema);
+        $crate::object_rows::objects_store!(@base $name = $schema, false);
+        $crate::object_rows::objects_store!(@refusable $name);
         $crate::object_rows::objects_store!(@readings $name);
+        $crate::object_rows::objects_store!(@waiting $name);
+    };
+    // A todo chain: a tab writes it, under the policy the box serves it with; the asks name none
+    // of its refusals, which its own receipts carry.
+    ($name:ident = $schema:ty, chain) => {
+        $crate::object_rows::objects_store!(@base $name = $schema, true);
+        $crate::object_rows::objects_store!(@waiting $name);
 
+        #[wasm_bindgen::prelude::wasm_bindgen]
+        impl $name {
+            pub fn policy(&self) -> Result<String, wasm_bindgen::JsError> {
+                self.0.policy()
+            }
+            pub fn let_go(&self, names: &str) -> Result<Vec<u8>, wasm_bindgen::JsError> {
+                self.0.let_go(names)
+            }
+            pub fn carry(&self, literals: &str) -> Result<Vec<u8>, wasm_bindgen::JsError> {
+                self.0.carry(literals)
+            }
+            #[must_use]
+            pub fn settled(&self) -> bool {
+                self.0.settled()
+            }
+            pub fn box_heads(&self) -> Result<String, wasm_bindgen::JsError> {
+                self.0.box_heads()
+            }
+        }
+    };
+    (@waiting $name:ident) => {
         #[wasm_bindgen::prelude::wasm_bindgen]
         impl $name {
             pub fn waiting(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.waiting()
+            }
+        }
+    };
+    (@refusable $name:ident) => {
+        #[wasm_bindgen::prelude::wasm_bindgen]
+        impl $name {
+            pub fn refused_in(
+                &mut self,
+                asks: &$crate::asks::Asks,
+            ) -> Result<Option<$crate::line_rows::Step>, wasm_bindgen::JsError> {
+                self.0.refused_in(&asks.0)
             }
         }
     };
@@ -360,7 +494,8 @@ macro_rules! objects_store {
         $crate::object_rows::objects_store!(@readings $name);
     };
     ($name:ident = $schema:ty, unread) => {
-        $crate::object_rows::objects_store!(@base $name = $schema);
+        $crate::object_rows::objects_store!(@base $name = $schema, false);
+        $crate::object_rows::objects_store!(@refusable $name);
         const _: () = assert!(
             matches!(
                 <$schema as suzatary_stores::stores::Store>::KIND.writer(),
@@ -386,11 +521,11 @@ macro_rules! objects_store {
             }
         }
     };
-    (@base $name:ident = $schema:ty) => {
+    (@base $name:ident = $schema:ty, $signatures:literal) => {
         #[doc = concat!("The store of objects at `", stringify!($schema), "` the tab holds.")]
         #[wasm_bindgen::prelude::wasm_bindgen]
         #[derive(Default)]
-        pub struct $name(pub(crate) $crate::object_rows::Store<$schema>);
+        pub struct $name(pub(crate) $crate::object_rows::Store<$schema, $signatures>);
 
         #[wasm_bindgen::prelude::wasm_bindgen]
         impl $name {
@@ -435,8 +570,12 @@ macro_rules! objects_store {
             pub fn append(
                 &mut self,
                 event: &str,
-            ) -> Result<Option<$crate::line_rows::Step>, wasm_bindgen::JsError> {
+            ) -> Result<Option<Vec<u8>>, wasm_bindgen::JsError> {
                 self.0.append(event)
+            }
+            #[must_use]
+            pub fn closed(&self) -> bool {
+                self.0.closed()
             }
             pub fn unsent(&self) -> Result<String, wasm_bindgen::JsError> {
                 self.0.unsent()
@@ -452,12 +591,6 @@ macro_rules! objects_store {
                 literal: &str,
             ) -> Result<$crate::line_rows::Step, wasm_bindgen::JsError> {
                 self.0.signed(literal)
-            }
-            pub fn refused_in(
-                &mut self,
-                asks: &$crate::asks::Asks,
-            ) -> Result<Option<$crate::line_rows::Step>, wasm_bindgen::JsError> {
-                self.0.refused_in(&asks.0)
             }
             pub fn answered(
                 &mut self,
@@ -500,3 +633,22 @@ pub(crate) use objects_store;
 #[cfg(test)]
 #[path = "object_rows_signed.rs"]
 mod signed;
+
+/// Whether `bytes`, a snapshot or a frame printed under a replica's form, are of `form` (`"This"`),
+/// of another (`"Other"`, an earlier build's), or too short to name one (`"None"`).
+pub(crate) fn form_of(form: u32, bytes: &[u8]) -> &'static str {
+    match bytes.first_chunk::<4>() {
+        None => "None",
+        Some(found) if u32::from_le_bytes(*found) == form => "This",
+        Some(_) => "Other",
+    }
+}
+
+/// `"This"`, `"Other"` or `"None"`: whether `bytes`, a snapshot or a frame of a store of objects (a
+/// chain's among them), are of the form this build reads, of an earlier build's, or too short to
+/// name one.
+#[wasm_bindgen::prelude::wasm_bindgen]
+#[must_use]
+pub fn objects_form(bytes: &[u8]) -> String {
+    form_of(<Objects as snapshot::Held>::FORM, bytes).to_owned()
+}

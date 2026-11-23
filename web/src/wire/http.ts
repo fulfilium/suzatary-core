@@ -259,8 +259,10 @@ export namespace http {
 
   // A post the browser still delivers once the page is gone (`keepalive`), within its 64 KiB for such requests: a larger
   // one goes as `act` does, and what it carried is posted again at the next load.
+  // Bounded like a read: a post the box never answers fails, unanswered, and goes with the next sync, so nothing waits
+  // on it for ever.
   export const handOver = <A>(path: string, body: unknown, decoder: d.Decoder<A>): Promise<A> =>
-    inflight.held(acting(path, body, undefined, "Outlives")).then(t => decoded(path, decoder, JSON.parse(t)))
+    inflight.held(acting(path, body, wait.MS, "Outlives")).then(t => decoded(path, decoder, JSON.parse(t)))
 
   // The most bytes a post that outlives its page carries, under the browser's 64 KiB for every such post in flight.
   const OUTLIVES = 60_000

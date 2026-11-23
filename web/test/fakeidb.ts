@@ -131,17 +131,24 @@ export const fakeIndexedDB = (): Fake => {
           const keyOf = (v: unknown, k?: string): string => k ?? String((v as Record<string, unknown>)[path ?? ""])
           return {
             // Each row in key order, one success each, then a last with no cursor; the rows as they stood when opened.
-            // The transaction stays open until the last.
-            openCursor: () => {
+            // The transaction stays open until the last. A row the cursor is at may be deleted through it.
+            openCursor: (k?: Key) => {
               asked = true
               open += 1
               const r: Req = { result: undefined, error: null, onsuccess: null, onerror: null }
               once(() => {
-                const rows = keys().map(x => structuredClone(staged().get(x)))
+                const named = keys(k)
+                const rows = named.map(x => structuredClone(staged().get(x)))
                 let at = 0
                 const step = (): void => {
                   if (at < rows.length) {
-                    r.result = { value: rows[at], continue: () => void ((at += 1), later(step)) }
+                    const key = named[at]!
+                    r.result = {
+                      key,
+                      value: rows[at],
+                      continue: () => void ((at += 1), later(step)),
+                      delete: () => ((deletes += 1), void staged().delete(key)),
+                    }
                     return r.onsuccess?.()
                   }
                   r.result = null

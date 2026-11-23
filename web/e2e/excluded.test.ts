@@ -12,7 +12,7 @@
 
 import assert from "node:assert/strict";
 
-import { WRITE_BASE, suite } from "./harness";
+import { WRITE_BASE, suite, untilReplica } from "./harness";
 
 const app = await suite("excluded");
 
@@ -87,10 +87,11 @@ function untilInbox(): Promise<void> {
 
 /**
  * These copies spoiled, each a row of a store of the database by its key, from a document of the same origin that runs
- * no app, as a broken write or an older build would leave them: a chain's row as a row no build reads, a store's
- * snapshot (`"bytes"`) as bytes of no form the core reads. Then the secretary's page, which reads them.
+ * no app, as a broken write or an older build would leave them: an earlier build's row of a chain as a row no build
+ * reads; a snapshot of the stores of objects' form that does not read (`"unread"`); a snapshot of another form, as an
+ * earlier build leaves it (`"earlier"`).
  */
-async function spoil(copies: readonly (readonly [string, string, ("row" | "bytes")?])[]): Promise<void> {
+async function spoil(copies: readonly (readonly [string, string, ("row" | "unread" | "earlier")])[]): Promise<void> {
   await app.page.navigate(`${WRITE_BASE}/.well-known/assetlinks.json`);
   await app.page.evaluate(`new Promise((resolve, reject) => {
     const request = indexedDB.open("suzatary");
@@ -99,7 +100,8 @@ async function spoil(copies: readonly (readonly [string, string, ("row" | "bytes
       const db = request.result;
       const copies = ${JSON.stringify(copies)};
       const tx = db.transaction([...new Set(copies.map(([store]) => store))], "readwrite");
-      for (const [store, key, value] of copies) tx.objectStore(store).put(value === "bytes" ? { through: 1, bytes: new Uint8Array([1, 2, 3, 4, 5]) } : { objects: "not a list" }, key);
+      const snapshot = (bytes) => ({ through: 1, bytes: new Uint8Array(bytes) });
+      for (const [store, key, value] of copies) tx.objectStore(store).put(value === "unread" ? snapshot([2, 0, 0, 0, 255, 255, 255, 255]) : value === "earlier" ? snapshot([1, 2, 3, 4, 5]) : { objects: "not a list" }, key);
       tx.oncomplete = () => { db.close(); resolve(true); };
       tx.onerror = () => reject(tx.error);
     };
@@ -145,50 +147,62 @@ app.scene("a print this device cannot read is left out, the page draws, and one 
   );
 }, HELD);
 
-app.scene("a chain's copy that does not read is named, with the one reset that writes over it", async () => {
+const row = (copy: string): string => `#excluded li[data-row="store/chain/${copy}"]`;
+
+/** Whether the device still keeps an earlier build's row of `chain`. */
+const carryKept = (chain: string): string => `new Promise((resolve) => {
+  const request = indexedDB.open("suzatary");
+  request.onsuccess = () => {
+    const query = request.result.transaction("chain", "readonly").objectStore("chain").get("carry:${chain}");
+    query.onsuccess = () => { request.result.close(); resolve(query.result !== undefined); };
+    query.onerror = () => resolve(true);
+  };
+  request.onerror = () => resolve(true);
+})`;
+
+app.scene("a chain's copy an earlier build kept that does not read is named, with the one reset that writes over it", async () => {
   await app.open(WRITE_BASE);
-  await spoil([["chain", "objects:life"]]);
-  await app.page.waitFor(`document.querySelector('#excluded li[data-row="life"]') !== null`, { timeout: 15000 });
-  assert.match(await app.page.evaluate<string>(`document.querySelector("#excluded summary").textContent`), /this device's copy of life needs you/i);
+  await spoil([["chain", "carry:life", "row"]]);
+  await app.page.navigate(`${WRITE_BASE}/#/`);
+  await app.page.waitFor(`document.querySelector('${row("life")}') !== null`, { timeout: 15000 });
+  assert.match(await app.page.evaluate<string>(`document.querySelector("#excluded summary").textContent`), /needs you/i);
   await app.page.click("#excluded summary");
-  const said = await app.page.evaluate<string>(`document.querySelector('#excluded li[data-row="life"]').textContent`);
+  const said = await app.page.evaluate<string>(`document.querySelector('${row("life")}').textContent`);
   assert.match(said, /does not read/, "it says why");
   assert.match(said, /writes over that copy/, "and that the reset writes over it");
-  await app.page.click(`#excluded li[data-row="life"] button`);
-  // The row reads again, as the reset's generation, and fills from the box; its entry goes once it does (the line
-  // stays for the print the scene above left in the inbox's row).
-  await app.page.waitFor(`document.querySelector('#excluded li[data-row="life"]') === null`, { timeout: 15000 });
-  await app.page.waitFor(
-    `new Promise((resolve) => {
-      const request = indexedDB.open("suzatary");
-      request.onsuccess = () => {
-        const query = request.result.transaction("chain", "readonly").objectStore("chain").get("objects:life");
-        query.onsuccess = () => { const row = query.result; request.result.close(); resolve(Array.isArray(row?.objects) && row.objects.length > 0 && row.generation >= 1); };
-        query.onerror = () => resolve(false);
-      };
-      request.onerror = () => resolve(false);
-    })`,
-    { timeout: 15000 },
-  );
+  await app.page.click(`${row("life")} button`);
+  await app.page.waitFor(`document.querySelector('${row("life")}') === null`, { timeout: 15000 });
+  assert.equal(await app.page.evaluate<boolean>(carryKept("life")), false, "the reset wrote over it");
+  await untilReplica(app.page, "life");
 });
 
 /**
  * A reading that moves what is left out draws the line again, and a reader who opened it finds it open: the reset of
- * one chain's copy moves it, and the other chain's reset is still there to tap. A store's copy of no form the core reads
- * is no row to reset: it is dropped and the store is taken again from the box, so the line never names it.
+ * one chain's row moves it, and the other chain's reset is still there to tap. A part of a log that does not read in
+ * this build's form is set aside, never deleted, and named with the reset that removes it; an earlier build's copy of a
+ * store the box alone writes goes without a word, and the store is taken again from the box.
  */
-app.scene("the line stays open while a reset moves it, and a store's copy that does not read is taken again unsaid", async () => {
+app.scene("the line stays open while a reset moves it; a log that does not read is set aside and named, an earlier build's inbox goes unsaid", async () => {
   await app.open(WRITE_BASE);
   await untilInbox();
-  await spoil([["chain", "objects:life"], ["chain", "objects:suzatary"], ["replica", "inbox/snapshot", "bytes"]]);
-  const row = (copy: string): string => `#excluded li[data-row="${copy}"]`;
+  await untilReplica(app.page, "life");
+  await spoil([
+    ["chain", "carry:life", "row"],
+    ["chain", "carry:suzatary", "row"],
+    ["replica", "chain/life/snapshot", "unread"],
+    ["replica", "inbox/snapshot", "earlier"],
+  ]);
+  await app.page.navigate(`${WRITE_BASE}/#/`);
   await app.page.waitFor(`document.querySelector('${row("life")}') !== null && document.querySelector('${row("suzatary")}') !== null`, { timeout: 15000 });
+  await app.page.waitFor(`[...document.querySelectorAll('${row("life")}')].some((li) => /kept aside/.test(li.textContent))`, { timeout: 15000 });
+  await untilInbox();
   await app.page.click("#excluded summary");
-  assert.equal(await app.page.evaluate<number>(`document.querySelectorAll('#excluded li[data-row^="store/"]').length`), 0, "no store's copy is named");
+  assert.equal(await app.page.evaluate<number>(`document.querySelectorAll('#excluded li[data-row="store/inbox"]').length`), 0, "the inbox's earlier copy is named nowhere");
   await app.page.click(`${row("life")} button`);
   await app.page.waitFor(`document.querySelector('${row("life")}') === null`, { timeout: 15000 });
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector("#excluded details").open`), true, "drawn again, the line is as the reader left it");
   await app.page.click(`${row("suzatary")} button`);
   await app.page.waitFor(`document.querySelector('${row("suzatary")}') === null`, { timeout: 15000 });
+  await untilReplica(app.page, "life");
   await untilInbox();
 });

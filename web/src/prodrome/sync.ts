@@ -1,660 +1,319 @@
 /**
- * The replica's effectful shell: IndexedDB, the exchange with the box, and the fold in the tab.
- * One exchange for online and offline alike (push what the box lacks, pull what we lack), so a bad network
- * has no second code path. Local-first: the cached fold, then the replica's fold, then the box's answer.
- * `stepSync` is the whole table; a second caller waits on the source for an in-flight read to clear.
- * `commit`'s chain check stays outside `stepSync`, since `step` reads nothing but its two arguments.
+ * The page's side of the chains, which the core's worker holds (`chainsync`): the fold on screen read from the worker's
+ * answer, the box's fold beside it, and every act and exchange asked of the worker. The page holds no copy of a chain:
+ * what it shows of one is an answer, and what it knows of the box's heads is what the worker last said.
  */
 
-import { fold, objectsSince, postObjects } from "../wire/api";
-import handover from "./handover";
-import type { FoldPayload } from "../wire/generated/wire";
-import primed from "../app/primed";
-import { cacheKey, fits, parseFold, printFold } from "../app/cache";
-import app from "../app/app";
-import type { HeldChain, Standing } from "./core";
-import { loadCore, signedObject } from "./core";
-import remote from "./remote";
-import type questions from "./questions";
-import type lanes from "./lanes";
-import signer from "./signer";
-import type device from "../app/device";
-import richkeep from "../app/richkeep";
-import kv from "../app/kv";
-import type { Write } from "./objects";
-import { CHAIN, heldRow, holdRow } from "./objects";
-import idb from "../app/idb";
-import lo from "../algebra/lo";
-import heads from "./heads";
-import excluded from "./excluded";
-import readings from "./readings";
-import type { Replica } from "./replica";
-import { NOTHING, ancestry, appended, boxHeadsOf, join, landed, pulled, rootOf, said, sameSet, sinceOf, stranded, unsignedWrites, unsynced, untrustedOf, wentBack } from "./replica";
-import time from "../app/time";
-import onscreen, { store } from "../app/store";
-import serial from "../algebra/serial";
-import folds from "./folds";
-import once from "../algebra/once";
-import sources from "../algebra/source";
+import { fold } from "../wire/api"
+import type { FoldPayload } from "../wire/generated/wire"
+import type { UnsentRead } from "../wire/generated/pages"
+import primed from "../app/primed"
+import { cacheKey, fits, parseFold, printFold } from "../app/cache"
+import app from "../app/app"
+import type { Order, Standing } from "./core"
+import remote from "./remote"
+import type questions from "./questions"
+import lanes from "./lanes"
+import signer from "./signer"
+import type device from "../app/device"
+import richkeep from "../app/richkeep"
+import kv from "../app/kv"
+import heads from "./heads"
+import excluded from "./excluded"
+import readings from "./readings"
+import { told } from "./said"
+import time from "../app/time"
+import onscreen, { store } from "../app/store"
+import serial from "../algebra/serial"
+import folds from "./folds"
+import sources from "../algebra/source"
 
 /** The box's last fold, kept on the device and dated, for the first paint of the next visit. */
 function keep(payload: FoldPayload, fetchedAt: number): void {
-  const printed = printFold({ at: payload.at, fetchedAt, entries: payload.entries });
+  const printed = printFold({ at: payload.at, fetchedAt, entries: payload.entries })
   // A fold too big is not kept, rather than evicting the reader's remembered filter for it.
-  if (fits(printed)) kv.local.set(cacheKey(), printed);
+  if (fits(printed)) kv.local.set(cacheKey(), printed)
 }
 
-// --- the state, and the fold -------------------------------------------------
+// --- Asking the worker ---------------------------------------------------------
 
-/** A refusal is a decision, shown until the next exchange and never retried; `on` names the chain an exchange is about. */
-export type Phase =
-  | { readonly kind: "idle" }
-  | { readonly kind: "pushing"; readonly on: string }
-  | { readonly kind: "pulling"; readonly on: string }
-  | { readonly kind: "refused"; readonly reason: string };
-
-export interface SyncState {
-  /** Never null: a replica holding nothing is a value. */
-  readonly replica: Replica;
-  /** Set only by a chain switch, so an exchange in flight stays about the chain it started on. */
-  readonly holding: string;
-  readonly phase: Phase;
-  /** The chain whose fold fetch (`/api/fold`) is in flight, or null. */
-  readonly fetching: string | null;
-}
-
-export type SyncEvent =
-  | { readonly kind: "chainSwitched"; readonly on: string }
-  /** A row kept on the device, or read from it: joined into what is held, so memory only climbs. */
-  | { readonly kind: "committed"; readonly replica: Replica }
-  | { readonly kind: "pushing"; readonly on: string }
-  | { readonly kind: "pulling"; readonly on: string }
-  | { readonly kind: "refused"; readonly reason: string }
-  | { readonly kind: "exchangeSettled" }
-  | { readonly kind: "fetchStarted"; readonly on: string }
-  | { readonly kind: "fetchSettled" };
-
-export const INITIAL_SYNC: SyncState = {
-  replica: NOTHING,
-  holding: app.now().chain,
-  phase: { kind: "idle" },
-  fetching: null,
-};
-
-/** A flag already set returns the same reference, so the source's `Object.is` dedup wakes no waiter. */
-export function stepSync(state: SyncState, event: SyncEvent): SyncState {
-  switch (event.kind) {
-    case "chainSwitched":
-      // The memo only: a running exchange stops at its next step once `holding` is no longer its `on`.
-      return { ...state, replica: NOTHING, holding: event.on };
-    case "committed": {
-      const replica = join(state.replica, event.replica);
-      return replica === state.replica ? state : { ...state, replica };
-    }
-    case "pushing":
-    case "pulling":
-      return state.phase.kind === event.kind && state.phase.on === event.on
-        ? state
-        : { ...state, phase: { kind: event.kind, on: event.on } };
-    case "refused":
-      return { ...state, phase: { kind: "refused", reason: event.reason } };
-    case "exchangeSettled":
-      return state.phase.kind === "idle" ? state : { ...state, phase: { kind: "idle" } };
-    case "fetchStarted":
-      return state.fetching === event.on ? state : { ...state, fetching: event.on };
-    case "fetchSettled":
-      return state.fetching === null ? state : { ...state, fetching: null };
-  }
-}
-
-const source = sources.create<SyncState, SyncEvent>(INITIAL_SYNC, stepSync);
-
-/** Wakes only on the events that move `replica`, never on a phase change; returns its own removal. */
-export function watchReplica(listener: () => void): () => void {
-  return source.subscribe((_state, event) => {
-    if (event.kind === "committed" || event.kind === "chainSwitched") listener();
-  });
-}
-
-export function held(): Replica {
-  return source.state().replica;
-}
-
-function whenClear(clear: (state: SyncState) => boolean): Promise<void> {
-  return new Promise((resolve) => {
-    const stop = source.subscribe((state) => {
-      if (clear(state)) {
-        stop();
-        resolve();
-      }
-    });
-  });
-}
-
-/**
- * Kept on the device first, then joined into memory from the row the write left, so nothing reaches memory, nor an
- * exchange reading it, that the device did not keep. A join that comes back on a later generation landed nowhere.
- */
-async function commit(write: Write<Replica>): Promise<lo.Settled<Replica>> {
-  const holding = source.state().holding;
-  // An answer about another chain is dropped, never stored under this one; it reports kept, since its own row is on disk.
-  if (holding !== app.now().chain) return write.type === "Join" ? lo.val(write.replica) : lo.error("the chain changed before the reset was kept");
-  // Without IndexedDB memory is the only copy: what the box sent is still held for this session, and no act is sealed.
-  if (!idb.available() && write.type === "Join") {
-    joinIn(holding, write.replica);
-    return lo.val(source.state().replica);
-  }
-  const row = await holdRow(CHAIN, holding, write);
-  // What another tab of this browser kept comes back with the row, joined in, its reset included.
-  if (row.type === "Val") joinIn(holding, row.v);
-  return write.type === "Join" ? lo.bind(row, (r) => landed(write.replica, r)) : row;
-}
-
-/** `row` joined into what is held, unless the tab moved to another chain meanwhile; and what it strands, named. */
-function joinIn(on: string, row: Replica): void {
-  if (source.state().holding !== on) return;
-  source.dispatch({ kind: "committed", replica: row });
-  const lost = stranded(source.state().replica);
-  readings.told(
-    `stranded/${on}`,
-    excluded.left(excluded.NONE, [], lost.length === 0 ? [] : [{
-      chain: on,
-      why: `${lost.length} unsent ${lost.length === 1 ? "act was" : "acts were"} written in a store the box no longer serves; kept on this device, and sent if it serves it again, unless this replica is reset`,
-      cure: "None",
-    }]),
-  );
-}
-
-/**
- * Drops the memory only; each chain's row stays on disk. A replica left standing would have the next chain's
- * acts sealed onto the previous chain's objects. The fold resets too, to an unloaded page, not an empty list.
- */
-export function forgetChainReplica(): void {
-  // The chain left keeps acts on disk this session's memory of it never saw, so it is read from disk again.
-  others.delete(source.state().holding);
-  source.dispatch({ kind: "chainSwitched", on: app.now().chain });
-  others.delete(app.now().chain);
-  store.dispatch({ type: "Reset" });
-}
-
-/**
- * Before the first route, so an act taken offline is still here after the phone was locked: the row on this device,
- * joined into what the tab holds, which also takes in what another tab of this browser kept since.
- */
-export async function restoreReplica(): Promise<void> {
-  const on = source.state().holding;
-  const found = await heldRow(CHAIN, on);
-  if (found.type === "Held") joinIn(on, found.v);
-  // The fold the loader asked the box for is read from what the device holds instead, so its answer goes unread.
-  if (found.type === "Held" && found.v.objects.length > 0) primed.cancel(primed.fold(on));
-  // A row that does not read is said, with the one write that may stand in for it; nothing else is kept until then.
-  readings.told(`row/${on}`, excluded.left(excluded.NONE, [], found.type === "Unreadable" ? [excluded.unread(on, found.why)] : []));
-}
-
-
-/** The chains held now, and the open chain's name and replica as the holding read it. */
-async function heldNow(): Promise<Holding> {
-  await restoreReplica();
-  const { holding } = source.state();
-  const served = app.now().served;
-  const names = served.includes(holding) ? served : [holding, ...served];
-  const rows = await Promise.all(names.map((name) => (name === holding ? Promise.resolve(lo.val(NOTHING)) : otherHeld(name))));
-  // The open chain as it is once the others are read, so a reading made right after holds every act sealed meanwhile.
-  const open = source.state().holding === holding ? source.state().replica : NOTHING;
-  const held = names.flatMap((name, i): HeldChain[] => {
-    if (name === holding) return open.objects.length === 0 ? [] : [{ name, replica: open }];
-    // A row that does not read is left out like one held nowhere, and `pullServed` says which and why.
-    const r = rows[i];
-    return r?.type !== "Val" || r.v.objects.length === 0 ? [] : [{ name, replica: r.v }];
-  });
-  return { held, holding, replica: open };
-}
-
-/** What the core's worker holds once every chain held now is sent to it: the chains, and the open one as read. */
-export interface Holding {
-  readonly held: readonly HeldChain[];
-  readonly holding: string;
-  readonly replica: Replica;
-}
-
-/** What a question of the shell's lane about the chains waits for before anything of it is read or sent. */
-let shellAfter: Promise<void> = Promise.resolve();
+/** What a question of the shell's lane about the chains waits for before it is sent. */
+let shellAfter: Promise<void> = Promise.resolve()
 
 /** Said once by the shell: its questions about the chains wait until the first page has drawn. */
 export function shellAsksAfter(after: Promise<void>): void {
-  shellAfter = after;
+  shellAfter = after
 }
 
-const turnOf = (lane: lanes.Lane): Promise<void> => (lane === "Shell" ? shellAfter : Promise.resolve());
+const turnOf = (lane: lanes.Lane): Promise<void> => (lane === "Shell" ? shellAfter : Promise.resolve())
 
-/**
- * The core's answer about the chains held now: every chain the tab holds, sent to its worker by what changed since the
- * last time, and the question right behind it in `lane`, with no wait between, so the answer reads that holding or a
- * later one.
- */
-export async function askHeld<K extends questions.Kind>(
-  question: (h: Holding) => questions.Of<K>,
-  lane: lanes.Lane,
-): Promise<{ readonly held: Holding; readonly answer: questions.Answer<K> }> {
-  await turnOf(lane);
-  const held = await heldNow();
-  return { held, answer: await askOf(held, question, lane) };
+/** The chains the box serves, the open one first where it serves it not: what the worker holds. */
+const served = (): readonly string[] => {
+  const { chain, served } = app.now()
+  return served.includes(chain) ? served : [chain, ...served]
 }
 
-/** `askHeld` over a holding already read, so a caller can look at it before anything is asked. */
-async function askOf<K extends questions.Kind>(held: Holding, question: (h: Holding) => questions.Of<K>, lane: lanes.Lane): Promise<questions.Answer<K>> {
-  const holding = remote.hold(held.held.map((c) => ({ name: c.name, objects: c.replica.objects, untrusted: untrustedOf(c.replica) })));
-  const answer = remote.ask(question(held), lane);
-  await holding;
-  return answer;
+let toldServed = ""
+
+/** `q` asked of the worker in `lane`, behind the chains served as the tab knows them now. */
+export async function ask<K extends questions.Kind>(q: questions.Of<K>, lane: lanes.Lane): Promise<questions.Answer<K>> {
+  await turnOf(lane)
+  const names = served()
+  const key = JSON.stringify(names)
+  // In the first lane, so the worker takes it before any question asked after it.
+  if (key !== toldServed) {
+    toldServed = key
+    void remote.ask({ type: "Served", chains: names }, lanes.FIRST)
+  }
+  return remote.ask(q, lane)
 }
 
-// --- The other chains -------------------------------------------------------------
+// --- What the worker says of the chains ----------------------------------------------------
 
-/**
- * Each served chain but the open one: its row on this device read once, joined with what this session pulled. Memory only,
- * so a pull never races the open chain's row on disk.
- */
-const others = new Map<string, Replica>();
-const othersHeard = new Set<() => void>();
+type Heard = { readonly chain: string; readonly box: ReadonlyMap<string, heads.Heads | null> }
+const heard = sources.create<Heard, { readonly chain: string; readonly box: readonly string[] | null }>(
+  { chain: "", box: new Map() },
+  (h, e) => ({ chain: e.chain, box: new Map([...h.box, [e.chain, e.box === null ? null : heads.of(e.box)]]) }),
+)
 
-/** Wakes when a pull brings another chain something, so a reading that links into it reprices; returns its own removal. */
+/** Said by the worker: a reading of `chain` moved, and the heads the box last said of it. */
+export function heardChain(chain: string, box: readonly string[] | null): void {
+  heard.dispatch({ chain, box })
+}
+
+/** Wakes when a reading of the open chain moves; returns its own removal. */
+export function watchReplica(listener: () => void): () => void {
+  return heard.subscribe(h => {
+    if (h.chain === app.now().chain) listener()
+  })
+}
+
+/** Wakes when a reading of another chain moves, so a reading that links into it reprices; returns its own removal. */
 export function watchOthers(listener: () => void): () => void {
-  othersHeard.add(listener);
-  return () => othersHeard.delete(listener);
+  return heard.subscribe(h => {
+    if (h.chain !== app.now().chain) listener()
+  })
 }
 
-/** A chain the pages are not reading: its row on this device, read once, joined with what this session pulled of it; or why the row does not read. */
-async function otherHeld(name: string): Promise<lo.Settled<Replica>> {
-  const known = others.get(name);
-  if (known !== undefined) return lo.val(known);
-  const disk = await heldRow(CHAIN, name);
-  if (disk.type === "Unreadable") return lo.error(disk.why);
-  // A pull that landed while the disk was read is kept, joined over the row.
-  const joined = join(disk.type === "Held" ? disk.v : NOTHING, others.get(name) ?? NOTHING);
-  others.set(name, joined);
-  return lo.val(joined);
-}
+// --- What the tab wrote that the box has not taken -------------------------------------------
 
-/**
- * Every served chain but the open one pulled from what is held of it: one request each, no stream, one pull at a time.
- * A chain the box does not answer for stays as held, and what refers into it reads as that. True when one moved; a chain
- * whose row on this device did not read is told to `readings`, which the one line draws.
- */
-export const pullServed: () => Promise<boolean> = once.shared(() =>
-  pullEach().then(({ moved, unread }) => {
-    if (moved) for (const listener of othersHeard) listener();
-    readings.told("served", excluded.left(excluded.NONE, [], unread.map(({ name, why }) => excluded.unread(name, why))));
-    return moved;
-  }),
-);
+const NONE: UnsentRead = { todos: {}, acts: [], refused: [], blocked: 0, stranded: 0, losses: [], waiting: 0 }
+const unsentNow = sources.create<UnsentRead, UnsentRead>(NONE, (_, u) => u)
 
-type Pulled = { readonly type: "Moved" } | { readonly type: "Stood" } | { readonly type: "Unread"; readonly name: string; readonly why: string };
+/** The open chain's unsent writes as the worker last read them. */
+export const unsent = (): UnsentRead => unsentNow.state()
+export const watchUnsent = (listener: () => void): (() => void) => unsentNow.subscribe(() => listener())
 
-async function pullEach(): Promise<{ moved: boolean; unread: { readonly name: string; readonly why: string }[] }> {
-  const holding = source.state().holding;
-  const each = await Promise.all(
-    app.now().served.filter((name) => name !== holding).map(async (name): Promise<Pulled> => {
-      const read = await otherHeld(name);
-      if (read.type === "Error") return { type: "Unread", name, why: read.e };
-      const was = read.v;
-      try {
-        const answer = await objectsSince(sinceOf(was), name);
-        readings.told(`epoch/${name}`, excluded.behind(name, wentBack(was, answer)));
-        const now = pulled(was, answer, time.now());
-        others.set(name, now);
-        // Kept on this device too, so the next visit asks only for what came after these heads; a row that does not
-        // read is never written over, and this session holds the pull in memory either way.
-        const row = await holdRow(CHAIN, name, { type: "Join", replica: now });
-        if (row.type === "Val" && source.state().holding !== name) others.set(name, join(others.get(name) ?? NOTHING, row.v));
-        // A policy that moved reprices as objects do: who is believed changes what the chain reads.
-        const moved = !heads.same(heads.of(now.heads), heads.of(was.heads)) || !sameSet(untrustedOf(now), untrustedOf(was));
-        return moved ? { type: "Moved" } : { type: "Stood" };
-      } catch {
-        // The network: what is held stays held, and the next exchange asks again.
-        return { type: "Stood" };
-      }
-    }),
-  );
-  return { moved: each.some((p) => p.type === "Moved"), unread: each.flatMap((p) => (p.type === "Unread" ? [{ name: p.name, why: p.why }] : [])) };
+const readUnsent = serial.of(async (): Promise<void> => {
+  const chain = app.now().chain
+  const u = await ask({ type: "Unsent", chain }, "Shell")
+  if (app.now().chain !== chain) return
+  unsentNow.dispatch(u)
+  readings.told(
+    `stranded/${chain}`,
+    excluded.left(excluded.NONE, [], u.stranded === 0 ? [] : [{
+      chain,
+      why: `${u.stranded} unsent ${u.stranded === 1 ? "act was" : "acts were"} written in a store the box no longer serves; kept on this device, and sent if it serves it again, unless this replica is reset`,
+      cure: "None",
+    }]),
+  )
+})
+
+/** A switch of chain: what was read of the previous one is dropped; the fold resets to an unloaded page. */
+export function forgetChainReplica(): void {
+  unsentNow.dispatch(NONE)
+  store.dispatch({ type: "Reset" })
 }
 
 // --- The box's folds --------------------------------------------------------------
 
 /**
  * Each chain the box serves, with its heads as this tab last heard them from the box, `null` for never: the open chain's
- * from its stream, which hears a move before any pull does, and each other's from its last pull.
+ * from its stream, which hears a move before any pull does, and each other's as the worker last said.
  */
 export function boxHeads(): folds.Known {
-  const { holding } = source.state();
-  const served = app.now().served;
-  const names = served.includes(holding) ? served : [holding, ...served];
-  const streamed = app.now().stream.heads;
-  const pulled = (r: Replica | undefined): heads.Heads | null => (r === undefined ? null : boxHeadsOf(r));
-  return new Map(names.map((name) => [name, name !== holding ? pulled(others.get(name)) : streamed.length === 0 ? null : heads.of(streamed)]));
+  const open = app.now().chain
+  const streamed = app.now().stream.heads
+  const said = heard.state().box
+  return new Map(served().map(name => [name, name !== open ? (said.get(name) ?? null) : streamed.length === 0 ? null : heads.of(streamed)]))
 }
 
 /** The box's fold of a chain, one per chain while nothing it read has moved. */
-export const boxFolds: folds.Cache = folds.cache(boxHeads, (chain) => fold(chain), time.now);
+export const boxFolds: folds.Cache = folds.cache(boxHeads, chain => fold(chain), time.now)
 
-// --- Appending, locally -------------------------------------------------------
+// --- Acting, and the exchange ----------------------------------------------------
 
 /**
- * `event` written into this replica by the core: a `Change` over its todo's heads in what is held, however many
- * heads the replica has. Folded locally at once from the same reading, so nothing is guessed or rolled back;
- * with no network it simply stays unsynced.
+ * `event` sealed by the worker as this tab's act onto the open chain, kept, and handed over behind the answer; the fold
+ * it answers is shown at once, and with no network the act simply stays unsent.
  */
 export async function appendAct(event: string): Promise<void> {
-  // Another tab's reset kept nothing of the act sealed before it: it is sealed once more onto what the reset holds.
-  for (const last of [false, true]) if ((await sealAct(event, last)) === "Kept") return;
+  const actor = app.actor(app.now())
+  if (actor === null) throw new Error("this device only reads, so it acts on nothing")
+  const chain = app.now().chain
+  const listed = await ask({ type: "Act", chain, event, at: time.moment(), actor }, "Page")
+  if (listed.type === "Read") await showFold(listed, chain)
 }
 
-async function sealAct(event: string, last: boolean): Promise<"Kept" | "Overtaken"> {
-  if (!idb.available()) throw new Error("this browser keeps nothing (no IndexedDB), so an act here would be forgotten — nothing was recorded");
-  await restoreReplica();
-  // A row a reset emptied, in this tab or another, is filled from the box before anything is sealed onto it.
-  if (source.state().replica.objects.length === 0) await sync();
-  // Under a root, nothing is sealed that this device cannot sign with a key the chain trusts: the box would refuse it.
-  const key = rootOf(source.state().replica) === null ? null : await trustedKey();
-  // Held after the last wait, so the act rests on everything held when it is sealed.
-  const held = await heldNow();
-  const { replica, holding } = held;
-  // Another tab's reset kept during those waits emptied what was held: the act is sealed again once it is filled.
-  if (replica.objects.length === 0 && !last) return "Overtaken";
-  if (replica.objects.length === 0) throw new Error("this browser holds no chain yet — syncing first");
-  const { appended: written, answer } = await askOf(held, (h) => ({ type: "Act", chain: h.holding, event, at: time.moment() }), "Page");
-  const signature = key === null ? [] : [signedObject(await loadCore(), written.hash, key.public, await signer.sign(key, written.hash))];
-  // Signing waits; joined into what is held now, which is a union, unless the tab has moved to another chain.
-  if (source.state().holding !== holding) throw new Error("the chain changed while this act was signed — nothing was recorded");
-  const next = appended(key === null ? replica : source.state().replica, [...written.objects, ...signature]);
-  const kept = await commit({ type: "Join", replica: next });
-  if (kept.type === "Error" && !last && source.state().replica.generation > next.generation) return "Overtaken";
-  if (kept.type === "Error") throw new Error(`this browser could not keep the act (${kept.e}) — nothing was recorded`);
-  await showFold(answer, next, holding);
-  await sync();
-  // Again after the exchange: the numbers are the same, but a chain the box now has takes the banner down.
-  await refold();
-  return "Kept";
-}
-
-/** This device's key, when the replica's objects trust it for the actor this tab writes as; otherwise why not, thrown. */
-async function trustedKey(): Promise<signer.Key> {
-  const actor = app.actor(app.now());
-  const held = await signer.held();
-  if (held.type !== "Held") throw new Error(`this browser cannot sign what it writes (${held.e}), so the box would refuse it`);
-  const standing = (): Promise<Standing> => (actor === null ? Promise.resolve("untrusted") : standingHere(actor, held.key.public, "Page"));
-  // A key trusted since the last pull reads trusted after one exchange.
-  const now = await standing();
-  const after = now === "trusted" ? now : (await sync(), await standing());
-  if (after !== "trusted") {
-    throw new Error(
-      after === "revoked"
-        ? "this device's key was revoked, so nothing it writes is taken"
-        : "this device is not trusted to write yet: trust it from Settings → This device with the code from the box, or ask there, then tap its card on a trusted device",
-    );
-  }
-  return held.key;
-}
-
-/**
- * Whether the replica trusts this device's key, and, when it does, every write of this replica the box has not taken
- * and nothing signs, signed now: an act sealed before the deployment signed, or before this device was trusted, is
- * posted again rather than lost to a reset.
- */
-async function signedOwn(): Promise<boolean> {
-  const replica = source.state().replica;
-  const actor = app.actor(app.now());
-  if (rootOf(replica) === null || actor === null) return false;
-  const held = await signer.held();
-  if (held.type !== "Held") return false;
-  if ((await standingHere(actor, held.key.public, "Shell")) !== "trusted") return false;
-  const unsigned = unsignedWrites(source.state().replica);
-  if (unsigned.length === 0) return true;
-  const core = await loadCore();
-  const signatures = await Promise.all(
-    unsigned.map(async (object) => signedObject(core, object.hash, held.key.public, await signer.sign(held.key, object.hash))),
-  );
-  return (await commit({ type: "Join", replica: appended(source.state().replica, signatures) })).type === "Val";
-}
-
-/** What `key` is to `actor` in the open chain as held now, read by the core in its worker. */
-async function standingHere(actor: string, key: string, lane: lanes.Lane): Promise<Standing> {
-  await turnOf(lane);
-  const held = await heldNow();
-  // A replica a reset emptied trusts no key, as the core reads no objects.
-  if (held.replica.objects.length === 0) return "untrusted";
-  return askOf(held, (h) => ({ type: "Standing", chain: h.holding, root: rootOf(h.replica), actor, key }), lane);
-}
-
-/** What this device's key is to the chain this tab holds, read by the core from the replica. */
-export async function signingHere(lane: lanes.Lane): Promise<device.Signing> {
-  await restoreReplica();
-  const replica = source.state().replica;
-  if (rootOf(replica) === null) return { type: "Unheard" };
-  const actor = app.actor(app.now());
-  if (actor === null) return { type: "Reads" };
-  const held = await signer.held();
-  if (held.type !== "Held") return held;
-  return { type: "Keyed", key: held.key.public, standing: await standingHere(actor, held.key.public, lane) };
-}
-
-// --- The exchange -------------------------------------------------------------
-
-/**
- * Push first, so the pull already carries the box's merge of our divergence. Serialised: a caller during an exchange
- * gets the one queued behind it, which starts after the call and so carries whatever the caller sealed, on the chain
- * held when it starts. Never throws, since the pill and banner are the report; a refusal is shown and never retried.
- */
+/** One exchange of the open chain: what the tab wrote handed over, then pulled. Never throws: the banner is the report. */
 export const sync: () => Promise<void> = serial.of(() =>
-  exchange()
-    .catch(() => {
-      // The network failed: what is held stays held, and the next tip change or reconnect tries again.
-    })
-    .finally(() => {
-      // An offline rejection unwinds `exchange` before it settles, and the phase it left says an exchange still runs.
-      const stuck = source.state().phase.kind;
-      if (stuck === "pushing" || stuck === "pulling") source.dispatch({ kind: "exchangeSettled" });
-    }),
-);
-
-async function exchange(): Promise<void> {
-  const on = source.state().holding;
-  source.dispatch({ kind: "pushing", on });
-  // Checked after every wait: a chain switch ends this exchange there.
-  const switched = (): boolean => source.state().holding !== on;
-  // Never before the read: an empty replica would pull everything and fail to push the acts still on disk.
-  await restoreReplica();
-  if (switched()) return;
-  const trusted = await signedOwn();
-  if (switched()) return;
-  const ended = await handover.of(() => source.state().replica, trusted, postObjects);
-  switch (ended.type) {
-    case "Nothing":
-      break;
-    // A box past this build's contract: the page offers the new one, and what it holds stays held for it to send.
-    case "Outdated":
-      return;
-    // The box answered no to the whole request (the gate, CSRF, size): said once, never retried.
-    case "Refused":
-      source.dispatch({ kind: "refused", reason: ended.reason });
-      handover.told(ended.reason);
-      return;
-    // No answer: what is held stays held, and the next tip change or reconnect tries again.
-    case "Unanswered":
-      throw ended.e;
-    case "Taken":
-      if (switched()) return;
-      await commit({ type: "Join", replica: ended.replica });
-      break;
-  }
-  source.dispatch({ kind: "pulling", on });
-  // The answer is joined into the replica it was asked of: it names only what that one lacked, so another tab's reset
-  // kept meanwhile, a later generation, keeps it out, rather than taking new objects without their ancestors. The reset
-  // is then asked of in turn, so an exchange that ends has pulled into the replica held when it ends.
-  for (;;) {
-    const asked = source.state().replica;
-    const answer = await objectsSince(sinceOf(asked));
-    if (switched()) return;
-    readings.told(`epoch/${on}`, excluded.behind(on, wentBack(source.state().replica, answer)));
-    if (answer.objects.length > 0 || !said(source.state().replica.box, false, (w) => heads.same(heads.of(answer.heads), heads.of(w.heads)))) {
-      await commit({ type: "Join", replica: pulled(asked, answer, time.now()) });
-    }
-    if (source.state().replica.generation === asked.generation) break;
-  }
-  source.dispatch({ kind: "exchangeSettled" });
-  // After the open chain's own, never on a stream of their own, so the rows' references into the others read them.
-  void pullServed();
-}
-
-/**
- * The one escape from a refusal, which loses the refused objects and all sealed on them. Never "drop just the
- * bad one": its children would be left resting on a hole.
- */
-export async function resetReplica(shown: ReadonlySet<string>): Promise<void> {
-  await resetRow(source.state().holding, shown, "Read");
-}
-
-/**
- * A chain's row reset from the box: the generation after the row's, so no tab's copy from before it comes back, and
- * refused, with the reason toasted, when the row holds an unsent object the reader was not shown, or does not read and
- * `over` does not say the reader was told it writes over that copy.
- */
-export async function resetRow(chain: string, shown: ReadonlySet<string>, over: "Read" | "Unread"): Promise<void> {
-  if (chain !== source.state().holding) {
-    const done = await holdRow(CHAIN, chain, { type: "Reset", shown, floor: 0, over });
-    if (done.type === "Error") handover.told(`the reset was not kept: ${done.e}`);
-    others.delete(chain);
-    void pullServed();
-    return;
-  }
-  const done = await commit({ type: "Reset", shown, floor: source.state().replica.generation, over });
-  // What the row holds now is read again, so a notice that missed another tab's acts draws them before it is pressed again.
-  await restoreReplica();
-  if (done.type === "Error") {
-    handover.told(`the reset was not kept: ${done.e}`);
-    return;
-  }
-  store.dispatch({ type: "Reset" });
-  await sync();
-  await foldHeld();
-}
-
-
-/** The lane the fold on screen is read in: the page's on a route that shows it, the shell's on any other. */
-let folding = (): lanes.Lane => "Page";
-
-/** Said once by the shell, which knows the route on screen. */
-export function foldWhere(where: () => lanes.Lane): void {
-  folding = where;
-}
-
-/**
- * Under the trust policy the box reported with these objects, never another. This browser's clock is used
- * only for "now"; the banner names the tip, because what is uncertain is the chain, not the instant.
- */
-export async function foldHeld(): Promise<boolean> {
-  // Never before the read-back: a refused connection fails faster than IndexedDB answers, and would fold nothing.
-  await restoreReplica();
-  if (source.state().replica.objects.length === 0) return false;
-  try {
-    const { held, answer } = await askHeld((h) => ({ type: "List", chain: h.holding, at: time.moment() }), folding());
-    const { replica, holding } = held;
-    if (source.state().holding !== holding) return false;
-    return await showFold(answer, replica, holding);
-  } catch {
-    return false;
-  }
-}
-
-/** The causal order over what is held, read once per set of heads, since the heads name the whole down-set. */
-let order: { readonly key: string; readonly of: ReturnType<typeof ancestry> } | null = null;
-function orderOf(replica: Replica): ReturnType<typeof ancestry> {
-  const key = `${replica.generation}:${heads.of(replica.heads).join(",")}`;
-  if (order?.key !== key) order = { key, of: ancestry(replica.objects) };
-  return order.of;
-}
-
-async function showFold(answer: FoldPayload, replica: Replica, holding: string): Promise<boolean> {
-  // The core has no typst: what the box once rendered for the same source is read back from this device.
-  const entries = await richkeep.fill(answer.entries);
-  if (source.state().holding !== holding) return false;
-  // A reading of a replica since moved is not shown: the move that superseded it is folded again (`refold`).
-  if (source.state().replica !== replica) return true;
-  // Fresh only with everything taken, the box's heads ours, and the live stream up: only the stream says the last contact is now.
-  // Judged against the replica as it stands once the reading is ready, not as it stood when the reading began: an
-  // exchange that settled meanwhile makes the same heads fresh, and objects taken meanwhile make them old.
-  const mine = heads.of(replica.heads);
-  const now = source.state().replica;
-  const settledNow = unsynced(now).length === 0 && said(now.box, false, (w) => heads.same(mine, heads.of(w.heads))) && app.live(app.now()) === "on";
-  store.dispatch({ type: "Local", entries, at: answer.at, next: answer.next, heads: mine, fresh: settledNow, ancestry: orderOf(now) });
-  return true;
-}
-
-/** The fold on screen follows the replica: every move of it is folded again, one fold at a time and one queued. */
-const refold = serial.of(() => foldHeld().then(() => undefined));
-source.subscribe((_state, event) => {
-  if (event.kind === "committed") void refold();
-});
+  ask({ type: "Exchange", chain: app.now().chain }, "Shell").then(
+    () => undefined,
+    () => undefined,
+  ),
+)
 
 /** One exchange per move of the box's heads, never per fold, so an offline session holds what it folds and acts on. */
 export function keepObjects(): Promise<void> {
-  return sync();
+  return sync()
 }
 
-// --- The fold ------------------------------------------------------------------
+/**
+ * The one escape from a refusal, which lets go of the refused acts and all sealed on them, after the reader was shown
+ * each: a reset that finds an unsent act the reader was not shown refuses, and says so.
+ */
+export async function resetReplica(shown: ReadonlySet<string>): Promise<void> {
+  await resetChain(app.now().chain, shown)
+}
+
+/** `chain` reset from the box, letting go of the unsent acts `shown`; what it could not do is said. */
+export async function resetChain(chain: string, shown: ReadonlySet<string>): Promise<void> {
+  const failed = await ask({ type: "ResetChain", chain, shown: [...shown] }, "Page")
+  failed.forEach(told)
+  if (failed.length > 0 || chain !== app.now().chain) return
+  store.dispatch({ type: "Reset" })
+  await foldHeld()
+}
+
+/** What this device's key is to the chain this tab holds, read by the core. */
+export async function signingHere(lane: lanes.Lane): Promise<device.Signing> {
+  const chain = app.now().chain
+  if ((await ask({ type: "Root", chain }, lane)) === null) return { type: "Unheard" }
+  const actor = app.actor(app.now())
+  if (actor === null) return { type: "Reads" }
+  const held = await signer.held()
+  if (held.type !== "Held") return held
+  const standing: Standing = (await ask({ type: "Standing", chain, actor, key: held.key.public }, lane)) ?? "untrusted"
+  return { type: "Keyed", key: held.key.public, standing }
+}
+
+// --- The fold on screen -----------------------------------------------------------
+
+/** The lane the fold on screen is read in: the page's on a route that shows it, the shell's on any other. */
+let folding = (): lanes.Lane => "Page"
+
+/** Said once by the shell, which knows the route on screen. */
+export function foldWhere(where: () => lanes.Lane): void {
+  folding = where
+}
+
+/**
+ * The open chain's fold as the worker reads what stands of it, under the policy the box last said; false where it holds
+ * nothing a pull landed, or the worker could not read it.
+ */
+export async function foldHeld(): Promise<boolean> {
+  const chain = app.now().chain
+  try {
+    const listed = await ask({ type: "List", chain, at: time.moment() }, folding())
+    if (listed.type === "Unheld") return false
+    // The fold the loader asked the box for is read from what the device holds instead, so its answer goes unread.
+    primed.cancel(primed.fold(chain))
+    return await showFold(listed, chain)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * `next` dispatched with how the heads it names stand to those of the fold shown, asked of the worker. Asked again
+ * when the fold shown moved while the worker answered, so the order read is the one between these two.
+ */
+async function ordered(chain: string, mine: heads.Heads, next: (ancestry: onscreen.Ancestry) => onscreen.Event): Promise<void> {
+  for (;;) {
+    const shown = store.state()
+    const was = shown.type === "Shown" && shown.by.type !== "Cached" ? shown.by.heads : null
+    const order: Order = was === null ? "Unknown" : await ask({ type: "Order", chain, a: mine, b: was }, "Page")
+    if (store.state() !== shown) continue
+    store.dispatch(next((a, b) => (heads.same(a, mine) && was !== null && heads.same(b, was) ? order : "Unknown")))
+    return
+  }
+}
+
+async function showFold(listed: Extract<questions.Listed, { type: "Read" }>, chain: string): Promise<boolean> {
+  // The core has no typst: what the box once rendered for the same source is read back from this device.
+  const entries = await richkeep.fill(listed.fold.entries)
+  if (app.now().chain !== chain) return false
+  const mine = heads.of(listed.fold.heads)
+  // Fresh only with everything taken, the box's heads ours, and the live stream up: only the stream says the last contact is now.
+  const fresh = listed.settled && app.live(app.now()) === "on"
+  await ordered(chain, mine, ancestry => ({ type: "Local", entries, at: listed.fold.at, next: listed.fold.next, heads: mine, fresh, ancestry }))
+  return true
+}
+
+/** The fold on screen follows the chain: every move of it is folded again, one fold at a time and one queued. */
+const refold = serial.of(() => foldHeld().then(() => undefined))
+watchReplica(() => {
+  void refold()
+  void readUnsent()
+})
+
+/** Before the first route and after a switch: the open chain read from what the worker restored. */
+export const restoreChain = (): Promise<void> => Promise.all([refold(), readUnsent()]).then(() => undefined)
+
+// --- The box's fold ------------------------------------------------------------------
+
+/** The chain whose fold fetch (`/api/fold`) is in flight. */
+let fetching: { readonly chain: string; readonly done: Promise<void> } | null = null
 
 /** Rejects so the page shows the failure where the list would be; a fold landing after a chain switch is dropped. */
 export function refetchFold(): Promise<void> {
-  const { fetching, holding } = source.state();
-  if (fetching !== null) {
-    const cleared = whenClear((state) => state.fetching === null);
-    return fetching === holding ? cleared : cleared.then(refetchFold);
-  }
-  const on = holding;
-  source.dispatch({ kind: "fetchStarted", on });
+  const on = app.now().chain
+  if (fetching !== null) return fetching.chain === on ? fetching.done : fetching.done.catch(() => {}).then(refetchFold)
   // What the box was known to hold when the fold was asked, which is what it read.
-  const known = boxFolds.key();
-  return fold()
-    .then((payload) => {
-      if (source.state().holding !== on) return;
-      const fetchedAt = time.now();
-      boxFolds.put(on, known, payload);
-      store.dispatch({ type: "Box", payload, fetchedAt, ancestry: orderOf(source.state().replica) });
+  const known = boxFolds.key()
+  const done = fold()
+    .then(async payload => {
+      if (app.now().chain !== on) return
+      const fetchedAt = time.now()
+      boxFolds.put(on, known, payload)
+      await ordered(on, heads.of(payload.heads), ancestry => ({ type: "Box", payload, fetchedAt, ancestry }))
       // The box names the chains its fold was priced without; the tab's own readings say theirs through the set.
-      readings.told(`box/${on}`, excluded.left(excluded.NONE, payload.failed));
-      boxRead = true;
-      keep(payload, fetchedAt);
-      void richkeep.keep(payload.entries);
+      readings.told(`box/${on}`, excluded.left(excluded.NONE, payload.failed))
+      boxRead = true
+      keep(payload, fetchedAt)
+      void richkeep.keep(payload.entries)
       // A fetch that worked means the network is back, so whatever is still held goes now.
-      void sync();
+      void sync()
     })
     .catch(async (error: unknown) => {
-      if (source.state().holding !== on) return;
+      if (app.now().chain !== on) return
       // What is on screen stays, dated, unless the held objects can be folded now instead.
-      store.dispatch({ type: "Stale" });
-      await foldHeld();
-      throw error;
+      store.dispatch({ type: "Stale" })
+      await foldHeld()
+      throw error
     })
     .finally(() => {
-      source.dispatch({ kind: "fetchSettled" });
-    });
+      fetching = null
+    })
+  fetching = { chain: on, done }
+  return done
 }
 
 /** Whether this tab has read the box's fold: only it carries what the box rendered and is kept as the dated copy. */
-let boxRead = false;
+let boxRead = false
 
 /**
  * A restored cache still asks, because a cache is not an answer about now; and the box is asked once per tab even when
  * the tab's own fold is fresh, since a page mounted once its module loads would otherwise never read it.
  */
 export function ensureFold(): Promise<void> {
-  return onscreen.fresh(store.state()) && boxRead ? Promise.resolve() : refetchFold();
+  return onscreen.fresh(store.state()) && boxRead ? Promise.resolve() : refetchFold()
 }
 
 /** Before the first route, so the first paint is not a spinner. */
 export function restoreFold(): void {
-  const cached = parseFold(kv.local.get(cacheKey()));
-  if (cached !== null) store.dispatch({ type: "Cached", fold: cached });
+  const cached = parseFold(kv.local.get(cacheKey()))
+  if (cached !== null) store.dispatch({ type: "Cached", fold: cached })
 }
 
-// `/api/chain` stays in `api.ts`: it is the chain page's rendering, while `/api/objects` is the replica's data.
+export default { ask }

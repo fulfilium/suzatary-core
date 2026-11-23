@@ -3,8 +3,8 @@
  * the chain.
  *
  * `app/cli/tests/acting.rs` pins what `POST /api/objects` does with a list of
- * literals, and `web/test/replica.test.ts` pins the decisions over sets of
- * names. Neither can check the thing the design is actually about: that a
+ * literals, and `web/test/chains.test.ts` and the core's replica laws pin the
+ * decisions over sets of names. Neither can check the thing the design is actually about: that a
  * person can tap Done on a train, lock their phone, and find the chain agreeing
  * with them later — once, with the instant their own device claimed.
  *
@@ -27,7 +27,7 @@
 
 import assert from "node:assert/strict";
 
-import { atTheTerminal, fold, openInPlace, reveal, shownTodos, suite, untilReplica, WRITE_BASE, WRITE_HEADERS, pickCategory } from "./harness";
+import { fold, openInPlace, shownTodos, suite, untilReplica, WRITE_BASE, WRITE_HEADERS } from "./harness";
 import cast from "../test/cast";
 
 const { todos, owner } = cast.world;
@@ -197,131 +197,4 @@ app.scene("two replicas that diverged leave the box both heads, joined by nothin
   );
   assert.ok((JSON.parse(holds) as string[]).includes(other.name), "the other replica's object is still held");
   assert.ok((await shownTodos(app.page)).length >= 0, "and the list still renders");
-});
-
-/**
- * ANOTHER TAB'S RESET, landing in this tab's next save of the chain's row: that save's own transaction finds the row
- * already the empty replica of the next generation, which every join keeps whole. Put in that transaction, before its
- * read, because that is the one order no wait in a scene could make happen.
- */
-const RESET_AT_NEXT_SAVE = `new Promise((resolve, reject) => {
-  const request = indexedDB.open("suzatary");
-  request.onerror = () => reject(request.error);
-  request.onsuccess = () => {
-    const db = request.result;
-    const read = db.transaction("chain", "readonly").objectStore("chain").get("objects:life");
-    read.onsuccess = () => {
-      const row = read.result;
-      db.close();
-      let reset = { generation: (row.generation ?? 0) + 1, objects: [], synced: [], refused: [], words: [], frontier: { type: "Nothing" } };
-      const transaction = IDBDatabase.prototype.transaction;
-      IDBDatabase.prototype.transaction = function (names, mode, ...rest) {
-        const t = transaction.call(this, names, mode, ...rest);
-        if (mode !== "readwrite" || reset === null) return t;
-        const objectStore = t.objectStore.bind(t);
-        t.objectStore = (name) => {
-          const store = objectStore(name);
-          const get = store.get.bind(store);
-          store.get = (key) => {
-            if (key === "objects:life" && reset !== null) { store.put(reset, key); reset = null; }
-            return get(key);
-          };
-          return store;
-        };
-        return t;
-      };
-      resolve(true);
-    };
-    read.onerror = () => reject(read.error);
-  };
-})`;
-
-/** The generation of this tab's row of the chain, as the device keeps it. */
-const GENERATION = `new Promise((resolve) => {
-    const request = indexedDB.open("suzatary");
-    request.onerror = () => resolve(-1);
-    request.onsuccess = () => {
-      const read = request.result.transaction("chain", "readonly").objectStore("chain").get("objects:life");
-      read.onsuccess = () => { request.result.close(); resolve(read.result?.generation ?? 0); };
-      read.onerror = () => resolve(-1);
-    };
-  })`;
-
-app.scene("an act overtaken by another tab's reset is sealed again onto it, never shown and dropped", async () => {
-  await app.open(WRITE_BASE);
-  await untilReplica(app.page);
-
-  // Another tab's reset, landing between this tab sealing an act and keeping it.
-  await app.page.evaluate(RESET_AT_NEXT_SAVE);
-
-  await app.page.click(".addsheet .pickerhandle");
-  await app.page.waitFor(`document.querySelector(".addsheet.open") !== null`);
-  await app.page.type(".draftbody", "Repot the cactus");
-  await pickCategory(app.page, "home");
-  await app.page.click(".addbtn");
-
-  // THE BOX'S FACT: the act was sealed again onto what the reset holds, once
-  // filled from the box, and reached it, rather than refused or dropped.
-  const id = "repotthecactus";
-  await app.page.waitFor(
-    `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${id}" && e.state === "open"))`,
-    { timeout: 15000 },
-  );
-  await app.page.waitFor(`document.querySelector('.tree .row[data-todo="${id}"]') !== null`, { timeout: 8000 });
-  // ONCE: the act reached memory only from the row the device kept, so no exchange posted the first sealing too.
-  await app.page.waitFor(`document.querySelector('.tree .row[data-todo="${id}"]:not(.pending)') !== null`, { timeout: 15000 });
-  const sealings = await app.page.evaluate<number>(
-    `fetch("/api/objects").then((r) => r.json()).then((b) => b.objects.filter((o) => o.literal.startsWith("Change(") && o.literal.includes("todo='${id}'")).length)`,
-  );
-  assert.equal(sealings, 1, "the box holds the act once");
-});
-
-app.scene("a pull asked before another tab's reset adds nothing to it, and an act sealed after it lands", async () => {
-  await app.open(WRITE_BASE);
-  await untilReplica(app.page);
-
-  // The box moves at its terminal, and this tab's pull of what moved is held at the network: an answer to a question
-  // asked of the replica the reset is about to replace.
-  const pulling = await app.page.holdRequests(["/api/life/objects?since="]);
-  atTheTerminal(["todo", "add", "movedattheterminal", "--body", "Moved at the terminal", "--rationale", "a write this tab hears while its pull is held", "--category", "home", "--priority", "60"]);
-  await app.page.untilHeld();
-
-  // The act's own save takes the reset, so it is sealed again once the replica is filled from the box, by the exchange
-  // queued behind the held one.
-  const before = await app.page.evaluate<number>(GENERATION);
-  await app.page.evaluate(RESET_AT_NEXT_SAVE);
-  await app.page.click(".addsheet .pickerhandle");
-  await app.page.waitFor(`document.querySelector(".addsheet.open") !== null`);
-  await app.page.type(".draftbody", "Repot the fern");
-  await pickCategory(app.page, "home");
-  await app.page.click(".addbtn");
-  // The act's own save took the reset when the row's generation passes the one it held before; an earlier scene's reset
-  // may have left it past zero.
-  await app.page.waitFor(`${GENERATION}.then((g) => g > ${before})`);
-  await pulling();
-
-  // The held answer named only what moved since the replica before the reset; joined into the reset, it would leave a
-  // replica of new objects without their ancestors, which the act cannot be sealed onto.
-  const id = "repotthefern";
-  await app.page.waitFor(
-    `fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.some((e) => e.todo === "${id}" && e.state === "open"))`,
-    { timeout: 15000 },
-  );
-  // And this tab holds the chain whole, every object the box holds, once its exchanges are done.
-  await app.page.waitFor(`document.querySelector('.tree .row[data-todo="${id}"]:not(.pending)') !== null`, { timeout: 15000 });
-  const missing = `Promise.all([
-    fetch("/api/life/objects").then((r) => r.json()).then((b) => b.objects.map((o) => o.hash)),
-    new Promise((resolve, reject) => {
-      const request = indexedDB.open("suzatary");
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const read = request.result.transaction("chain", "readonly").objectStore("chain").get("objects:life");
-        read.onsuccess = () => { request.result.close(); resolve(new Set(read.result.objects.map((o) => o.hash))); };
-        read.onerror = () => reject(read.error);
-      };
-    }),
-  ]).then(([box, held]) => box.filter((hash) => !held.has(hash)).length)`;
-  await app.page.waitFor(`${missing}.then((n) => n === 0)`, { timeout: 15000 });
-  await reveal(app.page, id);
-  await reveal(app.page, "movedattheterminal");
 });

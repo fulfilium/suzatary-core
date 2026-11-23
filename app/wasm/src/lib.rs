@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod asks;
+mod chain;
 mod chains;
 mod counts;
 mod evaluator;
@@ -25,6 +26,7 @@ mod unrendered;
 
 use wasm_bindgen::JsError;
 
+pub use chain::Chain;
 pub use chains::{Chains, Linker};
 
 type Event = suzatary_record::record::TodoEvent;

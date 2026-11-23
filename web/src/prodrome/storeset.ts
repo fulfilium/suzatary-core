@@ -8,6 +8,7 @@ import ownlines from "./ownlines"
 import linesync from "./linesync"
 import type sealing from "./lines"
 import type progress from "./progress"
+import replicalog from "./replicalog"
 import replicasync from "./replicasync"
 import stores from "./stores"
 import topics from "./topics"
@@ -57,6 +58,8 @@ export namespace storeset {
     readonly acted: (lines: readonly string[]) => Promise<void>
     // Each own line refused for good, with words, of a topic the box refused (`[Waiting]`).
     readonly refused: () => string
+    // The stores this device writes of which it keeps an earlier build's copy aside.
+    readonly earlier: () => Promise<readonly stores.Written[]>
   }
 
   // A line refused is named so.
@@ -101,8 +104,11 @@ export namespace storeset {
           ask: since => storereads.objects(name, since),
           piece: (a, at) => store.piece(JSON.stringify(a), at),
           landed: () => Promise.resolve(),
+          form: bytes => replicalog.formOf(core.objects_form(bytes)),
+          // A store this tab writes may hold a write not yet sent; the box alone writes the rest.
+          holds: WRITTEN.some(w => w === name) ? "OwnWrites" : "BoxAlone",
         },
-        { told, bars, moved: said => (said === "[]" ? undefined : (say({ type: "Moved", conversations: "All" }), after())), replaced: replaced(name) },
+        { told, bars: e => bars({ ...e, name }), moved: said => (said === "[]" ? undefined : (say({ type: "Moved", conversations: "All" }), after())), replaced: replaced(name) },
       ),
     })
 
@@ -115,13 +121,19 @@ export namespace storeset {
         replaced: replaced("lines"),
       },
       blocks,
+      bytes => replicalog.formOf(core.lines_form(bytes)),
     )
     const inbox = objectStore("inbox", new core.Proposals())
     const topicStores: { readonly [N in topics.Store]: { readonly store: TopicStore; readonly sync: replicasync.T } } = {
       topics: objectStore("topics", new core.Memberships()),
       "topic-aliases": objectStore("topic-aliases", new core.TopicAliases()),
     }
-    const asks: { readonly store: ObjectStore; readonly sync: replicasync.T } = objectStore("asks", new core.Asks(), () => void writes.refusedIn(asks.store))
+    // The asks' refusals of every store's writes, held as refused.
+    const refusedIn = async (asks: ObjectStore): Promise<void> => {
+      for (const name of WRITTEN) await writes.settled(name, () => topicStores[name].store.refused_in(asks))
+      await writes.settled("lines", () => held.refused_in(asks))
+    }
+    const asks: { readonly store: ObjectStore; readonly sync: replicasync.T } = objectStore("asks", new core.Asks(), () => void refusedIn(asks.store))
     const engines: { readonly [N in stores.Name]: replicasync.Store } = { lines: lines.engine, inbox: inbox.sync, topics: topicStores.topics.sync, "topic-aliases": topicStores["topic-aliases"].sync, asks: asks.sync }
 
     const reading = last.of<string, TopicReading>(
@@ -134,16 +146,22 @@ export namespace storeset {
     }
 
     // Read again whenever it moves: each store this tab writes holds what it records as refused.
-    const entry = (name: topics.Store): written.Entry => ({ noun: NOUNS[name], store: topicStores[name].store, stepped: step => topicStores[name].sync.stepped(step) })
-    const writes = written.of(
-      core,
-      {
-        topics: entry("topics"),
-        "topic-aliases": entry("topic-aliases"),
-        lines: { noun: LINE, store: held, stepped: lines.ownStepped, told: { seen: ownlines.seen, told: ownlines.told } },
-      },
-      why => say({ type: "Refused", why }),
-    )
+    const post = (name: stores.Written): written.Entry["post"] => (literals, since, keys) => storereads.post(name, literals, since, keys)
+    const entry = (name: topics.Store): written.Entry => ({
+      noun: NOUNS[name],
+      store: topicStores[name].store,
+      exclusive: topicStores[name].sync.exclusive,
+      stepped: step => topicStores[name].sync.stepped(step),
+      post: post(name),
+      signs: () => "Signs",
+    })
+    const entries: { readonly [N in stores.Written]: written.Entry } = {
+      topics: entry("topics"),
+      "topic-aliases": entry("topic-aliases"),
+      // The lines take their turns in their own engine and under the device's lock (`ownlines`).
+      lines: { noun: LINE, store: held, exclusive: f => f(), stepped: lines.ownStepped, post: post("lines"), signs: () => "Signs", told: { seen: ownlines.seen, told: ownlines.told } },
+    }
+    const writes = written.of<stores.Written>(core, name => entries[name], why => say({ type: "Refused", why }))
     // A hand-over that failed is said, and the next sync tries it again.
     const failed = (name: stores.Written) => (e: unknown): void =>
       say({ type: "Refused", why: `This tab's ${name === "lines" ? LINE : NOUNS[name]} writes were not handed over (${lo.reason(e)}); the next sync tries again.` })
@@ -217,11 +235,14 @@ export namespace storeset {
       }
       await measured("ready", () => readies.All.get())
       const { store, sync } = topicStores[name]
-      const events = await measured("plan", () => topics.plan(topicsNow().reading, w, at, actor))
-      for (const event of events) {
-        const step = await measured("append", () => store.append(event))
-        if (step !== undefined) await measured("keep", () => sync.stepped(step))
-      }
+      // Planned, sealed and kept in the store's turn, so the reading planned from is the one written over.
+      await sync.exclusive(async () => {
+        const events = await measured("plan", () => topics.plan(topicsNow().reading, w, at, actor))
+        for (const event of events) {
+          const frame = await measured("append", () => store.append(event))
+          if (frame !== undefined) await measured("keep", () => sync.kept(frame))
+        }
+      })
       await measured("sign", () => writes.sign(name))
       void writes.handOver(name).catch(failed(name))
     }
@@ -320,6 +341,13 @@ export namespace storeset {
       seal,
       acted,
       refused: () => held.refused_elsewhere(),
+      earlier: async () => {
+        const kept = await Promise.all([
+          lines.earlier().then((e): stores.Written[] => (e ? ["lines"] : [])),
+          ...WRITTEN.map(name => topicStores[name].sync.earlier().then(e => (e ? [name] : []))),
+        ])
+        return kept.flat()
+      },
     }
   }
 }

@@ -40,3 +40,7 @@ path = "tests/signature.rs"
 [[test]]
 name = "writes"
 path = "tests/writes.rs"
+
+[[test]]
+name = "held"
+path = "tests/held.rs"

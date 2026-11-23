@@ -5,7 +5,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import outbox from "../src/shell/outbox"
-import type { Unsent } from "../src/prodrome/replica"
+import type { Unsent } from "../src/wire/generated/pages"
 import { forAll } from "./gen"
 
 const STATES: readonly Unsent[] = ["Sending", "AwaitingTrust", "Refused"]

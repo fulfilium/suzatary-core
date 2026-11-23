@@ -87,7 +87,7 @@ test("a reference into another chain is linked through the set the rows are pric
   const f = foldObjects(wasm, chain.links, "2026-09-02T12:00:00", chain.untrusted)
   const home = linked(wasm, linker(within(wasm, f.functions)), f.env, f.at)({ kind: "ref", todo: urgent })
   assert.ok(home !== null, "the todo prices in its own chain")
-  const held = holdAll(new wasm.Chains(), [heldChain("life", chain.links, chain.untrusted)])
+  const held = holdAll(new wasm.Chains(), [heldChain(wasm, "life", chain.links, chain.untrusted)])
   try {
     const across = { kind: "refIn", store: "life", entity: urgent } as const
     const [through, nothing] = [linkerOf(held, {}, f.at), linkerOf(none, {}, f.at)]

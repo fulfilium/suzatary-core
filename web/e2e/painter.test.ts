@@ -47,6 +47,7 @@ const device = (r: Rng): Device => ({
   persist: r.pick([{ type: "Unsupported" }, { type: "Granted" }, { type: "Denied" }] as const),
   usage: { bytes: r.int(10_000_000), count: r.int(3) },
   budget: 50_000_000,
+  earlier: r.pick([[], ["topics"], ["topics", "topic-aliases"]]),
   signing: r.pick([
     { type: "Unheard" },
     { type: "Reads" },

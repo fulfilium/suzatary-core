@@ -1,27 +1,30 @@
 // A store's pull by pieces against a box that answers as `routes::store_objects_since` does: what a replica holding
 // the frontier it names lacks, parents first, cut to a budget of literal bytes, naming the frontier the asker holds
-// after it. A pull the network cuts keeps the pieces that came, and the next asks only for the rest.
+// after it. A pull the network cuts keeps the pieces that came, and the next asks only for the rest. The tab's replica
+// is the core's, a chain's store of objects, as the worker holds it.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
+import type { Core, Named } from "../src/prodrome/core"
+import { verifyObjects } from "../src/prodrome/core"
 import pieces from "../src/prodrome/pieces"
-import { NOTHING, behind, boxHeadsOf, headsOf, join, parentsOf, prodromeOf, pulled, replicaOf, reset, sinceOf } from "../src/prodrome/replica"
-import type { Replica } from "../src/prodrome/replica"
 import type { StorePayload, StoredObject } from "../src/wire/generated/wire"
 import { forAllAsync } from "./gen"
-import { held as prodromes } from "./held"
-import heads from "../src/prodrome/heads"
+import { headsOf, held as prodromes, restsOn } from "./held"
+import d from "../src/wire/decoder"
 
-const box = JSON.parse(readFileSync("app/api/tests/web/replicas.json", "utf8")) as { conversations: { hash: string; text: string }[] }
-const all: StoredObject[] = box.conversations.map(o => ({ hash: o.hash, literal: o.text }))
-
-// What an object rests on, as the box's `parents_of` reads it: its parents, and the genesis of the prodrome it is in.
-const restsOn = (o: StoredObject): string[] => {
-  const genesis = o.literal.startsWith("Genesis(") ? null : prodromeOf(o)
-  return genesis === null ? parentsOf(o) : [...parentsOf(o), genesis]
-}
+const built = process.env["SUZATARY_PRODROME_WASM"]
+if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
+const core = createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
+const chain = JSON.parse(readFileSync("app/api/tests/web/chain.json", "utf8")) as { links: Named[] }
+// The box's objects parents first, as the box serves them.
+const all: StoredObject[] = (() => {
+  const by = new Map(chain.links.map(l => [l.hash, l]))
+  return verifyObjects(core, chain.links).linearisation.flatMap(h => by.get(h) ?? [])
+})()
 
 // Everything `since` rests on, itself included, by one pass back over the box's parents-first order.
 const closure = (since: readonly string[]): Set<string> => {
@@ -67,51 +70,60 @@ const answer = (budget: number) => (since: string): StorePayload => {
   return { objects, heads: headsOf(all), untrusted: [], root: null, geneses: prodromes(all), epoch: 1, since: known === undefined ? "Unknown" : "Known", frontier, keys: {}, rest: missing.length - objects.length, size: missing.reduce((n, o) => n + o.literal.length, 0), weight: objects.reduce((n, o) => n + o.literal.length, 0), erased: [] }
 }
 
-// A tab's store as its engine holds it: the row readings read, and beside it the pieces of a pull not yet landed. It
-// asks from both, keeps each piece beside the row, written by itself, and lands them in one step at the end.
+// A tab's store as its engine holds it: the core's replica, which keeps each piece beside the landed row readings read
+// and lands them in one step at the end. Every move it made is a frame, which another tab of the device reads back.
+const Linearised = d.json(d.obj<{ linearisation: string[] }>({ linearisation: d.arr(d.str) }))
 const tab = (ask: (since: string) => Promise<StorePayload>) => {
-  let row: Replica = NOTHING
-  let pending: Replica = NOTHING
+  const store = new core.Chain()
+  const frames: Uint8Array[] = []
   const asked: string[] = []
   const counts = { lands: 0, shown: 0, written: 0 }
-  const of = new WeakMap<StorePayload, Replica>()
-  const holding = (): Replica => join(row, pending)
-  const show = (replica: Replica): void => {
-    const was = row
-    row = join(row, replica)
-    if (row !== was) counts.shown += 1
+  const kept = (step: { readonly delta: Uint8Array; readonly moved: string; readonly free: () => void }): string => {
+    frames.push(step.delta)
+    const moved = step.moved
+    step.free()
+    return moved
+  }
+  // What the names a set of heads rests on are, read off the box's objects: a replica holds a down-set.
+  const under = (names: readonly string[]): string[] => {
+    const wanted = new Set(names)
+    for (const o of [...all].reverse()) if (wanted.has(o.hash)) for (const p of restsOn(o)) wanted.add(p)
+    return all.filter(o => wanted.has(o.hash)).map(o => o.hash)
   }
   const fx: pieces.Effects<StorePayload> = {
     ask: () => {
-      const replica = holding()
-      const since = sinceOf(replica)
+      const since = store.since()
       asked.push(since)
-      return ask(since).then(a => (of.set(a, replica), a))
+      return ask(since)
     },
     keep: async a => {
-      const asked = of.get(a) ?? NOTHING
-      pending = join(pending, pulled(replicaOf({ ...NOTHING.held, generation: asked.generation, frontier: asked.held.frontier }), a, 1))
+      frames.push(store.piece(JSON.stringify(a), 1))
       counts.written += a.objects.reduce((n, o) => n + o.literal.length, 0)
     },
     land: async () => {
       counts.lands += 1
-      show(pending)
-      pending = NOTHING
+      if (kept(store.land()) !== "[]") counts.shown += 1
     },
-    held: () => [row, pending],
+    held: () => [store.since(), store.heads()],
   }
   return {
     fx,
     asked,
     counts,
-    // What another tab kept of its pull comes back with the device's rows, joined beside this one's.
-    join: (row: Replica): void => void (pending = join(pending, row)),
-    // Another tab's reset of the row pages read.
-    reset: (): void => show(reset(row)),
-    pending: () => pending,
-    row: () => row,
-    held: () => holding().objects.map(o => o.hash),
-    shown: () => row.objects.map(o => o.hash),
+    frames,
+    // What another tab kept of its pull comes back with the device's log, each frame a join.
+    join: (theirs: readonly Uint8Array[]): void => theirs.forEach(f => void store.apply(f)),
+    behind: (box: readonly string[]): boolean => store.behind(JSON.stringify(box)),
+    held: () => under(JSON.parse(store.heads()) as string[]),
+    shown: (): string[] => {
+      const t = store.todos()
+      try {
+        const read = Linearised(t.verify())
+        return read.type === "Val" ? read.v.linearisation : []
+      } finally {
+        t.free()
+      }
+    },
   }
 }
 
@@ -217,7 +229,7 @@ test("two tabs cut at different pieces join into a row the next pull finishes, s
   // only the other tab held, and never what the one whose frontier stands held.
   const stands = [a, b].reduce((x, y) => (y.held().length > x.held().length ? y : x))
   const standing = new Set(stands.held())
-  a.join(b.pending())
+  a.join(b.frames)
   const before = new Set(a.held())
   for (const o of all.filter(o => before.has(o.hash))) assert.ok(restsOn(o).every(p => before.has(p)), "the join is a down-set")
   const sent: string[] = []
@@ -234,20 +246,6 @@ test("two tabs cut at different pieces join into a row the next pull finishes, s
   assert.deepEqual(new Set(a.held()), new Set(all.map(o => o.hash)))
 })
 
-test("another tab's reset that lands while a piece is on its way keeps the piece out, and the next is asked of the reset", async () => {
-  let resets = 1
-  const one = tab(since => {
-    const a = answer(BUDGET)(since)
-    if (since !== "" && resets-- > 0) one.reset()
-    return Promise.resolve(a)
-  })
-  const ended = await pieces.pull(one.fx)
-  assert.equal(ended.type, "Whole")
-  assert.equal(one.row().generation, 1, "the reset stands")
-  assert.deepEqual(one.asked.filter(since => since === "").length, 2, "asked from nothing twice: at the start and after the reset")
-  assert.deepEqual(new Set(one.held()), new Set(all.map(o => o.hash)))
-})
-
 test("a many-piece pull lands once and writes each object once: one change for the pages, no store rewritten per piece", async () => {
   const total = all.reduce((n, o) => n + o.literal.length, 0)
   const one = tab(since => Promise.resolve(answer(1)(since)))
@@ -262,13 +260,12 @@ test("a frame naming what the tab does not hold takes a cut pull up again, and o
   let answers = 2
   const one = tab(since => (answers-- > 0 ? Promise.resolve(answer(BUDGET)(since)) : Promise.reject(new Error("offline"))))
   assert.equal((await pieces.pull(one.fx)).type, "Cut")
-  // The box's heads, as its stream says them; the tab's last word of them is the same, and it still lacks objects.
-  const frame = heads.of(headsOf(all))
-  assert.deepEqual(boxHeadsOf(one.pending()), frame)
-  assert.equal(behind(frame, join(one.row(), one.pending())), true)
+  // The box's heads, as its stream says them: the tab still lacks objects they name.
+  const frame = headsOf(all)
+  assert.equal(one.behind(frame), true)
   answers = Infinity
   assert.equal((await pieces.pull(one.fx)).type, "Whole")
-  assert.equal(behind(frame, one.row()), false)
+  assert.equal(one.behind(frame), false)
 })
 
 test("a box that lost its records answers the next pull from nothing once, and the pull ends; twice over", async () => {

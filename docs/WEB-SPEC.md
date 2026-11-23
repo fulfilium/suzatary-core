@@ -22,9 +22,9 @@ a sentence here.
   `asked` (`web/src/app/asked.ts`); it loads nothing itself.
 - **A page drawn in Rust**: a `viewtree::Program` (`app/pages/`), painted by
   `web/src/painter/painter.ts` and run by `web/src/pages/program.ts`.
-- **What the tab holds**: replicas of the box's objects
-  (`web/src/prodrome/replica.ts`, and the stores' in `app/store/src/replica/`),
-  read and moved by the core in its worker (`web/src/prodrome/questions.ts`).
+- **What the tab holds**: replicas of the box's objects, the chains' and the
+  stores' (`app/store/src/replica/`), read and moved by the core in its worker
+  (`web/src/prodrome/questions.ts`); the page asks and holds none.
 - **The tab's own state**: registers, each declared once with its tier in
   `web/src/app/registers.ts`.
 - **The wire**: types and decoders generated into `web/src/wire/generated/`

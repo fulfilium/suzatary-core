@@ -358,7 +358,7 @@ impl HeldReplica {
                         },
                     },
                     None => match &own.answer {
-                        Answer::Taken => return None,
+                        Answer::Taken | Answer::LetGo => return None,
                         Answer::Unsent => Ruling::Unsent,
                         Answer::Refused { kind, reason } => match kind {
                             Refusal::Trust => Ruling::Trust,

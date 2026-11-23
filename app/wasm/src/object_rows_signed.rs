@@ -173,12 +173,18 @@ fn a_signature_changes_no_reading() {
             match r.int(4) {
                 0 => {
                     if let Some(e) = membership.first() {
-                        assert!(members.append(e).is_ok(), "{moment}: appended");
+                        let f = members.append(e).expect("appended");
+                        if let Some(f) = f {
+                            members.apply(&f).expect("kept");
+                        }
                     }
                 }
                 1 => {
                     if let Some(e) = alias.first() {
-                        assert!(aliases.append(e).is_ok(), "{moment}: appended");
+                        let f = aliases.append(e).expect("appended");
+                        if let Some(f) = f {
+                            aliases.apply(&f).expect("kept");
+                        }
                     }
                 }
                 2 => {

@@ -57,9 +57,18 @@
 # attendeeaddress, merged with 2.1.221: prodrome 5,074,430 (+2,022 over master's: an attendee's
 # name and its address check, the attendees' count, the calendar's door for a plugin's items) and
 # views 3,760,435, each within its line.
+# chainsinworker (the chains held by the core in its worker), merged with 2.1.217: prodrome 5,122,677
+# (+59,878 over 2.1.215's 5,062,799: the todo chain as a store of objects, `Chain`, its policy,
+# let-go, carry and readings), so its lines rise by 60,000. At its second review, prodrome
+# 5,131,058 (+8,381: the policy heard by the box's stamp, the closed check at load, the join of two
+# replicas, the planned act and carry), so its lines rise by 10,000. At its third, prodrome
+# 5,125,556 (-5,502: a plan is made without a copy of the replica, and a hold behind a refusal is
+# derived, never stored), so its lines fall by 5,000. Merged with 2.1.222, prodrome 5,135,596
+# (+63,188 over master's 5,072,408). Merged with 2.1.227, prodrome 5,136,952 and views 3,762,791;
+# prodrome's lines are that figure rounded up to the next 10,000, and the next above it for aarch64.
 views_bg.wasm x86_64-linux 3770000
-prodrome_bg.wasm x86_64-linux 5080000
+prodrome_bg.wasm x86_64-linux 5140000
 typst_bg.wasm x86_64-linux 22020000
 views_bg.wasm aarch64-linux 3780000
-prodrome_bg.wasm aarch64-linux 5090000
+prodrome_bg.wasm aarch64-linux 5150000
 typst_bg.wasm aarch64-linux 22090000

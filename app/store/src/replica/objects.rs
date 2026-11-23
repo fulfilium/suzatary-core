@@ -10,8 +10,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
 use crate::replica::form::{self, DeltaForm, Name, RowForm, bytes, hash};
+use crate::replica::frontier::Frontier;
 use crate::replica::held::{Node, Said};
-use crate::replica::pulling::{Delta, Pulling};
+use crate::replica::pulling::{Delta, Lands, Pulling};
 use crate::replica::row::{Keys, Row};
 use crate::replica::writes::{Answer, Own, Role, Writes};
 use crate::snapshot::{self, NotASnapshot, Unprinted};
@@ -98,15 +99,62 @@ pub(crate) type ObjectRows = Pulling<Object, NoKeys>;
 
 pub(crate) type ObjectDelta = Delta<Object, NoKeys>;
 
+/// Who the box does not believe, and the root key a device key's signatures count under; `None`
+/// for a store the box alone writes.
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Policy {
+    pub untrusted: BTreeSet<String>,
+    pub root: Option<String>,
+}
+
+/// The policy the box read a piece under, at the frontier its answer named, in the generation of the
+/// rows it was asked from. Joined by the later generation, then the later frontier, both of which
+/// the box's answers decide, never a device's clock; two answers at one frontier hold the union of
+/// who is not believed, so a tab never trusts an actor another answer at that frontier distrusts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Heard {
+    pub generation: u64,
+    pub frontier: Frontier,
+    pub policy: Policy,
+}
+
+impl Heard {
+    #[must_use]
+    pub fn join(self, other: &Heard) -> Heard {
+        match (self.generation, &self.frontier).cmp(&(other.generation, &other.frontier)) {
+            std::cmp::Ordering::Less => other.clone(),
+            std::cmp::Ordering::Greater => self,
+            std::cmp::Ordering::Equal => Heard {
+                policy: Policy {
+                    untrusted: self
+                        .policy
+                        .untrusted
+                        .union(&other.policy.untrusted)
+                        .cloned()
+                        .collect(),
+                    root: self.policy.root.max(other.policy.root.clone()),
+                },
+                ..self
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Objects {
     rows: ObjectRows,
     own: Writes<Object>,
+    heard: Option<Heard>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Move {
     Rows(ObjectDelta),
+    /// A piece the box answered, beside the policy it was read under.
+    Piece {
+        delta: ObjectDelta,
+        heard: Heard,
+    },
     Own(Vec<Own<Object>>),
 }
 
@@ -116,8 +164,37 @@ impl Objects {
         &self.rows
     }
 
-    pub fn piece(&mut self, said: Said<Object>, fetched_at: u64) -> Move {
-        Move::Rows(self.rows.piece(said, NoKeys, fetched_at))
+    pub fn piece(&mut self, said: Said<Object>, policy: Policy, fetched_at: u64) -> Move {
+        let asked = self.rows.holding();
+        let heard = Heard {
+            generation: asked.generation(),
+            frontier: asked.replica().frontier().answered(
+                said.since,
+                said.digest.clone(),
+                said.count,
+            ),
+            policy,
+        };
+        let delta = self.rows.piece(said, NoKeys, fetched_at);
+        self.hear(&heard);
+        Move::Piece { delta, heard }
+    }
+
+    /// The policy the box served the landed rows' generation under, none before it has spoken in
+    /// that generation.
+    #[must_use]
+    pub fn policy(&self) -> Option<&Policy> {
+        self.heard
+            .as_ref()
+            .filter(|h| h.generation == self.rows.landed().generation())
+            .map(|h| &h.policy)
+    }
+
+    fn hear(&mut self, heard: &Heard) {
+        self.heard = Some(match self.heard.take() {
+            None => heard.clone(),
+            Some(h) => h.join(heard),
+        });
     }
 
     pub fn land(&mut self) -> Move {
@@ -142,9 +219,77 @@ impl Objects {
         Move::Own(self.own.refused(refused))
     }
 
+    pub fn let_go(&mut self, names: &BTreeSet<Hash>) -> Move {
+        Move::Own(self.own.let_go(names))
+    }
+
+    /// Every write this replica made, with the box's answer.
+    pub fn own(&self) -> impl Iterator<Item = &Own<Object>> {
+        self.own.iter()
+    }
+
+    /// The move of [`Objects::write`], made and not taken: a plan the caller keeps before the
+    /// replica applies it.
+    #[must_use]
+    pub fn writing(objects: Vec<Object>) -> Move {
+        Move::Own(Writes::writing(objects))
+    }
+
+    /// The move of [`Objects::let_go`], made and not taken.
+    #[must_use]
+    pub fn letting_go(&self, names: &BTreeSet<Hash>) -> Move {
+        Move::Own(self.own.letting_go(names))
+    }
+
+    /// Every write the box has not taken and the rows do not hold, signatures included, each
+    /// with its answer: what letting go loses, read by kind.
+    #[must_use]
+    pub fn untaken(&self) -> Vec<&Own<Object>> {
+        let holding = self.rows.holding();
+        let reading = holding.replica().read();
+        self.own
+            .untaken()
+            .filter(|own| !reading.holds(own.node.name()))
+            .collect()
+    }
+
+    /// The writes the box has not taken that rest in a prodrome it no longer serves.
+    #[must_use]
+    pub fn stranded(&self) -> Vec<&Object> {
+        let reading = self.rows.landed().replica().read();
+        let gone = reading.gone();
+        self.untaken()
+            .into_iter()
+            .map(|own| &own.node)
+            .filter(|o| o.prodrome.as_ref().is_some_and(|p| gone.contains(p)))
+            .collect()
+    }
+
+    /// What `other` holds joined in: its rows, its writes and its policy. A load joins what it read
+    /// into what this replica holds, so a write made meanwhile is never lost.
+    pub fn join(&mut self, other: &Objects) {
+        self.rows.join(&other.rows);
+        self.own
+            .apply(&other.own.iter().cloned().collect::<Vec<_>>());
+        if let Some(h) = &other.heard {
+            self.hear(h);
+        }
+    }
+
+    /// Whether the landed rows hold all they say they hold ([`Pulling::closed`]): a store of
+    /// objects lands each pull whole.
+    #[must_use]
+    pub fn closed(&self) -> bool {
+        self.rows.closed(Lands::Whole)
+    }
+
     pub fn apply(&mut self, m: &Move) {
         match m {
             Move::Rows(delta) => self.rows.apply(delta),
+            Move::Piece { delta, heard } => {
+                self.rows.apply(delta);
+                self.hear(heard);
+            }
             Move::Own(owned) => self.own.apply(owned),
         }
     }
@@ -231,23 +376,36 @@ struct OwnForm {
 }
 
 #[derive(Serialize, Deserialize)]
+struct HeardForm {
+    generation: u64,
+    era: u64,
+    count: u64,
+    digest: Name,
+    untrusted: Vec<String>,
+    root: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Given {
     landed: ObjectRowForm,
     landings: u64,
     pending: ObjectRowForm,
     own: Vec<OwnForm>,
+    heard: Option<HeardForm>,
 }
 
 #[derive(Serialize, Deserialize)]
 enum MoveForm {
     Rows(DeltaForm<ObjectRowForm, ()>),
+    Piece(DeltaForm<ObjectRowForm, ()>, HeardForm),
     Own(Vec<OwnForm>),
 }
 
 impl snapshot::Held for Objects {
     type Given = Given;
-    /// 1: the landed and pending rows and the own objects, every name as its 32 bytes.
-    const FORM: u32 = 1;
+    /// 2: the landed and pending rows, the own objects, every name as its 32 bytes, and the
+    /// policy heard.
+    const FORM: u32 = 2;
 
     fn given(&self) -> Given {
         Given {
@@ -255,6 +413,7 @@ impl snapshot::Held for Objects {
             landings: self.rows.landings(),
             pending: row_form(self.rows.pending()),
             own: self.own.iter().map(own_form).collect(),
+            heard: self.heard.as_ref().map(heard_form),
         }
     }
 
@@ -272,33 +431,38 @@ impl snapshot::Held for Objects {
                     .map(own_of)
                     .collect::<Result<Vec<_>, _>>()?,
             ),
+            heard: given.heard.map(heard_of).transpose()?,
         })
     }
 }
 
 /// `m` as a frame of the log: the snapshot's form, then the move in postcard.
 pub fn frame(m: &Move) -> Result<Vec<u8>, Unprinted> {
+    let delta = |delta| form::delta_form(delta, row_form, |n| match *n {});
     let form = match m {
-        Move::Rows(delta) => MoveForm::Rows(form::delta_form(delta, row_form, |n| match *n {})),
+        Move::Rows(d) => MoveForm::Rows(delta(d)),
+        Move::Piece { delta: d, heard } => MoveForm::Piece(delta(d), heard_form(heard)),
         Move::Own(owned) => MoveForm::Own(owned.iter().map(own_form).collect()),
     };
     snapshot::print(<Objects as snapshot::Held>::FORM, &form)
 }
 
-/// The move `bytes` print, or none for a frame of another form.
-pub fn unframe(bytes: &[u8]) -> Result<Option<Move>, NotASnapshot> {
-    let form: MoveForm = match snapshot::read(<Objects as snapshot::Held>::FORM, bytes) {
-        Ok(form) => form,
-        Err(NotASnapshot::Form { .. }) => return Ok(None),
-        Err(e) => return Err(e),
+/// The move `bytes` print. A frame of another form is [`NotASnapshot::Form`], as a snapshot of
+/// another form is: the caller decides what an earlier form's copy becomes, for both alike.
+pub fn unframe(bytes: &[u8]) -> Result<Move, NotASnapshot> {
+    let form: MoveForm = snapshot::read(<Objects as snapshot::Held>::FORM, bytes)?;
+    let delta = |delta| {
+        form::delta_of(delta, row_of, |(): &()| {
+            Err("a store of objects holds no key to let go".to_owned())
+        })
+        .map_err(NotASnapshot::Refused)
     };
     let m = match form {
-        MoveForm::Rows(delta) => Move::Rows(
-            form::delta_of(delta, row_of, |(): &()| {
-                Err("a store of objects holds no key to let go".to_owned())
-            })
-            .map_err(NotASnapshot::Refused)?,
-        ),
+        MoveForm::Rows(d) => Move::Rows(delta(d)?),
+        MoveForm::Piece(d, heard) => Move::Piece {
+            delta: delta(d)?,
+            heard: heard_of(heard).map_err(NotASnapshot::Refused)?,
+        },
         MoveForm::Own(owned) => Move::Own(
             owned
                 .into_iter()
@@ -307,7 +471,38 @@ pub fn unframe(bytes: &[u8]) -> Result<Option<Move>, NotASnapshot> {
                 .map_err(NotASnapshot::Refused)?,
         ),
     };
-    Ok(Some(m))
+    Ok(m)
+}
+
+fn heard_form(heard: &Heard) -> HeardForm {
+    let (era, count, digest) = match &heard.frontier {
+        Frontier::Nothing => (0, 0, [0; 32]),
+        Frontier::Named { era, count, digest } => (*era, *count, bytes(digest.as_str())),
+    };
+    HeardForm {
+        generation: heard.generation,
+        era,
+        count,
+        digest,
+        untrusted: heard.policy.untrusted.iter().cloned().collect(),
+        root: heard.policy.root.clone(),
+    }
+}
+
+/// A frontier named by an answer is never `Nothing`, so a print names one.
+fn heard_of(form: HeardForm) -> Result<Heard, String> {
+    Ok(Heard {
+        generation: form.generation,
+        frontier: Frontier::Named {
+            era: form.era,
+            count: form.count,
+            digest: hash(&form.digest)?,
+        },
+        policy: Policy {
+            untrusted: form.untrusted.into_iter().collect(),
+            root: form.root,
+        },
+    })
 }
 
 fn row_form(row: &Row<Object, NoKeys>) -> ObjectRowForm {

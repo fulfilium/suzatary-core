@@ -1,6 +1,10 @@
 //! THE ROLLBACK LAW: for any set F of the writes refused for good, what stands and what is unsent
 //! are what they would be had the replica never written F or anything resting on F; what stands
-//! holds no write of a gone prodrome, nor one resting on it; and the refusals name F exactly.
+//! holds no write of a gone prodrome, nor one resting on it; and the refusals name F exactly. A
+//! set the owner let go is taken back the same way, and names no refusal. Two replicas that write,
+//! hear answers and let go in any order converge when joined, a write the box took is never hidden,
+//! no write is held back unsaid, and a write is held back exactly while something under it is
+//! refused for good or let go.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -73,7 +77,7 @@ fn names<'a>(nodes: impl IntoIterator<Item = &'a Bare>) -> BTreeSet<Hash> {
 }
 
 fn answer(n: u8) -> Answer {
-    match n % 4 {
+    match n % 5 {
         0 => Answer::Unsent,
         1 => Answer::Refused {
             kind: Refusal::Trust,
@@ -83,12 +87,13 @@ fn answer(n: u8) -> Answer {
             kind: Refusal::Final,
             reason: "never".to_owned(),
         },
-        _ => Answer::Taken,
+        3 => Answer::Taken,
+        _ => Answer::LetGo,
     }
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(256))]
+    #![proptest_config(ProptestConfig::with_cases(20_000))]
 
     #[test]
     fn law_a_refusal_for_good_takes_back_what_rests_on_it(
@@ -140,12 +145,48 @@ proptest! {
             .collect();
         prop_assert_eq!(names(never.standing(in_rows, &gone)), standing);
         prop_assert_eq!(names(refused.refusals().into_iter().map(|(n, _, _)| n)), taken_back.clone());
+        // Stored, a refusal is the box's alone: what rests on one is held back by derivation.
         let refused_now: BTreeSet<Hash> = refused
             .iter()
             .filter(|o| matches!(&o.answer, Answer::Refused { kind: Refusal::Final | Refusal::Outdated, .. }))
             .map(|o| o.node.name.clone())
             .collect();
-        prop_assert_eq!(refused_now, taken_back);
+        prop_assert_eq!(refused_now, f);
+    }
+
+    /// A write the owner let go and what rests on it stand nowhere and are posted never, as if
+    /// never written; a refusal of one keeps it let go; and none of it names a refusal.
+    #[test]
+    fn law_a_write_let_go_takes_back_what_rests_on_it(
+        parents in prop::collection::vec(prop::collection::vec(any::<bool>(), 10), 1..10),
+        held in 0usize..10,
+        letting in prop::collection::vec(any::<bool>(), 10),
+    ) {
+        let all = dag(&parents);
+        let held = held.min(all.len());
+        let rows: BTreeSet<Hash> = names(&all[..held]);
+        let in_rows = |n: &Hash| rows.contains(n);
+        let own: Vec<Bare> = all[held..].to_vec();
+        let g: BTreeSet<Hash> = own
+            .iter()
+            .zip(&letting)
+            .filter(|(_, l)| **l)
+            .map(|(n, _)| n.name.clone())
+            .collect();
+
+        let mut let_go = Writes::default();
+        let_go.write(own.clone());
+        let moved = let_go.let_go(&g);
+        let_go.refused(g.iter().map(|n| (n.clone(), (Grounds::Final, "refused".to_owned()))).collect());
+        let taken_back = resting_on(&own, &g);
+        prop_assert_eq!(names(moved.iter().map(|o| &o.node)), taken_back.clone());
+        let mut never = Writes::default();
+        never.write(own.iter().filter(|n| !taken_back.contains(&n.name)).cloned().collect());
+
+        prop_assert_eq!(names(let_go.standing(in_rows, &BTreeSet::new())), names(never.standing(in_rows, &BTreeSet::new())));
+        prop_assert_eq!(names(let_go.unsent(in_rows)), names(never.unsent(in_rows)));
+        prop_assert!(let_go.refusals().is_empty());
+        prop_assert_eq!(names(let_go.untaken().map(|o| &o.node)), names(never.untaken().map(|o| &o.node)));
     }
 
     /// Moves taken in any order and any number of times hold the same writes, and a move taken
@@ -237,4 +278,126 @@ fn a_write_answered_later_waits_and_goes_again() {
     );
     assert!(made.refusals().is_empty(), "no refusal for good");
     assert_eq!(names(made.unsent(|_| false)), names(&all), "both go again");
+}
+
+/// One step of a replica's writes: a write, an answer of the box, or the owner letting a write go.
+#[derive(Debug, Clone)]
+enum Step {
+    Write(usize),
+    Answer(usize, u8),
+    LetGo(usize),
+}
+
+fn step(n: usize) -> impl Strategy<Value = Step> {
+    prop_oneof![
+        3 => (0..n).prop_map(Step::Write),
+        3 => (0..n, any::<u8>()).prop_map(|(i, a)| Step::Answer(i, a)),
+        2 => (0..n).prop_map(Step::LetGo),
+    ]
+}
+
+/// The moves `steps` make of `writes`, over the nodes `all`.
+fn run(writes: &mut Writes<Bare>, all: &[Bare], steps: &[Step]) -> Vec<Vec<Own<Bare>>> {
+    steps
+        .iter()
+        .map(|s| match s {
+            Step::Write(i) => writes.write(vec![all[*i].clone()]),
+            Step::Answer(i, a) => writes.answered([(all[*i].name.clone(), answer(*a))]),
+            Step::LetGo(i) => {
+                let before: BTreeMap<Hash, Answer> = writes
+                    .iter()
+                    .map(|o| (o.node.name.clone(), o.answer.clone()))
+                    .collect();
+                let moved = writes.let_go(&BTreeSet::from([all[*i].name.clone()]));
+                for o in &moved {
+                    assert_ne!(
+                        before.get(&o.node.name),
+                        Some(&Answer::Taken),
+                        "a taken write is let go"
+                    );
+                }
+                moved
+            }
+        })
+        .collect()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(20_000))]
+
+    /// Two replicas from one start, each writing, hearing answers and letting go in its own order,
+    /// joined either way, hold the same writes; in the join a write the box took stands, a write let
+    /// go stands nowhere and is never posted, and every write that does not stand is a refusal named.
+    #[test]
+    fn law_two_replicas_converge_a_taken_write_is_never_hidden_and_nothing_is_held_back_unsaid(
+        parents in prop::collection::vec(prop::collection::vec(any::<bool>(), 8), 1..8),
+        start in prop::collection::vec(step(8), 0..6),
+        a in prop::collection::vec(step(8), 0..10),
+        b in prop::collection::vec(step(8), 0..10),
+    ) {
+        let all = dag(&parents);
+        let fit = |s: &[Step]| -> Vec<Step> {
+            s.iter()
+                .filter(|s| match s {
+                    Step::Write(i) | Step::Answer(i, _) | Step::LetGo(i) => *i < all.len(),
+                })
+                .cloned()
+                .collect()
+        };
+        let mut left = Writes::default();
+        let common = run(&mut left, &all, &fit(&start));
+        let mut right = Writes::default();
+        for m in &common {
+            right.apply(m);
+        }
+        let from_left = run(&mut left, &all, &fit(&a));
+        let from_right = run(&mut right, &all, &fit(&b));
+        for m in &from_right {
+            left.apply(m);
+        }
+        for m in &from_left {
+            right.apply(m);
+        }
+        let read = |w: &Writes<Bare>| -> BTreeMap<Hash, Answer> {
+            w.iter().map(|o| (o.node.name.clone(), o.answer.clone())).collect()
+        };
+        prop_assert_eq!(read(&left), read(&right));
+
+        // Held back, derived from the answers as they stand now: an untaken write refused for good,
+        // or resting on a write let go or held back. Nothing else is.
+        let answers = read(&left);
+        let mut back: BTreeSet<Hash> = BTreeSet::new();
+        loop {
+            let more: Vec<Hash> = left
+                .untaken()
+                .map(|o| &o.node)
+                .filter(|n| !back.contains(&n.name))
+                .filter(|n| {
+                    matches!(answers.get(&n.name), Some(Answer::Refused { kind: Refusal::Final | Refusal::Outdated, .. }))
+                        || n.rests_on.iter().any(|p| back.contains(p) || answers.get(p) == Some(&Answer::LetGo))
+                })
+                .map(|n| n.name.clone())
+                .collect();
+            if more.is_empty() {
+                break;
+            }
+            back.extend(more);
+        }
+
+        let none = BTreeSet::new();
+        let standing = names(left.standing(|_| false, &none));
+        let unsent = names(left.unsent(|_| false));
+        let refused = names(left.refusals().into_iter().map(|(n, _, _)| n));
+        prop_assert_eq!(&refused, &back, "a write is held back only while something under it is refused or let go");
+        for o in left.iter() {
+            match o.answer {
+                Answer::Taken => prop_assert!(standing.contains(&o.node.name), "a taken write is hidden"),
+                Answer::LetGo => prop_assert!(!standing.contains(&o.node.name) && !unsent.contains(&o.node.name)),
+                Answer::Unsent | Answer::Refused { .. } => prop_assert!(
+                    standing.contains(&o.node.name) || refused.contains(&o.node.name),
+                    "{} held back unsaid", o.node.name
+                ),
+            }
+        }
+    }
 }

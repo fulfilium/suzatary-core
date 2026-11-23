@@ -7,9 +7,18 @@ import assert from "node:assert/strict"
 import type { Core, Written } from "../src/prodrome/core"
 import written from "../src/prodrome/written"
 import http from "../src/wire/http"
+import storereads from "../src/wire/storereads"
 import ownlines from "../src/prodrome/ownlines"
 
 type Fake = { readonly store: Written; readonly calls: string[] }
+
+// The lines' entry, posted to the lines' route and signed.
+const lines = (e: Pick<written.Entry, "noun" | "store" | "stepped" | "told">): ((name: "lines") => written.Entry) => () => ({
+  ...e,
+  exclusive: f => f(),
+  post: (literals, since, keys) => storereads.post("lines", literals, since, keys),
+  signs: () => "Signs",
+})
 
 // A store holding `pieces` posts of one unsent line each, its refusals `refusals` (the core's JSON), each move it is asked for recorded.
 const fake = (refusals: unknown[] = [], pieces = 1, waiting: unknown[] = []): Fake => {
@@ -32,7 +41,7 @@ test("an answer for later leaves every line unsent, refuses nothing, stops the h
     Object.assign(globalThis, { fetch: async () => (posts++, new Response(JSON.stringify({ error: `not yet (${status})` }), { status })) })
     const { store, calls } = fake([], 2)
     const said: string[] = []
-    const writes = written.of({} as Core, { lines: { noun: "line", store, stepped: async () => {} } }, why => void said.push(why))
+    const writes = written.of({} as Core, lines({ noun: "line", store, stepped: async () => {} }), why => void said.push(why))
     await writes.handOver("lines")
     await writes.handOver("lines")
     assert.deepEqual(calls, [], `${status}: nothing answered, nothing refused`)
@@ -46,7 +55,7 @@ test("a refusal of the post itself refuses its lines for good, as the rule's doe
     let posts = 0
     Object.assign(globalThis, { fetch: async () => (posts++, new Response(JSON.stringify({ error: `never (${status})` }), { status })) })
     const { store, calls } = fake([], 2)
-    const writes = written.of({} as Core, { lines: { noun: "line", store, stepped: async () => {} } }, () => {})
+    const writes = written.of({} as Core, lines({ noun: "line", store, stepped: async () => {} }), () => {})
     await writes.handOver("lines")
     assert.deepEqual(calls, [`refuse:never (${status})`, `refuse:never (${status})`], `${status}: each piece refused`)
     assert.equal(posts, 2, `${status}: no piece holds back the next`)
@@ -73,14 +82,12 @@ test("a refusal a load finds is said with the person's words, once, and marked s
   const said: string[] = []
   const writes = written.of(
     {} as Core,
-    {
-      lines: {
-        noun: "line",
-        store,
-        stepped: async () => {},
-        told: { seen: async literals => void seen.push([...literals]), told: async () => told },
-      },
-    },
+    lines({
+      noun: "line",
+      store,
+      stepped: async () => {},
+      told: { seen: async literals => void seen.push([...literals]), told: async () => told },
+    }),
     why => void said.push(why),
   )
   await writes.said("lines")
@@ -97,7 +104,7 @@ test("a post the box did not answer leaves every line unsent and says nothing: t
     Object.assign(globalThis, { fetch: async () => new Response("", { status }) })
     const { store, calls } = fake()
     const said: string[] = []
-    const writes = written.of({} as Core, { lines: { noun: "line", store, stepped: async () => {} } }, why => void said.push(why))
+    const writes = written.of({} as Core, lines({ noun: "line", store, stepped: async () => {} }), why => void said.push(why))
     await writes.handOver("lines")
     assert.deepEqual(calls, [], `${status}: nothing answered, nothing refused`)
     assert.deepEqual(said, [], `${status}: nothing said`)
@@ -112,14 +119,12 @@ test("a line the box has not taken yet is said once in its rule's words, and tol
   const said: string[] = []
   const writes = written.of(
     {} as Core,
-    {
-      lines: {
-        noun: "line",
-        store,
-        stepped: async () => {},
-        told: { seen: async literals => void seen.push(...literals), told: async () => told },
-      },
-    },
+    lines({
+      noun: "line",
+      store,
+      stepped: async () => {},
+      told: { seen: async literals => void seen.push(...literals), told: async () => told },
+    }),
     why => void said.push(why),
   )
   await writes.said("lines")
@@ -142,14 +147,12 @@ test("a signature refused or waiting with what it signs says nothing of its own:
   const said: string[] = []
   const writes = written.of(
     {} as Core,
-    {
-      lines: {
-        noun: "line",
-        store,
-        stepped: async () => {},
-        told: { seen: async literals => void seen.push(...literals), told: async () => new Set(seen) },
-      },
-    },
+    lines({
+      noun: "line",
+      store,
+      stepped: async () => {},
+      told: { seen: async literals => void seen.push(...literals), told: async () => new Set(seen) },
+    }),
     why => void said.push(why),
   )
   await writes.said("lines")

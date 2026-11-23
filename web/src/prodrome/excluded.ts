@@ -29,6 +29,13 @@ export namespace excluded {
     why: `what this device keeps of it does not read (${why}), so nothing done here can be kept until it is reset from the box, which writes over that copy and whatever it held`,
     cure: "Reset",
   })
+  // A copy this device keeps of which a part (`what`) did not read: that part is kept aside, the store works without it,
+  // and the reset that writes over the copy removes it.
+  export const aside = (chain: string, what: string): Row => ({
+    chain,
+    why: `part of what this device keeps of it did not read (${what}); that part is kept aside and the store works without it, and writing over this copy from the box removes it`,
+    cure: "Reset",
+  })
   export const NOTHING: Left = { objects: NONE, chains: [], rows: [] }
   export const UNSEEN: Seen = {}
 
@@ -97,8 +104,16 @@ export namespace excluded {
       ? `the chain ${cs[0]?.chain ?? ""} could not be read, so what refers into it is unpriced until it reads`
       : `${cs.length} chains could not be read, so what refers into them is unpriced until they read`
 
-  const rowsSaid = (rs: readonly Row[]): string =>
-    rs.length === 1 ? `this device's copy of ${rs[0]?.chain ?? ""} needs you` : `${rs.length} of this device's copies need you`
+  // A copy is said to need the owner only where the owner can do something for it: a reset that writes over it. A row
+  // with no cure is a word about the copy, never a call.
+  const rowsSaid = (rs: readonly Row[]): string => {
+    const asking = rs.filter(r => r.cure === "Reset")
+    const telling = rs.filter(r => r.cure === "None")
+    return [
+      ...(asking.length === 0 ? [] : [asking.length === 1 ? `this device's copy of ${asking[0]?.chain ?? ""} needs you` : `${asking.length} of this device's copies need you`]),
+      ...(telling.length === 0 ? [] : [telling.length === 1 ? `a word on this device's copy of ${telling[0]?.chain ?? ""}` : `a word on ${telling.length} of this device's copies`]),
+    ].join("; ")
+  }
 
   // The one line: what was left out of what was read, then what could not be read at all, then what this device keeps.
   export const said = (l: Left): string => {

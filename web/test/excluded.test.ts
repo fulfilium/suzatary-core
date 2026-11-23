@@ -70,3 +70,12 @@ test("a chain the box's fold holds as a failure is named once in the one line, w
   const cleared = readers.reduce((s, reader) => excluded.step(s, { type: "Read", reader, left: excluded.NOTHING }), told)
   assert.ok(excluded.empty(excluded.all(cleared)))
 })
+
+test("the line asks for the owner only for a copy a reset can cure, and says the rest as a word", () => {
+  const cured = excluded.left(excluded.NONE, [], [excluded.aside("store/topics", "its snapshot")])
+  const held = excluded.left(excluded.NONE, [], [{ chain: "store/inbox", why: "held unchanged", cure: "None" }])
+  assert.equal(excluded.said(cured), "This device's copy of store/topics needs you")
+  assert.equal(excluded.said(held), "A word on this device's copy of store/inbox")
+  assert.equal(/need/.test(excluded.said(held)), false)
+  assert.equal(excluded.said(excluded.joinLeft(cured, held)), "This device's copy of store/topics needs you; a word on this device's copy of store/inbox")
+})

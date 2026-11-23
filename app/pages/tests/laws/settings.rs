@@ -40,9 +40,9 @@ fn device() -> impl Strategy<Value = Value> {
     prop::sample::select(vec![
         json!(null),
         json!({"persist": {"type": "Granted"}, "usage": {"bytes": 1024.0, "count": 1}, "budget": 1e6,
-            "signing": {"type": "Keyed", "key": "ab".repeat(32), "standing": "untrusted"}}),
+            "signing": {"type": "Keyed", "key": "ab".repeat(32), "standing": "untrusted"}, "earlier": []}),
         json!({"persist": {"type": "Denied"}, "usage": {"bytes": 0.0, "count": 0}, "budget": 1e6,
-            "signing": {"type": "Unreadable", "e": "it does not read"}}),
+            "signing": {"type": "Unreadable", "e": "it does not read"}, "earlier": ["topics", "chain/life"]}),
     ])
 }
 

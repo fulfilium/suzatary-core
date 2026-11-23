@@ -50,4 +50,11 @@ declare module "node:crypto" {
   export function createHash(algorithm: string): {
     update(data: string, encoding: string): { digest(encoding: string): string };
   };
+  /** Enough of Ed25519 to sign an object as a device key does: a key pair, its public half as SPKI DER (the raw key is
+   * its last 32 bytes), and a signature of bytes. */
+  export interface KeyObject {
+    export(options: { format: "der"; type: "spki" }): Uint8Array;
+  }
+  export function generateKeyPairSync(type: "ed25519"): { publicKey: KeyObject; privateKey: KeyObject };
+  export function sign(algorithm: null, data: Uint8Array, key: KeyObject): Uint8Array;
 }

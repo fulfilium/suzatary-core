@@ -90,6 +90,12 @@ impl<N: Node> Held<N> {
         self.nodes.values()
     }
 
+    /// Whether the node `name` is held, read or not.
+    #[must_use]
+    pub fn contains(&self, name: &Hash) -> bool {
+        self.nodes.contains_key(name)
+    }
+
     #[must_use]
     pub fn words(&self) -> &[Word] {
         &self.words

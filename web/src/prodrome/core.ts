@@ -23,7 +23,7 @@ import text from "../wire/text";
 import content from "./content";
 import excluded from "./excluded";
 import type lines from "./lines";
-import type { Replica } from "./replica";
+import type { Unsent, UnsentRead } from "../wire/generated/pages";
 
 /** Hand-written, since `tsc` cannot wait for the generated `prodrome.d.ts`; names are the Rust ones. */
 export interface Core {
@@ -33,8 +33,12 @@ export interface Core {
   Memberships: new () => TopicStore;
   TopicAliases: new () => TopicStore;
   Asks: new () => ObjectStore;
+  Chain: new () => ChainStore;
   TopicReading: new (memberships: ObjectStore, aliases: ObjectStore) => TopicReading;
   Chains: new () => Chains;
+  /** `"This"`, `"Other"` or `"None"`: the form of a snapshot's or a frame's bytes, of a store of objects or of the lines. */
+  objects_form: (bytes: Uint8Array) => string;
+  lines_form: (bytes: Uint8Array) => string;
   /** `undefined` where the term reads `∅`. */
   fulfillment: (term: string, now: string, env: string) => number | undefined;
   link: (term: string, specs: string) => string;
@@ -88,6 +92,10 @@ export interface Posted {
   unsigned: () => string;
   /** The device's `Signed` of a change, kept unsent. */
   signed: (literal: string) => LineStep;
+}
+
+/** A store whose writes the asks may refuse. */
+export interface Refusable {
   /** The asks' refusals of this store's writes, held as refused; none where nothing moved. */
   refused_in: (asks: ObjectStore) => LineStep | undefined;
 }
@@ -99,7 +107,7 @@ export interface Written extends Posted {
 }
 
 /** A store of objects the core holds (`object_rows::Store`); each move answers its frame. */
-export interface ObjectStore extends Posted {
+export interface Replicated extends Posted {
   heads: () => string;
   heard: () => boolean;
   behind: (heads: string) => boolean;
@@ -108,15 +116,41 @@ export interface ObjectStore extends Posted {
   piece: (answer: string, fetchedAt: number) => Uint8Array;
   land: () => LineStep;
   start_over: () => LineStep;
-  /** `event` sealed as a `Change` and kept as the tab's, unsent; none for a twin. */
-  append: (event: string) => LineStep | undefined;
+  /** Whether the landed row holds all it says it holds. */
+  closed: () => boolean;
+  /** The frame of `event` sealed as a `Change` and written as the tab's, unsent, which the store takes once it is kept
+   * (`apply`); none for a twin. */
+  append: (event: string) => Uint8Array | undefined;
   apply: (frame: Uint8Array) => string;
   load: (bytes: Uint8Array | undefined, frames: Uint8Array) => string;
   snapshot: () => Uint8Array;
   version: () => number;
   tips: () => string;
-  readings: (at: string | null, untrusted: string) => string;
   free: () => void;
+}
+
+export interface ObjectStore extends Replicated {
+  readings: (at: string | null, untrusted: string) => string;
+}
+
+/** A todo chain the core holds (`chain::Chain`), under the policy the box serves it with. */
+export interface ChainStore extends Replicated, Written {
+  /** `{untrusted, root}`, or `null` before the box spoke. */
+  policy: () => string;
+  /** The frame of letting `names` and what rests on them go, taken once kept. */
+  let_go: (names: string) => Uint8Array;
+  /** The frame of `literals` (JSON) written as the tab's own, taken once kept. */
+  carry: (literals: string) => Uint8Array;
+  /** Whether the box holds all of it, and it all the box said it holds. */
+  settled: () => boolean;
+  /** The heads the box last said, JSON, or `null` before it spoke. */
+  box_heads: () => string;
+  /** The page's `Unsent` reading, printed. */
+  unsent_reading: () => string;
+  /** The reading of what stands; the caller frees it. */
+  todos: () => Todos;
+  /** How the heads `a` stand to `b` over what stands. */
+  order: (a: string, b: string) => string;
 }
 
 export interface Proposals extends ObjectStore {
@@ -126,6 +160,7 @@ export interface Proposals extends ObjectStore {
 /** The todo chains held. */
 export interface Chains {
   hold: (name: string, objects: string, untrusted: string) => string;
+  hold_chain: (name: string, chain: ChainStore) => string;
   drop: (name: string) => void;
   /** The set at `at`, read once, to link every term of one reading. */
   linker: (specs: string, at: string) => Linker;
@@ -138,21 +173,47 @@ export interface Linker {
   free: () => void;
 }
 
-/** One chain as the tab holds it, by name. */
-export interface HeldChain {
-  readonly name: string;
-  readonly replica: Replica;
-}
-
+// A chain the box has not yet said whom it believes is not held, and leaves nothing out of a reading: its own reading
+// answers that it is not held.
 const Held = (chain: string): d.Decoder<excluded.Left> =>
   d.alt(
-    d.map(obj<{ why: string }>({ why: str }), (h) => excluded.left(excluded.NONE, [{ chain, why: h.why }])),
-    d.map(Tipped, (t) => excluded.left(t.excluded)),
+    d.map(d.lit("Unheard"), () => excluded.NOTHING),
+    d.alt(
+      d.map(obj<{ why: string }>({ why: str }), (h) => excluded.left(excluded.NONE, [{ chain, why: h.why }])),
+      d.map(Tipped, (t) => excluded.left(t.excluded)),
+    ),
   );
 
-export function holdIn(chains: Chains, name: string, objects: readonly Named[], untrusted: readonly string[]): excluded.Left {
-  return checked("hold", chains.hold(name, objectsOf(objects), JSON.stringify(untrusted)), Held(name));
+export function holdIn(chains: Chains, name: string, chain: ChainStore): excluded.Left {
+  return checked("hold", chains.hold_chain(name, chain), Held(name));
 }
+
+/** What the box said a chain is read under, none before it spoke. */
+export type Policy = { readonly untrusted: readonly string[]; readonly root: string | null };
+const PolicyOf = d.nullable(d.obj<Policy>({ untrusted: d.arr(d.str), root: d.nullable(d.str) }));
+export const policyOf = (chain: ChainStore): Policy | null => checked("policy", chain.policy(), PolicyOf);
+
+/** The heads the box last said of a chain, none before it spoke. */
+export const boxHeadsIn = (chain: ChainStore): readonly string[] | null => checked("box_heads", chain.box_heads(), d.nullable(d.arr(d.str)));
+
+/** What the tab wrote that the box has not taken, as the page draws it. */
+const UnsentAct = d.oneOf<Unsent>({ Sending: null, AwaitingTrust: null, Refused: null });
+const UnsentOf = d.obj<UnsentRead>({
+  todos: d.rec(UnsentAct),
+  acts: d.arr(d.obj<UnsentRead["acts"][number]>({ todo: d.str, name: d.str, at: d.str })),
+  refused: d.arr(d.str),
+  blocked: d.num,
+  stranded: d.num,
+  losses: d.arr(d.str),
+  waiting: d.num,
+});
+export const unsentIn = (chain: ChainStore): UnsentRead => checked("unsent", chain.unsent_reading(), UnsentOf);
+
+/** How two sets of heads stand in the causal order over what a chain holds. */
+export type Order = "Same" | "Below" | "Above" | "Apart" | "Unknown";
+const OrderOf = d.oneOf<Order>({ Same: null, Below: null, Above: null, Apart: null, Unknown: null });
+export const orderIn = (chain: ChainStore, a: readonly string[], b: readonly string[]): Order =>
+  checked("order", chain.order(JSON.stringify(a), JSON.stringify(b)), OrderOf);
 
 /** One move of the lines' rows; freed once read. */
 export interface LineStep {
@@ -177,7 +238,7 @@ export interface Unheld {
 
 /** The lines a tab holds; a slot without its key reads as missing. What this tab wrote is handed over as every
  * store a tab writes is (`written`), each step of it the device's record of the own lines. */
-export interface Lines extends Written {
+export interface Lines extends Written, Refusable {
   /** `asked` sealed by `actor` at `at`, its keys drawn from `entropy`: kept unsent and read at once; or, where a pull
    * may cure what kept it from being sealed, that cause's sentence. */
   seal: (asked: string, at: string, actor: string, entropy: Uint8Array) => Sealed | Unheld;
@@ -212,6 +273,8 @@ export interface Lines extends Written {
   piece: (answer: string, keys: string, fetchedAt: number) => Uint8Array;
   land: () => LineStep;
   start_over: () => LineStep;
+  /** Whether the landed row holds all it says it holds. */
+  closed: () => boolean;
   /** The keys let go from every row, each line whose every key is gone kept as its husk. */
   forget: (gone: string) => LineStep;
   /** `[{hash, husk}]`: husks answered for prints, kept where no held key opens them. */
@@ -251,7 +314,7 @@ export interface Lines extends Written {
   free: () => void;
 }
 
-export type TopicStore = ObjectStore & Written;
+export type TopicStore = ObjectStore & Written & Refusable;
 
 /** The topics both replicas read as, and their planned events. */
 /** A reading printed whole for a page, and beside it the little the worker reads of it (`said`, JSON). */
@@ -554,11 +617,6 @@ export interface Appended {
 /** `event` as a `Change` over its todo's heads in `todos`. */
 export function appendTo(todos: Todos, event: string): Appended {
   return checked("append", todos.append(event, null), Appended);
-}
-
-export interface Acted {
-  appended: Appended;
-  answer: FoldPayload;
 }
 
 

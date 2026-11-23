@@ -5,7 +5,7 @@ import type { Entry, FoldPayload, NextChange } from "../wire/generated/wire"
 import type { CachedFold } from "./cache"
 import source from "../algebra/source"
 import heads from "../prodrome/heads"
-import type { Order } from "../prodrome/replica"
+import type { Order } from "../prodrome/core"
 import fulfillment from "../todo/fulfillment"
 
 export namespace onscreen {

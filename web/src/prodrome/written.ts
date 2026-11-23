@@ -1,30 +1,37 @@
 // What this tab wrote, handed over by one engine for every store it writes: each change signed by the key only the page
 // mints, posted in pieces the box takes whole, each answer kept, and each refusal for good said once in the box's words.
 
-import type { Core, LineStep, ObjectStore, Written } from "./core"
+import type { Core, LineStep, Written } from "./core"
 import { CoreError, signedObject } from "./core"
 import signer from "./signer"
-import type stores from "./stores"
 import clock from "../algebra/clock"
 import lo from "../algebra/lo"
 import d from "../wire/decoder"
 import http from "../wire/http"
-import storereads from "../wire/storereads"
+import type { ReceiptPayload } from "../wire/generated/wire"
 import ownlines from "./ownlines"
 
 export namespace written {
-  // A store this tab writes: the noun a refusal names, its core class, how a step of it is kept, and, for a store whose
-  // writes hold the person's words, where the device keeps which refusals it told them of.
+  // A store this tab writes: the noun a refusal names, its core class, how a step of it is kept, where its writes are
+  // posted (each slot's key by its line's name travels beside them), whether its writes are signed (a chain's only under
+  // the root the box names), and, for a store whose writes hold the person's words, where the device keeps which
+  // refusals it told them of.
   export type Entry = {
     readonly noun: string
     readonly store: Written
+    // `f` alone among the store's steps: a hand-over, a signing and a settling each read the store and write it in one turn.
+    readonly exclusive: <R>(f: () => Promise<R>) => Promise<R>
+    // Called only inside `exclusive`.
     readonly stepped: (step: LineStep) => Promise<void>
+    readonly post: (literals: readonly string[], since: string, keys: Readonly<Record<string, readonly string[]>>) => Promise<ReceiptPayload>
+    // Whether its writes are signed; `Unknown` until the box has said, when nothing of it is posted.
+    readonly signs: () => Signing
     readonly told?: { readonly seen: (literals: readonly string[]) => Promise<void>; readonly told: () => Promise<ReadonlySet<string>> }
   }
-  // One for every store `N` names, so a store left out does not compile.
-  export type Entries<N extends stores.Written> = { readonly [K in N]: Entry }
 
-  export type T<N extends stores.Written> = {
+  export type Signing = "Signs" | "Unsigned" | "Unknown"
+
+  export type T<N extends string> = {
     // Every unsigned change of `name` signed, so a write made keyless is signed later.
     readonly sign: (name: N) => Promise<void>
     // The same signatures as moves the caller keeps, with whatever else it keeps in the same write: none where the
@@ -33,8 +40,8 @@ export namespace written {
     readonly signatures: (name: N) => Promise<Signed>
     // What `name` holds unsent, signed and posted; an answer kept, a refusal said.
     readonly handOver: (name: N) => Promise<void>
-    // The asks' refusals of every store's writes, held as refused.
-    readonly refusedIn: (asks: ObjectStore) => Promise<void>
+    // A move of `name` the caller made, kept; each newly refused write said once, in the box's words.
+    readonly settled: (name: N, step: () => LineStep | undefined) => Promise<void>
     // Each refusal of `name` the person was not told of yet, said with their words: what a load found.
     readonly said: (name: N) => Promise<void>
   }
@@ -104,8 +111,7 @@ export namespace written {
     return x instanceof http.ApiError && REFUSED.has(x.status) ? { type: "Refused", why } : { type: "Later", why }
   }
 
-  export const of = <N extends stores.Written>(core: Core, entries: Entries<N>, say: (why: string) => void, timers: clock.Timers = TIMERS): T<N> => {
-    const entry = (name: N): Entry => entries[name]
+  export const of = <N extends string>(core: Core, entry: (name: N) => Entry, say: (why: string) => void, timers: clock.Timers = TIMERS): T<N> => {
     // One wake per store, armed again after each hand-over and load: its lines dated ahead are posted again when the box
     // may take them.
     const wakes = new Map<N, (n: clock.Next, k: () => void) => void>()
@@ -160,6 +166,7 @@ export namespace written {
     const signatures = async (name: N): Promise<Signed> => {
       const e = entry(name)
       const steps: LineStep[] = []
+      if (e.signs() !== "Signs") return { type: "Signed", steps }
       try {
         const unsigned = read("unsigned", Names(e.store.unsigned()))
         if (unsigned.length === 0) return { type: "Signed", steps }
@@ -172,30 +179,46 @@ export namespace written {
       }
     }
     // Every move made is kept, a signature that failed after them too; the failure is then thrown.
-    const sign = async (name: N): Promise<void> => {
+    const signIn = async (name: N): Promise<void> => {
       const signed = await signatures(name)
       for (const step of signed.steps) await entry(name).stepped(step)
       if (signed.type === "Partly") throw new Error(signed.why)
     }
+    const sign = (name: N): Promise<void> => entry(name).exclusive(() => signIn(name))
 
     // Each piece posted in turn, its receipt kept. An answer that is no receipt is read by `failed`: one for later stops
     // the hand-over, said once per tab; a refusal of the post refuses its lines for good, said with their words as a
     // rule's refusal is, and the hand-over goes on to the next piece, so one post can never hold back the rest.
+    //
+    // NO TURN IS HELD ACROSS A REQUEST: what is unsent is signed and read in one of the store's turns, each post goes
+    // outside every turn, and each answer is settled in a turn of its own, so an act, a reset or a compaction never waits
+    // on the network. The hand-overs of one store run one after another on a lane of their own; a receipt for a write
+    // a reset dropped meanwhile names nothing the store holds and is passed over.
     const shapes = new Set<string>()
-    const handOver = (name: N): Promise<void> => posted(name).finally(() => retried(name))
+    const lanes = new Map<N, Promise<void>>()
+    const handOver = (name: N): Promise<void> => {
+      const next = (lanes.get(name) ?? Promise.resolve()).then(() => posted(name)).finally(() => retried(name))
+      lanes.set(name, next.catch(() => {}))
+      return next
+    }
+    // Nothing is posted before the box has said whether the store's writes are signed: one posted unsigned under a root
+    // it had not named yet would be refused.
     const posted = async (name: N): Promise<void> => {
-      await sign(name)
       const e = entry(name)
-      for (const posting of read("unsent", Unsent(e.store.unsent()))) {
+      if (e.signs() === "Unknown") return
+      const postings = await e.exclusive(async () => {
+        await signIn(name)
+        return read("unsent", Unsent(e.store.unsent()))
+      })
+      for (const posting of postings) {
         try {
           const keys = Object.fromEntries(posting.filter(o => o.keys.length > 0).map(o => [o.hash, o.keys]))
-          const receipt = await storereads.post(
-            name,
+          const receipt = await e.post(
             posting.map(o => o.literal),
             e.store.since(),
             keys,
           )
-          await settled(e, () => e.store.answered(JSON.stringify(receipt)))
+          await e.exclusive(() => settled(e, () => e.store.answered(JSON.stringify(receipt))))
         } catch (x: unknown) {
           const answer = failed(x)
           switch (answer.type) {
@@ -208,18 +231,14 @@ export namespace written {
               shapes.add(answer.why)
               return
             case "Refused":
-              await settled(e, () => e.store.refuse(JSON.stringify(posting.map(o => o.hash)), answer.why))
+              await e.exclusive(() => settled(e, () => e.store.refuse(JSON.stringify(posting.map(o => o.hash)), answer.why)))
               break
           }
         }
       }
     }
 
-    const refusedIn = async (asks: ObjectStore): Promise<void> => {
-      for (const e of Object.values<Entry>(entries)) await settled(e, () => e.store.refused_in(asks))
-    }
-
-    return { sign, signatures, handOver, refusedIn, said }
+    return { sign, signatures, handOver, settled: (name, step) => entry(name).exclusive(() => settled(entry(name), step)), said }
   }
 }
 export default written

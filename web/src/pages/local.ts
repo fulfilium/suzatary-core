@@ -7,8 +7,7 @@ import app from "../app/app"
 import ui from "../app/ui"
 import registers from "../app/registers"
 import time from "../app/time"
-import { boxFolds, ensureFold, held as replicaHeld, signingHere, watchOthers, watchReplica } from "../prodrome/sync"
-import { awaitingTrust, losses, stranded, stuckBehind, unsentActs, unsentTodos } from "../prodrome/replica"
+import { boxFolds, ensureFold, signingHere, unsent, watchOthers, watchReplica, watchUnsent } from "../prodrome/sync"
 import onscreen, { store } from "../app/store"
 import signer from "../prodrome/signer"
 import storesync from "../prodrome/storesync"
@@ -46,7 +45,10 @@ export namespace local {
     return () => unhear.forEach(u => u())
   })
 
-  const here = reading.map(reading.both(kept, signing), ([k, s]) => (k === null ? null : { ...k, signing: s }))
+  // The copies kept from before the last change of form, said where the device's copies are listed.
+  const earlier = reading.againOn(asked.question(() => storesync.earlier().catch((): readonly string[] => [])), storesync.watch)
+
+  const here = reading.map(reading.both(reading.both(kept, signing), earlier), ([[k, s], e]) => (k === null ? null : { ...k, signing: s, earlier: e }))
 
   // The worker says what it was priced without as the inbox's reader.
   const proposals = reading.againOn(
@@ -143,20 +145,8 @@ export namespace local {
     },
   )
 
-  // What this tab wrote that the box has not taken, read again on every commit to the replica.
-  const unsent = reading.held((): Answer<"Unsent"> => {
-    const r = replicaHeld()
-    const { held: blocked, reasons } = stuckBehind(r)
-    return {
-      todos: Object.fromEntries(unsentTodos(r)),
-      acts: unsentActs(r),
-      refused: reasons.map(one => one.reason),
-      blocked,
-      stranded: stranded(r).length,
-      losses: losses(r).map(object => object.hash),
-      waiting: awaitingTrust(r),
-    }
-  }, watchReplica)
+  // What this tab wrote that the box has not taken, as the worker last read it.
+  const unsentRead = reading.held((): Answer<"Unsent"> => unsent(), watchUnsent)
 
   const waiting = reading.held((): Answer<"Waiting"> => app.now().waiting, heard => app.hear(a => a.waiting, heard))
 
@@ -192,7 +182,7 @@ export namespace local {
     Scroll: (_, box) => printed(scroll.of(box)),
     Route: () => printed(route),
     Fold: () => printed(folded),
-    Unsent: () => printed(unsent),
+    Unsent: () => printed(unsentRead),
     Refused: () => reading.map(refusedElsewhere, (json: string) => text.said<Answer<"Refused">>(json)),
     Waiting: () => printed(waiting),
     Kept: l => printed(onDevice(l.key)),

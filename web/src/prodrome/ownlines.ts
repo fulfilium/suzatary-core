@@ -1,5 +1,5 @@
 // What this tab wrote to the lines, kept by the device until the box serves it back: each own line's print, its
-// slots' keys and the box's answer, in a row of the rows' store beside the chains', which every upgrade keeps
+// slots' keys and the box's answer, in a row of the rows' store, which every upgrade keeps
 // (`objects`). The row is plain JSON of what no build changes, so a snapshot of another build, a reset of the lines and
 // an upgrade drop the lines' log and never an own line: the worker reads the row back into its core on every load.
 //
@@ -42,16 +42,7 @@ export namespace ownlines {
 
   const NOTHING: Row = { records: [] }
 
-  // A reset never reaches this row: nothing in it is the box's to take again.
-  const ROWS: Rows<Row> = {
-    parse: (raw: unknown) => parse(raw),
-    print: r => r,
-    generation: () => 0,
-    unsent: () => [],
-    join,
-    after: () => NOTHING,
-    nothing: NOTHING,
-  }
+  const ROWS: Rows<Row> = { parse: (raw: unknown) => parse(raw), print: r => r, join, nothing: NOTHING }
 
   // Every other tab of the device is told the row moved, never what moved: it reads the row itself, so a line sealed in a
   // tab closed before its hand-over is still handed over by another. A device that keeps nothing has no row to wake for.
@@ -68,7 +59,7 @@ export namespace ownlines {
   // again as it stood wakes nobody, so two tabs never wake each other over one line for ever.
   export const keep = async (records: readonly Kept[]): Promise<lo.Settled<Row>> => {
     const before = await heldRow(ROWS, NAME)
-    const kept = await holdRow(ROWS, NAME, { type: "Join", replica: { records } })
+    const kept = await holdRow(ROWS, NAME, { records })
     const was = before.type === "Held" ? before.v : NOTHING
     if (kept.type === "Val" && JSON.stringify(kept.v) !== JSON.stringify(join(was, NOTHING))) channel()?.postMessage(null)
     return kept
@@ -94,16 +85,13 @@ export namespace ownlines {
   const SEEN_ROWS: Rows<Seen> = {
     parse: (raw: unknown) => d.obj<Seen>({ literals: d.arr(d.str) })(raw),
     print: r => r,
-    generation: () => 0,
-    unsent: () => [],
     join: (a, b) => ({ literals: [...new Set([...a.literals, ...b.literals])].sort() }),
-    after: () => NO_ONE,
     nothing: NO_ONE,
   }
 
   // The refused lines whose prints `literals` names were said to the person, their words with them.
   export const seen = async (literals: readonly string[]): Promise<void> => {
-    if (literals.length > 0) await holdRow(SEEN_ROWS, SEEN, { type: "Join", replica: { literals } })
+    if (literals.length > 0) await holdRow(SEEN_ROWS, SEEN, { literals })
   }
 
   // What the told set holds for a line told it waits, beside its print alone for one told it was refused: so being told a
@@ -128,7 +116,7 @@ export namespace ownlines {
   export const acted = async (names: readonly string[]): Promise<lo.Settled<null>> => {
     const done = await actedOn()
     if (names.every(n => done.has(n))) return lo.val(null)
-    const kept = await holdRow(SEEN_ROWS, ACTED, { type: "Join", replica: { literals: [...names] } })
+    const kept = await holdRow(SEEN_ROWS, ACTED, { literals: [...names] })
     if (kept.type === "Error") return kept
     channel()?.postMessage(null)
     return lo.val(null)
@@ -208,7 +196,7 @@ export namespace ownlines {
     await before()
     const released = core.releasable(await told())
     if (released.refused.length > 0) {
-      const kept = await holdRow(SEEN_ROWS, ACTED, { type: "Join", replica: { literals: [...released.refused] } })
+      const kept = await holdRow(SEEN_ROWS, ACTED, { literals: [...released.refused] })
       // Not let go unless joined to the acted ones: a tab still holding one unsent would post it again.
       if (kept.type === "Error") return `the refusals it lets go were not joined to the acted ones (${kept.e})`
     }

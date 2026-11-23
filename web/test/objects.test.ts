@@ -1,15 +1,12 @@
-// The replica kept on the device is shared by every tab of one origin, and it only climbs: two tabs offline at once
-// both keep what they sealed, whichever saves last.
+// The device's rows are shared by every tab of one origin, and each only climbs: two tabs keeping at once both keep
+// what they wrote, whichever saves last; and the upgrade that moved the chains into the core keeps each chain's row for
+// the worker to carry, as it was, and every own row.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import type { StoredObject } from "../src/wire/generated/wire"
-import type { Replica } from "../src/prodrome/replica"
-import { NOTHING, appended, join, landed, losses } from "../src/prodrome/replica"
-import type { Write } from "../src/prodrome/objects"
-import { CHAIN, alterRow, heldRow, heldRows, holdRow, keepRow } from "../src/prodrome/objects"
-import { replicaWith } from "./held"
+import type { Rows } from "../src/prodrome/objects"
+import { alterRow, heldRow, heldRows, holdRow } from "../src/prodrome/objects"
 import door from "../src/app/idb"
 import ownlines from "../src/prodrome/ownlines"
 import { forAllAsync } from "./gen"
@@ -64,13 +61,16 @@ const fakeIndexedDB = (at = 0, rows: Readonly<Record<string, unknown>> = {}) => 
             })
             return r
           }
-          const openCursor = (): Req => {
-            const ks = [...rows.keys()]
+          const openCursor = (range?: Range): Req => {
+            const ks = [...rows.keys()].filter(k => range === undefined || range.includes(k)).sort()
             const r: Req = { result: null, error: null, onsuccess: null, onerror: null }
             const next = (): void =>
               later(() => {
                 const k = ks.shift()
-                r.result = k === undefined ? null : { value: structuredClone(rows.get(k)), update: (v: unknown) => void rows.set(k, structuredClone(v)), continue: next }
+                r.result =
+                  k === undefined
+                    ? null
+                    : { key: k, value: structuredClone(rows.get(k)), update: (v: unknown) => void rows.set(k, structuredClone(v)), delete: () => void rows.delete(k), continue: next }
                 r.onsuccess?.()
               })
             next()
@@ -102,172 +102,86 @@ const fakeIndexedDB = (at = 0, rows: Readonly<Record<string, unknown>> = {}) => 
 }
 
 const name = (seed: string): string => seed.repeat(64).slice(0, 64)
-const change = (hash: string, deps: readonly string[], todo: string): StoredObject => ({
-  hash,
-  literal: `Change(genesis='${name("0")}', deps=(${deps.map(d => `'${d}',`).join(" ")}), event=Completed(todo='${todo}', at=datetime(2026, 9, 7, 12, 0, 0), actor='ada', note=''))`,
-})
 
-const BOX = change(name("a"), [], "alpha")
-const synced: Replica = replicaWith({ objects: [BOX], synced: [BOX.hash], boxHeads: [BOX.hash], fetchedAt: 1 })
-const keep_ = (replica: Replica): Write<Replica> => ({ type: "Join", replica })
-const resetting = (shown: readonly string[], over: "Read" | "Unread" = "Read", floor = 0): Write<Replica> => ({ type: "Reset", shown: new Set(shown), floor, over })
-const row = async (chain = "life"): Promise<Replica | null> => {
-  const read = await heldRow(CHAIN, chain)
+// A row of names that only grows: a join of sets.
+type Names = { readonly names: readonly string[] }
+const NAMES: Rows<Names> = {
+  parse: raw => (typeof raw === "object" && raw !== null && "names" in raw && Array.isArray(raw.names) ? { type: "Val", v: { names: raw.names.map(String) } } : { type: "Error", e: "not a row of names" }),
+  print: r => r,
+  join: (a, b) => ({ names: [...new Set([...a.names, ...b.names])].sort() }),
+  nothing: { names: [] },
+}
+const row = async (key = "own/test"): Promise<Names | null> => {
+  const read = await heldRow(NAMES, key)
   return read.type === "Held" ? read.v : null
 }
 const spoil = async (idb: ReturnType<typeof fakeIndexedDB>): Promise<void> => {
   const db = idb.open("suzatary").result as { transaction: (n: string) => { objectStore: () => { put: (v: unknown, k: string) => unknown } } }
-  db.transaction("chain").objectStore().put({ objects: "not a list" }, "objects:life")
+  db.transaction("chain").objectStore().put({ names: "not a list" }, "objects:own/test")
   await new Promise(r => setTimeout(r, 5))
 }
-
-test("two tabs offline: the second to save keeps the first's unsent act on the device", async () => {
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB() })
-  assert.equal((await holdRow(CHAIN, "life", keep_(synced))).type, "Val")
-  const inB = appended(synced, [change(name("b"), [BOX.hash], "beta")])
-  assert.equal((await holdRow(CHAIN, "life", keep_(inB))).type, "Val")
-  const inA = appended(synced, [change(name("c"), [BOX.hash], "gamma")])
-  assert.equal((await holdRow(CHAIN, "life", keep_(inA))).type, "Val")
-  const held = new Set((await row())?.objects.map(o => o.hash))
-  assert.ok(held.has(name("b")), "the act tab B sealed is still on the device")
-  assert.ok(held.has(name("c")), "and so is tab A's")
-})
-
-test("a reset stands, and an act sealed before it in another tab is reported lost, never kept and dropped unsaid", async () => {
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB() })
-  const inB = appended(synced, [change(name("b"), [BOX.hash], "beta")])
-  await holdRow(CHAIN, "life", keep_(inB))
-  assert.equal((await holdRow(CHAIN, "life", resetting([name("b")]))).type, "Val")
-  const actInB = appended(inB, [change(name("c"), [BOX.hash], "gamma")])
-  const afterB = await holdRow(CHAIN, "life", keep_(actInB))
-  assert.equal(afterB.type, "Val")
-  const said = afterB.type === "Val" ? landed(actInB, afterB.v) : afterB
-  assert.equal(said.type, "Error", "the save that came back on a later generation is not reported kept")
-  assert.ok(said.type === "Error" && said.e.includes("reset"), "and it says why")
-  assert.deepEqual((await row())?.objects, [], "the row is the reset's")
-  assert.equal((await row())?.generation, 1)
-  assert.deepEqual(afterB.type === "Val" ? join(inB, afterB.v).objects : null, [], "and tab B, joining the row it got back, holds the reset too")
-})
-
-test("a reset says everything it loses: a row holding an unsent act it was not shown refuses it", async () => {
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB() })
-  const inA = appended(synced, [change(name("b"), [BOX.hash], "beta")])
-  await holdRow(CHAIN, "life", keep_(inA))
-  // Tab A drew its notice over its own act; tab B saved one more before the press.
-  const shown = losses(inA).map(o => o.hash)
-  assert.deepEqual(shown, [name("b")], "every unsent act, not only the refused ones")
-  await holdRow(CHAIN, "life", keep_(appended(synced, [change(name("c"), [BOX.hash], "gamma")])))
-  const refused = await holdRow(CHAIN, "life", resetting(shown))
-  assert.ok(refused.type === "Error" && refused.e.includes("1 more unsent act"), "the reset is refused, saying how many it would have lost unsaid")
-  assert.equal((await row())?.objects.length, 3, "and nothing was dropped")
-  const again = losses((await row()) ?? NOTHING).map(o => o.hash)
-  assert.equal((await holdRow(CHAIN, "life", resetting(again))).type, "Val", "shown everything, it goes")
-})
-
-test("two resets in turn take two generations, so neither keeps what the other dropped", async () => {
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB() })
-  await holdRow(CHAIN, "life", keep_(synced))
-  // Both tabs held generation 0 when they pressed; the generation is the row's, read in the transaction.
-  const first = await holdRow(CHAIN, "life", resetting([], "Read", 0))
-  const second = await holdRow(CHAIN, "life", resetting([], "Read", 0))
-  assert.equal(first.type === "Val" ? first.v.generation : null, 1)
-  assert.equal(second.type === "Val" ? second.v.generation : null, 2)
-  assert.deepEqual((await row())?.objects, [])
-})
 
 test("a row is altered in its own transaction, and one not there or not read is left as it is", async () => {
   const idb = fakeIndexedDB()
   Object.assign(globalThis, { indexedDB: idb })
-  const inB = appended(synced, [change(name("b"), [BOX.hash], "beta")])
-  await holdRow(CHAIN, "life", keep_(inB))
+  await holdRow(NAMES, "own/test", { names: ["a"] })
   // What another tab joined in before the alteration stays: the step sees the row as the transaction reads it.
-  await holdRow(CHAIN, "life", keep_(appended(synced, [change(name("c"), [BOX.hash], "gamma")])))
+  await holdRow(NAMES, "own/test", { names: ["b"] })
   const seen: number[] = []
-  assert.equal((await alterRow(CHAIN, "life", r => (seen.push(r.objects.length), { ...r, held: { ...r.held, synced: [] } }))).type, "Val")
-  assert.deepEqual(seen, [3], "the step got the row with both tabs' acts")
-  assert.deepEqual((await row())?.held.synced, [], "and its answer is what the row now holds")
-  assert.equal((await alterRow(CHAIN, "nowhere", () => assert.fail("no row to alter"))).type, "Val")
-  assert.equal((await heldRow(CHAIN, "nowhere")).type, "Absent", "a row not there is not made")
+  assert.equal((await alterRow(NAMES, "own/test", r => (seen.push(r.names.length), { names: [] }))).type, "Val")
+  assert.deepEqual(seen, [2], "the step got the row with both tabs' names")
+  assert.deepEqual(await row(), { names: [] }, "and its answer is what the row now holds")
+  assert.equal((await alterRow(NAMES, "nowhere", () => assert.fail("no row to alter"))).type, "Val")
+  assert.equal((await heldRow(NAMES, "nowhere")).type, "Absent", "a row not there is not made")
   await spoil(idb)
-  assert.equal((await alterRow(CHAIN, "life", () => assert.fail("a row that does not read is not altered"))).type, "Val")
-  assert.equal((await heldRow(CHAIN, "life")).type, "Unreadable", "and it is left as it was")
+  assert.equal((await alterRow(NAMES, "own/test", () => assert.fail("a row that does not read is not altered"))).type, "Val")
+  assert.equal((await heldRow(NAMES, "own/test")).type, "Unreadable", "and it is left as it was")
 })
 
 test("a row that does not read is said, and never written over by a save", async () => {
   const idb = fakeIndexedDB()
   Object.assign(globalThis, { indexedDB: idb })
-  await holdRow(CHAIN, "life", keep_(synced))
+  await holdRow(NAMES, "own/test", { names: ["a"] })
   await spoil(idb)
-  const read = await heldRow(CHAIN, "life")
-  assert.equal(read.type, "Unreadable", "never taken for a row that is not there")
-  const answer = await holdRow(CHAIN, "life", keep_(appended(synced, [change(name("c"), [BOX.hash], "gamma")])))
+  assert.equal((await heldRow(NAMES, "own/test")).type, "Unreadable", "never taken for a row that is not there")
+  const answer = await holdRow(NAMES, "own/test", { names: ["c"] })
   assert.ok(answer.type === "Error" && answer.e.includes("does not read"), "the save is refused, saying why")
-  assert.equal((await holdRow(CHAIN, "life", resetting([]))).type, "Error", "and so is a reset that was not told it writes over that copy")
-  assert.equal((await heldRow(CHAIN, "life")).type, "Unreadable", "the unread row is still what is kept")
-})
-
-test("a reset told it writes over a copy that does not read is the one write that may, and saves go on from it", async () => {
-  const idb = fakeIndexedDB()
-  Object.assign(globalThis, { indexedDB: idb })
-  await holdRow(CHAIN, "life", keep_(synced))
-  await spoil(idb)
-  const answer = await holdRow(CHAIN, "life", resetting([], "Unread"))
-  assert.equal(answer.type, "Val")
-  assert.equal((await row())?.generation, 1, "the row reads again, as the reset")
-  const fresh = answer.type === "Val" ? answer.v : NOTHING
-  assert.equal((await holdRow(CHAIN, "life", keep_(appended(fresh, [BOX])))).type, "Val", "and saves go on from it")
-})
-
-test("a save that fails over a row that reads says the row reads, and one over a row that does not says why", async () => {
-  const idb = fakeIndexedDB()
-  Object.assign(globalThis, { indexedDB: idb })
-  await holdRow(CHAIN, "life", keep_(appended(synced, [change(name("b"), [BOX.hash], "beta")])))
-  // Refused, while the row reads: the reset was not shown the unsent act.
-  const refused = await keepRow(CHAIN, "life", resetting([]))
-  assert.equal(refused.row.type, "Error")
-  assert.equal(refused.unread, null, "no false 'does not read'")
-  const saved = await keepRow(CHAIN, "life", keep_(synced))
-  assert.deepEqual([saved.row.type, saved.unread], ["Val", null], "a good save clears it")
-  await spoil(idb)
-  const spoiled = await keepRow(CHAIN, "life", keep_(synced))
-  assert.equal(spoiled.row.type, "Error")
-  assert.ok(spoiled.unread !== null && spoiled.unread.length > 0, "and a row that does not read says why")
+  assert.equal((await heldRow(NAMES, "own/test")).type, "Unreadable", "the unread row is still what is kept")
 })
 
 // What the device's rows' store holds under `key`, as it was written.
 const rawOf = (key: string): Promise<unknown> =>
-  new Promise<unknown>(done => {
+  new Promise(done => {
     const db = (globalThis as unknown as { indexedDB: { open: (n: string) => { result: { transaction: (n: string) => { objectStore: () => { get: (k: string) => { result: unknown; onsuccess: (() => void) | null } } } } } } }).indexedDB.open("suzatary").result
     const r = db.transaction("chain").objectStore().get(key)
     r.onsuccess = () => done(r.result)
   })
 
-test("a device from version 8 keeps its chains' rows as they were, the tab's unsent act among them, and no other row", async () => {
-  const unsent = change(name("c"), [BOX.hash], "beta")
-  const kept = { generation: 0, objects: [BOX, unsent], synced: [BOX.hash], refused: [], words: [], frontier: { type: "Nothing" } }
-  for (const from of [8, 9, 10]) {
+test("the upgrade to version 14 moves each chain's row to its carry key as it was, keeps every own row, and drops what no build keeps", async () => {
+  const kept = { generation: 0, objects: [{ hash: name("a"), literal: "Genesis(…)" }], synced: [], refused: [], words: [], frontier: { type: "Nothing" } }
+  const own = { records: [] }
+  for (const from of [8, 11, 12, 13]) {
     Object.assign(globalThis, {
-      indexedDB: fakeIndexedDB(from, { "objects:life": kept, "objects:store/inbox": { replica: kept, keys: {} }, "objects:store/rendered-owed": true, "objects:pages/topics": kept }),
+      indexedDB: fakeIndexedDB(from, { "objects:life": kept, "objects:work-2": kept, "objects:own/lines": own, "objects:store/inbox": { replica: kept, keys: {} } }),
     })
-    const life = await row()
-    assert.deepEqual(life?.objects.map(o => o.hash), [BOX.hash, unsent.hash], `the unsent act is kept, from ${from}`)
-    assert.deepEqual(await rawOf("objects:life"), kept, "as it was")
-    for (const other of ["objects:store/inbox", "objects:store/rendered-owed", "objects:pages/topics"]) assert.equal(await rawOf(other), undefined, `${other} goes`)
+    assert.deepEqual(await ownlines.kept(), { type: "Val", v: [] }, `the own row reads, from ${from}`)
+    assert.deepEqual([await rawOf("carry:life"), await rawOf("carry:work-2")], [kept, kept], `each chain's row carried as it was, from ${from}`)
+    assert.deepEqual([await rawOf("objects:life"), await rawOf("objects:work-2")], [undefined, undefined], "and its row gone")
+    assert.deepEqual(await rawOf("objects:own/lines"), own, "an own row stays")
+    assert.deepEqual(await rawOf("objects:store/inbox"), from < 12 ? undefined : { replica: kept, keys: {} }, "a row no build keeps goes with the upgrade before 12")
   }
 })
 
-test("a device before version 8 keeps no row, and every chain is pulled again", async () => {
+test("a device before version 8 keeps no row", async () => {
   for (const from of [1, 2, 3, 5, 7]) {
-    Object.assign(globalThis, { indexedDB: fakeIndexedDB(from, { "objects:life": { objects: [BOX] }, "objects:store/inbox": { replica: { objects: [BOX] }, keys: {} } }) })
-    assert.equal((await heldRow(CHAIN, "life")).type, "Absent", `from ${from}`)
-    assert.equal(await rawOf("objects:store/inbox"), undefined)
-    assert.equal((await holdRow(CHAIN, "life", keep_(synced))).type, "Val")
-    assert.deepEqual(await row(), join(NOTHING, synced), "what the pull brings is joined into nothing left of the old row")
+    Object.assign(globalThis, { indexedDB: fakeIndexedDB(from, { "objects:life": { objects: [] }, "objects:own/lines": { records: [] } }) })
+    assert.equal((await heldRow(NAMES, "life")).type, "Absent", `from ${from}`)
+    assert.equal(await rawOf("carry:life"), undefined)
+    assert.equal(await rawOf("objects:own/lines"), undefined)
   }
 })
 
-// This tab's own lines (`ownlines`): a row of the rows' store that only climbs, kept by every upgrade from version 8,
-// beside the chains' rows. The law: whatever moves two tabs keep in any order, and whatever upgrade the device sees
+// This tab's own lines (`ownlines`): a row of the rows' store that only climbs, kept by every upgrade from version 8. The law: whatever moves two tabs keep in any order, and whatever upgrade the device sees
 // between them, the row holds every own line any move kept, each at the furthest answer any move gave it.
 const ANSWERS: readonly unknown[] = ["Unsent", { Refused: { kind: "Trust", reason: "a key" } }, { Refused: { kind: "Outdated", reason: "reload" } }, "Taken"]
 test("law: no own line is dropped, and each holds its furthest answer, whatever order and upgrade", async () => {
@@ -297,9 +211,9 @@ test("law: no own line is dropped, and each holds its furthest answer, whatever 
   })
 })
 
-test("a device from version 8 keeps this tab's own lines through the upgrade, as it keeps a chain's unsent act", async () => {
+test("a device from version 8 keeps this tab's own lines through the upgrade", async () => {
   const own = { records: [{ literal: "Opened(…)", keys: { [name("1")]: name("2") }, answer: "Unsent" }] }
-  for (const from of [8, 11, 12]) {
+  for (const from of [8, 11, 12, 13]) {
     Object.assign(globalThis, { indexedDB: fakeIndexedDB(from, { "objects:own/lines": own }) })
     assert.deepEqual(await ownlines.kept(), { type: "Val", v: own.records }, `from ${from}`)
   }
@@ -423,11 +337,11 @@ test("a settle reads the records and the acts before it decides, and answers its
 
 test("two rows read in one transaction say each what a read of it alone says", async () => {
   const parse = (raw: unknown) => (typeof raw === "string" ? { type: "Val" as const, v: raw } : { type: "Error" as const, e: "not a string" })
-  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13, { "objects:a": "held", "objects:b": 7 }) })
-  const [a, b] = await heldRows({ rows: { parse }, name: "a" }, { rows: { parse }, name: "b" })
-  assert.deepEqual([a, b], [await heldRow({ parse }, "a"), await heldRow({ parse }, "b")])
+  Object.assign(globalThis, { indexedDB: fakeIndexedDB(13, { "objects:own/a": "held", "objects:own/b": 7 }) })
+  const [a, b] = await heldRows({ rows: { parse }, name: "own/a" }, { rows: { parse }, name: "own/b" })
+  assert.deepEqual([a, b], [await heldRow({ parse }, "own/a"), await heldRow({ parse }, "own/b")])
   assert.deepEqual([a.type, b.type], ["Held", "Unreadable"])
-  const [c] = await heldRows({ rows: { parse }, name: "c" }, { rows: { parse }, name: "a" })
+  const [c] = await heldRows({ rows: { parse }, name: "own/c" }, { rows: { parse }, name: "own/a" })
   assert.deepEqual(c, { type: "Absent" })
 })
 

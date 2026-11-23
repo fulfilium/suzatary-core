@@ -1,26 +1,26 @@
 // The core's worker against the core read in this thread: the questions go by message over a channel to the same
-// `serve` the worker runs, and each answer is the in-thread core's for the same objects, over generated holdings that
-// grow, shrink and move between chains. A reading kept by the set and the instant is never folded again.
+// `serve` the worker runs, which holds each chain as the box serves it (a fake box below), and each answer is the
+// in-thread core's for the same objects, as the box's chains grow and the tab reads more of them. A reading kept by the
+// set and the instant is never folded again.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
-import type { Core, Named, Todos } from "../src/prodrome/core"
+import type { ChainStore, Core, Named, Todos } from "../src/prodrome/core"
 import { entriesOf, foldObjects, linked, linker, linkerOf, objectsOf, verifyObjects } from "../src/prodrome/core"
-import lo from "../src/algebra/lo"
 import questions from "../src/prodrome/questions"
 import remote from "../src/prodrome/remote"
 import thirty from "../src/todo/thirty"
 import time from "../src/app/time"
 import type { SpecNode } from "../src/wire/generated/wire"
 import { forAllAsync } from "./gen"
-import { heldChain, holdAll } from "./held"
+import { answerOf, heldChain, holdAll } from "./held"
 import type text from "../src/wire/text"
 
 // A reading the worker answers as text, read back as the page's module would.
-const readOf = (t: text.Text<questions.Read>): questions.Read => JSON.parse(new TextDecoder().decode(t.bytes))
+const readOf = (t: text.Text<{ readonly read: questions.Read }>): questions.Read => (JSON.parse(new TextDecoder().decode(t.bytes)) as { read: questions.Read }).read
 
 const built = process.env["SUZATARY_PRODROME_WASM"]
 if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")
@@ -34,17 +34,41 @@ const ordered: Named[] = (() => {
 })()
 const todos = [...new Set(ordered.flatMap(o => /todo='([^']+)'/.exec(o.literal)?.[1] ?? []))]
 
+// What the box serves of each chain, by name: a GET of `/api/<chain>/objects` answers all it holds.
+const served = new Map<string, { readonly objects: readonly Named[]; readonly untrusted: readonly string[] }>()
+Object.assign(globalThis, {
+  fetch: async (input: string | URL): Promise<Response> => {
+    const name = /^\/api\/([a-z][a-z0-9-]*)\/objects$/.exec(new URL(String(input), "http://box").pathname)?.[1]
+    const chain = name === undefined ? undefined : served.get(name)
+    if (chain === undefined) return new Response("", { status: 404 })
+    return new Response(JSON.stringify(answerOf(chain.objects, chain.untrusted)), { status: 200, headers: { "content-type": "application/json" } })
+  },
+})
+
 // A core whose folds are counted.
 const counted = (): { core: Core; folds: () => number } => {
   let n = 0
-  const Base = core.Todos
-  const Counting = function (objects: string): Todos {
-    const t = new Base(objects)
-    const fold = t.fold.bind(t)
-    t.fold = (at, untrusted) => ((n += 1), fold(at, untrusted))
-    return t
+  const Base = core.Chain
+  const Counting = function (): ChainStore {
+    const c = new Base()
+    const todos = c.todos.bind(c)
+    c.todos = (): Todos => {
+      const t = todos()
+      const fold = t.fold.bind(t)
+      t.fold = (at, untrusted) => ((n += 1), fold(at, untrusted))
+      return t
+    }
+    return c
   }
-  return { core: { ...core, Todos: Counting as unknown as Core["Todos"] }, folds: () => n }
+  return { core: { ...core, Chain: Counting as unknown as Core["Chain"] }, folds: () => n }
+}
+
+// The box serving `chains`, and the worker told of them and pulled.
+const serving = async (r: remote.Remote, chains: readonly { readonly name: string; readonly objects: readonly Named[]; readonly untrusted: readonly string[] }[]): Promise<void> => {
+  served.clear()
+  for (const c of chains) served.set(c.name, c)
+  await r.ask({ type: "Served", chains: chains.map(c => c.name) }, "Page")
+  for (const c of chains) await r.ask({ type: "Exchange", chain: c.name }, "Page")
 }
 
 // The worker's side and the tab's, joined by a channel, which each test closes so the run can end.
@@ -64,18 +88,24 @@ const channel = async (c: Core, check: (r: remote.Remote) => Promise<void>): Pro
 
 const instant = (n: number): string => time.instant(time.parse("2026-08-20T00:00:00") + n * 3600)
 
-test("law: an answer by message is the in-thread core's answer, as holdings grow and shrink and chains come and go", () =>
-  channel(core, r => forAllAsync(25, async rg => {
-    const life = ordered.slice(0, 1 + rg.int(ordered.length))
-    // Another chain, holding a different down-set: read at the same instant, it is its own reading.
-    const otherSize = rg.int(ordered.length)
-    const other = rg.bool() ? [{ name: "other", objects: ordered.slice(0, otherSize === life.length ? otherSize - 1 : otherSize), untrusted: [] }] : []
-    const held = [{ name: "life", objects: life, untrusted: chain.untrusted }, ...other.filter(c => c.objects.length > 0)]
-    await r.hold(held)
+test("law: an answer by message is the in-thread core's answer, as the box's chains grow and the tab reads more of them", () =>
+  channel(core, r => {
+    let grown = 0
+    let otherGrown = 0
+    return forAllAsync(25, async rg => {
+    grown = Math.min(ordered.length, grown + 1 + rg.int(Math.ceil(ordered.length / 8)))
+    const life = ordered.slice(0, grown)
+    // Another chain, holding a different down-set that grows as well: read at the same instant, it is its own reading.
+    otherGrown = Math.max(otherGrown, rg.int(grown))
+    const other = otherGrown > 0 && rg.bool() ? [{ name: "other", objects: ordered.slice(0, otherGrown), untrusted: [] }] : []
+    const held = [{ name: "life", objects: life, untrusted: chain.untrusted }, ...other]
+    await serving(r, held)
     const at = instant(rg.int(24 * 40))
-    const set = holdAll(new core.Chains(), held.map(c => heldChain(c.name, c.objects, c.untrusted)))
+    const set = holdAll(new core.Chains(), held.map(c => heldChain(core, c.name, c.objects, c.untrusted)))
     try {
-      assert.deepEqual(await r.ask({ type: "List", chain: "life", at }, "Page"), entriesOf(core, life, at, chain.untrusted, "life", set))
+      const listed = await r.ask({ type: "List", chain: "life", at }, "Page")
+      assert.equal(listed.type, "Read")
+      if (listed.type === "Read") assert.deepEqual(listed.fold, entriesOf(core, life, at, chain.untrusted, "life", set))
       const read = readOf(await r.ask({ type: "Reading", chain: "life", at }, "Page"))
       const f = foldObjects(core, life, at, chain.untrusted)
       assert.equal(read.type, "Read")
@@ -110,12 +140,13 @@ test("law: an answer by message is the in-thread core's answer, as holdings grow
     } finally {
       set.free()
     }
-  })))
+    })
+  }))
 
 test("two chains held and read at one instant are two readings, each its own chain's", () =>
   channel(core, async r => {
     const few = ordered.filter(o => o.literal.startsWith("Genesis(") || o.literal.includes(`todo='${todos[0] ?? ""}'`))
-    await r.hold([
+    await serving(r, [
       { name: "life", objects: ordered, untrusted: chain.untrusted },
       { name: "work", objects: few, untrusted: chain.untrusted },
     ])
@@ -128,56 +159,17 @@ test("two chains held and read at one instant are two readings, each its own cha
     assert.equal(questions.same(life.reading, work.reading), false)
   }))
 
-test("a holding sends each object once: a second holding of the same chains sends no object", () => {
-  const sent: questions.Asked[] = []
-  const r = remote.over({ postMessage: m => void sent.push(m), addEventListener: () => {} })
-  const held = [{ name: "life", objects: ordered, untrusted: chain.untrusted }]
-  void r.hold(held)
-  void r.hold(held)
-  void r.hold([{ name: "life", objects: ordered.slice(0, 3), untrusted: chain.untrusted }])
-  const holdings = sent.map(m => (m.question.type === "Hold" ? m.question.chains[0] : undefined))
-  assert.equal(holdings[0]?.add.length, ordered.length)
-  assert.deepEqual([holdings[1]?.add, holdings[1]?.drop], [[], []])
-  assert.deepEqual([holdings[2]?.add, holdings[2]?.drop.length], [[], ordered.length - 3])
-})
-
-test("a holding the worker refused is sent again whole, and the worker holds what it names and nothing else", () =>
-  channel(core, async r => {
-    // A first port that refuses the holding: what the worker took of it is unknown, so the next is whole.
-    const sent: questions.Asked[] = []
-    let answer: (m: questions.Answered) => void = () => {}
-    const refusing = remote.over({
-      postMessage: m => void sent.push(m),
-      addEventListener: (_, f) => void (answer = m => f({ data: m })),
-    })
-    const held = [{ name: "life", objects: ordered, untrusted: chain.untrusted }]
-    const first = refusing.hold(held)
-    answer({ id: 1, answer: lo.error("refused") })
-    await assert.rejects(first)
-    void refusing.hold([{ name: "life", objects: ordered.slice(0, 3), untrusted: chain.untrusted }])
-    const again = sent[1]?.question
-    assert.ok(again?.type === "Hold")
-    assert.deepEqual([again.chains[0]?.whole, again.chains[0]?.add.length, again.chains[0]?.drop], [true, 3, []])
-    // A worker holding more than the whole names lets the rest go.
-    await r.hold(held)
-    const at = instant(5)
-    await r.ask({ type: "Hold", chains: again.chains }, "Page")
-    const read = readOf(await r.ask({ type: "Reading", chain: "life", at }, "Page"))
-    assert.ok(read.type === "Read")
-    assert.deepEqual(read.specs, foldObjects(core, ordered.slice(0, 3), at, chain.untrusted).specs)
-  }))
-
 test("a remount does not fold: the same chains at the same instant read the reading kept", () => {
   const { core: c, folds } = counted()
   return channel(c, async r => {
-    const held = [{ name: "life", objects: ordered, untrusted: chain.untrusted }]
     const at = instant(10)
-    const mount = async () => (await r.hold(held), readOf(await r.ask({ type: "Reading", chain: "life", at }, "Page")))
+    await serving(r, [{ name: "life", objects: ordered.slice(0, -1), untrusted: chain.untrusted }])
+    const mount = async () => readOf(await r.ask({ type: "Reading", chain: "life", at }, "Page"))
     const first = await mount()
     assert.equal(folds(), 1)
     assert.deepEqual(await mount(), first, "the page mounted again reads the same reading")
     assert.equal(folds(), 1, "and nothing was folded for it")
-    await r.hold([{ name: "life", objects: ordered.slice(0, -1), untrusted: chain.untrusted }])
+    await serving(r, [{ name: "life", objects: ordered, untrusted: chain.untrusted }])
     readOf(await r.ask({ type: "Reading", chain: "life", at }, "Page"))
     assert.equal(folds(), 2, "a chain that moved is folded again")
   })
@@ -202,9 +194,10 @@ test("a worker that is gone fails every question waiting and every one after, in
   await assert.rejects(r.ask({ type: "List", chain: "life", at: null }, "Page"), /stopped/)
 })
 
-test("a question about a chain the worker does not hold says so", () =>
+test("a chain no pull of which has landed reads as unheld", () =>
   channel(core, async r => {
-    await r.hold([])
-    await assert.rejects(r.ask({ type: "List", chain: "life", at: null }, "Page"), /holds nothing of life/)
+    served.clear()
+    await r.ask({ type: "Served", chains: ["life"] }, "Page")
+    assert.deepEqual(await r.ask({ type: "List", chain: "life", at: null }, "Page"), { type: "Unheld" })
     assert.deepEqual(readOf(await r.ask({ type: "Reading", chain: "life", at: instant(0) }, "Page")), { type: "Unheld" })
   }))

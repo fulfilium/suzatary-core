@@ -25,7 +25,6 @@ import { byId, clear, el } from "./view/dom";
 import { announce } from "./view/focus";
 import { toast } from "./view/toast";
 import outbox from "./shell/outbox";
-import { unsentTodos } from "./prodrome/replica";
 import { WIDE_MIN_PX, isWide } from "./shell/layout";
 import { installKeyboard, setPaletteOpener } from "./shell/keyboard";
 import nav from "./shell/nav";
@@ -51,7 +50,8 @@ import readings from "./prodrome/readings";
 import heads from "./prodrome/heads";
 import { hearTheme, restoreTheme, theme } from "./app/theme";
 import { store } from "./app/store";
-import { ensureFold, foldHeld, foldWhere, forgetChainReplica, held, keepObjects, refetchFold, resetRow, restoreFold, restoreReplica, shellAsksAfter, signingHere, sync, watchReplica } from "./prodrome/sync";
+import type { Unsent } from "./wire/generated/pages";
+import { ensureFold, foldHeld, foldWhere, forgetChainReplica, keepObjects, refetchFold, resetChain, restoreChain, restoreFold, shellAsksAfter, signingHere, sync, unsent, watchReplica, watchUnsent } from "./prodrome/sync";
 import signer from "./prodrome/signer";
 import http from "./wire/http";
 import clock from "./algebra/clock";
@@ -72,8 +72,9 @@ const paint = chrome.painter({
   panel: (p) => updatePanel(p),
   stale: stale.install(byId("stale"), refetchFold),
   excluded: leftout.install(byId("excluded"), (copy) => {
-    const store = storesync.named(copy);
-    void (store === null ? resetRow(copy, new Set(), "Unread") : storesync.reset(store, toast));
+    const named = storesync.named(copy);
+    if (named?.type === "Store") void storesync.reset(named.name, toast);
+    if (named?.type === "Chain") void resetChain(named.name, new Set());
   }, ui.cell(registers.leftout)),
   signing: (s) => {
     const bar = byId("signing");
@@ -171,7 +172,7 @@ function heardTip(data: string): void {
   // A decision is a todo, so a move of the chain may move the badge.
   if (was.length !== 0) void refreshWaiting();
   // Our own write is already in the store; announcing it back would tell the reader what they just did.
-  if (was.length !== 0 && !wasOurWrite(now)) {
+  if (was.length !== 0 && !wasOurWrite(app.now().chain, now)) {
     toast(`chain moved — heads ${heads.shown(now)}`);
     // A failed background refresh keeps what is on screen; the next tip move retries.
     void refetchFold().catch(() => {});
@@ -234,7 +235,7 @@ function switched(): void {
   forgetChainReplica();
   restoreFold();
   connect();
-  void restoreReplica().then(() => sync());
+  void restoreChain().then(() => sync());
   void refetchFold().catch(() => {});
   askWhoAndWhere();
 }
@@ -301,7 +302,7 @@ if (app.now().chain !== loaded.chain) forgetChainReplica();
 // Before the first route, so the first paint is the last fold seen, in the right colours.
 restoreTheme();
 restoreFold();
-void restoreReplica().then(() => sync());
+void restoreChain().then(() => sync());
 askWhoAndWhere();
 const heardStore = (name: stores.Name): void => void ((name === "inbox" || name === "lines") && refreshWaiting());
 let closeStores = storesync.listen(heardStore);
@@ -338,22 +339,23 @@ store.subscribe(() => paint(chrome.of(app.now(), seen())));
 let told = outbox.EMPTY;
 let telling = 0;
 const tell = (): void => {
-  const unsent = unsentTodos(held());
-  const { t, said } = outbox.step(told, unsent, Date.now());
+  const todos = new Map<string, Unsent>();
+  for (const [todo, u] of Object.entries(unsent().todos)) if (u !== undefined) todos.set(todo, u);
+  const { t, said } = outbox.step(told, todos, Date.now());
   told = t;
   if (said.type === "Said") {
     const about = said.about;
     toast(said.text, about.type === "Refused" ? { label: "Open", onClick: () => address.go({ type: "todo", id: about.todo }) } : undefined);
   }
   window.clearTimeout(telling);
-  const at = outbox.next(told, unsent);
+  const at = outbox.next(told, todos);
   if (Number.isFinite(at)) telling = window.setTimeout(tell, Math.max(0, at - Date.now()));
 };
 watchReplica(() => {
   paint(chrome.of(app.now(), seen()));
   keyed();
-  tell();
 });
+watchUnsent(tell);
 readings.watch(() => paint(chrome.of(app.now(), seen())));
 hearTheme(() => paint(chrome.of(app.now(), seen())));
 // The fold is read again when what it shows next moves (`due`); a read that moved nothing waits longer each time.

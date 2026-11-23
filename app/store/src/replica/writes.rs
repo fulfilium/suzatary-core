@@ -4,6 +4,10 @@
 //! THE ROLLBACK LAW (`app/store/tests/writes.rs`): with any set F of the writes refused for good,
 //! what stands is what would stand had the replica never written F or anything resting on F, and
 //! the refusals name F exactly.
+//!
+//! A write resting on one refused for good or let go is held back by derivation, never by a stored
+//! answer: it is held back exactly while something under it is refused or let go, so the box
+//! taking what it rests on frees it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -34,10 +38,12 @@ impl Refusal {
     }
 }
 
-/// How the box answered a node this replica wrote. The order is the join's: an answer only climbs.
-/// A refusal stands over the post it answered and a taking over every refusal, so the arms' order
-/// must not change.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+/// How the box answered a node this replica wrote, or that the owner let it go. The order is the
+/// join's, and an answer only climbs: a refusal stands over the post it answered, letting a write go
+/// over every refusal, and the box taking it over everything, since a write the box holds must never
+/// be hidden. The arms are declared in the order their prints were first numbered, which is not the
+/// order (`rank`), so a print of an earlier build reads the same.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Answer {
     Unsent,
     Refused {
@@ -46,13 +52,44 @@ pub enum Answer {
         reason: String,
     },
     Taken,
+    /// The owner let it go after being shown it, while the box had not taken it: it stands nowhere
+    /// and is never posted, and what rests on it is held back with it, named.
+    LetGo,
+}
+
+impl Answer {
+    fn rank(&self) -> u8 {
+        match self {
+            Answer::Unsent => 0,
+            Answer::Refused { .. } => 1,
+            Answer::LetGo => 2,
+            Answer::Taken => 3,
+        }
+    }
+}
+
+impl Ord for Answer {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Answer::Refused { kind, reason }, Answer::Refused { kind: k, reason: r }) => {
+                (kind, reason).cmp(&(k, r))
+            }
+            (a, b) => a.rank().cmp(&b.rank()),
+        }
+    }
+}
+
+impl PartialOrd for Answer {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Answer {
     fn is_final(&self) -> bool {
         match self {
             Answer::Refused { kind, .. } => kind.holds_back(),
-            Answer::Unsent | Answer::Taken => false,
+            Answer::Unsent | Answer::Taken | Answer::LetGo => false,
         }
     }
 
@@ -60,8 +97,13 @@ impl Answer {
         match self {
             Answer::Unsent => true,
             Answer::Refused { kind, .. } => !kind.holds_back(),
-            Answer::Taken => false,
+            Answer::Taken | Answer::LetGo => false,
         }
+    }
+
+    /// Held back from every reading, with what rests on it.
+    fn holds_back(&self) -> bool {
+        self.is_final() || *self == Answer::LetGo
     }
 }
 
@@ -107,16 +149,8 @@ impl<N: Node> Writes<N> {
     }
 
     pub fn write(&mut self, nodes: Vec<N>) -> Vec<Own<N>> {
-        let owned: Vec<Own<N>> = nodes
-            .into_iter()
-            .map(|node| Own {
-                node,
-                answer: Answer::Unsent,
-            })
-            .collect();
+        let owned = Self::writing(nodes);
         self.apply(&owned);
-        let mut owned = owned;
-        owned.extend(self.held_back());
         owned
     }
 
@@ -132,28 +166,7 @@ impl<N: Node> Writes<N> {
             })
             .collect();
         self.apply(&owned);
-        let mut owned = owned;
-        owned.extend(self.held_back());
         owned
-    }
-
-    /// Refuse for good each untaken write that rests on one refused for good.
-    fn held_back(&mut self) -> Vec<Own<N>> {
-        let moved: Vec<Own<N>> = self
-            .refusals()
-            .into_iter()
-            .filter(|(node, _, _)| {
-                self.0
-                    .get(node.name())
-                    .is_some_and(|own| !own.answer.is_final())
-            })
-            .map(|(node, kind, reason)| Own {
-                node: node.clone(),
-                answer: Answer::Refused { kind, reason },
-            })
-            .collect();
-        self.apply(&moved);
-        moved
     }
 
     pub fn refused(
@@ -169,6 +182,63 @@ impl<N: Node> Writes<N> {
             })
             .collect();
         self.answered(answers)
+    }
+
+    /// The moves of writing `nodes`, read, not taken: what [`Writes::write`] applies.
+    #[must_use]
+    pub fn writing(nodes: Vec<N>) -> Vec<Own<N>> {
+        nodes
+            .into_iter()
+            .map(|node| Own {
+                node,
+                answer: Answer::Unsent,
+            })
+            .collect()
+    }
+
+    /// Each write named that the box has not taken, let go, with every untaken write resting on
+    /// one (a signature rests on what it signs).
+    pub fn let_go(&mut self, names: &BTreeSet<Hash>) -> Vec<Own<N>> {
+        let owned = self.letting_go(names);
+        self.apply(&owned);
+        owned
+    }
+
+    /// The moves of [`Writes::let_go`], read, not taken.
+    #[must_use]
+    pub fn letting_go(&self, names: &BTreeSet<Hash>) -> Vec<Own<N>> {
+        let mut gone: BTreeSet<&Hash> = self
+            .untaken()
+            .map(|own| own.node.name())
+            .filter(|name| names.contains(*name))
+            .collect();
+        loop {
+            let more: Vec<&Hash> = self
+                .untaken()
+                .filter(|own| !gone.contains(own.node.name()))
+                .filter(|own| own.node.rests_on().iter().any(|p| gone.contains(p)))
+                .map(|own| own.node.name())
+                .collect();
+            if more.is_empty() {
+                break;
+            }
+            gone.extend(more);
+        }
+        self.untaken()
+            .filter(|own| gone.contains(own.node.name()))
+            .map(|own| Own {
+                node: own.node.clone(),
+                answer: Answer::LetGo,
+            })
+            .collect()
+    }
+
+    /// The writes the box has not taken and the owner has not let go, signatures included: what
+    /// letting every write go loses.
+    pub fn untaken(&self) -> impl Iterator<Item = &Own<N>> {
+        self.0
+            .values()
+            .filter(|own| matches!(own.answer, Answer::Unsent | Answer::Refused { .. }))
     }
 
     /// How many of `owned` [`Writes::apply`] would move.
@@ -224,10 +294,16 @@ impl<N: Node> Writes<N> {
             .collect()
     }
 
-    /// Every write a refusal for good holds back, including each untaken write resting on one,
-    /// so no write is held back unsaid.
+    /// Every write a refusal for good holds back, including each untaken write resting on one or
+    /// on a write the owner let go, so no write is held back unsaid.
     #[must_use]
     pub fn refusals(&self) -> Vec<(&N, Refusal, String)> {
+        let let_go: BTreeSet<&Hash> = self
+            .0
+            .values()
+            .filter(|own| own.answer == Answer::LetGo)
+            .map(|own| own.node.name())
+            .collect();
         let mut back: BTreeMap<&Hash, (&N, Refusal, String)> = self
             .0
             .values()
@@ -235,24 +311,27 @@ impl<N: Node> Writes<N> {
                 Answer::Refused { kind, reason } if kind.holds_back() => {
                     Some((own.node.name(), (&own.node, *kind, reason.clone())))
                 }
-                Answer::Unsent | Answer::Refused { .. } | Answer::Taken => None,
+                Answer::Unsent | Answer::Refused { .. } | Answer::Taken | Answer::LetGo => None,
             })
             .collect();
         loop {
             let more: Vec<(&Hash, (&N, Refusal, String))> = self
-                .0
-                .values()
-                .filter(|own| own.answer != Answer::Taken && !back.contains_key(own.node.name()))
+                .untaken()
+                .filter(|own| !back.contains_key(own.node.name()))
                 .filter_map(|own| {
                     let rests_on = own.node.rests_on();
-                    let parent = rests_on.iter().find(|parent| back.contains_key(parent))?;
-                    let (_, kind, reason) = &back[parent];
+                    let held = |p: &&Hash| back.contains_key(p) || let_go.contains(p);
+                    let parent = rests_on.iter().find(held)?;
+                    let (kind, why) = match back.get(parent) {
+                        Some((_, kind, reason)) => (*kind, format!("the box refused: {reason}")),
+                        None => (Refusal::Final, "was let go".to_owned()),
+                    };
                     Some((
                         own.node.name(),
                         (
                             &own.node,
-                            *kind,
-                            format!("it rests on {parent}, which the box refused: {reason}"),
+                            kind,
+                            format!("it rests on {parent}, which {why}"),
                         ),
                     ))
                 })
@@ -274,7 +353,7 @@ impl<N: Node> Writes<N> {
                     kind: Refusal::Later,
                     reason,
                 } => Some((&own.node, reason.clone())),
-                Answer::Unsent | Answer::Refused { .. } | Answer::Taken => None,
+                Answer::Unsent | Answer::Refused { .. } | Answer::Taken | Answer::LetGo => None,
             })
             .collect()
     }
@@ -285,7 +364,7 @@ impl<N: Node> Writes<N> {
         let signed: BTreeSet<Hash> = self
             .0
             .values()
-            .filter(|own| !own.answer.is_final())
+            .filter(|own| !own.answer.holds_back())
             .filter_map(|own| match role(&own.node) {
                 Role::Signs(node) => Some(node),
                 Role::Change | Role::Other => None,
@@ -352,15 +431,23 @@ impl<N: Node> Writes<N> {
                     || self
                         .0
                         .get(n.name())
-                        .is_some_and(|own| own.answer.is_final())
+                        .is_some_and(|own| own.answer.holds_back())
             })
             .map(|n| n.name())
             .collect();
+        // A write the box took is never hidden, whatever it rests on.
+        let taken = |n: &N| {
+            self.0
+                .get(n.name())
+                .is_some_and(|own| own.answer == Answer::Taken)
+        };
         loop {
             let more: Vec<&Hash> = mine
                 .iter()
                 .filter(|n| {
-                    !blocked.contains(n.name()) && n.rests_on().iter().any(|p| blocked.contains(p))
+                    !blocked.contains(n.name())
+                        && !taken(n)
+                        && n.rests_on().iter().any(|p| blocked.contains(p))
                 })
                 .map(|n| n.name())
                 .collect();

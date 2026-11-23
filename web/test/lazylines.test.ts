@@ -13,8 +13,6 @@ import { conversationOf, lackingIn, listOfLines, objectsOf, planOf, searchOf } f
 import lines from "../src/prodrome/lines"
 import content from "../src/prodrome/content"
 import { sha256Hex } from "../src/prodrome/verify"
-import { empty, pulled } from "../src/prodrome/replica"
-import type { Replica } from "../src/prodrome/replica"
 import type { SkeletonNode, SkeletonPayload } from "../src/wire/generated/wire"
 import { forAll, forAllAsync, type Rng } from "./gen"
 import { fakeIndexedDB } from "./fakeidb"
@@ -55,7 +53,8 @@ const readerOf = (): {
 }
 
 // A down-set of the skeleton the box's pieces could have left, in the order they arrived.
-const skeleton = (r: Rng): Replica<SkeletonNode> => {
+type Skeleton = { readonly objects: readonly SkeletonNode[] }
+const skeleton = (r: Rng): Skeleton => {
   const held = new Set<string>()
   const left = [...box.skeleton.nodes]
   const nodes: SkeletonNode[] = []
@@ -65,12 +64,12 @@ const skeleton = (r: Rng): Replica<SkeletonNode> => {
     held.add(next.hash)
     left.splice(left.indexOf(next), 1)
   }
-  return pulled(empty<SkeletonNode>(), { ...box.skeleton, heads: box.skeleton.heads.are === "these" ? box.skeleton.heads.heads : [], objects: nodes, untrusted: [], root: null }, 1)
+  return { objects: nodes }
 }
 
 // Some of the box's literals for nodes the skeleton holds: content is fetched for a node the skeleton names, and let go
 // once none names it.
-const fetched = (r: Rng, s: Replica<SkeletonNode>): ReadonlyMap<string, string> =>
+const fetched = (r: Rng, s: Skeleton): ReadonlyMap<string, string> =>
   new Map(s.objects.filter(() => r.bool(0.7)).map(n => [n.hash, literals.get(n.hash)!]))
 
 // The core's lines given `nodes` and `keys` as one landed piece of the box's skeleton.
@@ -109,7 +108,7 @@ const scopes = [lines.WHOLE, ...ids.map(lines.one), lines.one("never-opened"), {
 )
 
 // A core holding the skeleton `s` and the prints `kept`: what the core's worker asks of its own skeleton.
-const coreOf = (s: Replica<SkeletonNode>, kept: ReadonlyMap<string, string>): Lines => {
+const coreOf = (s: Skeleton, kept: ReadonlyMap<string, string>): Lines => {
   const held = new core.Lines()
   landed(held, s.objects, {})
   held.hold(objectsOf([...kept].map(([hash, literal]) => ({ hash, literal }))), "[]")

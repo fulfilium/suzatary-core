@@ -80,7 +80,8 @@ const written = (label: string, make: () => ObjectStore, event: (s: ObjectStore,
   const s = storeOf(make(), [g])
   for (let n = 0; n < r.int(6); n++) {
     const e = event(s, r, 1000 + n)
-    if (e !== undefined) s.append(e)?.free()
+    const f = e === undefined ? undefined : s.append(e)
+    if (f !== undefined) s.apply(f)
   }
   const objects = [g, ...unsentOf(s)]
   s.free()
@@ -115,8 +116,9 @@ test("law: for every store of objects, an append extends the kept reading to the
           const e = kind.event(s, r, n)
           if (e === undefined) continue
           const fresh = afresh(s, kind.make)
-          fresh.append(e)?.free()
-          s.append(e)?.free()
+          const [f, g] = [fresh.append(e), s.append(e)]
+          if (f !== undefined) fresh.apply(f)
+          if (g !== undefined) s.apply(g)
           assert.equal(s.unsent(), fresh.unsent(), `${kind.name} seed ${seed}: an append to the kept reading writes what one to a fresh reading writes`)
           fresh.free()
         } else if (move === 1) {

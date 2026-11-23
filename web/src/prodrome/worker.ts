@@ -1,6 +1,5 @@
-// The core in its own thread: one module, the chains the tab holds read into it once per change, the lines pulled and
-// read here, and every question about them answered here (`questions.serve`), so a page change never waits on the
-// core's reading of a chain or of the lines.
+// The core in its own thread: one module, the chains and the stores pulled and read here, and every question about
+// them answered here (`questions.serve`), so a page change never waits on the core's reading of a chain or of the lines.
 
 import { loadCore } from "./core"
 import questions from "./questions"

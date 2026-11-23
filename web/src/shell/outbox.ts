@@ -1,7 +1,7 @@
 // What the shell says, once and on any page, about this tab's acts the box has not taken: one refused, one waiting for
 // this device to be trusted, or one still on its way after a few seconds. In words, naming no object.
 
-import type { Unsent } from "../prodrome/replica"
+import type { Unsent } from "../wire/generated/pages"
 
 export namespace outbox {
   // When each act on its way was first seen, and what was last said about each todo.

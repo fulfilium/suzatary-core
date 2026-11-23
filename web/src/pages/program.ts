@@ -27,7 +27,7 @@ import type asks from "../prodrome/asks"
 import type questions from "../prodrome/questions"
 import vouch from "../prodrome/vouch"
 import storesync from "../prodrome/storesync"
-import { askHeld, resetReplica } from "../prodrome/sync"
+import chains, { resetReplica } from "../prodrome/sync"
 import lanes from "../prodrome/lanes"
 import { lifecycleEvent, loadCore } from "../prodrome/core"
 import payload from "../wire/generated/payload"
@@ -154,14 +154,12 @@ export namespace program {
   const core = (q: Core, lane: lanes.Lane): Promise<text.Text<unknown>> => {
     switch (q.type) {
       case "Reading":
-        return askHeld(() => ({ type: "Reading", chain: q.chain, at: q.at }), lane).then(({ held: h, answer: read }) =>
-          text.object({ held: text.printed(h.held.map(c => c.name)), read }),
-        )
+        return chains.ask({ type: "Reading", chain: q.chain, at: q.at }, lane)
       case "Thirty":
-        return askHeld(() => ({ type: "Thirty", chain: q.chain, id: q.id, ms: q.ms }), lane).then(r => r.answer)
+        return chains.ask({ type: "Thirty", chain: q.chain, id: q.id, ms: q.ms }, lane)
       case "Tree": {
         const basis = basisOf(q.basis)
-        return askHeld(() => ({ type: "Tree", basis, members: decoded_(d.arr(placed)(q.members)), by: q.by }), lane).then(r => r.answer)
+        return chains.ask({ type: "Tree", basis, members: decoded_(d.arr(placed)(q.members)), by: q.by }, lane)
       }      case "Line":
         return storesync.seal(q.line, time.moment()).then(sealed => text.printed(sealed))
       case "Acted":

@@ -17,7 +17,7 @@ use suzatary_base::topic_target::Target;
 use suzatary_lines::secretary::line_form;
 use suzatary_store::replica::frontier::Frontier;
 use suzatary_store::replica::held::{Node, Said};
-use suzatary_store::replica::objects::{Move, Object, Objects, frame, unframe};
+use suzatary_store::replica::objects::{Move, Object, Objects, Policy, frame, unframe};
 use suzatary_store::replica::writes::{Answer, Refusal};
 use suzatary_store::snapshot::{from_snapshot, snapshot};
 use suzatary_store::wire::store::SinceRead;
@@ -108,20 +108,28 @@ fn said(all: &[Object], held: usize, epoch: u64, digest: u8) -> Said<Object> {
 /// One step of a replica's history.
 #[derive(Debug, Clone)]
 enum Op {
-    Piece { held: usize, epoch: u64, digest: u8 },
+    Piece {
+        held: usize,
+        epoch: u64,
+        digest: u8,
+        untrusted: bool,
+        root: u8,
+    },
     Land,
     StartOver,
     Write(usize),
     Answer(usize, u8),
+    LetGo(usize),
 }
 
 fn op(objects: usize) -> impl Strategy<Value = Op> {
     prop_oneof![
-        4 => (1..=objects, 1u64..3, any::<u8>()).prop_map(|(held, epoch, digest)| Op::Piece { held, epoch, digest }),
+        4 => (1..=objects, 1u64..3, any::<u8>(), any::<bool>(), 0u8..3).prop_map(|(held, epoch, digest, untrusted, root)| Op::Piece { held, epoch, digest, untrusted, root }),
         3 => Just(Op::Land),
         1 => Just(Op::StartOver),
         2 => (0..objects).prop_map(Op::Write),
         2 => (0..objects, 0u8..3).prop_map(|(i, a)| Op::Answer(i, a)),
+        1 => (0..objects).prop_map(Op::LetGo),
     ]
 }
 
@@ -145,16 +153,26 @@ fn step(replica: &mut Objects, all: &[Object], op: &Op) -> Move {
             held,
             epoch,
             digest,
-        } => replica.piece(said(all, *held, *epoch, *digest), 7),
+            untrusted,
+            root,
+        } => replica.piece(
+            said(all, *held, *epoch, *digest),
+            Policy {
+                untrusted: untrusted.then(|| "triage".to_owned()).into_iter().collect(),
+                root: (*root > 0).then(|| format!("{root:064x}")),
+            },
+            7 + u64::from(*digest),
+        ),
         Op::Land => replica.land(),
         Op::StartOver => replica.start_over(),
         Op::Write(i) => replica.write(vec![all[*i].clone()]),
         Op::Answer(i, a) => replica.answered([(all[*i].name().clone(), answer(*a))]),
+        Op::LetGo(i) => replica.let_go(&BTreeSet::from([all[*i].name().clone()])),
     }
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(64))]
+    #![proptest_config(ProptestConfig::with_cases(20_000))]
 
     /// The frames of a history, shuffled and each taken twice, rebuild the replica that made
     /// them, and its snapshot and frames read back to what they printed.
@@ -169,7 +187,7 @@ proptest! {
 
         let frames: Vec<Vec<u8>> = moves.iter().map(|m| frame(m).expect("prints")).collect();
         for (m, f) in moves.iter().zip(&frames) {
-            prop_assert_eq!(&unframe(f).expect("reads").expect("this form"), m);
+            prop_assert_eq!(&unframe(f).expect("reads"), m);
         }
         let mut shuffled: Vec<&Vec<u8>> = frames.iter().chain(&frames).collect();
         let mut seed = order;
@@ -179,13 +197,59 @@ proptest! {
         }
         let mut other = Objects::default();
         for f in shuffled {
-            other.apply(&unframe(f).expect("reads").expect("this form"));
+            other.apply(&unframe(f).expect("reads"));
         }
         prop_assert_eq!(&other, &replica);
+        prop_assert_eq!(other.policy(), replica.policy());
 
         let back: Objects = from_snapshot(&snapshot(&replica).expect("prints")).expect("reads");
         prop_assert_eq!(&back, &replica);
         prop_assert_eq!(back.standing(), replica.standing());
+    }
+
+    /// Two tabs from one start, each pulling under policies whose root and untrusted actors change,
+    /// writing, hearing answers, letting go and starting over in its own order, hold one replica once
+    /// each has the other's frames, and so does a load that joins one into the other; in it a write
+    /// the box took stands, and the policy is that of the latest generation and frontier heard.
+    #[test]
+    fn law_two_replicas_that_diverge_join_and_a_taken_write_is_never_hidden(
+        start in prop::collection::vec(op(6), 0..8),
+        a in prop::collection::vec(op(6), 0..12),
+        b in prop::collection::vec(op(6), 0..12),
+    ) {
+        let all = universe(5);
+        let mut left = Objects::default();
+        let common: Vec<Move> = start.iter().map(|o| step(&mut left, &all, o)).collect();
+        let mut right = Objects::default();
+        for m in &common {
+            right.apply(m);
+        }
+        let mut joined = left.clone();
+        let from_left: Vec<Move> = a.iter().map(|o| step(&mut left, &all, o)).collect();
+        let from_right: Vec<Move> = b.iter().map(|o| step(&mut right, &all, o)).collect();
+        joined.join(&right);
+        joined.join(&left);
+        for m in &from_right {
+            left.apply(m);
+        }
+        for m in &from_left {
+            right.apply(m);
+        }
+        prop_assert_eq!(&left, &right);
+        prop_assert_eq!(&joined, &left);
+        prop_assert_eq!(left.policy(), right.policy());
+        let standing: BTreeSet<Hash> = left.standing().iter().map(|o| o.name().clone()).collect();
+        let reading = left.rows().landed().replica().read();
+        for own in left.untaken() {
+            prop_assert!(!matches!(own.answer, Answer::Taken | Answer::LetGo));
+        }
+        for o in &all {
+            let taken = [&from_left, &from_right, &common].iter().any(|ms| ms.iter().any(|m| matches!(m, Move::Own(owned) if owned.iter().any(|w| w.node.name() == o.name() && w.answer == Answer::Taken))));
+            let gone = o.prodrome().is_some_and(|p| reading.gone().contains(p));
+            if taken && !gone {
+                prop_assert!(standing.contains(o.name()), "{} was taken and is hidden", o.name());
+            }
+        }
     }
 }
 
@@ -204,7 +268,7 @@ fn law_what_a_replica_wrote_stands_until_the_box_answers() {
     assert_eq!(count(replica.unsent()), 2);
     assert_eq!(count(replica.standing()), 2);
 
-    replica.piece(said(&all, 1, 1, 1), 1);
+    replica.piece(said(&all, 1, 1, 1), Policy::default(), 1);
     replica.land();
     assert_eq!(count(replica.unsent()), 1, "the box holds the genesis");
     assert_eq!(count(replica.standing()), 2);
@@ -239,15 +303,18 @@ fn law_what_a_replica_wrote_stands_until_the_box_answers() {
     ));
 }
 
-/// A frame of the lines' form is passed over, never misread as a move of objects.
+/// A frame of the lines' form reads as another form, never misread as a move of objects.
 #[test]
-fn a_frame_of_another_form_is_passed_over() {
+fn a_frame_of_another_form_reads_as_one() {
     let lines = line_form::frame(&line_form::LineFrame {
         delta: suzatary_store::replica::pulling::Delta::StartedOver { generation: 1 },
         husked: Vec::new(),
     })
     .expect("prints");
-    assert!(unframe(&lines).expect("a form").is_none());
+    assert!(matches!(
+        unframe(&lines),
+        Err(suzatary_store::snapshot::NotASnapshot::Form { .. })
+    ));
 }
 
 /// The box's store in each epoch: before a migration, `before`; after it, the last membership
@@ -355,13 +422,13 @@ proptest! {
         let (before, after) = epochs();
         let mut device = Objects::default();
         let mut fresh = Objects::default();
-        took(&mut device, [fresh.piece(served(&before, before.clone(), OLD), 1), fresh.land()]);
+        took(&mut device, [fresh.piece(served(&before, before.clone(), OLD), Policy::default(), 1), fresh.land()]);
         let pull = |device: &mut Objects| {
             if device.rows().overtaken(LATER) {
                 device.start_over();
             }
             let sent = lacked(&after, device);
-            device.piece(served(&after, sent, LATER), 9);
+            device.piece(served(&after, sent, LATER), Policy::default(), 9);
             device.land();
         };
         let mut steps: Vec<usize> = Vec::new();
@@ -369,23 +436,23 @@ proptest! {
             steps.push(step);
             let mut fresh = Objects::default();
             match step {
-                0 => took(&mut device, [fresh.piece(served(&before, down(&before, n), OLD), 2), fresh.land()]),
-                1 => took(&mut device, [fresh.piece(served(&before, vec![before[before.len() - 1].clone()], OLD), 3)]),
+                0 => took(&mut device, [fresh.piece(served(&before, down(&before, n), OLD), Policy::default(), 2), fresh.land()]),
+                1 => took(&mut device, [fresh.piece(served(&before, vec![before[before.len() - 1].clone()], OLD), Policy::default(), 3)]),
                 2 => {
                     let mut other = device.clone();
                     if other.rows().overtaken(LATER) {
                         device.apply(&other.start_over());
                     }
                     let sent = lacked(&after, &other);
-                    device.apply(&other.piece(served(&after, down(&sent, n), LATER), 4));
+                    device.apply(&other.piece(served(&after, down(&sent, n), LATER), Policy::default(), 4));
                 }
                 3 => {
                     if device.rows().landed().replica().spoken().is_some_and(|w| w.epoch == OLD) {
-                        took(&mut device, [fresh.piece(served(&after, vec![after[after.len() - 1].clone()], LATER), 4)]);
+                        took(&mut device, [fresh.piece(served(&after, vec![after[after.len() - 1].clone()], LATER), Policy::default(), 4)]);
                     }
                 }
-                4 => took(&mut device, [fresh.piece(served(&after, after.clone(), LATER), 5), fresh.land()]),
-                5 => took(&mut device, [fresh.piece(served(&before, before.clone(), OLD), 6), fresh.land()]),
+                4 => took(&mut device, [fresh.piece(served(&after, after.clone(), LATER), Policy::default(), 5), fresh.land()]),
+                5 => took(&mut device, [fresh.piece(served(&before, before.clone(), OLD), Policy::default(), 6), fresh.land()]),
                 6 => {
                     let mut other = device.clone();
                     device.apply(&other.start_over());
@@ -521,7 +588,7 @@ proptest! {
 
         let landed = |own: Vec<Object>| {
             let mut replica = Objects::default();
-            replica.piece(said(&all, held, 1, 1), 1);
+            replica.piece(said(&all, held, 1, 1), Policy::default(), 1);
             replica.land();
             replica.write(own);
             replica

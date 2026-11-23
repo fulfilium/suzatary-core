@@ -399,9 +399,10 @@ declare -A unit_base=(
 declare -A unit_fallback=([crates]="all-but:${rust_base//,/ }" [files:web/test]="${web//,/ }" [files:web/e2e]=all)
 ((!list)) || echo "cli_only $cli_only"
 # unit_scopes: where a test file's imports can lead. unit_shared: what units read with no import
-# naming it; `<test>=<path>` is read by that unit alone.
+# naming it; `<test>=<path>` is read by that unit alone (the bundle law builds the page's and the
+# worker's bundles from web/src and reads their modules).
 declare -A unit_scopes=([web/test]="web/src web/test web/e2e" [web/e2e]="web/src web/test web/e2e")
-declare -A unit_shared=([web/test]="web/src/view/tokens.ts web/test/e2estores.test.ts=web/e2e" [web/e2e]="web/src web/e2e/typstbench.ts web/e2e/painter.test.ts=web/e2e/painterlaws.ts")
+declare -A unit_shared=([web/test]="web/src/view/tokens.ts web/test/e2estores.test.ts=web/e2e web/test/bundle.test.ts=web/src" [web/e2e]="web/src web/e2e/typstbench.ts web/e2e/painter.test.ts=web/e2e/painterlaws.ts")
 # A scene file's pass is keyed by its imports and what its tabs fetched (web/e2e/harness.ts,
 # SUZATARY_E2E_READS): a page fetches a chunk, or the pages' module (`scene_later`), when it runs it.
 observed=files:web/e2e

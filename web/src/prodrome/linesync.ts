@@ -2,9 +2,10 @@
 // and keeps each move it answers on the device as its frame (`replicalog`), holding no node, key or head of its own.
 
 import type { Lines } from "./core"
-import { CoreError, admitsOf, framed, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
+import { CoreError, admitsOf, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
 import content from "./content"
 import replicasync from "./replicasync"
+import copies from "./copies"
 import excluded from "./excluded"
 import type heads from "./heads"
 import keep from "./keep"
@@ -42,6 +43,8 @@ export namespace linesync {
   export type T = {
     // The store as the set of stores asks each of its stores.
     readonly engine: replicasync.Store
+    // Whether the device keeps an earlier build's copy of the lines aside.
+    readonly earlier: () => Promise<boolean>
     // `read` once every line `scope` reads is held; the scope is asked again after each fetch.
     readonly over: <A>(scope: () => lines.Scope, read: () => A) => Promise<A>
     readonly holds: (id: string) => boolean
@@ -66,7 +69,7 @@ export namespace linesync {
   }
 
   const NAME = "lines"
-  const KEPT = replicasync.kept(NAME)
+  const KEPT = copies.kept(NAME)
   // How long the lines stay unmoved before their log is compacted.
   export const QUIET_MS = 30_000
   // A pull that did not end whole is asked again after a wait that doubles from two seconds to a minute.
@@ -81,9 +84,10 @@ export namespace linesync {
     return { once, done }
   }
 
-  export const of = (held: Lines, fx: Effects, blocks: rendered.Device): T => {
-    const log = replicalog.of(NAME, CONTENT)
-    const told = (why: string | null): void => fx.told(`row/${KEPT}`, replicasync.unread(NAME, why))
+  export const of = (held: Lines, fx: Effects, blocks: rendered.Device, form: (bytes: Uint8Array) => replicalog.Form): T => {
+    // The lines hold this tab's own lines too: an earlier build's copy is kept aside.
+    const log = replicalog.of(NAME, CONTENT, "OwnWrites")
+    const told = (why: string | null): void => fx.told(`row/${KEPT}`, copies.unread(NAME, why))
     const moved = (said: string): void => fx.moved(movedOf(said))
 
     let shown = false
@@ -129,28 +133,29 @@ export namespace linesync {
       void prefetch()
     }
 
-    // Every frame up to `after` is held; the frames this tab appended are passed over when it reads the log again.
-    let after = 0
-    const mine = new Set<number>()
-    const take = (frames: readonly replicalog.Frame[]): void => {
-      for (const f of frames) {
-        if (!mine.has(f.at)) moved(held.apply(f.bytes))
-        after = Math.max(after, f.at)
-      }
+    // The core the log is read into, what each load or frame moved heard.
+    const reader: replicalog.Reader = {
+      load: (snapshot, frames) => moved(held.load(snapshot, frames)),
+      apply: bytes => moved(held.apply(bytes)),
+      form,
     }
-    // The core loaded from a snapshot and the frames after it: what the load moved, or none for a snapshot of another
-    // form, which drops the log, so the lines are taken again from the box.
-    const loaded = async (kept: replicalog.Kept): Promise<string | null> => {
-      try {
-        const said = held.load(kept.snapshot?.bytes, framed(kept.frames.map(f => f.bytes)))
-        after = kept.frames.at(-1)?.at ?? kept.snapshot?.through ?? 0
-        mine.clear()
-        return said
-      } catch {
-        const gone = await log.drop()
-        told(gone.type === "Error" ? `the lines kept on this device are of another build and were not dropped (${gone.e})` : null)
-        return null
+    // A part that did not read in this build's form, set aside and named once with the reset that removes it.
+    const asideTold = (what: string | null): void => fx.told(`aside/${KEPT}`, copies.aside(NAME, what))
+    // Whether the box's own copy, pulled whole from nothing, is not closed under its parents: then it is held unchanged, said
+    // once, and never started over for that again.
+    let open = false
+    // What the log holds read into the core, part by part where the whole does not read (`replicalog.take`). Where frames
+    // were taken, rows that do not hold all a pull can leave start over.
+    // Whether it named a part it set aside.
+    const read = async (kept: replicalog.Kept): Promise<boolean> => {
+      const took = await log.take(kept, reader)
+      if (took.type === "Error") {
+        told(took.e)
+        return false
       }
+      if (took.v.unread !== null) asideTold(took.v.unread)
+      if (took.v.taken && !open && !held.closed()) await startOver()
+      return took.v.unread !== null
     }
     // A pull, a purge, a compaction and a read of the log take turns. ⚠️ No frame of another tab is taken while a pull
     // runs: another tab's landing replaces the pieces this pull kept and has not landed. A pull's own purge runs in the
@@ -167,11 +172,9 @@ export namespace linesync {
     // What another tab wrote since this one last read the log, one read at a time.
     const caughtUp = serial.of(async (): Promise<void> => {
       if (!idb.available()) return
-      const kept = await log.since(after)
+      const kept = await log.since()
       if (kept.type === "Error") return told(kept.e)
-      if (kept.v.snapshot === null) return take(kept.v.frames)
-      const said = await loaded(kept.v)
-      if (said !== null) moved(said)
+      await read(kept.v)
     })
 
     // Where another tab's compaction came first, its snapshot is read, and this compacts again.
@@ -181,17 +184,20 @@ export namespace linesync {
       quiet = undefined
       if (!idb.available()) return
       for (let tries = 0; tries < 2; tries += 1) {
+        await caughtUp()
         const start = performance.now()
-        const done = await log.compact(after, take, () => held.snapshot(), () => husksOf(held), kept => blocks.swept(kept, admitsOf(held, kept)))
+        const done = await log.compact(
+          frames => frames.forEach(f => moved(held.apply(f.bytes))),
+          () => held.snapshot(),
+          () => husksOf(held),
+          kept => blocks.swept(kept, admitsOf(held, kept)),
+        )
         if (done.type === "Error") return
-        if (done.v.type === "Through") {
-          after = done.v.at
-          mine.clear()
+        if (done.v === "Done") {
           measure("compact:lines", start, { store: NAME })
           phases.mark("lines snapshot written")
           return
         }
-        await caughtUp()
       }
     })
     // A compaction in its own turn: when the lines are quiet, or the page is hidden.
@@ -202,9 +208,10 @@ export namespace linesync {
     }
     const append = async (bytes: Uint8Array): Promise<void> => {
       if (!idb.available()) return
-      const at = await log.append(bytes)
-      if (at.type === "Error") return told(`a move of the lines was not kept on this device (${at.e}); the next load takes it again from the box`)
-      mine.add(at.v)
+      const appended = await log.append(bytes)
+      if (appended.type === "Error") return told(`a move of the lines was not kept on this device (${appended.e}); the next load takes it again from the box`)
+      // The log began again: it is read whole.
+      if (appended.v === "BeganAgain") await caughtUp()
       owe()
     }
     // A step the core took, its moves heard and its frame kept.
@@ -272,7 +279,7 @@ export namespace linesync {
           moved.push(JSON.stringify(said.v.moved))
           fresh = said.v.fresh > 0
           const unread = said.v.unread
-          if (unread.length > 0) fx.told(`own/${KEPT}`, replicasync.unread(NAME, `${unread.length} of this tab's own lines do not read (${unread[0]}); they stay on the device untouched`))
+          if (unread.length > 0) fx.told(`own/${KEPT}`, copies.unread(NAME, `${unread.length} of this tab's own lines do not read (${unread[0]}); they stay on the device untouched`))
         }
         // The refusals the person acted on, on any tab of the device, whose words a reading no longer offers.
         if (acted.size > 0) moved.push(held.acted(JSON.stringify([...acted])))
@@ -293,14 +300,14 @@ export namespace linesync {
         fx.told(reader, why === null ? excluded.NOTHING : left(why))
       }
     }
-    const actsUnread = saying("own/acted", why => replicasync.unread(NAME, `the refusals acted on, kept on this device, do not read (${why}); they are shown again until it does`))
+    const actsUnread = saying("own/acted", why => copies.unread(NAME, `the refusals acted on, kept on this device, do not read (${why}); they are shown again until it does`))
     const cleanupFailed = saying("own/settle", why =>
       excluded.left(excluded.NONE, [], [{ chain: KEPT, why: `this device could not let go of the own lines it no longer needs (${why}); it tries again at the next sync`, cure: "None" }]),
     )
     // A reading's moves heard together; a row that does not read said, the records' and the acts' each.
     const published = (reading: lo.Settled<ownlines.Reading<Reading>>): Reading => {
       if (reading.type === "Error") {
-        fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines do not read (${reading.e}); they stay on the device untouched`))
+        fx.told(`own/${KEPT}`, copies.unread(NAME, `this tab's own lines do not read (${reading.e}); they stay on the device untouched`))
         return NONE
       }
       actsUnread(reading.v.acts)
@@ -340,7 +347,7 @@ export namespace linesync {
       const records = read.flatMap(r => r.records)
       if (idb.available() && records.length > 0) {
         const kept = await ownlines.keep(records)
-        if (kept.type === "Error") fx.told(`own/${KEPT}`, replicasync.unread(NAME, `this tab's own lines were not kept on this device (${kept.e}); a reload forgets them`))
+        if (kept.type === "Error") fx.told(`own/${KEPT}`, copies.unread(NAME, `this tab's own lines were not kept on this device (${kept.e}); a reload forgets them`))
       }
       for (const r of read) moved(r.said)
     }
@@ -352,8 +359,12 @@ export namespace linesync {
       phases.mark("lines restore")
       if (idb.available()) {
         const kept = await log.read()
+        let named = false
         if (kept.type === "Error") told(kept.e)
-        else await loaded(kept.v)
+        else named = await read(kept.v)
+        // What an earlier load set aside, where this one set nothing aside of its own to name.
+        const aside = named ? null : await log.aside()
+        if (aside !== null && aside.type === "Val" && aside.v.unread) asideTold("parts of it, from an earlier load")
       }
       await ownRead()
       phases.mark("lines restored")
@@ -365,6 +376,9 @@ export namespace linesync {
     // A later epoch overtook what is held: every row reset, and a wait on a landing waits on the next.
     const startOver = async (): Promise<void> => {
       await stepped(held.start_over())
+      replaced()
+    }
+    const replaced = (): void => {
       const was = landing
       landing = awaited()
       was.done("Replaced")
@@ -375,7 +389,7 @@ export namespace linesync {
     // After a landing: the content outside the plan let go, and the plan prefetched once a page reads the lines.
     const landedNow = async (): Promise<void> => {
       const gone = await content.keepOnly(new Set((await planned()).keep), heldOf(held), drop => Promise.resolve(held.hold("[]", JSON.stringify(drop))))
-      if (gone.type === "Error") fx.told(`row/${replicasync.kept("lines")}`, replicasync.unread("lines", gone.e))
+      if (gone.type === "Error") fx.told(`row/${copies.kept("lines")}`, copies.unread("lines", gone.e))
       if (wanted === "Yes") prefetched(held.heads())
     }
 
@@ -395,9 +409,11 @@ export namespace linesync {
     // keys are owed, and a piece of a later epoch starts the store over first.
     const pullNow = serial.of(async (): Promise<boolean> => {
       await restored.get()
+      let fromNothing = false
       const ended = await inTurn(async (): Promise<pieces.Ended> => {
         try {
           await caughtUp()
+          fromNothing = held.since() === ""
           pulling = true
           return await pieces.pull<SkeletonPayload>({
             ask: async () => {
@@ -442,6 +458,12 @@ export namespace linesync {
       }
       fx.bars({ type: "Pulled", name: NAME })
       if (ended.type === "Whole") {
+        // The box's own copy, taken whole from nothing, that is not closed under its parents: no start-over can close it,
+        // so it is held unchanged and said once.
+        if (fromNothing && !open && !held.closed()) {
+          open = true
+          fx.told(`open/${KEPT}`, copies.open(NAME, "the box's copy of the lines is not closed under its parents, so this device holds it unchanged and does not take it again for that"))
+        }
         settled()
         return true
       }
@@ -484,16 +506,30 @@ export namespace linesync {
           if (wanted === "Yes" && held.behind(JSON.stringify(box))) void pullNow()
         },
         // A copy that does not read, or one the owner asked to take again: the log dropped and the lines started over.
-        reset: async () => {
-          const gone = await log.drop()
-          after = 0
-          mine.clear()
-          await startOver()
-          await want()
-          return gone.type === "Error" ? [`the reset was not kept: ${gone.e}`] : []
-        },
+        // In one transaction (`replicalog.reset`): the lines started over in the core and their snapshot kept in place of
+        // every frame read, with what was aside gone.
+        reset: () =>
+          inTurn(async (): Promise<readonly string[]> => {
+            await caughtUp()
+            const step = held.start_over()
+            moved(step.moved)
+            step.free()
+            replaced()
+            const done = idb.available() ? await log.reset(() => held.snapshot()) : lo.val<replicalog.Folded>("Done")
+            const failed = done.type === "Error" ? [`the reset was not kept: ${done.e}`] : done.v === "Behind" ? ["the reset was not kept: another tab kept writing to the lines meanwhile"] : []
+            if (failed.length === 0) {
+              told(null)
+              asideTold(null)
+            }
+            return failed
+          }).then(async failed => {
+            // The core started over either way: a reset not kept pulls all the same, since the lines stand empty.
+            await want()
+            return failed
+          }),
         sync: { restored, landed: () => held.heard(), whole },
       },
+      earlier: () => restored.get().then(() => log.aside().then(a => a.type === "Val" && a.v.earlier)),
       over,
       holds: id => held.holds(id),
       shown: on => {
@@ -504,7 +540,7 @@ export namespace linesync {
       },
       lacking: scope => lacksIn(held, scope).lines,
       admit: {
-        admits: async (ks, s) => ((await log.behind(s, after, mine)) ? "Behind" : admitsOf(held, ks)),
+        admits: async (ks, s) => ((await log.behind(s)) ? "Behind" : admitsOf(held, ks)),
         behind: () => inTurn(caughtUp),
       },
       ownStepped,

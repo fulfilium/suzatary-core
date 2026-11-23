@@ -1,135 +1,126 @@
 /**
- * The replica kept in IndexedDB: objects, not a fold, so an offline list is today's answer from yesterday's
- * chain; and it holds this browser's own acts, so losing it loses writes the box has not taken.
- * IndexedDB rather than `localStorage`, which is synchronous and too small for megabytes of chain.
+ * The device's database: the stores' replicas in the core's own form (`replicalog`), their content by name, the rendered
+ * blocks, and the rows' store, which holds the own lines' rows (`ownlines`) and, for one start after the update that
+ * moved the chains into the core, each chain's acts the box had not taken. IndexedDB rather than `localStorage`, which
+ * is synchronous and too small.
  */
 
-import d from "../wire/decoder";
-import lo from "../algebra/lo";
-import idb from "../app/idb";
-import payload from "../wire/generated/payload";
-import type { Frontier, Held, Obj, Replica, Word } from "./replica";
-import type { StoredObject } from "../wire/generated/wire";
-import { NOTHING, canonical, join, losses, replicaOf, reset } from "./replica";
+import lo from "../algebra/lo"
+import idb from "../app/idb"
 
-export const DB_NAME = "suzatary";
-const STORE_NAME = "chain";
-const CONTENT_NAME = "content";
-const REPLICA_NAME = "replica";
-const BLOCKS_NAME = "blocks";
+export const DB_NAME = "suzatary"
+const STORE_NAME = "chain"
+const CONTENT_NAME = "content"
+const REPLICA_NAME = "replica"
+const BLOCKS_NAME = "blocks"
 
-/**
- * One row per chain, which only climbs: every tab of this origin joins into it, so none erases what another sealed.
- * The chain is a parameter, never `App.chain` at write time: an exchange in flight when the reader
- * switches would file one chain's objects under the other's key.
- */
-function keyFor(chain: string): string {
-  return `objects:${chain}`;
-}
-
-/** A word of the box as a row keeps it. */
-const Spoken = d.obj<Word>({
-  epoch: d.num,
-  heads: d.arr(d.str),
-  untrusted: d.arr(d.str),
-  root: d.nullable(d.str),
-  fetchedAt: d.num,
-  geneses: d.arr(d.str),
-});
-
-/** Where a replica stands with the box, as a row keeps it. */
-const Standing: d.Decoder<Frontier> = d.sum<Frontier, "type">("type", { Nothing: {}, Named: { digest: d.str, count: d.num, era: d.num } });
-
-/** A replica's row, its objects read by `objects`. */
-const replicaRow = <O extends Obj>(objects: d.Decoder<O>): d.Decoder<Held<O>> =>
-  d.obj<Held<O>>({
-    generation: d.num,
-    objects: d.arr(objects),
-    synced: d.arr(d.str),
-    refused: d.arr(payload.RefusedObject),
-    words: d.arr(Spoken),
-    frontier: Standing,
-  });
-
-export const Stored = replicaRow(payload.StoredObject);
-
-/** A row holding no objects is a value too: a reset's, which is what tells another tab of it. */
-export const parseReplica = (raw: unknown): lo.Settled<Replica> => lo.map(Stored(raw), (held) => replicaOf(canonical(held)));
-
-// --- the shell: IndexedDB ----------------------------------------------------
+/** Every row is kept under its name behind this prefix, which builds before version 14 chose for a chain's row. */
+const keyFor = (name: string): string => `objects:${name}`
+/** A chain's name holds no `/`, which every other row's name does (`own/lines`). */
+const CHAIN_NAME = /^objects:([a-z][a-z0-9-]*)$/
+/** The key a chain's carried acts are kept under until its core holds them. */
+const carryKey = (chain: string): string => `carry:${chain}`
 
 /**
- * The device keeps no format but this build's, and nothing is carried from another: a store this build does not read
- * is taken again from the box. The one thing a device holds that the box does not is what this tab wrote and the box
- * has not taken, in a chain's row, so the rows' store of version 8 or later, which is this build's, is kept; its rows
- * that are no chain's, which a build before this one kept, are deleted, and every other store goes and is made anew. A
- * device before version 8 keeps nothing. Version 11 keeps the lines as the core's own form (`replicalog`), version 12
- * the inbox and the topic stores as well, and version 13 adds the rendered blocks beside them, so an erasure deletes
- * a block in the transaction that lets its key go; it changes no other store, so a device at 12 keeps them all.
+ * The device keeps no format but this build's, and nothing is carried from another: a store this build does not read is
+ * taken again from the box. The one thing a device holds that the box does not is what this tab wrote and the box has
+ * not taken. A device before version 8 keeps nothing; from 8 the rows' store is kept, its rows that are no chain's
+ * deleted, and every other store made anew; 13 adds the rendered blocks. Version 14 moves every chain's row to the
+ * chain's carry key, since the core holds the chains: the worker reads what the box had not taken out of it into the
+ * chain's core, as its own writes, once, and then deletes it (`carried`).
  */
 const DB: idb.Db = {
   name: DB_NAME,
-  version: 13,
+  version: 14,
   store: STORE_NAME,
   upgrade: (db, tx, from) => {
-    const blocks = (): void => void db.createObjectStore(BLOCKS_NAME, { keyPath: "key" }).createIndex("used", "used");
-    if (from === 12) return blocks();
-    const kept = from >= 8 && db.objectStoreNames.contains(STORE_NAME);
-    for (const name of Array.from(db.objectStoreNames)) if (!(kept && name === STORE_NAME)) db.deleteObjectStore(name);
-    if (kept) for (const prefix of OTHERS) tx.objectStore(STORE_NAME).delete(under(prefix));
-    else db.createObjectStore(STORE_NAME);
-    for (const name of [CONTENT_NAME, REPLICA_NAME]) db.createObjectStore(name);
-    blocks();
+    const blocks = (): void => void db.createObjectStore(BLOCKS_NAME, { keyPath: "key" }).createIndex("used", "used")
+    if (from < 12) {
+      const kept = from >= 8 && db.objectStoreNames.contains(STORE_NAME)
+      for (const name of Array.from(db.objectStoreNames)) if (!(kept && name === STORE_NAME)) db.deleteObjectStore(name)
+      if (kept) for (const prefix of OTHERS) tx.objectStore(STORE_NAME).delete(under(keyFor(prefix)))
+      else db.createObjectStore(STORE_NAME)
+      for (const name of [CONTENT_NAME, REPLICA_NAME]) db.createObjectStore(name)
+    }
+    if (from < 13) blocks()
+    if (from >= 8) carryChains(tx.objectStore(STORE_NAME))
   },
-};
-
-/** The prefixes of the rows of the rows' store that are no chain's: every row a build before this one kept beside them. */
-const OTHERS = ["store/", "pages/"];
-
-/** The device's content by name: one literal per object name, written once and never rewritten. */
-export const CONTENT: idb.Db = { ...DB, store: CONTENT_NAME };
-
-/** The replicas the core keeps in its own form, a snapshot and the frames after it, by the store's name (`replicalog`). */
-export const REPLICA: idb.Db = { ...DB, store: REPLICA_NAME };
-
-/** Typst's HTML by the key the box names it under, beside the replicas (`rendered.device`). */
-export const BLOCKS: idb.Db = { ...DB, store: BLOCKS_NAME };
-
-/**
- * What a chain's row holds and how it reads, joins and starts over: its replica, which is what a reset is checked
- * against.
- */
-export interface Rows<A> {
-  readonly parse: (raw: unknown) => lo.Settled<A>;
-  readonly print: (a: A) => unknown;
-  readonly generation: (a: A) => number;
-  /** What the row holds that the box has not taken: what a reset would lose. */
-  readonly unsent: (a: A) => readonly StoredObject[];
-  readonly join: (a: A, b: A) => A;
-  /** The empty row of the generation after `generation`. */
-  readonly after: (generation: number) => A;
-  readonly nothing: A;
 }
 
-export const CHAIN: Rows<Replica> = {
-  parse: parseReplica,
-  print: (r) => r.held,
-  generation: (r) => r.generation,
-  unsent: losses,
-  join,
-  after: (generation) => reset(replicaOf({ ...NOTHING.held, generation })),
-  nothing: NOTHING,
-};
+/** The prefixes of the rows of the rows' store that are no chain's: every row a build before version 8 kept beside them. */
+const OTHERS = ["store/", "pages/"]
+
+/** Each chain's row moved to its carry key in the upgrade's transaction, as it was. */
+function carryChains(rows: IDBObjectStore): void {
+  const cursor = rows.openCursor(under(keyFor("")))
+  cursor.onsuccess = () => {
+    const at = cursor.result
+    if (at === null) return
+    const chain = CHAIN_NAME.exec(String(at.key))?.[1]
+    if (chain !== undefined) {
+      rows.put(at.value, carryKey(chain))
+      at.delete()
+    }
+    at.continue()
+  }
+}
+
+/** The device's content by name: one literal per object name, written once and never rewritten. */
+export const CONTENT: idb.Db = { ...DB, store: CONTENT_NAME }
+
+/** The replicas the core keeps in its own form, a snapshot and the frames after it, by the store's name (`replicalog`). */
+export const REPLICA: idb.Db = { ...DB, store: REPLICA_NAME }
+
+/** Typst's HTML by the key the box names it under, beside the replicas (`rendered.device`). */
+export const BLOCKS: idb.Db = { ...DB, store: BLOCKS_NAME }
+
+/**
+ * The row an earlier build kept of `chain`, read by `parse` and handed to `keep`, and deleted once `keep` settled: a
+ * `keep` that throws leaves it for the next start. A row that does not read, or a device that does not answer, is kept
+ * and said to `unread`, never deleted unread. `keep` must write what it is handed twice as once, so a start cut short
+ * between the two keeps nothing twice.
+ */
+export const carried = async <A>(
+  chain: string,
+  parse: (raw: unknown) => lo.Settled<A>,
+  keep: (a: A) => Promise<void>,
+  unread: (why: string) => void,
+): Promise<void> => {
+  if (!idb.available()) return
+  const row = await idb.read(DB, carryKey(chain), parse)
+  switch (row.type) {
+    case "Absent":
+      return
+    case "Unreadable":
+    case "Unavailable":
+      return unread(row.why)
+    case "Held":
+      await keep(row.v)
+      await idb.within(DB, "readwrite", s => idb.done(s.delete(carryKey(chain))))
+  }
+}
+
+/** The row an earlier build kept of `chain` deleted: what a reset that writes over a row that does not read does. */
+export const dropCarried = (chain: string): Promise<void> =>
+  idb.available() ? idb.within(DB, "readwrite", s => idb.done(s.delete(carryKey(chain)))) : Promise.resolve()
+
+/** What a row holds and how it reads and joins: every row only climbs, so two tabs keeping at once both land. */
+export interface Rows<A> {
+  readonly parse: (raw: unknown) => lo.Settled<A>
+  readonly print: (a: A) => unknown
+  readonly join: (a: A, b: A) => A
+  readonly nothing: A
+}
 
 /** What this device holds of a row: nothing, its value, or a row that does not read, and why. */
-export type Read<A> = Exclude<idb.Row<A>, { readonly type: "Unavailable" }>;
+export type Read<A> = Exclude<idb.Row<A>, { readonly type: "Unavailable" }>
 
 /**
  * Never throws: a row that cannot be read says so, and is never taken for one that is not there. A store that does not
- * open is said the same way, with its reset, since the replica's acts are what this device would lose.
+ * open is said the same way.
  */
 export const heldRow = <A>(rows: Pick<Rows<A>, "parse">, name: string): Promise<Read<A>> =>
-  idb.read(DB, keyFor(name), rows.parse).then((r): Read<A> => (r.type === "Unavailable" ? { type: "Unreadable", why: r.why } : r));
+  idb.read(DB, keyFor(name), rows.parse).then((r): Read<A> => (r.type === "Unavailable" ? { type: "Unreadable", why: r.why } : r))
 
 /**
  * Two rows read in one read-only transaction, so no write lands between the two reads: a reader of both waits for a
@@ -140,59 +131,39 @@ export const heldRows = <A, B>(
   b: { readonly rows: Pick<Rows<B>, "parse">; readonly name: string },
 ): Promise<readonly [Read<A>, Read<B>]> => {
   const readOf = <C>(rows: Pick<Rows<C>, "parse">, raw: unknown): Read<C> => {
-    if (raw === undefined) return { type: "Absent" };
-    const parsed = rows.parse(raw);
-    return parsed.type === "Val" ? { type: "Held", v: parsed.v } : { type: "Unreadable", why: parsed.e };
-  };
-  if (!idb.available()) return Promise.resolve([{ type: "Absent" }, { type: "Absent" }]);
+    if (raw === undefined) return { type: "Absent" }
+    const parsed = rows.parse(raw)
+    return parsed.type === "Val" ? { type: "Held", v: parsed.v } : { type: "Unreadable", why: parsed.e }
+  }
+  if (!idb.available()) return Promise.resolve([{ type: "Absent" }, { type: "Absent" }])
   return idb
     .within(DB, "readonly", async (store): Promise<readonly [Read<A>, Read<B>]> => {
-      const first: unknown = await idb.done(store.get(keyFor(a.name)));
-      const second: unknown = await idb.done(store.get(keyFor(b.name)));
-      return [readOf(a.rows, first), readOf(b.rows, second)];
+      const first: unknown = await idb.done(store.get(keyFor(a.name)))
+      const second: unknown = await idb.done(store.get(keyFor(b.name)))
+      return [readOf(a.rows, first), readOf(b.rows, second)]
     })
     .catch((error: unknown): readonly [Read<A>, Read<B>] => {
-      const why = lo.reason(error);
-      return [{ type: "Unreadable", why }, { type: "Unreadable", why }];
-    });
-};
+      const why = lo.reason(error)
+      return [{ type: "Unreadable", why }, { type: "Unreadable", why }]
+    })
+}
 
 /**
- * A write to a row: what a replica holds, joined in; or the one way down, a reset, which names every unsent object it
- * was shown to lose and the generation the reader holds, and says whether it may stand in for a row that does not read.
+ * `value` joined into the row in one read-write transaction, so two tabs saving at once both land; the row it now holds
+ * is the answer. A join never writes over a row that does not read, since a join with nothing would shrink it. Every
+ * failure says why, since a write that could not be kept is one this browser would forget.
  */
-export type Write<A> =
-  | { readonly type: "Join"; readonly replica: A }
-  | { readonly type: "Reset"; readonly shown: ReadonlySet<string>; readonly floor: number; readonly over: "Read" | "Unread" };
-
-/**
- * The write done in one read-write transaction, so two tabs saving at once both land; the row it now holds is the
- * answer. A join never writes over a row that does not read, since a join with nothing would shrink it. A reset keeps
- * nothing of the row, so it refuses one holding an unsent object the reader was not shown, and starts the generation
- * after the row's, so no copy from before it, a concurrent reset's included, reaches it. Every failure says why, since
- * an act that could not be kept is an act this browser would forget.
- */
-export const holdRow = <A>(rows: Rows<A>, name: string, write: Write<A>): Promise<lo.Settled<A>> =>
+export const holdRow = <A>(rows: Rows<A>, name: string, value: A): Promise<lo.Settled<A>> =>
   idb
     .within(DB, "readwrite", async (store) => {
-      const raw: unknown = await idb.done(store.get(keyFor(name)));
-      const now = written(rows, raw === undefined ? lo.val(rows.nothing) : rows.parse(raw), raw, write);
-      if (now.type === "Val") await idb.done(store.put(rows.print(now.v), keyFor(name)));
-      return now;
+      const raw: unknown = await idb.done(store.get(keyFor(name)))
+      const row = raw === undefined ? lo.val(rows.nothing) : rows.parse(raw)
+      if (row.type !== "Val") return lo.error(`the row kept on this device does not read (${row.e}), so nothing was written over it`)
+      const now = rows.join(row.v, value)
+      await idb.done(store.put(rows.print(now), keyFor(name)))
+      return lo.val(now)
     })
-    .catch((error: unknown) => lo.error(lo.reason(error)));
-
-/**
- * `write` done, and what the row is now: on a failure the row is read again, so a caller says it does not read only when
- * a read says so (a store that does not open included, as `heldRow` says it), never for a refusal or a failed transaction
- * over a row that reads.
- */
-export async function keepRow<A>(rows: Rows<A>, name: string, write: Write<A>): Promise<{ readonly row: lo.Settled<A>; readonly unread: string | null }> {
-  const row = await holdRow(rows, name, write);
-  if (row.type === "Val") return { row, unread: null };
-  const read = await heldRow(rows, name);
-  return { row, unread: read.type === "Unreadable" ? read.why : null };
-}
+    .catch((error: unknown) => lo.error(lo.reason(error)))
 
 /**
  * The row as `step` leaves it, in one read-write transaction, so what another tab joined in meanwhile stays: the one way
@@ -201,32 +172,12 @@ export async function keepRow<A>(rows: Rows<A>, name: string, write: Write<A>): 
 export const alterRow = <A>(rows: Rows<A>, name: string, step: (a: A) => A): Promise<lo.Settled<null>> =>
   idb
     .within(DB, "readwrite", async (store) => {
-      const raw: unknown = await idb.done(store.get(keyFor(name)));
-      const row = raw === undefined ? null : rows.parse(raw);
-      if (row !== null && row.type === "Val") await idb.done(store.put(rows.print(step(row.v)), keyFor(name)));
-      return lo.val(null);
+      const raw: unknown = await idb.done(store.get(keyFor(name)))
+      const row = raw === undefined ? null : rows.parse(raw)
+      if (row !== null && row.type === "Val") await idb.done(store.put(rows.print(step(row.v)), keyFor(name)))
+      return lo.val(null)
     })
-    .catch((error: unknown) => lo.error(lo.reason(error)));
-
-/** What `write` leaves in a row that read as `row`, or why it may not be written. */
-function written<A>(rows: Rows<A>, row: lo.Settled<A>, raw: unknown, write: Write<A>): lo.Settled<A> {
-  const unread = row.type === "Val" ? null : row.e;
-  if (write.type === "Join") {
-    return row.type === "Val" ? lo.val(rows.join(row.v, write.replica)) : lo.error(`the replica kept on this device does not read (${unread}), so nothing was written over it`);
-  }
-  if (row.type !== "Val" && write.over === "Read") return lo.error(`the replica kept on this device does not read (${unread}), so nothing was written over it`);
-  const unshown = row.type === "Val" ? rows.unsent(row.v).filter((object) => !write.shown.has(object.hash)).length : 0;
-  if (unshown > 0) {
-    return lo.error(`this browser kept ${unshown} more unsent ${unshown === 1 ? "act" : "acts"} since the reset was offered, so nothing was reset: look again at what it loses`);
-  }
-  const was = row.type === "Val" ? rows.generation(row.v) : generationOf(raw);
-  return lo.val(rows.after(Math.max(was, write.floor)));
-}
-
-/** The generation a row that does not read says it is of, read off its print; 0 for one that does not say. */
-function generationOf(raw: unknown): number {
-  return typeof raw === "object" && raw !== null && "generation" in raw && typeof raw.generation === "number" ? raw.generation : 0;
-}
+    .catch((error: unknown) => lo.error(lo.reason(error)))
 
 /** The names under `prefix`: a key range of the rows' store. */
-const under = (prefix: string): IDBKeyRange => IDBKeyRange.bound(keyFor(prefix), `${keyFor(prefix)}￿`);
+const under = (prefix: string): IDBKeyRange => IDBKeyRange.bound(prefix, `${prefix}￿`)

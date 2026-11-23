@@ -539,40 +539,28 @@ export async function fold(page: Page): Promise<{ todo: string; state: string; v
 }
 
 /**
- * WAIT UNTIL THIS BROWSER IS ACTUALLY A REPLICA — holding objects, so an act
- * has a genesis to name and heads to rest on.
- *
- * ⚠️ NOT "the database exists", which is the obvious check and is WRONG.
- * `objects.ts` opens `suzatary` to read the replica back, and
- * `indexedDB.open` CREATES a database that is not there — so the database
- * exists the moment the app has looked for it, whether or not anything was
- * ever pulled. A scene that acted on that would be racing the first sync, and
- * an act on an empty replica is refused, so the failure would read as a UI
- * bug.
- *
- * The row's own `heads` is the real answer: it is written only by a commit,
- * and a commit only happens after a pull or an append.
+ * WAIT UNTIL THIS BROWSER IS ACTUALLY A REPLICA of `chain`: the core's log of it holds a frame, which only a pull or an
+ * act writes. Not "the database exists": the app's own open creates it whether or not anything was pulled.
  */
 export async function untilReplica(page: Page, chain = "life", timeout = 20000): Promise<void> {
-  await page.waitFor(
-    `new Promise((resolve) => {
-      const request = indexedDB.open("suzatary");
-      request.onerror = () => resolve(false);
-      request.onsuccess = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains("chain")) { db.close(); resolve(false); return; }
-        const query = db.transaction("chain", "readonly").objectStore("chain").get("objects:${chain}");
-        query.onerror = () => { db.close(); resolve(false); };
-        query.onsuccess = () => {
-          const row = query.result;
-          db.close();
-          resolve(row !== undefined && Array.isArray(row.objects) && row.objects.length > 0);
-        };
-      };
-    })`,
-    { timeout },
-  );
+  await page.waitFor(`${chainKept(chain)}.then((n) => n > 0)`, { timeout });
 }
+
+/**
+ * How many entries of the core's log the device keeps of `chain` (its snapshot and frames, under `chain/<name>/` in the
+ * `replica` store): an expression a page evaluates. It never opens a database that is not there, which would create it.
+ */
+export const chainKept = (chain: string): string => `indexedDB.databases().then((known) => !known.some((db) => db.name === "suzatary") ? 0 : new Promise((resolve) => {
+  const request = indexedDB.open("suzatary");
+  request.onerror = () => resolve(-1);
+  request.onsuccess = () => {
+    const db = request.result;
+    if (!db.objectStoreNames.contains("replica")) { db.close(); resolve(0); return; }
+    const query = db.transaction("replica", "readonly").objectStore("replica").getAllKeys(IDBKeyRange.bound("chain/${chain}/", "chain/${chain}/\uffff"));
+    query.onerror = () => { db.close(); resolve(-1); };
+    query.onsuccess = () => { const n = query.result.length; db.close(); resolve(n); };
+  };
+}))`
 
 /**
  * SWITCH THE LIST, the way a reader does: open the More sheet and tap a chain.
@@ -677,6 +665,32 @@ export const LANDED_ROW = withCore(`
   lines.free()
   return landed
 `)
+/** Whether the device's log of `chain`, read back through the core, holds a landed chain whole: heard from the box, and
+ * every object its landing says it holds. */
+export const chainLanded = (chain: string): string => withCore(`
+  const rows = await new Promise((ok, no) => {
+    const r = indexedDB.open("suzatary")
+    r.onerror = () => no(String(r.error))
+    r.onsuccess = () => {
+      const range = IDBKeyRange.bound("chain/${chain}/", "chain/${chain}/\\uffff")
+      const tx = r.result.transaction("replica", "readonly")
+      const keys = tx.objectStore("replica").getAllKeys(range)
+      const values = tx.objectStore("replica").getAll(range)
+      values.onsuccess = () => (r.result.close(), ok(keys.result.map((k, i) => [k, values.result[i]])))
+    }
+  })
+  const snapshot = rows.find(([k]) => k === "chain/${chain}/snapshot")?.[1]?.bytes
+  const frames = rows.filter(([k]) => k.startsWith("chain/${chain}/log/")).map(([, v]) => v)
+  const framed = new Uint8Array(frames.reduce((n, f) => n + 4 + f.length, 0))
+  let at = 0
+  for (const f of frames) (new DataView(framed.buffer).setUint32(at, f.length, true), framed.set(f, at + 4), (at += 4 + f.length))
+  const held = new core.Chain()
+  held.load(snapshot, framed)
+  const whole = held.heard() && held.closed()
+  held.free()
+  return whole
+`)
+
 export type Landed = { readonly generation: number; readonly epoch: number; readonly frontier: { readonly digest: string } | null; readonly nodes: readonly string[]; readonly keys: readonly string[] }
 
 /**

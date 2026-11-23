@@ -2,7 +2,7 @@
 // to it: plain requests, which the core's worker makes, so this module reads no state of the page.
 
 import type stores from "../prodrome/stores"
-import type { ContentPayload, PostedObjects, ReceiptPayload, SkeletonPayload, StorePayload } from "./generated/wire"
+import type { ContentPayload, ObjectsPayload, PostedObjects, ReceiptPayload, SkeletonPayload, StorePayload } from "./generated/wire"
 import http from "./http"
 import wait from "./wait"
 import payload from "./generated/payload"
@@ -28,6 +28,15 @@ export namespace storereads {
   // can hold the words of a line an erasure later lets go.
   export const content = (store: string, hashes: readonly string[]): Promise<ContentPayload> =>
     http.get(`/api/stores/${encodeURIComponent(store)}/content?hashes=${hashes.join(",")}`, payload.ContentPayload, BOUND, "Never")
+
+  // What a replica of the todo chain `chain` holding `since` lacks: one answer, nothing left behind it.
+  export const chain = (chain: string, since: string): Promise<ObjectsPayload> =>
+    http.get(sinceIn(`/api/${encodeURIComponent(chain)}/objects`, since), payload.ObjectsPayload, BOUND)
+
+  // What a replica of the todo chain `chain` holding `since` lacks on the box, taken as the actor the request was proven
+  // for.
+  export const chainPost = (chain: string, objects: readonly string[], since: string): Promise<ReceiptPayload> =>
+    http.handOver(`/api/${encodeURIComponent(chain)}/objects`, { objects: [...objects], since, keys: {} } satisfies PostedObjects, payload.ReceiptPayload)
 
   // What a replica of a store a tab writes holding the frontier `since` lacks on the box: the box takes each as the actor
   // the request was proven for. `keys` travel beside the objects, never in one: each slot's key by its line's name, the

@@ -19,9 +19,8 @@ import questions from "../src/prodrome/questions"
 import rendered from "../src/app/rendered"
 import time from "../src/app/time"
 import http from "../src/wire/http"
-import { headsOf as objectHeads } from "../src/prodrome/replica"
 import type { ContentPayload, SkeletonNode, SkeletonPayload, StorePayload, StoredObject } from "../src/wire/generated/wire"
-import { held as prodromes } from "./held"
+import { headsOf as objectHeads, held as prodromes } from "./held"
 
 const built = process.env["SUZATARY_PRODROME_WASM"]
 if (built === undefined || built === "") throw new Error("SUZATARY_PRODROME_WASM is unset — run scripts/web-test.sh")

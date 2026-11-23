@@ -12,11 +12,10 @@ import type {
   SpecNode,
   TurnRow,
 } from "../wire/generated/wire"
-import type { Dressed, Streamed, Windowed as PageWindow } from "../wire/generated/pages"
-import type { Acted, AnsweredBlock, Chains, Core, CoreEnv, CoreFold, Linker, Named, CorePlaced, Beside, CoreSpot, Standing, Todos, Window } from "./core"
+import type { Dressed, Streamed, UnsentRead, Windowed as PageWindow } from "../wire/generated/pages"
+import type { AnsweredBlock, Chains, Core, CoreEnv, CoreFold, Linker, CorePlaced, Beside, CoreSpot, Order, Standing, Todos, Window } from "./core"
 import { grow } from "./core"
 import {
-  appendTo,
   barOf,
   chosenOf,
   conversationOf,
@@ -31,12 +30,14 @@ import {
   linkerOf,
   listOf,
   listOfLines,
-  objectsOf,
+  orderIn,
+  policyOf,
+  unsentIn,
   searchOf,
-  standingIn,
   streamOf,
   within,
 } from "./core"
+import chainsync from "./chainsync"
 import type topics from "./topics"
 import excluded from "./excluded"
 import type heads from "./heads"
@@ -56,14 +57,9 @@ import { measure } from "../app/perf"
 import text from "../wire/text"
 
 export namespace questions {
-  // `whole` replaces what the worker holds: sent after a refused holding, since nothing then says what it took.
-  export type Holding = {
-    readonly name: string
-    readonly untrusted: readonly string[]
-    readonly add: readonly Named[]
-    readonly drop: readonly string[]
-    readonly whole: boolean
-  }
+  // A chain's fold as the core reads what stands of it: none before a pull of it landed; `settled` while the box holds
+  // all of it and nothing it holds is this tab's alone.
+  export type Listed = { readonly type: "Unheld" } | { readonly type: "Read"; readonly fold: FoldPayload; readonly settled: boolean }
 
   // `set` names the version of every chain held.
   export type Name = { readonly chain: string; readonly set: string; readonly at: string }
@@ -108,16 +104,31 @@ export namespace questions {
   export type Line = { readonly place: CoreSpot; readonly term: SpecNode; readonly priced: Priced; readonly children: readonly Line[] }
 
   export type Table = {
-    Hold: { q: { readonly chains: readonly Holding[] }; a: null }
-    // The box's `GET …/fold`.
-    List: { q: { readonly chain: string; readonly at: string | null }; a: FoldPayload }
-    Act: { q: { readonly chain: string; readonly event: string; readonly at: string }; a: Acted }
+    // The chains the box serves: each is held, and pulled with the open one's exchange.
+    Served: { q: { readonly chains: readonly string[] }; a: null }
+    // The box's `GET …/fold`, from what stands.
+    List: { q: { readonly chain: string; readonly at: string | null }; a: Listed }
+    // Sealed as `actor`'s, kept, and handed over behind the answer: the fold after it.
+    Act: { q: { readonly chain: string; readonly event: string; readonly at: string; readonly actor: string }; a: Listed }
+    // What the tab wrote that the box has not taken.
+    Unsent: { q: { readonly chain: string }; a: UnsentRead }
+    // What the tab wrote handed over, then the chain pulled, and the others served after it; whether its pull ended whole.
+    Exchange: { q: { readonly chain: string }; a: boolean }
+    // The unsent writes `shown` let go and the chain taken again; what the reset could not do.
+    ResetChain: { q: { readonly chain: string; readonly shown: readonly string[] }; a: readonly string[] }
+    // How the heads `a` stand to `b` over what the chain holds.
+    Order: { q: { readonly chain: string; readonly a: readonly string[]; readonly b: readonly string[] }; a: Order }
+    // The root a device key counts under, none before the box named one.
+    Root: { q: { readonly chain: string }; a: string | null }
+    // What a trusted device signs to vouch for `key` as `actor` (SPEC law 42).
+    KeyAdded: { q: { readonly chain: string; readonly actor: string; readonly key: string }; a: string }
     // Kept while the set and the instant stand.
-    Reading: { q: { readonly chain: string; readonly at: string }; a: text.Text<Read> }
+    Reading: { q: { readonly chain: string; readonly at: string }; a: text.Text<{ readonly held: readonly string[]; readonly read: Read }> }
     Price: { q: { readonly basis: Basis; readonly terms: readonly SpecNode[] }; a: readonly Priced[] }
     Tree: { q: { readonly basis: Basis; readonly members: readonly Placed[]; readonly by: string }; a: text.Text<Line> }
     Thirty: { q: { readonly chain: string; readonly id: string; readonly ms: number }; a: text.Text<thirty.Thirty> }
-    Standing: { q: { readonly chain: string; readonly root: string | null; readonly actor: string; readonly key: string }; a: Standing }
+    // None where the box names no root.
+    Standing: { q: { readonly chain: string; readonly actor: string; readonly key: string }; a: Standing | null }
     // Pulls every store now and after every word of the box's stream; true when every pull ended whole.
     Pull: { q: Record<never, never>; a: boolean }
     Heard: { q: { readonly store: stores.Name; readonly heads: heads.Heads }; a: null }
@@ -128,7 +139,7 @@ export namespace questions {
     // Answers with what the reset could not do.
     Reset: { q: { readonly store: stores.Name }; a: readonly string[] }
     // Says what it was priced without as the inbox's reader.
-    Proposals: { q: { readonly at: string; readonly memory: MemoryPayload | null }; a: text.Text<InboxProposalsPayload> }
+    Proposals: { q: { readonly at: string; readonly memory: MemoryPayload | null }; a: text.Text<{ readonly payload: InboxProposalsPayload; readonly held: readonly string[] }> }
     Conversations: { q: Record<never, never>; a: Whole<ConversationsPayload> }
     Conversation: { q: { readonly id: string; readonly window: Window; readonly memory: MemoryPayload | null }; a: One }
     // Read back to the turn it must reach (`grouped.covering`), grouped into rounds on the owner's days in `zone`.
@@ -150,6 +161,8 @@ export namespace questions {
     Line: { q: { readonly line: lines.Sealing; readonly at: string; readonly actor: string }; a: lines.Sealed }
     Acted: { q: { readonly lines: readonly string[] }; a: null }
     Refused: { q: Readonly<Record<never, never>>; a: string }
+    // The copies this device keeps from before the last change of form: the stores it writes and the chains, by name.
+    Earlier: { q: Readonly<Record<never, never>>; a: readonly string[] }
   }
   export type Kind = keyof Table
   export type Question = { [k in Kind]: { readonly type: k } & Table[k]["q"] }[Kind]
@@ -161,7 +174,7 @@ export namespace questions {
 
   // Said unasked. `Gone`: the box refused this device's key on a worker read; `Stale`: refused this build's contract;
   // `Unloaded`: the core did not load.
-  export type Said = storeset.Said | { readonly type: "Gone" } | { readonly type: "Stale" } | { readonly type: "Unloaded"; readonly why: string }
+  export type Said = storeset.Said | chainsync.Said | { readonly type: "Gone" } | { readonly type: "Stale" } | { readonly type: "Unloaded"; readonly why: string }
   export type Out = Answered | { readonly said: Said }
 
   // A proposal the box draws against its chain, whose card counts what it draws: its whole row is the box's.
@@ -176,7 +189,6 @@ export namespace questions {
   // The page's reading, and the one it replaced while a page still reads it.
   const KEPT = 4
 
-  type Chain = { objects: Map<string, string>; untrusted: readonly string[]; version: number; todos: { readonly version: number; readonly t: Todos } | null }
   type Reading = { readonly answer: Read & { type: "Read" }; readonly set: Linker; readonly price: (t: SpecNode) => number | null; readonly prices: Map<string, Priced> }
 
   // The box's rows carry their values, so nothing is bound when one is linked.
@@ -196,50 +208,52 @@ export namespace questions {
   export type Answering = (q: Question, turn: Turn) => Answer<Kind> | Promise<Answer<Kind>>
 
   export const serve = (core: Core, say: (s: Said) => void = () => {}): Answering => {
-    const chains = new Map<string, Chain>()
+    const chains = chainsync.of(core, {
+      told: (reader, left) => say({ type: "Told", reader, left }),
+      said: say,
+      refused: why => say({ type: "Refused", why }),
+    })
     const set: Chains = new core.Chains()
     const inSet = new Map<string, number>()
     const readings: Reading[] = []
-    let versions = 0
 
-    const named = (name: string): Chain => {
-      const c = chains.get(name)
-      if (c === undefined) throw new Error(`this tab holds nothing of ${name}`)
-      return c
-    }
-    const objectsIn = (c: Chain): Named[] => [...c.objects].map(([hash, literal]) => ({ hash, literal }))
-    const todosOf = (c: Chain): Todos => {
-      if (c.todos?.version === c.version) return c.todos.t
-      c.todos?.t.free()
-      const t = new core.Todos(objectsOf(objectsIn(c)))
-      c.todos = { version: c.version, t }
+    // Each chain's reading of what stands, made once per move of it.
+    const todos = new Map<string, { readonly version: number; readonly t: Todos }>()
+    const todosOf = (c: chainsync.Chain): Todos => {
+      const known = todos.get(c.name)
+      if (known?.version === c.store.version()) return known.t
+      known?.t.free()
+      const t = c.store.todos()
+      todos.set(c.name, { version: c.store.version(), t })
       return t
     }
-    const forget = (c: Chain): void => {
-      c.todos?.t.free()
-      c.todos = null
-    }
+    // Who a chain does not believe, as the box last said for its rows; a chain it has not said that of is read nowhere,
+    // never as one that believes everyone.
+    const heldUnder = (c: chainsync.Chain): readonly string[] | null => (c.sync.sync.landed() ? (policyOf(c.store)?.untrusted ?? null) : null)
+    // Every chain held, restored, before the set is read.
+    const allReady = (): Promise<readonly chainsync.Chain[]> => Promise.all(chains.held().map(c => chains.ready(c.name)))
     const setNow = (): string => {
-      for (const [name, c] of chains) {
-        if (inSet.get(name) === c.version) continue
-        say({ type: "Told", reader: `chain/${name}`, left: holdIn(set, name, objectsIn(c), c.untrusted) })
-        inSet.set(name, c.version)
+      for (const c of chains.held()) {
+        if (inSet.get(c.name) === c.store.version()) continue
+        say({ type: "Told", reader: `chain/${c.name}`, left: holdIn(set, c.name, c.store) })
+        inSet.set(c.name, c.store.version())
       }
-      for (const name of [...inSet.keys()]) {
-        if (chains.has(name)) continue
-        set.drop(name)
-        inSet.delete(name)
-        say({ type: "Told", reader: `chain/${name}`, left: excluded.NOTHING })
-      }
-      return [...chains].map(([name, c]) => `${name}:${c.version}`).sort().join(";")
+      return chains
+        .held()
+        .map(c => `${c.name}:${c.store.version()}`)
+        .sort()
+        .join(";")
     }
+    // The chains a reading is priced through: each that holds what a pull landed.
+    const heldNames = (): string[] => chains.held().flatMap(c => (heldUnder(c) === null ? [] : [c.name]))
+    // A chain restored with every other, so what it refers to is read too.
+    const chain = (name: string): Promise<chainsync.Chain> => chains.ready(name).then(c => allReady().then(() => c))
     // Newest last; a reading is found by its name, never by a print of it.
     const kept = (name: Name): Reading | undefined => readings.find(r => same(r.answer.reading, name))
     const keep = (r: Reading): void => {
       readings.push(r)
       for (const old of readings.splice(0, Math.max(0, readings.length - KEPT))) old.set.free()
     }
-    const sorted = (xs: readonly string[]): string => JSON.stringify([...xs].sort())
 
     const held = new core.Lines()
     // The rendered blocks the device keeps, read and written here alone, of the functions this build keeps blocks of, as
@@ -299,43 +313,19 @@ export namespace questions {
       return { text: text.object<Dressed<T>>({ read, html: text.printed(html), drawn: text.printed(drawn) }), missing }
     }
 
-    const hold = (holding: readonly Holding[]): null => {
-      for (const h of holding) {
-        const c = chains.get(h.name) ?? { objects: new Map<string, string>(), untrusted: [], version: 0, todos: null }
-        chains.set(h.name, c)
-        if (h.whole) c.objects.clear()
-        for (const hash of h.drop) c.objects.delete(hash)
-        for (const o of h.add) c.objects.set(o.hash, o.literal)
-        if (h.whole || h.add.length > 0 || h.drop.length > 0 || sorted(h.untrusted) !== sorted(c.untrusted) || c.version === 0) c.version = versions += 1
-        c.untrusted = h.untrusted
-      }
-      for (const [name, c] of [...chains]) {
-        if (holding.some(h => h.name === name)) continue
-        forget(c)
-        chains.delete(name)
-      }
-      return null
-    }
-
-    const act = (chain: string, event: string, at: string): Answer<"Act"> => {
+    const listed = (c: chainsync.Chain, at: string | null): Listed => {
+      const untrusted = heldUnder(c)
+      if (untrusted === null) return { type: "Unheld" }
       setNow()
-      const c = named(chain)
-      const t = todosOf(c)
-      try {
-        return { appended: appendTo(t, event), answer: listOf(t, at, c.untrusted, chain, set) }
-      } finally {
-        // The worker holds what the tab holds, so the act is read in again once the tab holds it.
-        forget(c)
-      }
+      return { type: "Read", fold: listOf(todosOf(c), at, untrusted, c.name, set), settled: c.store.settled() }
     }
-
-    const reading = (chain: string, at: string): Read => {
-      const name: Name = { chain, set: setNow(), at }
+    const reading = (c: chainsync.Chain, at: string): Read => {
+      const name: Name = { chain: c.name, set: setNow(), at }
       const known = kept(name)
       if (known !== undefined) return known.answer
-      const c = chains.get(chain)
-      if (c === undefined) return { type: "Unheld" }
-      const f = foldOf(todosOf(c), at, c.untrusted)
+      const untrusted = heldUnder(c)
+      if (untrusted === null) return { type: "Unheld" }
+      const f = foldOf(todosOf(c), at, untrusted)
       const linkSet = linkerOf(set, f.functions, f.at)
       const read: Reading = {
         answer: { type: "Read", reading: name, at: f.at, specs: f.specs, functions: f.functions },
@@ -366,17 +356,36 @@ export namespace questions {
 
     return (q, turn) => {
       switch (q.type) {
-        case "Hold":
-          return hold(q.chains)
-        case "List": {
-          setNow()
-          const c = named(q.chain)
-          return listOf(todosOf(c), q.at, c.untrusted, q.chain, set)
-        }
+        case "Served":
+          chains.serve(q.chains)
+          return null
+        case "List":
+          return chain(q.chain).then(c => listed(c, q.at))
         case "Act":
-          return act(q.chain, q.event, q.at)
+          // Decided when the act is kept: a reading that fails after it answers that the fold follows with the chain's
+          // next move, never that nothing was recorded.
+          return chains.act(q.chain, q.event, q.actor).then(c =>
+            allReady()
+              .then(() => listed(c, q.at))
+              .catch((): Listed => ({ type: "Unheld" })),
+          )
+        case "Unsent":
+          return chains.ready(q.chain).then(c => unsentIn(c.store))
+        case "Exchange":
+          return chains.exchange(q.chain)
+        case "ResetChain":
+          return chains.reset(q.chain, new Set(q.shown))
+        case "Order":
+          return chains.ready(q.chain).then(c => orderIn(c.store, q.a, q.b))
+        case "Root":
+          return chains.ready(q.chain).then(c => policyOf(c.store)?.root ?? null)
+        case "KeyAdded":
+          return chains.ready(q.chain).then(c => {
+            if (heldUnder(c) === null) throw new Error("this device holds no copy of the first chain yet, so it cannot vouch")
+            return todosOf(c).key_added(q.actor, q.key)
+          })
         case "Reading":
-          return text.printed(reading(q.chain, q.at))
+          return chain(q.chain).then(c => text.object({ read: text.printed(reading(c, q.at)), held: text.printed(heldNames()) }))
         case "Price":
           return price(q.basis, q.terms)
         case "Tree": {
@@ -385,13 +394,14 @@ export namespace questions {
           const prices = (g: ReturnType<typeof grow>): Line => ({ place: g.place, term: g.term, priced: price(q.basis, [g.term])[0] ?? { type: "Refused", why: "not priced" }, children: g.children.map(prices) })
           return text.printed(prices(grown))
         }
-        case "Thirty": {
-          setNow()
-          const c = chains.get(q.chain)
-          return text.printed(c === undefined ? thirty.unheld : thirty.sample(core, set, todosOf(c), c.untrusted, q.id, q.ms))
-        }
+        case "Thirty":
+          return chain(q.chain).then(c => {
+            setNow()
+            const untrusted = heldUnder(c)
+            return text.printed(untrusted === null ? thirty.unheld : thirty.sample(core, set, todosOf(c), untrusted, q.id, q.ms))
+          })
         case "Standing":
-          return standingIn(todosOf(named(q.chain)), q.root, q.actor, q.key)
+          return chains.standing(q.chain, q.actor, q.key)
         case "Pull":
           return stores.pull()
         case "Heard":
@@ -401,15 +411,15 @@ export namespace questions {
           stores.opened()
           return null
         case "Shown":
-          return stores.shown(q.on).then(() => null)
+          return Promise.all([stores.shown(q.on), chains.shown(q.on)]).then(() => null)
         case "Reset":
           return stores.reset(q.store)
         case "Proposals":
-          return ready("Inbox", turn).then(() => {
+          return Promise.all([ready("Inbox", turn), allReady()]).then(() => {
             const of = proposals()
             const read = inbox({ version: of.version(), set: setNow(), memory: JSON.stringify(q.memory) }, () => inboxOf(of, q.at, q.memory, set))
             say({ type: "Told", reader: "inbox", left: excluded.left(excluded.NONE, read.said) })
-            return read.text
+            return text.object({ payload: read.text, held: text.printed(heldNames()) })
           })
         case "Conversations":
           return whole(turn, () => listOfLines(held, proposals()))
@@ -475,6 +485,10 @@ export namespace questions {
           return stores.acted(q.lines).then(() => null)
         case "Refused":
           return Promise.resolve(stores.refused())
+        case "Earlier":
+          return Promise.all([stores.earlier(), Promise.all(chains.held().map(c => c.sync.earlier().then(e => (e ? [`chain/${c.name}`] : []))))]).then(
+            ([written, chained]) => [...written, ...chained.flat()],
+          )
       }
     }
   }

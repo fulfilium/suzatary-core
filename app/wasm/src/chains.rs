@@ -52,6 +52,20 @@ impl Chains {
         Ok(answer)
     }
 
+    /// Hold the chain `name` as `chain` holds it now: what stands, under the policy the box last
+    /// named for its rows. Before the box has named one the chain is not held, as a chain this
+    /// device never pulled is not, and every reference into it reads `∅`; never is it held as a
+    /// chain that believes everyone. Answers as [`Chains::hold`], or `"Unheard"`.
+    pub fn hold_chain(&mut self, name: &str, chain: &crate::Chain) -> Result<String, JsError> {
+        let Some(policy) = chain.0.replica().policy() else {
+            self.drop(name);
+            return json(&"Unheard");
+        };
+        let objects = chain.0.standing().map_err(refused)?;
+        let untrusted: Vec<&String> = policy.untrusted.iter().collect();
+        self.hold(name, &objects, &json(&untrusted)?)
+    }
+
     /// Hold the chain `name` no more: every reference into it reads `∅`.
     pub fn drop(&mut self, name: &str) {
         self.0.retain(|(held, ..)| held.as_str() != name);

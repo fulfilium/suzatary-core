@@ -174,14 +174,11 @@ pub fn frame(frame: &LineFrame) -> Result<Vec<u8>, Unprinted> {
     snapshot::print(<LineReplica as snapshot::Held>::FORM, &form)
 }
 
-/// The frame `bytes` prints, or none for a frame of another form, which this build passes over.
-pub fn unframe(bytes: &[u8]) -> Result<Option<LineFrame>, NotASnapshot> {
-    let form: FrameForm = match snapshot::read(<LineReplica as snapshot::Held>::FORM, bytes) {
-        Ok(form) => form,
-        Err(NotASnapshot::Form { .. }) => return Ok(None),
-        Err(e) => return Err(e),
-    };
-    Ok(Some(LineFrame {
+/// The frame `bytes` prints. A frame of another form is [`NotASnapshot::Form`], as a snapshot of
+/// another form is: the caller decides what an earlier form's copy becomes, for both alike.
+pub fn unframe(bytes: &[u8]) -> Result<LineFrame, NotASnapshot> {
+    let form: FrameForm = snapshot::read(<LineReplica as snapshot::Held>::FORM, bytes)?;
+    Ok(LineFrame {
         delta: form::delta_of(form.delta, row_of, key_name).map_err(NotASnapshot::Refused)?,
         husked: form
             .husked
@@ -189,7 +186,7 @@ pub fn unframe(bytes: &[u8]) -> Result<Option<LineFrame>, NotASnapshot> {
             .map(husked)
             .collect::<Result<_, _>>()
             .map_err(NotASnapshot::Refused)?,
-    }))
+    })
 }
 
 fn husk_form(husked: &Husked) -> HuskForm {

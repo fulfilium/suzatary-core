@@ -9,7 +9,7 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
 import type { Core, Lines, Named, Proposals } from "../src/prodrome/core"
-import { storeOf } from "./held"
+import { heldChain, storeOf } from "./held"
 import { conversationOf, entriesOf, excludedOf, holdIn, inboxOf, linesLeft, listOfLines, objectsOf, searchOf } from "../src/prodrome/core"
 import excluded from "../src/prodrome/excluded"
 import type { MemoryPayload } from "../src/wire/generated/wire"
@@ -87,7 +87,7 @@ test("law: a chain held over an unreadable print reads what it can, and the set 
   assert.deepEqual(entriesOf(core, [junk], null, [], "life", none).entries, [])
   const set = new core.Chains()
   try {
-    const left = holdIn(set, "life", [junk], [])
+    const left = holdIn(set, "life", heldChain(core, "life", [junk], []).store)
     assert.deepEqual(left.objects.map(x => x.name), [junk.hash])
     assert.deepEqual(left.chains, [])
   } finally {
