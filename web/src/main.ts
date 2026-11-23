@@ -1,7 +1,7 @@
 // The shell: what the tab hears becomes an `app.Event`, and after each one the shell is drawn from `App` —
 // the chrome around the page, and the page `pages.table` mounts for its screen.
 
-import { me, reportPushToken, waitingCount, wasOurWrite } from "./wire/api";
+import { me, reportPushToken, waitingCount } from "./wire/api";
 import storesync from "./prodrome/storesync";
 import intentsync from "./prodrome/intentsync";
 import app from "./app/app";
@@ -23,7 +23,7 @@ import program from "./pages/program";
 import { installPresence } from "./app/presence";
 import { byId, clear, el } from "./view/dom";
 import { announce } from "./view/focus";
-import { toast } from "./view/toast";
+import { aside, toast } from "./view/toast";
 import outbox from "./shell/outbox";
 import { WIDE_MIN_PX, isWide } from "./shell/layout";
 import { installKeyboard, setPaletteOpener } from "./shell/keyboard";
@@ -51,7 +51,7 @@ import heads from "./prodrome/heads";
 import { hearTheme, restoreTheme, theme } from "./app/theme";
 import { store } from "./app/store";
 import type { Unsent } from "./wire/generated/pages";
-import { ensureFold, foldHeld, foldWhere, forgetChainReplica, keepObjects, refetchFold, resetChain, restoreChain, restoreFold, shellAsksAfter, signingHere, sync, unsent, watchReplica, watchUnsent } from "./prodrome/sync";
+import { elsewhere, ensureFold, foldHeld, foldWhere, forgetChainReplica, keepObjects, refetchFold, resetChain, restoreChain, restoreFold, shellAsksAfter, signingHere, sync, unsent, watchReplica, watchUnsent } from "./prodrome/sync";
 import signer from "./prodrome/signer";
 import http from "./wire/http";
 import clock from "./algebra/clock";
@@ -165,20 +165,25 @@ function connect(): void {
 
 function heardTip(data: string): void {
   const frame = tipFrame(data);
-  const was = app.now().stream.heads;
+  const { chain, stream } = app.now();
+  const was = stream.heads;
   if (frame.type !== "Val" || heads.same(heads.of(frame.v.heads), was)) return;
   const now = heads.of(frame.v.heads);
   app.dispatch({ type: "Heard", heads: now });
+  void keepObjects().catch(() => {});
+  if (was.length === 0) return;
   // A decision is a todo, so a move of the chain may move the badge.
-  if (was.length !== 0) void refreshWaiting();
-  // Our own write is already in the store; announcing it back would tell the reader what they just did.
-  if (was.length !== 0 && !wasOurWrite(app.now().chain, now)) {
-    toast(`chain moved — heads ${heads.shown(now)}`);
-    // A failed background refresh keeps what is on screen; the next tip move retries.
+  void refreshWaiting();
+  const reread = (): void => {
     void refetchFold().catch(() => {});
     asked.moved();
-  }
-  void keepObjects().catch(() => {});
+  };
+  // This tab's own writes were answered in their own words; a move it cannot judge is read unsaid.
+  void elsewhere(chain, was, now).then((news) => {
+    if (news.length === 0) return;
+    aside("updated with changes made elsewhere");
+    reread();
+  }, reread);
 }
 
 function askWhoAndWhere(): void {

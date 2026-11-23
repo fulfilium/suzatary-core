@@ -16,16 +16,16 @@ import d from "../wire/decoder"
 import storereads from "../wire/storereads"
 
 export namespace chainsync {
-  export type Chain = { readonly name: string; readonly store: ChainStore; readonly sync: replicasync.T }
+  // `made`: the name of every object this tab made: each act's change, and each signature of one of them.
+  export type Chain = { readonly name: string; readonly store: ChainStore; readonly sync: replicasync.T; readonly made: Set<string> }
 
-  // `Chain`: a reading of the chain moved, and the heads the box last said of it, none before it spoke. `Ours`: the heads
-  // the box answered this tab's post with, which its stream then names back. `Sealed`: every write of `chain` this
-  // device holds unsent, signatures included, said once an act is kept and before anything of it is posted, so the
-  // stream naming one back is known as ours whichever arrives first.
-  export type Said =
-    | { readonly type: "Chain"; readonly chain: string; readonly box: readonly string[] | null }
-    | { readonly type: "Ours"; readonly heads: readonly string[] }
-    | { readonly type: "Sealed"; readonly chain: string; readonly names: readonly string[] }
+  // A reading of the chain moved, and the heads the box last said of it, none before it spoke.
+  export type Said = { readonly type: "Chain"; readonly chain: string; readonly box: readonly string[] | null }
+
+  // Of the heads `now` the box names after `was`, those this tab did not make. An object is in `made` before any of it is
+  // posted, so no order of the box's word and the receipt changes the answer.
+  export const elsewhere = (was: readonly string[], now: readonly string[], made: ReadonlySet<string>): readonly string[] =>
+    now.filter(h => !was.includes(h) && !made.has(h))
 
   export type Effects = {
     readonly told: (reader: string, left: excluded.Left) => void
@@ -51,6 +51,7 @@ export namespace chainsync {
     // while it holds an unsent write the reader was not shown.
     readonly reset: (name: string, shown: ReadonlySet<string>) => Promise<readonly string[]>
     readonly shown: (on: boolean) => Promise<void>
+    readonly elsewhere: (name: string, was: readonly string[], now: readonly string[]) => readonly string[]
   }
 
   // What an act says where it cannot be kept, in the words the page shows.
@@ -61,11 +62,21 @@ export namespace chainsync {
     "this device is not trusted to write yet: trust it from Settings → This device with the code from the box, or ask there, then tap its card on a trusted device"
 
   const Losses = d.json(d.obj<{ losses: string[] }>({ losses: d.arr(d.str) }))
-  // The name of every write the chain holds unsent, from its posts.
-  const Posts = d.json(d.arr(d.arr(d.obj<{ hash: string }>({ hash: d.str }))))
-  const unsentNames = (store: ChainStore): readonly string[] => {
+  type Unsent = { readonly hash: string; readonly literal: string }
+  const Posts = d.json(d.arr(d.arr(d.obj<Unsent>({ hash: d.str, literal: d.str }))))
+  const unsentOf = (store: ChainStore): readonly Unsent[] => {
     const posts = Posts(store.unsent())
-    return posts.type === "Val" ? posts.v.flat().map(o => o.hash) : []
+    return posts.type === "Val" ? posts.v.flat() : []
+  }
+  // An unsigned change waits out of the posts under a root.
+  const Names = d.json(d.arr(d.str))
+  const unsentNames = (store: ChainStore): ReadonlySet<string> => {
+    const unsigned = Names(store.unsigned())
+    return new Set([...unsentOf(store).map(o => o.hash), ...(unsigned.type === "Val" ? unsigned.v : [])])
+  }
+  // A signature is this tab's when the change it signs is.
+  const signaturesMade = (c: Chain): void => {
+    for (const o of unsentOf(c.store)) if (o.literal.startsWith("Signed(") && [...c.made].some(n => o.literal.includes(n))) c.made.add(o.hash)
   }
 
   // A chain's row as builds before the chains moved into the core kept it: all it held, and the names the box was known
@@ -94,11 +105,10 @@ export namespace chainsync {
           store: c.store,
           exclusive: c.sync.exclusive,
           stepped: step => c.sync.stepped(step),
-          post: (literals, since) =>
-            storereads.chainPost(name, literals, since).then(receipt => {
-              if (receipt.heads.length > 0) fx.said({ type: "Ours", heads: receipt.heads })
-              return receipt
-            }),
+          post: (literals, since) => {
+            signaturesMade(c)
+            return storereads.chainPost(name, literals, since)
+          },
           signs: () => {
             const policy = policyOf(c.store)
             return policy === null ? "Unknown" : policy.root === null ? "Unsigned" : "Signs"
@@ -132,9 +142,9 @@ export namespace chainsync {
           replaced: () => {},
         },
       )
-      const made = { name, store, sync }
-      chains.set(name, made)
-      return made
+      const held = { name, store, sync, made: new Set<string>() }
+      chains.set(name, held)
+      return held
     }
 
     const ready = async (name: string): Promise<Chain> => {
@@ -222,6 +232,7 @@ export namespace chainsync {
         // Read again in the act's own turn, so the plan is made over what the device holds now.
         await c.sync.read()
         if (!c.sync.sync.landed()) throw new Error(UNLANDED)
+        const before = unsentNames(c.store)
         const frame = c.store.append(event)
         if (frame === undefined) return
         try {
@@ -229,9 +240,10 @@ export namespace chainsync {
         } catch (e: unknown) {
           throw new Error(`this browser could not keep the act (${e instanceof Error ? e.message : String(e)}) — nothing was recorded`)
         }
+        for (const n of unsentNames(c.store)) if (!before.has(n)) c.made.add(n)
       })
       await writes.sign(name).catch((e: unknown) => fx.refused(`The act was kept unsigned (${e instanceof Error ? e.message : String(e)}); the next sync signs it.`))
-      fx.said({ type: "Sealed", chain: name, names: unsentNames(c.store) })
+      signaturesMade(c)
       void exchange(name)
       return c
     }
@@ -270,6 +282,7 @@ export namespace chainsync {
       standing,
       reset,
       shown: on => Promise.all([...chains.values()].map(c => c.sync.shown(on))).then(() => undefined),
+      elsewhere: (name, was, now) => elsewhere(was, now, of1(name).made),
     }
   }
 }

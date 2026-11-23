@@ -17,6 +17,8 @@ import questions from "../src/prodrome/questions"
 import type { PostedObjects, ReceiptPayload, StoredObject } from "../src/wire/generated/wire"
 import { fakeIndexedDB } from "./fakeidb"
 import { forAllAsync } from "./gen"
+import { notice } from "../src/view/toast"
+import heads from "../src/prodrome/heads"
 import { answerOf, headsOf, heldChain, holdAll } from "./held"
 
 const built = process.env["SUZATARY_PRODROME_WASM"]
@@ -43,6 +45,9 @@ let gate: Promise<void> = Promise.resolve()
 let atGate = (): void => {}
 let postGate: Promise<void> = Promise.resolve()
 let atPost = (): void => {}
+// Once the box took a post, before its receipt goes: what the box's stream names then, while `takenGate` holds the receipt.
+let atTaken = (): void => {}
+let takenGate: Promise<void> = Promise.resolve()
 // How many objects the box's frontier counts beyond what it serves: a box whose own copy is not closed.
 let lacking = 0
 // How many reads asked from nothing: a whole pull.
@@ -67,6 +72,8 @@ Object.assign(globalThis, {
       const refused = posted.objects.filter(l => l.includes("note='refuse me'"))
       const adopted = posted.objects.filter(l => !refused.includes(l)).map(literal => ({ hash: hashOf(literal), literal })).filter(o => !held.some(h => h.hash === o.hash))
       held = [...held, ...adopted]
+      atTaken()
+      await takenGate
       return json({
         heads: headsOf(held),
         adopted: adopted.map(o => o.hash),
@@ -166,6 +173,90 @@ test("law: every act two tabs seal reaches the box once, through any acts, excha
     }
     await settled()
   })
+})
+
+// The orders of `tokens` in which each pair `[a, b]` of `after` has `a` first.
+const orders = <T>(tokens: readonly T[], after: readonly (readonly [T, T])[]): T[][] => {
+  const all = (left: readonly T[]): T[][] =>
+    left.length === 0 ? [[]] : left.flatMap((t, i) => all([...left.slice(0, i), ...left.slice(i + 1)]).map(rest => [t, ...rest]))
+  return all(tokens).filter(o => after.every(([a, b]) => !o.includes(a) || !o.includes(b) || o.indexOf(a) < o.indexOf(b)))
+}
+
+// The page of tab `one`, as `main.ts` hears the box's stream and the act's answer: a tip is judged by `Elsewhere`, and
+// what the page shows is `notice.step` over what it was offered, one millisecond a step, all within one dwell.
+test("law: a tab's own write is never announced back to it and another's is announced once, whatever order the act's answer, the box's word and a second tab's write come in", async () => {
+  type Token = "Answer" | "Tip" | "Other" | "OtherTip"
+  const cases = [
+    ...orders<Token>(["Answer", "Tip"], []).map(o => ({ o, coalesced: false })),
+    ...orders<Token>(["Answer", "Tip", "Other", "OtherTip"], [["Other", "OtherTip"], ["Tip", "OtherTip"]]).map(o => ({ o, coalesced: false })),
+    // The box's word of the first write is lost: the page hears both writes in one move.
+    ...orders<Token>(["Answer", "Other", "OtherTip"], [["Other", "OtherTip"]]).map(o => ({ o, coalesced: true })),
+  ]
+  let n = 9700
+  for (const { o, coalesced } of cases)
+    for (const receiptFirst of [false, true]) {
+      fakeIndexedDB()
+      held = [...start]
+      down = false
+      const [one, other] = [await tab(), await tab()]
+      for (const t of [one, other]) await t.ask({ type: "Exchange", chain: "life" })
+      let was = heads.of(headsOf(held))
+      const before = new Set(held.map(h => h.hash))
+      // One's post is held at the box once taken, so its stream speaks before one's worker has the receipt.
+      let release = (): void => {}
+      takenGate = new Promise(go => (release = go))
+      const taken = new Promise<void>(go => (atTaken = go))
+      n += 1
+      await one.ask({ type: "Act", chain: "life", event: act(n), at: AT, actor: "owner" })
+      await taken
+      atTaken = () => {}
+      takenGate = Promise.resolve()
+      const ours = held.filter(h => !before.has(h.hash)).map(h => h.hash)
+      const tip = heads.of(headsOf(held))
+      if (receiptFirst) release()
+      let theirs: string[] = []
+      let otherTip = heads.NONE
+      let shown: notice.T = notice.HIDDEN
+      const announced: string[][] = []
+      let at = 0
+      const heard = async (now: heads.Heads): Promise<void> => {
+        if (heads.same(now, was)) return
+        const news = await one.ask({ type: "Elsewhere", chain: "life", was, now })
+        was = now
+        if (news.length === 0) return
+        announced.push([...news])
+        shown = notice.step(shown, { type: "Offered", notice: { type: "Aside", message: "updated with changes made elsewhere" }, at: (at += 1) })
+      }
+      for (const token of o)
+        switch (token) {
+          case "Answer":
+            shown = notice.step(shown, { type: "Offered", notice: { type: "Act", message: "added a" }, at: (at += 1) })
+            break
+          case "Tip":
+            if (!coalesced) await heard(tip)
+            break
+          case "Other": {
+            const mid = new Set(held.map(h => h.hash))
+            n += 1
+            await other.ask({ type: "Act", chain: "life", event: act(n), at: AT, actor: "owner" })
+            await other.ask({ type: "Exchange", chain: "life" })
+            theirs = held.filter(h => !mid.has(h.hash)).map(h => h.hash)
+            otherTip = heads.of(headsOf(held))
+            break
+          }
+          case "OtherTip":
+            await heard(otherTip)
+            break
+        }
+      release()
+      const where = `${o.join(", ")}${coalesced ? " (one word for both)" : ""}${receiptFirst ? ", the receipt first" : ""}`
+      assert.equal(ours.length > 0, true)
+      assert.deepEqual(announced.flat().filter(h => ours.includes(h)), [], `one's own write is not announced: ${where}`)
+      assert.deepEqual(announced, o.includes("Other") ? [theirs] : [], `the other tab's write is announced once: ${where}`)
+      if (o.includes("Answer"))
+        assert.deepEqual(notice.shown(shown), { type: "Act", message: "added a" }, `the act's own notice stands through its dwell: ${where}`)
+      await settled()
+    }
 })
 
 // An earlier build's device: version 13, its chain's row holding what it pulled and what the box has not taken.

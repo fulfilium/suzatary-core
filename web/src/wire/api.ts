@@ -2,7 +2,6 @@
 
 import app from "../app/app";
 import type { AboutPayload, Authoring, AuthoredPayload, BlockRender, BriefingPayload, BriefingsPayload, CalendarPayload, ConversationPayload, DevicePayload, DrawnPayload, Erasing, FactId, FoldPayload, MailSearchPayload, MePayload, MemoryPayload, Reasoning, RecordPayload, Registering, Revealing, Tapping, TodoPayload, UpdateTodo, Uploaded, Uploading, WaitingPayload } from "./generated/wire";
-import heads from "../prodrome/heads";
 import http from "./http";
 import type heldvalue from "../view/heldvalue";
 import payload from "./generated/payload";
@@ -21,33 +20,6 @@ export const todo = (id: string): Promise<TodoPayload> =>
 export const me = (): Promise<MePayload> => http.get(onChain("me"), payload.MePayload);
 
 export const about = (): Promise<AboutPayload> => http.get("/api/about", payload.AboutPayload);
-
-// Our last sync's heads, so `/events` does not announce our write back; asking consumes them. And every write this
-// device sealed, by chain and name, marked before anything of it is posted: a tip whose heads are all ours is ours,
-// whichever of the stream and the receipt arrives first.
-let ourHeads: heads.Heads | null = null;
-const sealedHere = new Map<string, Set<string>>();
-
-export const wasOurWrite = (chain: string, h: heads.Heads): boolean => {
-  if (ourHeads !== null && heads.same(ourHeads, h)) {
-    ourHeads = null;
-    return true;
-  }
-  const mine = sealedHere.get(chain);
-  if (mine === undefined || h.length === 0 || !h.every((name) => mine.has(name))) return false;
-  for (const name of h) mine.delete(name);
-  return true;
-};
-
-export const ours = (h: heads.Heads): void => {
-  ourHeads = heads.of(h);
-};
-
-export const sealed = (chain: string, names: readonly string[]): void => {
-  const mine = sealedHere.get(chain) ?? new Set<string>();
-  for (const name of names) mine.add(name);
-  sealedHere.set(chain, mine);
-};
 
 // Appends nothing: the replica seals the answer; the actor is the gate's peer.
 const author = (body: Authoring): Promise<AuthoredPayload> => http.act(onChain("author"), body, payload.AuthoredPayload);

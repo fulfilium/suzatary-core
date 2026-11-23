@@ -9,7 +9,6 @@ import type linesync from "./linesync"
 import lanes from "./lanes"
 import type storeset from "./storeset"
 import chains, { heardChain } from "./sync"
-import { ours, sealed } from "../wire/api"
 import heads from "./heads"
 import excluded from "./excluded"
 import { told } from "./said"
@@ -196,10 +195,6 @@ export namespace storesync {
         return fx.unloaded(s.why)
       case "Chain":
         return heardChain(s.chain, s.box)
-      case "Ours":
-        return ours(heads.of(s.heads))
-      case "Sealed":
-        return sealed(s.chain, s.names)
       default:
         return heardWorker(s)
     }

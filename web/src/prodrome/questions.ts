@@ -116,6 +116,8 @@ export namespace questions {
     Exchange: { q: { readonly chain: string }; a: boolean }
     // The unsent writes `shown` let go and the chain taken again; what the reset could not do.
     ResetChain: { q: { readonly chain: string; readonly shown: readonly string[] }; a: readonly string[] }
+    // Of the heads the box names after `was`, those this tab did not make.
+    Elsewhere: { q: { readonly chain: string; readonly was: heads.Heads; readonly now: heads.Heads }; a: readonly string[] }
     // How the heads `a` stand to `b` over what the chain holds.
     Order: { q: { readonly chain: string; readonly a: readonly string[]; readonly b: readonly string[] }; a: Order }
     // The root a device key counts under, none before the box named one.
@@ -375,6 +377,8 @@ export namespace questions {
           return chains.exchange(q.chain)
         case "ResetChain":
           return chains.reset(q.chain, new Set(q.shown))
+        case "Elsewhere":
+          return chains.elsewhere(q.chain, q.was, q.now)
         case "Order":
           return chains.ready(q.chain).then(c => orderIn(c.store, q.a, q.b))
         case "Root":

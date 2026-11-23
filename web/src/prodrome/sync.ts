@@ -163,6 +163,10 @@ export const sync: () => Promise<void> = serial.of(() =>
   ),
 )
 
+/** Of the heads the box names for `chain` after `was`, those this tab did not make. */
+export const elsewhere = (chain: string, was: heads.Heads, now: heads.Heads): Promise<readonly string[]> =>
+  ask({ type: "Elsewhere", chain, was, now }, "Shell")
+
 /** One exchange per move of the box's heads, never per fold, so an offline session holds what it folds and acts on. */
 export function keepObjects(): Promise<void> {
   return sync()
