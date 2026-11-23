@@ -472,7 +472,10 @@
          "rows": [],
          "sentence": "In your calendar's settings, copy its secret address in iCal format (a link ending in .ics). A Google account's calendars need no link: connect the account itself, which reads them through Google's own API.",
          "title": "Store your Work calendar's secret link",
-         "uncertain": "It may have gone through; it is never done again."
+         "uncertain": "It may have gone through; it is never done again.",
+         "reaches": {
+          "kind": "nobody"
+         }
         },
         "coding": null,
         "index": 0,
@@ -524,7 +527,10 @@
          "rows": [],
          "sentence": "Authorise ada-work@example.test to send mail (SMTP).",
          "title": "Sign in to send",
-         "uncertain": "It may have gone through; it is never done again."
+         "uncertain": "It may have gone through; it is never done again.",
+         "reaches": {
+          "kind": "nobody"
+         }
         },
         "coding": null,
         "index": 1,
@@ -593,7 +599,10 @@
          "rows": [],
          "sentence": "Remove your Work calendar: one link for the calendar goes from the instance file, and its todos, cards and conversations stay.",
          "title": "Remove your Work calendar",
-         "uncertain": "It may have gone through; it is never done again."
+         "uncertain": "It may have gone through; it is never done again.",
+         "reaches": {
+          "kind": "nobody"
+         }
         },
         "coding": null,
         "index": 2,
@@ -654,7 +663,10 @@
          "rows": [],
          "sentence": "Let the calendar reach https://cal.example.test.",
          "title": "Let the calendar reach a new address",
-         "uncertain": "It may have gone through; it is never done again."
+         "uncertain": "It may have gone through; it is never done again.",
+         "reaches": {
+          "kind": "nobody"
+         }
         },
         "coding": null,
         "index": 3,

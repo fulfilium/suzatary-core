@@ -50,9 +50,13 @@
 # undoflicker, merged with 2.1.215: views 3,726,097 (+7,208 over master's 3,718,889: each
 # unsent act's todo, name and instant read into the todos page, the acts it keeps until a reading
 # holds them, and the owed todos a tree question carries), so both views lines rise by 10,000.
-views_bg.wasm x86_64-linux 3730000
-prodrome_bg.wasm x86_64-linux 5070000
+# cardsaysto, merged with 2.1.219: views 3,760,404 (+33,487 over master's 3,726,917: the card's
+# `reaches`, its tagged sums decoded in the tab, and the closed card's line drawn from it), so both
+# views lines rise by 40,000; prodrome 5,072,408 (+3,111 over master's 5,069,297: the same card
+# built in the tab's reading), so both prodrome lines rise by 10,000.
+views_bg.wasm x86_64-linux 3770000
+prodrome_bg.wasm x86_64-linux 5080000
 typst_bg.wasm x86_64-linux 22020000
-views_bg.wasm aarch64-linux 3740000
-prodrome_bg.wasm aarch64-linux 5080000
+views_bg.wasm aarch64-linux 3780000
+prodrome_bg.wasm aarch64-linux 5090000
 typst_bg.wasm aarch64-linux 22090000

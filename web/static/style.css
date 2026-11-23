@@ -3427,6 +3427,27 @@ h1[tabindex="-1"]:focus {
   line-height: 1.5;
 }
 
+/* Past three lines, the rest is in Details. */
+.proposalreaches {
+  margin: var(--s-1h) 0 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.reacheslead {
+  color: var(--ink-muted);
+}
+
+.reachesto,
+.reachescc {
+  font-weight: 600;
+}
+
 .proposalsources {
   display: flex;
   flex-wrap: wrap;

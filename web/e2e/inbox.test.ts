@@ -175,6 +175,12 @@ app.scene("a card is drawn closed, and asking Send opens it whole before the que
   const card = `.inboxpage .proposal[data-conversation="${id}"]`;
   await app.page.waitFor(`document.querySelector('${card} .act-send') !== null`, { timeout: 10000 });
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector('${card} .proposaldetails').open`), false);
+  // Who it goes to is read before any tap: on screen, outside the closed Details.
+  const [seen, line] = await app.page.evaluate<[boolean, string]>(
+    `(() => { const to = document.querySelector('${card} .proposalreaches .reachesto'); const r = to.getBoundingClientRect(); return [to.checkVisibility() && r.width > 0 && to.closest("details") === null, to.closest(".proposalreaches").textContent]; })()`,
+  );
+  assert.equal(seen, true, "the recipient is on screen with Details closed");
+  assert.match(line, /^To counsel@example\.test · The reply opened by its question · from her@example\.invalid$/);
   assert.deepEqual(
     await app.page.evaluate<string[]>(`[...document.querySelectorAll('${card} .proposalact-row button')].map((b) => b.textContent)`),
     ["Send", "Dismiss", "Reply"],

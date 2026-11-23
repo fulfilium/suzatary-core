@@ -421,6 +421,38 @@ pub struct Card {
     pub readonly: String,
     /// `null` for none; never a model's words drawn as a button.
     pub link: Option<CardLink>,
+    /// Drawn on the closed card.
+    pub reaches: Reaches,
+}
+
+/// Who outside the owner and the box a card's act reaches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Reaches {
+    Nobody {},
+    /// Every address verbatim, in the draft's order.
+    Mail {
+        from: String,
+        to: Vec<String>,
+        cc: Vec<String>,
+        subject: Subject,
+    },
+}
+
+/// Verbatim.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Subject {
+    New {
+        subject: String,
+    },
+    /// The subject with every leading `Re:` cut.
+    Reply {
+        thread: String,
+    },
+    Forward {
+        subject: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

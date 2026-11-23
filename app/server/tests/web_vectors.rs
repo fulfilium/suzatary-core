@@ -2347,6 +2347,7 @@ fn the_answers_vector_holds_every_answer() {
                 failed: String::new(),
                 readonly: String::new(),
                 link: None,
+                reaches: suzatary_inbox::wire::inbox::Reaches::Nobody {},
             },
             why: "a message asks for it".to_owned(),
             sources: vec!["briefing:2026-09-02".parse().expect("a reference")],

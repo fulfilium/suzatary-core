@@ -24,25 +24,28 @@ pub(crate) fn proposal(index: usize) -> impl Strategy<Value = Value> {
         ]),
     )
         .prop_map(move |(kind, state, by, problem, link)| {
-            let (act, answer) = match kind {
+            let (act, answer, reaches) = match kind {
                 "secret" => (
                     json!({"kind": "secret", "label": "the calendar's link", "found": null, "link": null}),
                     json!({"verb": "store", "label": "Store", "done": "Stored", "asks": "value", "input": "The link"}),
+                    json!({"kind": "nobody"}),
                 ),
                 "grant" => (
                     json!({"kind": "grant", "plugin": "ics", "origin": "https://cal.example.test", "sentence": "Allow it."}),
                     json!({"verb": "allow", "label": "Allow", "done": "Allowed", "asks": "confirm", "question": "Allow it?", "yes": "Allow"}),
+                    json!({"kind": "nobody"}),
                 ),
                 _ => (
                     json!({"kind": "email", "account": "me@example.test", "to": ["ada@example.test"], "cc": [], "subject": "Hello", "body": "Dear Ada", "reply_to": null, "attachments": [], "held": {"type": "Read", "values": []}, "sentence": "Send it."}),
                     json!({"verb": "send", "label": "Send", "done": "Sent", "asks": "confirm", "question": "Send to ada@example.test?", "yes": "Send"}),
+                    json!({"kind": "mail", "from": "me@example.test", "to": ["ada@example.test"], "cc": [], "subject": {"kind": "new", "subject": "Hello"}}),
                 ),
             };
             json!({"index": index, "act": act, "why": "Because", "sources": ["todo:life/renewcard"], "at": "2026-10-05T04:00:00",
                 "state": state, "outcome": "", "tries": 0, "turn": 1, "coding": null, "announced": null, "revises": null,
                 "card": {"title": "A card", "by": by, "sentence": "Do it.", "fields": [{"label": "To", "value": "ada@example.test"}],
                     "body": "", "rows": [], "files": [], "problem": problem, "answers": [answer], "uncertain": "Check Sent.", "check": "I checked Sent", "failed": "Not sent",
-                    "readonly": "You may read this.", "link": link}})
+                    "readonly": "You may read this.", "link": link, "reaches": reaches}})
         })
 }
 

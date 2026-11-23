@@ -52,6 +52,8 @@ fourth:
 ## 3. The laws no test checks
 
 - No refusal of the add sheet is drawn under the phone's tab bar.
+- A card whose act reaches someone outside names them on the closed card, from
+  `Card.reaches`; each new such kind (a calendar invite) is a new arm of `Reaches`.
 - An `Owner` register (a draft to the secretary) never enters a store the box
   pushes to git.
 

@@ -14,6 +14,7 @@ mod mail;
 mod memory;
 mod message;
 mod needsyou;
+mod reaches;
 mod rehearsals;
 mod secretary;
 mod settings;

@@ -6,7 +6,7 @@ use crate::secretary::proposal::Style;
 use crate::secretary::responded::{Responded, Tried};
 use crate::wire::inbox::{
     Asker, Asks, Cached, Card, CardAnswer, CardField, CardFile, CardLink, HeldIn, ProposedAct,
-    RememberWords, ReplacedFact,
+    Reaches, RememberWords, ReplacedFact, Subject,
 };
 use suzatary_connect::connect::RoutineId;
 use suzatary_connect::settings::Help;
@@ -31,9 +31,13 @@ pub fn of(act: &ProposedAct) -> Card {
         } => Card {
             files: attachments.clone(),
             ..email(
-                account,
-                &Envelope { to, cc },
-                subject,
+                &Envelope {
+                    account,
+                    to,
+                    cc,
+                    subject,
+                },
+                Subject::of(subject),
                 body,
                 attachments.len(),
                 held,
@@ -49,21 +53,30 @@ pub fn of(act: &ProposedAct) -> Card {
             original,
             style,
             held,
-        } => forward(
-            email(
+        } => {
+            let envelope = Envelope {
                 account,
-                &Envelope { to, cc },
+                to,
+                cc,
                 subject,
-                note,
-                attachments.len(),
-                &HeldIn::Read { values: Vec::new() },
-            ),
-            &Envelope { to, cc },
-            original,
-            *style,
-            held,
-            attachments,
-        ),
+            };
+            forward(
+                email(
+                    &envelope,
+                    Subject::Forward {
+                        subject: subject.clone(),
+                    },
+                    note,
+                    attachments.len(),
+                    &HeldIn::Read { values: Vec::new() },
+                ),
+                &envelope,
+                original,
+                *style,
+                held,
+                attachments,
+            )
+        }
         ProposedAct::Changes {
             changes, problem, ..
         } => changeset(changes, problem),
@@ -730,10 +743,12 @@ fn web(request: WebKind, target: &str, host: &str, always: &str, sentence: &str)
     }
 }
 
-/// Every address a send reaches.
+/// Every address a send reaches, and what it is sent as.
 struct Envelope<'a> {
+    account: &'a str,
     to: &'a [String],
     cc: &'a [String],
+    subject: &'a str,
 }
 
 impl Envelope<'_> {
@@ -743,13 +758,41 @@ impl Envelope<'_> {
             cc => format!("{}, and Cc {}", self.to.join(", "), cc.join(", ")),
         }
     }
+
+    fn reaches(&self, subject: Subject) -> Reaches {
+        Reaches::Mail {
+            from: self.account.to_owned(),
+            to: self.to.to_vec(),
+            cc: self.cc.to_vec(),
+            subject,
+        }
+    }
+}
+
+impl Subject {
+    /// A reply's when the subject begins with `Re:` in any case, else a new message's.
+    fn of(subject: &str) -> Self {
+        fn re(text: &str) -> Option<&str> {
+            text.get(..3)
+                .filter(|prefix| prefix.eq_ignore_ascii_case("re:"))
+                .and_then(|_| text.get(3..))
+                .map(str::trim_start)
+        }
+        match std::iter::successors(re(subject.trim_start()), |thread| re(thread)).last() {
+            Some(thread) => Self::Reply {
+                thread: thread.to_owned(),
+            },
+            None => Self::New {
+                subject: subject.to_owned(),
+            },
+        }
+    }
 }
 
 /// Every field whole, the body verbatim, and Send naming everyone it goes to.
 fn email(
-    account: &str,
     envelope: &Envelope<'_>,
-    subject: &str,
+    heading: Subject,
     body: &str,
     files: usize,
     held: &HeldIn,
@@ -762,11 +805,14 @@ fn email(
         .collect::<Vec<_>>()
         .join(", ");
     let to = envelope.to.join(", ");
-    let mut fields = vec![field("From", account), field("To", &envelope.to.join(", "))];
+    let mut fields = vec![
+        field("From", envelope.account),
+        field("To", &envelope.to.join(", ")),
+    ];
     if !envelope.cc.is_empty() {
         fields.push(field("Cc", &envelope.cc.join(", ")));
     }
-    fields.push(field("Subject", subject));
+    fields.push(field("Subject", envelope.subject));
     let named: Vec<String> = match held {
         HeldIn::Read { values } => values.iter().fold(Vec::new(), |mut named, value| {
             let value = format!("your {}", value.named);
@@ -814,6 +860,7 @@ fn email(
         check: "I checked Sent".to_owned(),
         failed: "Not sent".to_owned(),
         sentence,
+        reaches: envelope.reaches(heading),
         ..card("Proposed email", "", fields, "send")
     }
 }
@@ -874,6 +921,7 @@ fn card(title: &str, sentence: &str, fields: Vec<CardField>, verb: &str) -> Card
             "This device can read this but not {verb} it. Use one of your own devices."
         ),
         link: None,
+        reaches: Reaches::Nobody {},
     }
 }
 

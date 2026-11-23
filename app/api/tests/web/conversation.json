@@ -124,7 +124,19 @@
         "check": "I checked Sent",
         "failed": "Not sent",
         "readonly": "This device can read this but not send it. Use one of your own devices.",
-        "link": null
+        "link": null,
+        "reaches": {
+          "kind": "mail",
+          "from": "her@example.invalid",
+          "to": [
+            "counsel@example.test"
+          ],
+          "cc": [],
+          "subject": {
+            "kind": "new",
+            "subject": "Your deed"
+          }
+        }
       },
       "why": "the deed is due and nothing has gone out yet",
       "sources": [

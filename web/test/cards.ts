@@ -21,6 +21,7 @@ export function aCard(over: Partial<Card> = {}): Card {
     failed: "Not sent",
     readonly: "Only the owner's own device can send this.",
     link: null,
+    reaches: { kind: "mail", from: "me@example.test", to: ["ada@example.test"], cc: [], subject: { kind: "new", subject: "Hello" } },
     ...over,
   };
 }

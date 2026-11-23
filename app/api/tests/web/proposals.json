@@ -54,7 +54,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (0)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [
@@ -115,7 +127,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (1)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [
@@ -176,7 +200,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (2)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [
@@ -246,7 +282,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (3)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [
@@ -307,7 +355,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (4)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [
@@ -368,7 +428,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (5)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [
@@ -429,7 +501,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (6)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [
@@ -490,7 +574,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (7)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [
@@ -551,7 +647,19 @@
       "check": "I checked Sent",
       "failed": "Not sent",
       "readonly": "This device can read this but not send it. Use one of your own devices.",
-      "link": null
+      "link": null,
+      "reaches": {
+        "kind": "mail",
+        "from": "her@example.invalid",
+        "to": [
+          "counsel@example.test"
+        ],
+        "cc": [],
+        "subject": {
+          "kind": "new",
+          "subject": "Your deed (8)"
+        }
+      }
     },
     "why": "the deed is due",
     "sources": [

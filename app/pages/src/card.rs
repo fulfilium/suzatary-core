@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use suzatary_base::reference::{Reference, TodoRef};
 use suzatary_inbox::wire::inbox::{
     Asker, Asks, CardAnswer, CardFile, CardLink, CodingFile, CodingSession, FileFrom, FixThen,
-    ProposedAct, ProposedObject,
+    ProposedAct, ProposedObject, Reaches, Subject,
 };
 use suzatary_topics::wire::topics::{ProposalRow, ProposalState};
 use ts_rs::TS;
@@ -997,6 +997,74 @@ fn acts(
     Some(view! { Div "proposalact-row" [parts] })
 }
 
+/// At most `fit` of `parties`; past it, all but one fewer, and how many more.
+fn named(parties: &[String], fit: usize) -> String {
+    let shown = if parties.len() > fit {
+        fit.saturating_sub(1).max(1)
+    } else {
+        parties.len()
+    };
+    let (named, more) = parties.split_at(shown);
+    match (named, more.len()) {
+        ([], _) => String::new(),
+        ([one], 0) => one.clone(),
+        ([rest @ .., last], 0) => format!("{} and {last}", rest.join(", ")),
+        (named, more) => format!("{} and {more} more", named.join(", ")),
+    }
+}
+
+/// Who the act reaches, said on the closed card: recipients first, then the subject.
+fn reaches(reaches: &Reaches) -> Option<Node<Ev>> {
+    match reaches {
+        Reaches::Nobody {} => None,
+        Reaches::Mail {
+            from,
+            to,
+            cc,
+            subject,
+        } => {
+            let (lead, subject) = match subject {
+                Subject::New { subject } => ("To", subject),
+                Subject::Reply { thread } => ("Reply to", thread),
+                Subject::Forward { subject } => ("Forward to", subject),
+            };
+            let subject = if subject.trim().is_empty() {
+                NO_SUBJECT
+            } else {
+                subject.as_str()
+            };
+            let part = |lead: &str, class: &str, text: String| -> Vec<Node<Ev>> {
+                vec![
+                    view! { Span "reacheslead" [lead] },
+                    viewtree::node::text(" "),
+                    view! { Span {Class => class.to_owned()} [text] },
+                ]
+            };
+            let cc = (!cc.is_empty()).then(|| {
+                let mut cc = part("Cc", "reachescc", named(cc, CC_FIT));
+                cc.insert(0, viewtree::node::text(" · "));
+                cc
+            });
+            let mut from = part("from", "reachesfrom", from.clone());
+            from.insert(0, viewtree::node::text(" · "));
+            Some(view! { P "proposalreaches" [
+                part(lead, "reachesto", named(to, TO_FIT)),
+                cc,
+                " · ",
+                view! { Span "reachessubject" [subject] },
+                from,
+            ] })
+        }
+    }
+}
+
+/// What the closed card says for a subject with no words.
+pub const NO_SUBJECT: &str = "(no subject)";
+/// How many recipients the closed card names before it counts the rest.
+pub const TO_FIT: usize = 3;
+/// How many copies the closed card names before it counts the rest.
+pub const CC_FIT: usize = 2;
+
 fn details(d: Drawn<'_>, ui: &Ui, carried: usize) -> Node<Ev> {
     let row = d.row;
     let card = &row.card;
@@ -1091,6 +1159,7 @@ fn view(d: Drawn<'_>, ui: &Ui, key: &Key) -> (Vec<(viewtree::Attr, String)>, Par
             tag.map(|(text, tip)| view! { Span "proposaltag" {Title => tip} [text] }),
             context,
         ] }),
+        reaches(&card.reaches),
         Some(para("proposalwhy", row.why.as_str())),
         revises,
         row.announced
@@ -1270,7 +1339,7 @@ mod tests {
             "card": {"title": "Sign in", "by": {"kind": "setup"}, "sentence": "Sign in.",
                 "fields": [], "body": "", "rows": [], "files": [], "problem": "",
                 "answers": [], "uncertain": "", "check": "", "failed": "Not done",
-                "readonly": "", "link": null}
+                "readonly": "", "link": null, "reaches": {"kind": "nobody"}}
         }))
         .expect("a row")
     }
