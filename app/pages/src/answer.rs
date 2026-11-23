@@ -84,9 +84,8 @@ pub(crate) fn more<M>(items: Vec<Node<M>>, open: bool) -> Option<Node<M>> {
     })
 }
 
-/// A reading as the host dressed it with what only the box says (`web/src/chat/dressed.ts`): the
-/// HTML each model block renders to, by its source, and each proposal it holds as the box drew it
-/// against its chain, by its index. What the box did not say stays as the replicas read it.
+/// A reading as the host dressed it with what only the box says (`web/src/chat/dressed.ts`): each
+/// model block's HTML by its source and each proposal's row by its index; the rest stays as read.
 #[derive(Debug, Clone, Deserialize, TS)]
 pub(crate) struct Dressed<T> {
     pub(crate) read: T,
@@ -94,7 +93,6 @@ pub(crate) struct Dressed<T> {
     pub(crate) drawn: Vec<ProposalRow>,
 }
 
-/// A reading that holds model turns, and proposals the box draws.
 pub(crate) trait Dressable {
     fn turns(&mut self) -> impl Iterator<Item = &mut TurnRow>;
     fn proposals(&mut self) -> impl Iterator<Item = &mut ProposalRow>;

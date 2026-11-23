@@ -1,5 +1,5 @@
 //! Suzatary's pages as `viewtree::Program`s, run as wasm in the tab and painted by
-//! `web/src/painter` (docs/FRAMEWORK-PLAN-2026-11-02.md).
+//! `web/src/painter`.
 #![forbid(unsafe_code)]
 // The crate's dependents are its own tests and the wasm boundary: an item is `pub` only where one
 // names it, and the types reachable through it stay unnameable outside.

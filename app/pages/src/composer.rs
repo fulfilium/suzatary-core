@@ -70,8 +70,7 @@ pub(crate) struct Sent {
     pub(crate) references: Vec<String>,
     /// Kept on the box.
     pub(crate) files: Vec<AttachmentRow>,
-    /// Each file the box answered an upload with, as a turn holds it, in `files`' order: what a
-    /// tab seals into its turn.
+    /// Each file the box answered an upload with, in `files`' order: what a tab seals into its turn.
     pub(crate) attachments: Vec<serde_json::Value>,
     pub(crate) mode: Mode,
 }
@@ -109,7 +108,6 @@ pub(crate) enum Then {
     Up,
 }
 
-/// Uploads are asked as `ask` names them.
 pub(crate) fn effects<H, A, S>(
     outs: Vec<Out>,
     ask: fn(Asking) -> A,
@@ -365,8 +363,7 @@ impl Composer {
         match ev {
             Ev::Typed(text) => self.typed(text),
             Ev::Picked(files) => {
-                // The box takes at most this many files in one turn: a turn past it is refused,
-                // so no more are taken here.
+                // The box refuses a turn past `MAX_FILES`, so no more are taken here.
                 let room = MAX_FILES
                     .saturating_sub(self.files.len() + self.uploading.len() + self.held.len());
                 let over = files.len() > room;
@@ -513,8 +510,7 @@ impl Composer {
                     Err(e) => vec![Out::Toast(e)],
                 }
             }
-            // A file the owner dropped, or one whose question was cancelled, is no longer held:
-            // its answer attaches nothing.
+            // A file dropped, or whose question was cancelled, is no longer held: it attaches nothing.
             Asking::Keep(id) => match (self.held.remove(&id), answered::<Uploaded>(a)) {
                 (Some(_), Ok(Uploaded::Kept { file, attachment })) => self.filed(file, &attachment),
                 (None, _) | (Some(_), Ok(Uploaded::Sensitive { .. })) => Vec::new(),

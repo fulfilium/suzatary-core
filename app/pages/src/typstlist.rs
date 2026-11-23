@@ -16,7 +16,6 @@ use crate::runtime::{Answer, Context, Effect, Gate, Input, Local, Never, read};
 use crate::todoparts::{Acting, Came, Phase, begin, came, finish, said};
 use viewtree::kit::Reading;
 
-/// Which chain's list.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "TypstFlags")]
 pub struct Flags {
@@ -24,7 +23,6 @@ pub struct Flags {
     pub chain: String,
 }
 
-/// The page's held readings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "TypstHold")]
 pub enum Hold {
@@ -73,7 +71,6 @@ impl Intent {
     }
 }
 
-/// Everything the page knows.
 #[derive(Debug, Clone)]
 pub struct Model {
     context: Context,
@@ -82,7 +79,6 @@ pub struct Model {
     open: String,
 }
 
-/// Everything that can happen to it.
 #[derive(Debug, Clone)]
 pub enum Msg {
     Host(Box<Input<Hold, Ask>>),
@@ -90,7 +86,6 @@ pub enum Msg {
     Intent(String),
 }
 
-/// The page as a program.
 #[derive(Debug)]
 pub enum Typst {}
 

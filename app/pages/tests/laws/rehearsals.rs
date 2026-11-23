@@ -2,7 +2,6 @@ use crate::common::*;
 use suzatary_pages::runtime::UNREAD;
 use viewtree::host::{Host, Hosted};
 
-/// `input` as the host hands it over.
 fn deliver<P: Hosted>(host: &mut Host<P>, input: &Value) -> Vec<u8> {
     match delivered(input) {
         Delivered::Whole(v) => host.input(&v.to_string()).expect("an input it takes"),

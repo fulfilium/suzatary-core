@@ -233,7 +233,7 @@ fn a_fix_answered_leaves_the_app_or_goes_to_a_place_as_its_link_says() {
 /// with the link the tab kept. Once the grant is performed the box's overview names it no more,
 /// so an overview read during the tap, landing before the tap's answer, must not lose the link.
 /// `allow.json` is what the links scene's Settings page held before the yes was answered, the
-/// overview read after it, and the answer (train 229 lost the resend in that order).
+/// overview read after it, and the answer: the order in which the resend can be lost.
 #[test]
 fn a_grant_answered_after_its_line_moved_still_sends_its_link() {
     let recorded: Value = serde_json::from_str(include_str!("allow.json")).expect("the recording");

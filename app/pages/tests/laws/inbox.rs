@@ -327,7 +327,6 @@ proptest! {
     }
 }
 
-/// The box's answer `body` to the Inbox's `ask`.
 fn answered(ask: inbox::Hold, body: &Value) -> inbox::Msg {
     let v = Answer::Done {
         body: Text::printed(body),

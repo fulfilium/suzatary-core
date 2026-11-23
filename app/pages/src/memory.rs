@@ -111,7 +111,6 @@ impl Program for Memory {
                 }
                 Input::Answered { ask, answer } => {
                     m.running.retain(|a| *a != ask);
-                    // What was changed is read again; a refusal names the act.
                     return vec![match (ask, answer) {
                         (Act::Forget(_), Answer::Done { .. }) => Effect::Again {
                             path: Question::Memory.path(),

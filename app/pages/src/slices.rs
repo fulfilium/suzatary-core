@@ -2,10 +2,8 @@
 //! the next steps a slice each, newest first, one to a frame (`runtime::Effect::Frame`), and what
 //! a later reading adds is drawn with it.
 //!
-//! A slice is bounded by what its frame lays out: the bytes of the words its items draw come to
-//! at most `WORDS`, or it holds the one item that alone comes to more. Its frame then builds,
-//! styles and lays out about as much text whatever the items' sizes, where a count of items
-//! would let two long answers fill one frame.
+//! A slice's words come to at most `WORDS` bytes, or it holds the one item that alone comes to
+//! more, so each frame lays out about as much text whatever the items' sizes.
 
 pub(crate) const WORDS: usize = 8 * 1024;
 

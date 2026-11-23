@@ -125,7 +125,6 @@ pub(crate) enum Question<'a> {
     /// A POST, answered by the watches that still wait.
     Cancel(&'a str),
     Overview,
-    /// A POST beginning a setup conversation on a template, answered by the conversation.
     /// A POST filing the card that asks for a new value of a stored secret, by its handle.
     Replace(&'a str),
     /// A POST filing this device's card for a trusted device to tap.
@@ -143,7 +142,6 @@ pub(crate) enum Question<'a> {
     Calendar(&'a str),
     About,
     Releases,
-    /// One todo in full.
     Todo {
         chain: &'a str,
         id: &'a str,

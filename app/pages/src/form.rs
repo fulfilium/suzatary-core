@@ -9,7 +9,6 @@ use viewtree::{Node, view};
 
 use crate::chrome::{pct, pie};
 
-/// A one-line field.
 pub(crate) fn line<M: 'static>(
     class: &str,
     label: &str,
@@ -63,7 +62,6 @@ pub(crate) struct Markup {
 }
 
 impl Markup {
-    /// A field opened on `text`.
     #[must_use]
     pub(crate) fn of(text: String) -> Markup {
         Markup {
@@ -123,7 +121,6 @@ pub(crate) struct Cycling {
     pub(crate) to: f64,
 }
 
-/// A move of the price picker.
 #[derive(Debug, Clone)]
 pub enum PriceMsg {
     Kind(Kind),
@@ -218,7 +215,6 @@ impl Pricing {
         }
     }
 
-    /// One move.
     pub(crate) fn update(&mut self, m: PriceMsg) {
         let cycled = |p: &Pricing, f: &dyn Fn(&mut Cycling)| {
             let mut c = p.cycle();

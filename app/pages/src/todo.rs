@@ -37,7 +37,6 @@ use crate::todoparts::{
 use crate::waiting::InboxRead;
 use crate::zone::{Offset, day_ms, minute, next_day_ms};
 
-/// Which todo, on which chain, and whether the page was pushed (a Back) or stands in a pane.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "TodoFlags")]
 pub struct Flags {
@@ -51,7 +50,6 @@ pub struct Flags {
     pub now: i64,
 }
 
-/// The page's held questions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[ts(rename = "TodoHold")]
 pub enum Hold {
@@ -158,7 +156,6 @@ enum Thirty {
     Failed(String),
 }
 
-/// Everything the page knows.
 #[derive(Debug, Clone)]
 pub struct Model {
     context: Context,
@@ -181,7 +178,6 @@ pub struct Model {
     history: Fold,
 }
 
-/// A move of the edit's form.
 #[derive(Debug, Clone)]
 pub enum EditMsg {
     Toggle(bool),
@@ -197,7 +193,6 @@ pub enum EditMsg {
     Save,
 }
 
-/// A move of the deferral.
 #[derive(Debug, Clone)]
 pub enum DeferMsg {
     Toggle(bool),
@@ -205,7 +200,6 @@ pub enum DeferMsg {
     Send,
 }
 
-/// Everything that can happen to the page.
 #[derive(Debug, Clone)]
 pub enum Msg {
     Host(Box<Input<Hold, Ask>>),
@@ -222,7 +216,6 @@ pub enum Msg {
     Reset,
 }
 
-/// The page as a program.
 #[derive(Debug)]
 pub enum Todo {}
 

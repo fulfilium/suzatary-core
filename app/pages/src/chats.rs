@@ -18,7 +18,6 @@ use crate::places::Place;
 use crate::runtime::{Effect, Local, Reach, read};
 use crate::zone::{Offset, recent};
 
-/// How long typing rests before the search is asked.
 const DEBOUNCE_MS: u32 = 250;
 
 const PAGE: usize = 30;

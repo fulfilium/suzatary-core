@@ -649,7 +649,6 @@ fn said(s: &Stream, chosen: &[String]) -> Option<Node<Msg>> {
     ] })
 }
 
-/// A round, with when it was opened as the stream says it and whether the owner writes.
 fn round((r, when, writes): &(Printed<StreamRound>, String, bool)) -> Node<Msg> {
     let writes = *writes;
     let meta = |class: &'static str, name: &str| {

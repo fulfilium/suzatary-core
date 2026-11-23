@@ -90,7 +90,6 @@ pub enum Effect<H, A, S = Never> {
         ask: H,
         local: Local,
     },
-    /// Write a register the tab keeps.
     Keep {
         register: Register,
         #[ts(type = "unknown")]
@@ -241,7 +240,6 @@ pub(crate) enum Sealing {
     },
 }
 
-/// How a page asks a question again.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type")]
 pub(crate) enum AskedAgain {
@@ -261,7 +259,6 @@ pub(crate) struct Asking {
     pub(crate) files: Vec<Filed>,
 }
 
-/// A file of a question.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub(crate) struct Filed {
     #[ts(type = "unknown")]
@@ -308,7 +305,6 @@ pub(crate) struct Sealed {
     pub(crate) conversation: String,
 }
 
-/// A todo the list places.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 pub(crate) struct Placed {
     pub(crate) todo: String,
@@ -361,7 +357,6 @@ pub(crate) enum KeyKind {
     Escape,
 }
 
-/// A key pressed, as the shell names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type")]
 pub enum Keyed {
@@ -381,7 +376,6 @@ pub enum Keyed {
     Escape,
 }
 
-/// An act's key, as the shell's keyboard names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum ActName {
@@ -679,7 +673,6 @@ pub(crate) enum Act {
     },
 }
 
-/// A lifecycle event's kind, as the core spells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub(crate) enum Lifecycle {
     Completed,
@@ -782,8 +775,7 @@ pub struct Behind {
     pub since: i64,
 }
 
-/// The JSON text of an answer's body, in UTF-8, as the box, the core's worker or the host printed
-/// it. The page that reads it parses it once, into the type it reads (`answered`).
+/// The JSON text of an answer's body, in UTF-8, parsed once by the page that reads it (`answered`).
 #[derive(Debug, Clone, PartialEq, Eq, TS)]
 #[ts(type = "Uint8Array")]
 pub struct Text(Vec<u8>);
@@ -923,7 +915,6 @@ pub(crate) fn read<T: DeserializeOwned>(r: Reading<Answer>) -> Reading<T> {
     }
 }
 
-/// The words a page shows for an answer in a shape it does not read.
 pub const UNREAD: &str = "the box answered in a shape this page does not read";
 
 /// # Errors

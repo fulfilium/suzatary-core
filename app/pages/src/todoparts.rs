@@ -30,7 +30,6 @@ pub(crate) enum Spelled {
 }
 
 impl Verb {
-    /// Its button's words.
     #[must_use]
     pub(crate) const fn label(self) -> &'static str {
         match self {
@@ -66,7 +65,6 @@ impl Verb {
         }
     }
 
-    /// How it is spelled.
     #[must_use]
     pub(crate) const fn spelled(self) -> Spelled {
         match self {
@@ -89,7 +87,6 @@ impl Verb {
     }
 }
 
-/// Whether it is open.
 #[must_use]
 pub(crate) fn is_open(e: &Entry) -> bool {
     e.state == EntryState::Open
@@ -247,7 +244,6 @@ pub enum Seal {
     Parent,
 }
 
-/// What an answer to an act comes to.
 #[derive(Debug)]
 pub(crate) enum Came<H, A, S> {
     /// The box printed it: these seal it.

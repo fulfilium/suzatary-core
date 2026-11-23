@@ -1362,7 +1362,6 @@ fn silent(t: &TurnRow) -> bool {
     matches!(t.who, Speaker::Model { .. }) && t.text.is_empty() && t.gone.is_none()
 }
 
-/// The name of the line of the turn at `index`, as the payload names it.
 fn line_of(m: &Model, index: usize) -> Option<String> {
     let payload = payload(m)?;
     let at = payload.turns.iter().position(|t| t.index == index)?;
@@ -1551,7 +1550,6 @@ fn turn(m: &Model, t: &TurnRow, reply: bool, tucked: Option<Node<Msg>>) -> Node<
     ] }
 }
 
-/// One outside the families prints as itself.
 fn family(verb: &str) -> &str {
     match verb {
         "search" | "show" | "thread" => "mail",
@@ -1724,7 +1722,6 @@ fn label(l: &Landing) -> String {
     }
 }
 
-/// An unlisted verb reads as its own name.
 fn phrase(verb: &str) -> &str {
     match verb {
         "search" => "searching mail",
@@ -2161,7 +2158,6 @@ mod tests {
         assert_eq!(acts(&effects), [vec![nine]], "dismissed is acted on");
     }
 
-    /// Every line a page asks the core to seal.
     fn sealings(effects: &[Effect]) -> Vec<runtime::Sealing> {
         effects
             .iter()

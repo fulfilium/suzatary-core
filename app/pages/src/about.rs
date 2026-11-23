@@ -40,7 +40,6 @@ pub enum Msg {
 #[derive(Debug)]
 pub enum About {}
 
-/// The claim has a page, not a footer.
 fn claims() -> Vec<Node<Msg>> {
     let prose = |words: Vec<Node<Msg>>| para("aboutprose", words);
     vec![

@@ -1,6 +1,5 @@
 use crate::common::*;
 
-/// The worker's prices, answering one of the page's first asks.
 /// The worker's tree, answering one of the page's first asks: the generated fold's todos under
 /// their categories, each node with one of the generated prices.
 fn list_prices() -> impl Strategy<Value = Input<todos::Hold, todos::Ask, todos::Listen>> {
@@ -288,14 +287,12 @@ enum World {
     Grow,
 }
 
-/// One act of the script: whether the box took it, and whether the tab dropped it.
 #[derive(Debug, Clone, Copy, Default)]
 struct Act {
     taken: bool,
     dropped: bool,
 }
 
-/// Whether the list draws `todo`'s line.
 fn drawn(page: &Runtime<todos::Todos>, todo: &str) -> bool {
     fn row(seen: &viewtree::dom::Seen, todo: &str) -> bool {
         match seen {
