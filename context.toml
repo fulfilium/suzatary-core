@@ -205,6 +205,9 @@ task = "typedtooling"
 [[in_force]]
 file = "docs/IOSPLIT-PLAN-2026-11-22.md"
 task = "iosplit"
+[[in_force]]
+file = "docs/TILEDLAYOUT-PLAN-2026-11-22.md"
+task = "tiledlayout"
 
 # One unit per workspace member, and the web app. `depends` names the units and the external
 # libraries this unit's code uses: for a crate, its Cargo.toml's `[dependencies]` (crates.io
