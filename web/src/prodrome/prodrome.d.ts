@@ -119,7 +119,6 @@ export class Lines {
   nodes(add: string, drop: string): void;
   /** `[<name>]`: every line whose words the stream's newest pages read. */
   chosen(topics: TopicReading, chosen: string, pages: number): string;
-  /** The stream's newest pages. */
   stream(topics: TopicReading, chosen: string, pages: number): string;
   /** `{<name>: [<answer key>]}`: the keys an erasure names, and the blocks their words fed. */
   erased(keys: string, told: string): string;
@@ -131,7 +130,6 @@ export class Lines {
 /** The topic store the tab holds. */
 export class Memberships extends ObjectStore {}
 
-/** The topic aliases' store the tab holds. */
 export class TopicAliases extends ObjectStore {}
 
 /** The topics both replicas read as, and the events that change them, printed for `append`. */

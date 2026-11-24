@@ -3,7 +3,6 @@
 // answered, and within its lane in the order it came.
 
 export namespace lanes {
-  // The order they are served in.
   export type Lane = "Page" | "Shell"
   export const FIRST: Lane = "Page"
   export const LAST: Lane = "Shell"
@@ -21,7 +20,6 @@ export namespace lanes {
   export const started = <A>(q: Queue<A>, lane: Lane): Queue<A> => ({ ...q, running: { ...q.running, [lane]: q.running[lane] + 1 } })
   export const ended = <A>(q: Queue<A>, lane: Lane): Queue<A> => ({ ...q, running: { ...q.running, [lane]: q.running[lane] - 1 } })
 
-  // Whether a question of `lane` may run now: every earlier lane has nothing waiting and nothing being answered.
   export const free = <A>(q: Queue<A>, lane: Lane): boolean => {
     for (const l of ORDER) {
       if (l === lane) return true

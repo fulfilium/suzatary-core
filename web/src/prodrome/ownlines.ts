@@ -71,7 +71,6 @@ export namespace ownlines {
     if (heard !== null) heard.onmessage = () => wake()
   }
 
-  // Every record kept, or why the row does not read.
   export const kept = async (): Promise<lo.Settled<readonly Kept[]>> => {
     const row = await heldRow(ROWS, NAME)
     return row.type === "Held" ? lo.val(row.v.records) : row.type === "Absent" ? lo.val([]) : lo.error(row.why)

@@ -1,35 +1,20 @@
 /**
- * THE BROWSER'S CORE, AGAINST THE REFERENCE'S OWN VECTORS.
+ * The browser's core against the reference's own vectors. The Prodrome's suite checks the Rust; this checks that the
+ * WebAssembly build, loaded and called across the JS boundary as a tab does, still produces the reference's numbers:
+ * `wasm-bindgen`'s glue, `wasm-opt`'s rewrite and the JSON shapes and guards in `web/src/prodrome/core.ts` are each a
+ * place an answer could change that no `cargo test` covers.
  *
- * The Prodrome's own suite already checks the Rust against its seeded vectors.
- * This checks something those tests cannot: that the WebAssembly BUILD of it,
- * loaded and called across the JS boundary exactly as a tab does, still
- * produces the reference's numbers. Every step between — `wasm-bindgen`'s glue,
- * `wasm-opt`'s rewrite, the JSON shapes in `web/src/prodrome/core.ts`, its guards — is a
- * place an answer could change, and none of them is covered by a `cargo test`.
+ * Which place a vector file comes from says what it is evidence about. `$SUZATARY_PRODROME_CONFORMANCE` is the seeded,
+ * frozen evidence that travels with the crate, re-emitted as JSON by `app/todo/examples/vector_json.rs` with the
+ * crate's own parser (never a second one). The live chain's objects are read from the data repository
+ * (`$SUZATARY_LIVE_EVENTS`): this repository holds no print of the chain's contents.
  *
- * THE VECTORS COME FROM TWO PLACES, and which place a file is in says what it is evidence ABOUT.
- * `$SUZATARY_PRODROME_CONFORMANCE` is the seeded, frozen evidence that
- * travels with the crate — since prodrome 0.4 (`conformance/*.py`, "the
- * evidence is a literal") it is the crate's own §2 grammar rather than JSON,
- * so this points at `app/todo/examples/vector_json.rs`'s output, which reads
- * `fpl.py`/`series.py` with the crate's own parser (never a second one —
- * see `suzatary-vector-json`'s comment in `flake.nix`) and re-emits the SAME 900
- * samples and 1429 knots as the `fpl.json`/`series.json` this file always
- * read, so nothing below this comment changed. The live chain's objects are
- * read from the data repository (`$SUZATARY_LIVE_EVENTS`); this repository
- * holds no print of the chain's contents.
+ * The claim is the spec's §9.8, measured here: hashes and knot instants exactly, fulfillments to 1e-9.
  *
- * SO THE CLAIM IS THE SPEC'S §9.8, MEASURED HERE: hashes and knot instants
- * EXACTLY, fulfillments to 1e-9. Not "the module loads".
- *
- * The module is the `--target nodejs` glue from the same derivation and the
- * same `.wasm` the browser gets (`$SUZATARY_PRODROME_WASM`, set by
- * scripts/web-test.sh). node 24 needs no flag for it; `createRequire` is the one
- * door, because that glue is CommonJS and reads its `.wasm` off disk.
- *
- * The functions under test take a `Core` rather than importing the module, so
- * the code exercised here is the code the tab runs — the guards included.
+ * The module is the `--target nodejs` glue from the same derivation and the same `.wasm` the browser gets
+ * (`$SUZATARY_PRODROME_WASM`, set by `scripts/web-test.sh`), which node 24 loads with no flag; `createRequire` is the
+ * one door, because that glue is CommonJS and reads its `.wasm` off disk. The functions under test take a `Core` rather
+ * than importing the module, so the code exercised here is the code the tab runs, the guards included.
  */
 
 import { test } from "node:test";
@@ -80,13 +65,11 @@ function vectors<T>(name: string): T {
   return JSON.parse(readFileSync(`${dir}/${name}.json`, "utf8")) as T;
 }
 
-// --- §2/§3: the hashes, exactly ---------------------------------------------
+// §2/§3: the hashes, exactly.
 
-/** The live store's objects, as `/api/chain` would hand them over — read off
- * `events/objects/` rather than out of a copy of it, which is what makes this a
- * claim about the bytes on this disk. The whole store, not a sample: rehashing
- * is what the chain page's verdict rests on and hundreds of sha256s cost
- * milliseconds. It GROWS, so nothing here counts them. */
+/** The live store's objects, as `/api/chain` would hand them over, read off `events/objects/` rather than out of a copy
+ * of it, so this is a claim about the bytes on this disk. The whole store: hundreds of sha256s cost milliseconds. It
+ * GROWS, so nothing here counts them. */
 const store = process.env["SUZATARY_LIVE_EVENTS"];
 const objects = (store === undefined ? [] : readdirSync(`${store}/objects`))
   .sort()
@@ -94,13 +77,12 @@ const objects = (store === undefined ? [] : readdirSync(`${store}/objects`))
     hash: file.replace(/\.py$/, ""),
     literal: readFileSync(`${store}/objects/${file}`, "utf8"),
   }));
-/** The data tree is its own repository (datasplit): a clone of the code alone
- * has no chain, and these tests say so rather than pass over nothing. */
+/** A clone of the code alone has no chain, since the data tree is its own repository, and these tests say so rather
+ * than pass over nothing. */
 const onBox: { skip: string | false } = { skip: store === undefined ? "no data tree: SUZATARY_LIVE_EVENTS is unset" : false };
 
 test("every stored object hashes to the name it is filed under", onBox, () => {
-  // The core derives the tips from the objects themselves (prodrome 0.9):
-  // nobody tells it where the heads are.
+  // The core derives the tips from the objects themselves: nobody tells it where the heads are.
   const verdict = verifyObjects(core, objects);
 
   assert.equal(verdict.objects.length, objects.length);
@@ -149,7 +131,7 @@ test("an object that hashes but is not the grammar is caught too", () => {
   assert.match(found.problems(verdict.found).join(" | "), /failed to parse/);
 });
 
-// --- §7: the fulfillments, to 1e-9 ------------------------------------------
+// §7: the fulfillments, to 1e-9.
 
 interface FplVectors {
   terms: {
@@ -185,7 +167,7 @@ test("every fulfillment sample agrees with the reference to 1e-9", () => {
   assert.ok(worst < 1e-9, `largest deviation ${worst}`);
 });
 
-// --- §7 knots: the curves, instant for instant -------------------------------
+// §7 knots: the curves, instant for instant.
 
 interface SeriesVectors {
   series: { exact: boolean; from: string; knots: [string, number][]; term: string; to: string }[];
@@ -215,8 +197,6 @@ test("every series has the reference's knots, at the reference's instants", () =
   assert.equal(knots, 1429, "the vector file's 1429 knots, all of them");
 });
 
-// --- the guards --------------------------------------------------------------
-
 test("a refusal from the core arrives as a value, not as a dead module", () => {
   assert.throws(() => termJson(core, "Flat(value=2.0)"), /value/);
   assert.throws(() => linked(core, JSON.stringify, { outcomes: {}, tended: {} }, "not-an-instant")({ kind: "flat", value: 0.5 }), /now/);
@@ -224,7 +204,7 @@ test("a refusal from the core arrives as a value, not as a dead module", () => {
   assert.equal(linked(core, JSON.stringify, { outcomes: {}, tended: {} }, "2026-09-06T12:00:00")({ kind: "flat", value: 0.5 }), 0.5);
 });
 
-// --- §3/§4: appending, which is how a replica acts ---------------------------
+// §3/§4: appending, which is how a replica acts.
 
 /** One question of a replica holding `held`, its memory given back however it ends. */
 const holding = <T>(held: readonly { hash: string; literal: string }[], ask: (t: Todos) => T): T => {
@@ -237,11 +217,9 @@ const holding = <T>(held: readonly { hash: string; literal: string }[], ask: (t:
 };
 
 test("a lifecycle event the core spelled appends to the live chain as a change the core names", onBox, () => {
-  // THE WHOLE OF WHAT A PHONE NEEDS TO WRITE, driven against the same `.wasm`
-  // the tab loads and THIS box's objects. `lifecycle` goes through §4's own
-  // constructor, `append` through §3's change and §2's printer, and the name is
-  // the sha256 of that print — which is how a replica and a box agree on what
-  // an object is CALLED with nothing between them but bytes.
+  // What a phone needs to write, against the same `.wasm` the tab loads and this box's objects: `lifecycle` goes
+  // through §4's own constructor, `append` through §3's change and §2's printer, and the name is the sha256 of that
+  // print, which is how a replica and a box agree on what an object is called with only bytes between them.
   const event = lifecycleEvent(core, "Completed", "alpha", "2026-09-06T12:00:00", "ada");
   assert.match(event, /^Completed\(todo='alpha', at=datetime\(2026, 9, 6, 12, 0, 0\)/, event);
 
@@ -284,7 +262,7 @@ test("the module reads escaped markup back as its prose, and leaves a person's m
   assert.equal(core.prose("*bold* words"), undefined);
 });
 
-// --- SPEC law 42: a device's WebCrypto signature, through the core --------------------------
+// SPEC law 42: a device's WebCrypto signature, through the core.
 
 test("a signature this browser makes with WebCrypto is one the core seals, and a moved one is refused", async () => {
   const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign", "verify"]);

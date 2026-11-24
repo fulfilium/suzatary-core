@@ -12,10 +12,8 @@ import type { ReceiptPayload } from "../wire/generated/wire"
 import ownlines from "./ownlines"
 
 export namespace written {
-  // A store this tab writes: the noun a refusal names, its core class, how a step of it is kept, where its writes are
-  // posted (each slot's key by its line's name travels beside them), whether its writes are signed (a chain's only under
-  // the root the box names), and, for a store whose writes hold the person's words, where the device keeps which
-  // refusals it told them of.
+  // A store this tab writes: each slot's key travels beside its writes, a chain's writes are signed only under the root
+  // the box names, and a store whose writes hold the person's words keeps which refusals it told them of (`told`).
   export type Entry = {
     readonly noun: string
     readonly store: Written
@@ -125,7 +123,6 @@ export namespace written {
       wake(due([...waitingIn(entry(name).store).values()], http.ahead(), timers.now()), () => void handOver(name).catch(() => {}))
     }
 
-    // `step`, a move of a store this tab writes, kept; each newly refused object said once, in the box's words.
     const settled = async (e: Entry, step: () => LineStep | undefined): Promise<void> => {
       const before = refusalsIn(e.store)
       const made = step()

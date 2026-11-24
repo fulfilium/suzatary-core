@@ -1,5 +1,5 @@
 // How far each store's sync has come, in bytes: a pull of pieces, whose first piece says how many bytes the whole pull
-// brings, and the content fetched by name, whose sizes the skeleton gives. What the bar under the header draws.
+// brings, and the content fetched by name, whose sizes the skeleton gives.
 
 import type stores from "./stores"
 
@@ -52,7 +52,6 @@ export namespace progress {
 
   export const step = (t: T, e: Event): T => ({ ...t, [e.name]: stepOne(t[e.name], e) })
 
-  // The bytes come and the bytes needed, or nothing while the store is not syncing.
   export type Bar = { readonly type: "Hidden" } | { readonly type: "Shown"; readonly done: number; readonly needed: number }
 
   export const bar = (o: One): Bar => {

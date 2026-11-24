@@ -54,7 +54,6 @@ export namespace replicalog {
   // What a read took: whether anything was read into the core, and, where a part did not read in this build's form,
   // what was set aside, for the store's row to name.
   export type Taken = { readonly taken: boolean; readonly unread: string | null }
-  // What is aside: an earlier build's copy, and parts that did not read.
   export type Aside = { readonly earlier: boolean; readonly unread: boolean }
 
   // How an append ended: the log goes on from what this tab read, or it began again and is to be read whole.
@@ -81,7 +80,6 @@ export namespace replicalog {
     // `kept` read into `reader`, whole, or part by part where the whole does not read, each part that does not read
     // dropped or set aside by the store's `Holds`, in one transaction.
     readonly take: (kept: Kept, reader: Reader) => Promise<lo.Settled<Taken>>
-    // What of the store is aside.
     readonly aside: () => Promise<lo.Settled<Aside>>
     // Whether, in `s`, the replica's store in a transaction of the caller's, another tab wrote what this tab has not
     // taken.
@@ -125,7 +123,6 @@ export namespace replicalog {
     let id: string | null = null
     const mine = new Set<number>()
 
-    // The frames after `from`, and the places of the rows after it that are no frame.
     const framesIn = async (s: IDBObjectStore, from: number): Promise<{ readonly frames: Frame[]; readonly strays: number[] }> => {
       const [keys, values] = await Promise.all([idb.done(s.getAllKeys(log(from))), idb.done(s.getAll(log(from)))])
       const frames: Frame[] = []

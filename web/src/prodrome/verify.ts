@@ -1,16 +1,13 @@
 /**
- * The reader's machine checks the store without the core: the browser never computes a fulfillment, but it
- * verifies, because handing over bytes and hashes is a different claim from asking to be believed.
- * Checked: each object hashes to its name, the walk from every head reaches genesis without a missing link,
- * the reached objects have no cycle, and nothing sent is left off the walk.
+ * The reader's machine checks the store without the core: the browser never computes a fulfillment, but it verifies,
+ * since handing over bytes and hashes is a different claim from asking to be believed. Checked: each object hashes to
+ * its name, the walk from every head reaches genesis without a missing link, the reached objects have no cycle, and
+ * nothing sent is left off the walk.
  */
 
 import type { Condition, Found, Link, ObjectVerdict, Walk } from "../wire/generated/wire";
 
-/**
- * Where the walk put an object, what verifying found and one object's verdict: the wire's (`wire::Walk`,
- * `wire::Found`, `wire::ObjectVerdict`), so this browser's check and the core's say it in one shape.
- */
+/** The wire's, so this browser's check and the core's say it in one shape. */
 export type { Condition, Found, ObjectVerdict, Walk };
 
 export namespace found {
@@ -23,7 +20,6 @@ export namespace found {
   export const fold = <R>(f: Found, on: { reached: () => R; unreached: (problems: readonly string[]) => R }): R =>
     f.type === "Reached" ? on.reached() : on.unreached(f.problems);
 
-  /** Every problem found, none for `Reached`: what a list of them shows. */
   export const problems = (f: Found): readonly string[] => fold<readonly string[]>(f, { reached: () => [], unreached: (ps) => ps });
 }
 
@@ -50,7 +46,6 @@ export async function sha256Hex(literal: string): Promise<string> {
 export namespace condition {
   export const CLEAN: Condition = { type: "Clean" };
   export const flawed = (problem: string): Condition => ({ type: "Flawed", problem });
-  /** What is wrong, as a table cell says it: nothing for a clean object. */
   export const said = (c: Condition): string => (c.type === "Clean" ? "" : c.problem);
 }
 
@@ -171,7 +166,6 @@ function cycles(seen: ReadonlySet<string>, parents: ReadonlyMap<string, readonly
   return [`objects ${stuck.join(", ")} rest on each other — parents form a cycle, not a history`];
 }
 
-/** Written here so the tests pin the claim, not just the arithmetic behind it. */
 export function summarise(verdict: ChainVerdict): string {
   return found.fold(verdict.found, {
     reached: () =>

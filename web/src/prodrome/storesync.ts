@@ -202,7 +202,6 @@ export namespace storesync {
 
   export const hearWorker = (fx: Heard): void => remote.hear(said => heardFromWorker(said, fx))
 
-  // Returns its own removal.
   export const watch = (listener: () => void): (() => void) => moves.subscribe(() => listener())
 
   export const watchConversation = (id: string, listener: () => void): (() => void) =>

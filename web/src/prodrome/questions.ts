@@ -85,10 +85,10 @@ export namespace questions {
 
   export type One = Unheld | { readonly type: "Held"; readonly payload: ConversationPayload } | NotHere
 
-  // A reading as its page parses it, dressed with what the device holds of what only the box says: its model blocks'
-  // HTML, and a conversation's proposals as the box drew them (`Drawn`, which the page holds and hands over). Beside it,
-  // what the device lacks: blocks it holds no HTML of (`missing`), proposals not drawn (`drawing`), and how many of its
-  // rows read the memory's words (`receipts`), which the page reads from the box and asks with again.
+  // A reading as its page parses it, dressed with the HTML the device holds of its model blocks and the proposals as
+  // the box drew them (`Drawn`, which the page holds and hands over); beside it, the blocks it holds no HTML of
+  // (`missing`), the proposals not drawn (`drawing`), and how many rows read the memory's words (`receipts`), which the
+  // page reads from the box and asks with again.
   export type Worded<T> = { readonly text: text.Text<T>; readonly missing: readonly AnsweredBlock[] }
   export type Windowed = Worded<PageWindow> & { readonly drawing: readonly ProposalRow[]; readonly receipts: number }
   // A proposal as the box drew it, and the print of the row it drew it from: kept while that row stands.

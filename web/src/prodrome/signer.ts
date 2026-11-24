@@ -81,7 +81,6 @@ export namespace signer {
   // A new key in the old one's place, for a device whose key was revoked or does not read: its storage, replica and acts
   // are kept, and the old key is gone from this browser, so nothing it signed can be signed again here.
   const renewed = new Set<() => void>()
-  // Wakes when this device's key is renewed; returns its own removal.
   export const watch = (listener: () => void): (() => void) => (renewed.add(listener), () => void renewed.delete(listener))
 
   export const renew = async (): Promise<Held> => {

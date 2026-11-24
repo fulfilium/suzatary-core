@@ -81,7 +81,6 @@ test("law: what a card shows is the history's once it holds the act, and the int
     assert.equal(s.type === "Absent", !intents.isIn(t, k))
   }))
 
-// 2026-09-30: a send went out and its answer never came back, and the card stayed pressed forever.
 test("law: a lost answer leaves the intent in view; the next sync subsumes it, or asking again is one more ask", () =>
   forAll(200, r => {
     const k = r.pick(KEYS)

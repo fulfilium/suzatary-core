@@ -1,5 +1,5 @@
-// The secretary's stores, by the name the box serves each under. Every one is a replica the core's worker holds
-// (`storeset`), one engine each (`engine`).
+// The secretary's stores, by the name the box serves each under; each is a replica the core's worker holds
+// (`storeset`).
 
 import type { StoreName, WrittenName } from "../wire/generated/wire"
 

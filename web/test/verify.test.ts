@@ -1,15 +1,8 @@
 /**
- * The browser's verification, tested against objects in the store's own print.
- *
- * The two literals below are made up in the exact bytes `events/objects/`
- * holds, with the filenames they would be stored under. That is the whole point: if this
- * code hashes them to their own names, the same code in a reader's tab is
- * checking the same thing `EventStore._load` checks, and the green on the
- * chain page means something.
- *
- * The store is a DAG, so the walk starts from every head and follows every
- * parent. A chain is the case with one head and one parent each, and it is
- * checked here exactly as before — that is the compatibility claim.
+ * The browser's verification, against objects in the store's own print: the two literals below are made up in the
+ * exact bytes `events/objects/` holds, with the filenames they would be stored under, so code that hashes them to their
+ * own names checks what the store's own load checks. The store is a DAG, so the walk starts from every head and follows
+ * every parent; a chain, one head and one parent each, is its simplest case.
  */
 
 import { test } from "node:test";
@@ -136,11 +129,8 @@ test("a tip the server never sent is a problem, not a crash", async () => {
   assert.match(found.problems(verdict.found).join(" | "), /was not sent/);
 });
 
-// --- the DAG -----------------------------------------------------------------
-//
-// Two branches over one genesis and the merge that joins them. The hashes are
-// made up, because what is being checked here is the SHAPE of the walk; the
-// hashing itself is pinned above on the store's own bytes.
+// Two branches over one genesis and the merge that joins them. The hashes are made up: what is checked here is the
+// shape of the walk, and the hashing is pinned above on the store's own bytes.
 
 const dagLink = (hash: string, parents: string[]): Link => ({
   hash,

@@ -62,7 +62,6 @@ export namespace storeset {
     readonly earlier: () => Promise<readonly stores.Written[]>
   }
 
-  // A line refused is named so.
   const LINE = "line"
   // What the owner reads where a line sealed under older rules is refused, or one the box did not answer: the words stay
   // where they were typed.
@@ -128,7 +127,7 @@ export namespace storeset {
       topics: objectStore("topics", new core.Memberships()),
       "topic-aliases": objectStore("topic-aliases", new core.TopicAliases()),
     }
-    // The asks' refusals of every store's writes, held as refused.
+    // Read again whenever the asks move: each store this tab writes holds what the asks record as refused.
     const refusedIn = async (asks: ObjectStore): Promise<void> => {
       for (const name of WRITTEN) await writes.settled(name, () => topicStores[name].store.refused_in(asks))
       await writes.settled("lines", () => held.refused_in(asks))
@@ -145,7 +144,6 @@ export namespace storeset {
       return { replicas, reading: reading(`${replicas.topics.version()}/${replicas["topic-aliases"].version()}`, () => new core.TopicReading(replicas.topics, replicas["topic-aliases"])) }
     }
 
-    // Read again whenever it moves: each store this tab writes holds what it records as refused.
     const post = (name: stores.Written): written.Entry["post"] => (literals, since, keys) => storereads.post(name, literals, since, keys)
     const entry = (name: topics.Store): written.Entry => ({
       noun: NOUNS[name],

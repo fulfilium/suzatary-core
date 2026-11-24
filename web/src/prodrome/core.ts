@@ -157,7 +157,6 @@ export interface Proposals extends ObjectStore {
   inbox: (at: string, chains: Chains, memory?: string) => Printed;
 }
 
-/** The todo chains held. */
 export interface Chains {
   hold: (name: string, objects: string, untrusted: string) => string;
   hold_chain: (name: string, chain: ChainStore) => string;
@@ -316,7 +315,6 @@ export interface Lines extends Written, Refusable {
 
 export type TopicStore = ObjectStore & Written & Refusable;
 
-/** The topics both replicas read as, and their planned events. */
 /** A reading printed whole for a page, and beside it the little the worker reads of it (`said`, JSON). */
 export interface Printed {
   readonly text: Uint8Array;
@@ -704,7 +702,6 @@ export function functionsOf(core: Core): ReadonlySet<string> {
   return new Set(checked("kept functions", core.kept_functions(), arr(str)));
 }
 
-/** What a reading leaves out. */
 export const excludedOf = (s: { tips: () => string }): excluded.T => checked("tips", s.tips(), Tipped).excluded;
 export const linesLeft = (lines: Lines): excluded.T => checked("excluded", lines.excluded(), Tipped).excluded;
 

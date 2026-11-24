@@ -4,7 +4,6 @@
 import excluded from "./excluded"
 
 export namespace copies {
-  // The log of the chain `chain`.
   export const chain = (chain: string): string => `chain/${chain}`
 
   // A store's copy on the device, under a key no chain can be named.

@@ -10,8 +10,7 @@ export namespace excluded {
   export type Chain = { readonly chain: string; readonly why: string }
   // A copy of a chain this device keeps that cannot be used as it is, and whether resetting it from the box is the way out.
   export type Row = { readonly chain: string; readonly why: string; readonly cure: "Reset" | "None" }
-  // Everything one reading could not read: its objects left out, the chains it could not read at all, and the copies
-  // this device keeps that it could not use.
+  // What one reading could not read; `rows` are the copies this device keeps that it could not use.
   export type Left = { readonly objects: T; readonly chains: readonly Chain[]; readonly rows: readonly Row[] }
   // What each reader last left out, by what it read.
   export type Seen = { readonly [reader: string]: Left }
@@ -29,8 +28,7 @@ export namespace excluded {
     why: `what this device keeps of it does not read (${why}), so nothing done here can be kept until it is reset from the box, which writes over that copy and whatever it held`,
     cure: "Reset",
   })
-  // A copy this device keeps of which a part (`what`) did not read: that part is kept aside, the store works without it,
-  // and the reset that writes over the copy removes it.
+  // A copy of which a part (`what`) did not read and is kept aside.
   export const aside = (chain: string, what: string): Row => ({
     chain,
     why: `part of what this device keeps of it did not read (${what}); that part is kept aside and the store works without it, and writing over this copy from the box removes it`,

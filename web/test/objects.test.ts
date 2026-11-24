@@ -181,8 +181,7 @@ test("a device before version 8 keeps no row", async () => {
   }
 })
 
-// This tab's own lines (`ownlines`): a row of the rows' store that only climbs, kept by every upgrade from version 8. The law: whatever moves two tabs keep in any order, and whatever upgrade the device sees
-// between them, the row holds every own line any move kept, each at the furthest answer any move gave it.
+// This tab's own lines (`ownlines`): a row of the rows' store that only climbs, kept by every upgrade from version 8.
 const ANSWERS: readonly unknown[] = ["Unsent", { Refused: { kind: "Trust", reason: "a key" } }, { Refused: { kind: "Outdated", reason: "reload" } }, "Taken"]
 test("law: no own line is dropped, and each holds its furthest answer, whatever order and upgrade", async () => {
   await forAllAsync(40, async r => {

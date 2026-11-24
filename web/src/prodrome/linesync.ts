@@ -41,7 +41,6 @@ export namespace linesync {
   }
 
   export type T = {
-    // The store as the set of stores asks each of its stores.
     readonly engine: replicasync.Store
     // Whether the device keeps an earlier build's copy of the lines aside.
     readonly earlier: () => Promise<boolean>
@@ -329,7 +328,6 @@ export namespace linesync {
       cleanupFailed(settled.cleanup)
       return published(settled.reading).fresh
     }
-    // The row read into the core alone, by a seal under its lock.
     const ownNow = async (): Promise<void> => {
       if (!idb.available()) return
       published(await ownlines.read(core))

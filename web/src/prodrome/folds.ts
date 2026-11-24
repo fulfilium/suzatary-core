@@ -1,6 +1,6 @@
-// The box's fold of each chain, kept while nothing it read has moved: the box's heads of every chain it serves, as the
-// tab knows them, and the fold's own next change. A fold prices through every chain, so any chain moving is news to
-// each. A page read again with nothing moved asks nothing; one asked while its answer is on its way waits on that ask.
+// The box's fold of each chain, kept while nothing it read has moved (the box's heads of every chain, as the tab knows
+// them, and the fold's own next change): a fold prices through every chain, so any chain moving is news to each, and a
+// fold asked while its answer is on its way waits on that ask.
 
 import type { FoldPayload } from "../wire/generated/wire"
 import heads from "./heads"
@@ -17,7 +17,7 @@ export namespace folds {
     return each.some(([, h]) => h === null) ? null : each.map(([name, h]) => `${name}:${(h ?? heads.NONE).join(",")}`).join(";")
   }
 
-  // A fold, what it read, and the instant it next moves, `null` for never.
+  // `until` is the instant the fold next moves, `null` for never.
   type Kept = { readonly key: string; readonly until: number | null; readonly payload: Promise<FoldPayload> }
 
   const fits = (k: Kept, key: string | null, now: number): boolean => key !== null && k.key === key && (k.until === null || now < k.until)
@@ -25,7 +25,6 @@ export namespace folds {
   const until = (p: FoldPayload): number | null => (p.next === null ? null : time.ms(p.next.at))
 
   export type Cache = {
-    // The chain's fold: the one kept when it fits, else asked of the box.
     readonly of: (chain: string) => Promise<FoldPayload>
     // What names a fold asked now; read before the ask, so a fold is kept under what the tab knew when it asked.
     readonly key: () => string | null

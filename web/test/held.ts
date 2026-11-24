@@ -26,7 +26,6 @@ export const headsOf = (objects: readonly StoredObject[]): string[] => {
   return objects.map(o => o.hash).filter(h => !named.has(h))
 }
 
-// The box's answer of a store holding `objects`, under `untrusted` and `root`.
 export const answerOf = (objects: readonly StoredObject[], untrusted: readonly string[] = [], root: string | null = null): ObjectsPayload => ({
   objects: [...objects],
   heads: headsOf(objects),
@@ -38,7 +37,6 @@ export const answerOf = (objects: readonly StoredObject[], untrusted: readonly s
   frontier: { digest: "0".repeat(64), count: objects.length },
 })
 
-// A store the core holds, filled with `objects`.
 export const storeOf = <S extends ObjectStore>(store: S, objects: readonly StoredObject[]): S => {
   const answer: StorePayload = { ...answerOf(objects), keys: {}, rest: 0, size: 0, weight: 0, erased: [] }
   store.piece(JSON.stringify(answer), 1)

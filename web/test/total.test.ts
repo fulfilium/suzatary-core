@@ -1,6 +1,6 @@
 // A reading is total over what a replica holds (Prodrome SPEC law 44): a print that does not parse at its store's
-// schema, as an inbox card from before `Remember` carried its `text` did on the owner's phone, is left out with what
-// rests on it, every other reading answers as the box does, and the line says what was left out.
+// schema is left out with what rests on it, every other reading answers as the box does, and the line says what was
+// left out.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"

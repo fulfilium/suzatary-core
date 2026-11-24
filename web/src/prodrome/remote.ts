@@ -6,7 +6,6 @@ import lanes from "./lanes"
 
 export namespace remote {
   export type Remote = {
-    // `q` in the lane of whoever asks it (`lanes`).
     readonly ask: <K extends questions.Kind>(q: questions.Of<K>, lane: lanes.Lane) => Promise<questions.Answer<K>>
   }
 

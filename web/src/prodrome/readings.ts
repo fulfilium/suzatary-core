@@ -1,5 +1,4 @@
-// What this device's readings of the replicas it holds left out, by the replica read: told by each reading, drawn by the
-// shell's one line.
+// What this device's readings of the replicas it holds left out, by the replica read.
 
 import excluded from "./excluded"
 import sources from "../algebra/source"

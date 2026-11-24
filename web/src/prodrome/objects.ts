@@ -1,8 +1,7 @@
 /**
  * The device's database: the stores' replicas in the core's own form (`replicalog`), their content by name, the rendered
- * blocks, and the rows' store, which holds the own lines' rows (`ownlines`) and, for one start after the update that
- * moved the chains into the core, each chain's acts the box had not taken. IndexedDB rather than `localStorage`, which
- * is synchronous and too small.
+ * blocks, and the rows' store, which holds the own lines' rows (`ownlines`) and each chain's acts an earlier build kept
+ * that the box had not taken. IndexedDB rather than `localStorage`, which is synchronous and too small.
  */
 
 import lo from "../algebra/lo"
@@ -22,12 +21,11 @@ const CHAIN_NAME = /^objects:([a-z][a-z0-9-]*)$/
 const carryKey = (chain: string): string => `carry:${chain}`
 
 /**
- * The device keeps no format but this build's, and nothing is carried from another: a store this build does not read is
- * taken again from the box. The one thing a device holds that the box does not is what this tab wrote and the box has
- * not taken. A device before version 8 keeps nothing; from 8 the rows' store is kept, its rows that are no chain's
- * deleted, and every other store made anew; 13 adds the rendered blocks. Version 14 moves every chain's row to the
- * chain's carry key, since the core holds the chains: the worker reads what the box had not taken out of it into the
- * chain's core, as its own writes, once, and then deletes it (`carried`).
+ * The device keeps no format but this build's: a store this build does not read is taken again from the box, and only
+ * what this tab wrote and the box has not taken is carried. A device before version 8 keeps nothing; from 8 the rows'
+ * store is kept, its rows that are no chain's deleted, and every other store made anew; 13 adds the rendered blocks; 14
+ * moves every chain's row to the chain's carry key, which the worker reads into the chain's core as its own writes,
+ * once, and then deletes (`carried`).
  */
 const DB: idb.Db = {
   name: DB_NAME,
@@ -179,5 +177,4 @@ export const alterRow = <A>(rows: Rows<A>, name: string, step: (a: A) => A): Pro
     })
     .catch((error: unknown) => lo.error(lo.reason(error)))
 
-/** The names under `prefix`: a key range of the rows' store. */
 const under = (prefix: string): IDBKeyRange => IDBKeyRange.bound(prefix, `${prefix}￿`)

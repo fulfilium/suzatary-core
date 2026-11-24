@@ -20,7 +20,6 @@ export namespace intentsync {
 
   export const held = (): T => source.state()
 
-  // Wakes on every change of the set; returns its own removal.
   export const watch = (listener: () => void): (() => void) => source.subscribe(() => listener())
 
   const TAKEN: intents.Answer = { type: "Taken" }
@@ -38,7 +37,6 @@ export namespace intentsync {
     for (const [key, v] of t.asked) if (intents.isIn(t, key) && holds(v.act)) source.dispatch({ type: "Subsumed", key })
   }
 
-  // Read each conversation an open ask lands in, once, and retract every ask the reading holds.
   export const settle = async (): Promise<void> => {
     const ids = [...new Set(intents.pending(source.state()).map(asks.conversation).filter((c): c is string => c !== null))]
     if (ids.length === 0) return

@@ -67,7 +67,6 @@ export namespace replicasync {
     readonly replaced: () => void
   }
 
-  // A store as the set of stores asks each of its stores.
   export type Store = {
     readonly want: () => Promise<boolean>
     readonly wanted: () => boolean

@@ -35,8 +35,6 @@ function keep(payload: FoldPayload, fetchedAt: number): void {
   if (fits(printed)) kv.local.set(cacheKey(), printed)
 }
 
-// --- Asking the worker ---------------------------------------------------------
-
 /** What a question of the shell's lane about the chains waits for before it is sent. */
 let shellAfter: Promise<void> = Promise.resolve()
 
@@ -68,8 +66,6 @@ export async function ask<K extends questions.Kind>(q: questions.Of<K>, lane: la
   return remote.ask(q, lane)
 }
 
-// --- What the worker says of the chains ----------------------------------------------------
-
 type Heard = { readonly chain: string; readonly box: ReadonlyMap<string, heads.Heads | null> }
 const heard = sources.create<Heard, { readonly chain: string; readonly box: readonly string[] | null }>(
   { chain: "", box: new Map() },
@@ -81,21 +77,19 @@ export function heardChain(chain: string, box: readonly string[] | null): void {
   heard.dispatch({ chain, box })
 }
 
-/** Wakes when a reading of the open chain moves; returns its own removal. */
+/** Wakes when a reading of the open chain moves. */
 export function watchReplica(listener: () => void): () => void {
   return heard.subscribe(h => {
     if (h.chain === app.now().chain) listener()
   })
 }
 
-/** Wakes when a reading of another chain moves, so a reading that links into it reprices; returns its own removal. */
+/** Wakes when a reading of another chain moves, so a reading that links into it reprices. */
 export function watchOthers(listener: () => void): () => void {
   return heard.subscribe(h => {
     if (h.chain !== app.now().chain) listener()
   })
 }
-
-// --- What the tab wrote that the box has not taken -------------------------------------------
 
 const NONE: UnsentRead = { todos: {}, acts: [], refused: [], blocked: 0, stranded: 0, losses: [], waiting: 0 }
 const unsentNow = sources.create<UnsentRead, UnsentRead>(NONE, (_, u) => u)
@@ -125,8 +119,6 @@ export function forgetChainReplica(): void {
   store.dispatch({ type: "Reset" })
 }
 
-// --- The box's folds --------------------------------------------------------------
-
 /**
  * Each chain the box serves, with its heads as this tab last heard them from the box, `null` for never: the open chain's
  * from its stream, which hears a move before any pull does, and each other's as the worker last said.
@@ -140,8 +132,6 @@ export function boxHeads(): folds.Known {
 
 /** The box's fold of a chain, one per chain while nothing it read has moved. */
 export const boxFolds: folds.Cache = folds.cache(boxHeads, chain => fold(chain), time.now)
-
-// --- Acting, and the exchange ----------------------------------------------------
 
 /**
  * `event` sealed by the worker as this tab's act onto the open chain, kept, and handed over behind the answer; the fold
@@ -200,8 +190,6 @@ export async function signingHere(lane: lanes.Lane): Promise<device.Signing> {
   const standing: Standing = (await ask({ type: "Standing", chain, actor, key: held.key.public }, lane)) ?? "untrusted"
   return { type: "Keyed", key: held.key.public, standing }
 }
-
-// --- The fold on screen -----------------------------------------------------------
 
 /** The lane the fold on screen is read in: the page's on a route that shows it, the shell's on any other. */
 let folding = (): lanes.Lane => "Page"
@@ -263,8 +251,6 @@ watchReplica(() => {
 
 /** Before the first route and after a switch: the open chain read from what the worker restored. */
 export const restoreChain = (): Promise<void> => Promise.all([refold(), readUnsent()]).then(() => undefined)
-
-// --- The box's fold ------------------------------------------------------------------
 
 /** The chain whose fold fetch (`/api/fold`) is in flight. */
 let fetching: { readonly chain: string; readonly done: Promise<void> } | null = null

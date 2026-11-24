@@ -1,6 +1,6 @@
-// What a reading of the lines reads of the skeleton, as the core's worker asks its core (`Lines.lacking`): a reading is
-// whole or it is not made (`engine.over`), so every node it reads is held, or the nodes still lacking are fetched, never
-// a fold over part of what it needs. The core reads its own skeleton; this names the question.
+// What a reading of the lines reads of the skeleton (`Lines.lacking`): a reading is whole or it is not made
+// (`engine.over`), so the nodes still lacking are fetched, never a fold over part of what it needs. The core reads its
+// own skeleton; this names the question.
 
 export namespace lines {
   // The whole store, for the list and a search; some conversations, each of which reads its own lines and what they
@@ -12,8 +12,7 @@ export namespace lines {
     | { readonly type: "Objects"; readonly names: readonly string[] }
     | { readonly type: "Naming"; readonly keys: readonly string[] }
 
-  // A question as a tab seals it: its words, what it points at, and each file as the upload answered it, named as the
-  // person named it.
+  // A question as a tab seals it; each file is the upload's answer, named as the person named it.
   export type Asking = {
     readonly text: string
     readonly references: readonly string[]

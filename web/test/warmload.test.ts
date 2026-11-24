@@ -1,10 +1,10 @@
 // A warm load holds what a cold one holds, and two tabs converge, and a fetch hands the core exactly the prints it
-// lacks: the lines are the core's replica the lines are the core's replica, kept on the device as
-// its snapshot and the frames after it (`replicalog`), and a tab's worker (`questions.serve` over the real core, a fake
-// box and the fake IndexedDB) reads them back on a reload. After any interleaving of the box's growth, two tabs' pulls,
-// compactions and reloads, each tab, once pulled, reads the conversations exactly as a core handed the box's whole store
-// reads them; and a reload reads what the device kept with no answer from the box at all. Which prints are held is the
-// core's alone to say, whatever its loads, landings and evictions.
+// lacks: the lines are the core's replica, kept on the device as its snapshot and the frames after it (`replicalog`),
+// and a tab's worker (`questions.serve` over the real core, a fake box and the fake IndexedDB) reads them back on a
+// reload. After any interleaving of the box's growth, two tabs' pulls, compactions and reloads, each tab, once pulled,
+// reads the conversations exactly as a core handed the box's whole store reads them; and a reload reads what the device
+// kept with no answer from the box at all. Which prints are held is the core's alone to say, whatever its loads,
+// landings and evictions.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"

@@ -11,10 +11,8 @@ export namespace topics {
     | { readonly type: "Remove"; readonly target: string; readonly topic: string }
     | { readonly type: "Rename"; readonly from: string; readonly to: string }
 
-  // The topic stores, the stores a tab writes but the lines.
   export type Store = Exclude<stores.Written, "lines">
 
-  // The store a write goes to.
   export const store = (w: Write): Store => (w.type === "Rename" ? "topic-aliases" : "topics")
 
   const prints = d.json(d.arr(d.str))

@@ -1,6 +1,5 @@
 // How many bytes of the lines' content this device keeps: the core plans the newest conversations, each whole, within
-// it (`Lines.plan`), a prefetch fetches what the plan names and the core lacks, and an eviction drops what the device
-// holds outside the plan and the prints the core holds.
+// it (`Lines.plan`).
 
 export namespace keep {
   // The origin's quota as `navigator.storage.estimate()` says it, or nothing where the browser does not say.
