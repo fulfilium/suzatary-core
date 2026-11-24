@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # `suzatary up` — converge the fetcher's services and health-check everything.
-# It generates no units: they are declared in nix/nixos-module.nix; `up` enables and starts
-# what the module declared, then runs the doctor.
+# It generates no units: they are declared in nix/nixos-module.nix.
 set -euo pipefail
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"

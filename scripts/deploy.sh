@@ -10,9 +10,9 @@
 # Only the branch's first-parent chain went through a gate. A carried instance is read once; the
 # move refuses if the live instance was committed again while the build ran.
 #
-# It builds first (scripts/app-builds.sh, rooted under `deploy-`), waiting bounded for the
-# publication run to fill the binary cache. A failed build, or a live instance the new binary
-# refuses to `verify`, moves nothing. The previous app stays rooted under `previous-` until success.
+# It builds first (scripts/app-builds.sh, rooted under `deploy-`). A failed build, or a live
+# instance the new binary refuses to `verify`, moves nothing. The previous app stays rooted under
+# `previous-` until success.
 #
 # The lock is committed through the deploy's own index under safe-push's push lock, then checked
 # out, so suzatary-roots.path only ever sees a committed state. If the units do not move to the
@@ -362,12 +362,9 @@ record() {
 
 # NO RUN OF ONE APP OVERLAPS A UNIT OF THE OTHER. A Prodrome before 85e5083 writes a store without
 # moving the mark of its last hold, which a handle of a later one that has read the store trusts:
-# such a reader would read none of the write until the store's next write, and the app's memo,
-# keyed on the record of heads the old write did move, would keep that stale history under the
-# new heads until then. So each run under way of another app ends first (the nightly gate's binary
-# is its checkout's, so it is waited for by name), every timer and the mail watcher stop, the
-# deploy looks again and again after the link (the old server can start a triage run on the old
-# app until it restarts), the units restart as fresh readers, and the timers start again.
+# such a reader would read none of the write until the store's next write, and the app's memo
+# would keep that stale history under the new heads until then.
+# The nightly gate's binary is its checkout's, so it is waited for by name.
 # drained <when> <what then>: once no run of another app is under way, within the bound; else the
 # deploy ends, saying what happens then.
 drained() {
@@ -639,8 +636,7 @@ done
 
 # Every store's record of heads, written by the new binary once the units are up: a store with no
 # record lists objects/ at every read until its next hold, and a record an older binary left is
-# made true. This replaces the deletion of every record that kept `verify` from reporting one a
-# rollback left older than its objects.
+# made true.
 SUZATARY_REPO="$app" "$roots/lock-bin/bin/suzatary" --instance "$unit_instance" prodrome record \
   || { say "not every store's heads were recorded (above); run: scripts/app-bin.sh --deployed prodrome record"; late=yes; }
 

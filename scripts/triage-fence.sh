@@ -40,7 +40,6 @@ case "$settings" in
   *@*_GUARD@*) die "$template holds a placeholder this script does not fill" ;;
 esac
 
-# The catch-all hook's command, as the JSON registers it.
 hook="$(printf '%s\n' "$settings" \
   | sed -n "s#.*\"command\": *\"\\('[^']*/tool-guard.sh' || exit 2\\)\".*#\\1#p")"
 [ "$(printf '%s\n' "$hook" | grep -c .)" -eq 1 ] \

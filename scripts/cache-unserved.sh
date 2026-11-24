@@ -29,8 +29,8 @@ mode="$1" in="$2" dir="$3"
 # The cache $1's answer about the path $2, one line: `held <path>` (status 200), `absent <path>`
 # (status 404, the "no" of cache.nixos.org and of Cachix alike), or `unknown <path> <last>`.
 # Anything else (a curl error such as a timeout or a refused connection, or another status) is
-# asked again, five tries in all with pauses of 1, 2, 4 and 8 seconds. No try starts at or past
-# the epoch second $until, and no pause ends past it; a path not asked by then is unknown at once.
+# asked again, with pauses that double. No try starts at or past the epoch second $until, and no
+# pause ends past it; a path not asked by then is unknown at once.
 ask() {
   local name="${2#/nix/store/}" pause=1 status=not-asked-before-the-cut-off try
   for try in 1 2 3 4 5; do

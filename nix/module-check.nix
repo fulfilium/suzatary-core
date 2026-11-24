@@ -46,7 +46,6 @@ let
   # The module's own units: what baseUnit made, whatever the name.
   ours = lib.filterAttrs (_: unit: unit.environment ? SUZATARY_USER_REPO);
   units = ours config.systemd.user.services;
-  # Every unit of the module's a host with `extra` declares, `<name>.<kind>`.
   unitsOf = extra:
     let
       c = (host extra).config.systemd;
@@ -77,7 +76,6 @@ let
     "suzatary-web.service"
   ];
   execOf = unit: toString unit.serviceConfig.ExecStart;
-  # Every unit of the module's on a host with every option set.
   full = ours (host {
     services.suzatary = {
       protonBridge.enable = true;
@@ -86,10 +84,8 @@ let
     };
   }).config.systemd.user.services;
 
-  # The units a deploy restarts: those part of suzatary-app.target.
   serving = lib.filterAttrs (_: unit: lib.elem "suzatary-app.target" unit.partOf);
-  # The app's service wrappers (nix/services.nix `appService`), by the binary
-  # each installs.
+  # The app's service wrappers (nix/services.nix `appService`).
   appBins = lib.mapAttrsToList (_: wrapper: "/bin/${wrapper.name}")
     (lib.filterAttrs (_: value: lib.isAttrs value && value.runsTheApp or false) services);
   runsTheApp = unit: lib.any (bin: lib.hasSuffix bin (execOf unit)) appBins;
@@ -101,7 +97,6 @@ let
     (name: unit: runsTheApp unit && longRunning unit && !(serving set ? ${name}))
     set);
 
-  # Does a configuration with `extra` evaluate as far as the user repository?
   evaluates = extra:
     (builtins.tryEval (builtins.deepSeq (host extra).config.services.suzatary.userRepo true)).success;
 

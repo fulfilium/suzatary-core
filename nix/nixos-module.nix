@@ -14,14 +14,13 @@
 let
   cfg = config.services.suzatary;
 
-  # What the jobs need lives in nix/services.nix; this module says when and under whom they run.
   services = import ./services.nix { inherit pkgs; };
   inherit (services) runtimeDeps;
 
   # ConditionUser: NixOS renders systemd.user.* into every user's manager, and root autologs in
   # on the console, where a second Proton Bridge would fight over vault.enc. The substituter gate
   # lives in the wrappers (nix/services.nix): `network-online.target` does not exist in a user
-  # manager. `path` is what a process inherits before its wrapper prepends to it.
+  # manager.
   baseUnit = description: serviceConfig: {
     inherit description;
     path = runtimeDeps;
@@ -35,7 +34,7 @@ let
     environment.SUZATARY_JUNK_SEED =
       if cfg.junkSeed == null then null else "${cfg.junkSeed}/domains.txt";
     # These jobs write what quotes mail: files 0600 whatever a script forgets, and a /tmp of their
-    # own. No unit reads another's /tmp.
+    # own.
     serviceConfig = { PrivateTmp = true; UMask = "0077"; } // serviceConfig;
   };
 
@@ -189,22 +188,17 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Linger: the whole point of these being user units is that they inherit the
-    # user's keyring/GPG/pass environment, and a user manager only exists at
-    # boot if the user lingers. This was previously set by hand with
-    # `loginctl enable-linger` and was therefore one `nixos-install` away from
-    # being forgotten on a rebuild.
+    # User units inherit the user's keyring/GPG/pass environment, and a user manager exists at
+    # boot only if the user lingers.
     users.users.${cfg.user}.linger = true;
 
     boot.kernel.sysctl = lib.mkIf cfg.web.unprivilegedPorts {
       "net.ipv4.ip_unprivileged_port_start" = lib.mkDefault 443;
     };
 
-    # The certificate is minted and renewed by ROOT (tailscale's socket is
-    # root's), handed to the user, and the user's web unit is restarted so
-    # the server reads the new files — it does not reload them on its own.
-    # `tailscale cert` is idempotent: it returns the cached certificate until
-    # renewal is due, so weekly is a check, not a fetch.
+    # Minted by ROOT (tailscale's socket is root's) and handed to the user, whose web unit is
+    # restarted because the server does not reload the files; `tailscale cert` returns the cached
+    # certificate until renewal is due, so weekly is a check, not a fetch.
     systemd.services.suzatary-tls = lib.mkIf (cfg.web.tlsDomain != null) {
       description = "Suzatary: mint or renew the tailnet TLS certificate for the web app";
       after = [ "tailscaled.service" "network-online.target" ];
@@ -231,19 +225,14 @@ in
       };
     };
 
-    # Also system-wide, not just on the unit PATH. The git credential helper
-    # runs wherever git runs — including an ordinary interactive `git push` from
-    # a login shell that is not inside `nix develop` — and a credential helper
-    # that only resolves inside a dev shell is a credential helper that fails at
-    # the worst moment.
+    # System-wide too: the git credential helper runs wherever git runs, a login shell's
+    # `git push` outside `nix develop` included.
     environment.systemPackages = with pkgs; [ secretspec pass gnupg notmuch ];
 
     systemd.user.services.proton-bridge = lib.mkIf cfg.protonBridge.enable (baseUnit
       "Proton Mail Bridge (localhost IMAP 1143 / SMTP 1025)"
       {
-        # Bridge is Proton's only IMAP path, so every other mail job is
-        # downstream of it staying up. It has historically been the flakiest
-        # piece — hence always, not on-failure.
+        # Bridge is Proton's only IMAP path, so every other mail job is downstream of it: always.
         Restart = "always";
         RestartSec = "10";
         # A store path, so a start evaluates nothing; the .#triage shell's bridge, which wrote vault.enc.
@@ -256,9 +245,6 @@ in
       "Suzatary mail sync + triage (every 5 min)"
       {
         Type = "oneshot";
-        # The wrapper supplies PATH and the substituter gate, then execs the
-        # script from the app's store path; it commits and pushes the data
-        # tree.
         ExecStart = "${services.triage}/bin/suzatary-triage";
       };
 
@@ -267,27 +253,20 @@ in
       description = "Run Suzatary triage every 5 minutes";
       wantedBy = [ "timers.target" ];
       timerConfig = {
-        # Empty ticks cost one sync and no tokens. This stays the fallback beside the IDLE watcher,
-        # which does not watch every account and can drop.
+        # The fallback beside the IDLE watcher, which does not watch every account and can drop.
         OnCalendar = "*:0/5";
         # Catch up after downtime rather than silently skipping the missed hour.
         Persistent = true;
       };
     };
 
-    # THE PLUGINS' SOURCES (docs/PLUGINS-PLAN-2026-10-02.md stage 2): every
-    # `[[plugins]]` source run into the cache tier, the calendar first. A
-    # sync is monotone and idempotent, so it needs no lock and no ordering
-    # with anything else here; a run that changes nothing writes nothing.
+    # A plugin sync is monotone and idempotent, so it needs no lock and no ordering with anything here.
     systemd.user.services.suzatary-plugins = baseUnit
       "Suzatary plugin sync (calendars into the cache tier, every 15 min)"
       {
         Type = "oneshot";
         # Nothing waits on it, so it never competes with the triage pass.
         Nice = 10;
-        # The wrapper supplies PATH and the substituter gate, then execs
-        # scripts/plugin-sync.sh, which roots the binary and the components
-        # and prints one journal line per plugin.
         ExecStart = "${services.plugins}/bin/suzatary-plugins";
       };
 
@@ -301,9 +280,7 @@ in
       };
     };
 
-    # THE FOLLOWED STORES: each `[[follows]]` copy brought to its upstream branch. A fetch only
-    # gains objects, under the copy's own lock, so it needs no ordering with anything here. A
-    # refused fetch fails the unit with one line per store, its name and git's words.
+    # A fetch only gains objects, under the copy's own lock, so it needs no ordering with anything here.
     systemd.user.services.suzatary-follows = baseUnit
       "Suzatary followed stores' fetch (every hour)"
       {
@@ -316,8 +293,7 @@ in
       description = "Fetch Suzatary's followed stores every hour";
       wantedBy = [ "timers.target" ];
       timerConfig = {
-        # A followed store is another repository's plan, which moves when its pull requests
-        # merge: an hour bounds how stale its rows read, and every reading dates the copy.
+        # An hour bounds how stale a followed store's rows read; every reading dates the copy.
         OnCalendar = "*:37";
         Persistent = true;
       };
@@ -330,27 +306,17 @@ in
       {
         Restart = "on-failure";
         RestartSec = "10";
-        # The wrapper supplies PATH and the substituter gate, then execs the
-        # app's scripts/mail-idle.sh, which execs `suzatary mail idle` out of
-        # the pure `.#suzatary` derivation.
         ExecStart = "${services.mailIdle}/bin/suzatary-mail-idle";
       };
 
-    # The long-running units that run the app: each `servingUnit` is part of
-    # it. Nothing starts it; it is the list a deploy restarts. Stopping it
-    # would stop every one of them, so it refuses a manual start or stop.
+    # Nothing starts it; it is the list a deploy restarts, and stopping it would stop every unit on it.
     systemd.user.targets.suzatary-app = {
       description = "Suzatary: the long-running units that run the app the lock names";
       unitConfig = { RefuseManualStart = true; RefuseManualStop = true; };
     };
 
-    # BUILD WHEN THE LOCK MOVES, NOT WHEN THE BOX IS ASKED
-    # (the lock since docs/USERREPO-PLAN-2026-10-01.md stage 2). The user repository's
-    # flake.lock IS the deployment's version: scripts/deploy.sh is the one
-    # thing that moves it, in a commit, so a stamp of history says which code
-    # ran when. Its service is the one reader of the lock (nix/services.nix
-    # `roots`): it runs exactly the app's two scripts, so there is one
-    # spelling of what a root is, and links the app only after both succeed.
+    # BUILD WHEN THE LOCK MOVES, NOT WHEN THE BOX IS ASKED: the user repository's flake.lock IS
+    # the deployment's version, moved only by scripts/deploy.sh, in a commit.
     systemd.user.paths.suzatary-roots = {
       description = "Suzatary roots: build the app the user repository's lock names";
       unitConfig.ConditionUser = cfg.user;
@@ -362,31 +328,23 @@ in
       "Suzatary roots: build the app the user repository's lock names"
       {
         Type = "oneshot";
-        # Never starves the triage timer or an agent's own cargo build — the
-        # whole point is that this refresh moves off the blocking path
-        # rather than moving the stall (plan §3, §5).
+        # Never starves the triage timer or an agent's own cargo build.
         Nice = 10;
         IOSchedulingClass = "idle";
-        # A oneshot triggered by a `.path` unit does not queue a second
-        # start while the first is still running (systemd coalesces
-        # PathChanged activations against an already-active unit), so this
-        # never overlaps itself; no lock file is needed. Each script prints
-        # its store path, one journal line each: the evidence a deploy cites.
+        # systemd coalesces PathChanged activations against an already-active unit, so this never
+        # overlaps itself and needs no lock file.
         ExecStart = "${services.roots}/bin/suzatary-roots";
       };
 
     systemd.user.services.suzatary-web = servingUnit
       "Suzatary web app on the tailnet (https on web.port)"
       {
-        # A server, not a job: Type=simple, and on-failure rather than always
-        # — a crash loop here should be visible as a FAILED unit, not papered
-        # over. Bridge gets `always` because every mail job is downstream of
-        # it; nothing is downstream of this one.
+        # On-failure, not always: nothing is downstream of it, and a crash loop shows as a FAILED unit.
         Type = "simple";
         Restart = "on-failure";
         RestartSec = "10";
-        # scripts/serve-web.sh resolves the tailnet address and refuses to start without it or a
-        # certificate. The two variables are what the module decides and the instance file cannot.
+        # scripts/serve-web.sh refuses to start without the tailnet address or a certificate; the
+        # two variables are what the module decides and the instance file cannot.
         ExecStart = "${services.web}/bin/suzatary-web";
         Environment = [
           "SUZATARY_TLS_DIR=${cfg.web.tlsDir}"
@@ -398,9 +356,8 @@ in
       "Encrypted state snapshot to Proton Drive"
       {
         Type = "oneshot";
-        # Encrypts to the vault PUBLIC key (private half is off-box with
-        # the owner), so this unit carries no secret. Needs the Drive CLI session
-        # in the pass store (proton-drive auth login, one-time per box).
+        # Encrypts to the vault PUBLIC key (the private half is off-box), so this unit carries no
+        # secret; it needs the Drive CLI session in the pass store (proton-drive auth login).
         ExecStart = "${services.vault}/bin/suzatary-vault";
       });
 
@@ -408,11 +365,9 @@ in
       description = "Daily encrypted state snapshot to Proton Drive";
       wantedBy = [ "timers.target" ];
       timerConfig = {
-        # Daily, because a key or a text written since the last snapshot is
-        # lost with the box, and the snapshots are pruned to a week, so a
-        # forgotten fact's words leave the backups within seven days. 04:17,
-        # an odd minute, so it never lands on a triage tick (every five).
-        # A failed upload surfaces as a FAILED unit.
+        # Daily, because what was written since the last snapshot is lost with the box; pruned to a
+        # week, so a forgotten fact's words leave the backups within seven days; an odd minute, so
+        # it never lands on a triage tick.
         OnCalendar = "*-*-* 04:17:00";
         Persistent = true;
       };

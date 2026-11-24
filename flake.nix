@@ -7,10 +7,8 @@
 
     # THE DATABASE, AS AN INPUT (docs/ARCHITECTURE.md §2), public under MIT OR Apache-2.0.
     #
-    # PINNED TO A COMMIT, the SAME one `app/Cargo.toml` names: the binary links the crate and
-    # the browser fetches the wasm from this input, and two shas would be two readings of one
-    # spec. Moving the pin is three places in one commit: this url (with `flake.lock`), the
-    # `rev`s in `app/Cargo.toml`, and `app/Cargo.lock`.
+    # PINNED TO THE COMMIT `app/Cargo.toml` names, as two shas would be two readings of one spec:
+    # move this url (with `flake.lock`), the `rev`s in `app/Cargo.toml` and `app/Cargo.lock` together.
     prodrome.url = "github:fulfilium/prodrome/588e30670dcf06ccfd59da55de26e972d1240444";
     # One nixpkgs in the closure: this pin carries what the Prodrome's build needs, `cargo`/`rustc`
     # and `wasm-bindgen-cli_0_2_127` (in lockstep with the `=0.2.127` crate).
@@ -21,14 +19,11 @@
     prodrome.inputs.typst-design.follows = "typst-design";
 
     # THE RUST BUILD IS CRANE: the dependencies are one derivation keyed on Cargo.lock alone
-    # (`cargoArtifacts` below), which the store cache carries across runs, so every build after
-    # it compiles the workspace crates and nothing else.
+    # (`cargoArtifacts` below).
     crane.url = "github:ipetkov/crane";
 
     # THE LOOK, AS AN INPUT: the owner's design system, the one source of every colour, mark and
-    # template Suzatary sets in Typst, as `@local/typst-design:<version>` on `TYPST_PACKAGE_PATH`
-    # and beside the tab's kit (`typstPackages` below), so the box and the tab compile against one
-    # package. Pinned by commit.
+    # template, so the box and the tab compile against one package (`typstPackages` below).
     typst-design.url = "github:bmabsout/typst-design/79d9dbafcd6457f269c3cd8b6f88c0ac27e35851";
     typst-design.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -43,10 +38,8 @@
       flake = false;
     };
 
-    # THE PLUGINS' STANDARD LIBRARY. A plugin is built for wasm32-wasip2, whose std
-    # nixpkgs' rustc does not carry (it carries wasm32-unknown-unknown alone), so the
-    # plugin derivation alone takes a rustup toolchain from this overlay with that target
-    # added.
+    # THE PLUGINS' STANDARD LIBRARY: nixpkgs' rustc carries no wasm32-wasip2 std, so the plugin
+    # derivation alone takes a rustup toolchain from this overlay.
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -57,12 +50,9 @@
     let
       inherit (nixpkgs) lib;
 
-      # THE APP'S VERSION IS DERIVED FROM THE TREE, NEVER TYPED TWICE. versionName is
-      # `app/release.toml`'s version plus the commit, so a phone's About screen names one;
-      # versionCode is the commit count, which only grows on master, and 0 for a dirty tree, so
-      # a hand-built APK never installs over CI's. No crate compiles the release file:
-      # `suzatary-app` installs it beside the binary, which reads it at run time, so a train
-      # rebuilds no binary.
+      # THE APP'S VERSION IS DERIVED FROM THE TREE: versionCode is the commit count, which only
+      # grows on master, and 0 for a dirty tree, so a hand-built APK never installs over CI's.
+      # No crate compiles the release file, so a train rebuilds no binary.
       appRelease = builtins.readFile ./app/release.toml;
       appVersion =
         let
@@ -74,14 +64,12 @@
       appVersionName = "${appVersion}+${self.shortRev or self.dirtyShortRev or "dirty"}";
       appVersionCode = toString (self.revCount or 0);
     in
-    # System-independent outputs live outside eachDefaultSystem. The NixOS module is consumed by
-    # the host's configuration, which takes this repo as a `path:` flake input.
+    # The host's configuration takes this repo as a `path:` flake input for the NixOS module.
     {
       nixosModules.default = import ./nix/nixos-module.nix;
       nixosModules.suzatary = self.nixosModules.default;
 
-      # What a new user's private repository starts from
-      # (docs/USERREPO-PLAN-2026-10-01.md stage 5): `nix flake init -t <this>#user`.
+      # What a new user's private repository starts from: `nix flake init -t <this>#user`.
       templates.user = {
         path = ./templates/user;
         description = "A secretary's user repository: its data, and the app it pins";
@@ -93,8 +81,7 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          # claude-code is unfree. Named explicitly rather than a blanket allowUnfree, so this
-          # stays a decision about one package the scheduled jobs need.
+          # claude-code is unfree: named, never a blanket allowUnfree.
           config.allowUnfreePredicate = pkg:
             builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
         };
@@ -140,10 +127,6 @@
           else
             build (apkProfile path);
 
-
-        # ===== THE APPLICATION (docs/ARCHITECTURE.md); above it, scaffolding and the ONE line
-        # that takes the database, the Prodrome, off the input — one direction (§1, §2).
-
         # The model crates, the application's library (`merge_gate.rs`'s `LIBRARY_CRATES`): each
         # fileset below names the part of each it reads, so a new crate is one word here.
         library = part: map (crate: ./app + "/${crate}${part}") [ "address" "base" "record" "release" "store"
@@ -166,8 +149,7 @@
             ./app/Cargo.lock
             # The plugin worlds the host binds at compile time.
             ./app/wit
-            # The site vouches for the Android app, and a test pins the file
-            # that says so; the sandbox has to hold it to run that test.
+            # A test pins the file by which the site vouches for the Android app.
             ./web/static/.well-known/assetlinks.json
             # The app's own stylesheets, which `prodrome pages` writes beside a store's pages.
             ./web/static/tokens.css
@@ -185,8 +167,7 @@
         appSrcBuild = builtins.substring 0 8 (builtins.baseNameOf (toString appSrc));
 
         # ONE DEPENDENCY BUILD FOR EVERY DERIVATION BELOW, against a dummy copy of the crates, so
-        # its hash moves only with `app/Cargo.lock` or the toolchain. Crane restores it into
-        # `./target`, inside `app/`, where cargo writes, so nothing rebuilds.
+        # its hash moves only with `app/Cargo.lock` or the toolchain; restored into `./target`.
         craneLib = crane.mkLib pkgs;
         # The plugins' toolchain: rustup's 1.98.1, nixpkgs' version at this lock, with the
         # wasm32-wasip2 std, whose linker writes the component itself.
@@ -194,9 +175,8 @@
           ((rust-overlay.lib.mkRustBin { } pkgs).stable."1.98.1".minimal.override {
             targets = [ "wasm32-wasip2" ];
           });
-        # Every phase runs INSIDE `app/` (`sourceRoot`): crane's install hook runs `cargo
-        # metadata` from the working directory and takes no `--manifest-path`. The tree above is
-        # still unpacked, so the files the tests read by `../../` stay put.
+        # Every phase runs INSIDE `app/`: crane's install hook runs `cargo metadata` from the working
+        # directory and takes no `--manifest-path`; the tree above stays for the tests' `../../`.
         commonArgs = {
           pname = "suzatary";
           src = appSrc;
@@ -214,11 +194,8 @@
         cargoVendorDir = craneLib.vendorCargoDeps { cargoLock = ./app/Cargo.lock; };
         appCrate = args: craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; } // args);
 
-        # THE MODEL CRATES ALONE: the manifests, the library's sources and what
-        # they compile in (the calendar's schema, the test supports their unit
-        # tests include), and the examples. What the wire's generator and the
-        # conformance vectors compile, so an edit to the server, the CLI, a live
-        # pin or a crate's integration tests moves neither.
+        # THE MODEL CRATES ALONE: what the wire's generator and the conformance vectors compile, so
+        # an edit to the server, the CLI, a live pin or a crate's integration tests moves neither.
         modelFiles = lib.fileset.unions ([
           ./app/Cargo.toml
           ./app/Cargo.lock
@@ -226,11 +203,8 @@
           ./app/todo/examples
         ] ++ members "/Cargo.toml" [ ] ++ library "/Cargo.toml" ++ library "/src" ++ supports);
         modelSrc = lib.fileset.toSource { root = ./.; fileset = modelFiles; };
-        # In cargo's own profiles (`CARGO_PROFILE` empty: no `--release`), since
-        # the generators are a `cargo test` and a `cargo run`, and with the
-        # generators' own feature sets (`-p suzatary-api`, `-p suzatary-todo`):
-        # built against the release, whole-workspace `cargoArtifacts`, they
-        # compiled every dependency again.
+        # In cargo's own profiles and the generators' own feature sets, since against the release,
+        # whole-workspace `cargoArtifacts` they compile every dependency again.
         modelArgs = commonArgs // {
           src = modelSrc;
           CARGO_PROFILE = "";
@@ -244,16 +218,13 @@
         });
         modelCrate = args: craneLib.buildPackage (modelArgs // { cargoArtifacts = suzatary-model-deps; } // args);
 
-        # `nix build .#suzatary-bin`, the one binary: vendored from app/Cargo.lock, offline, no
-        # OpenSSL. `doCheck` is off: the laws are the merge gate's `test` step.
-        #
-        # IT DOES NOT READ THE RELEASE (`appSrc` lacks `app/release.toml`), so a release commit
-        # recompiles nothing (scripts/release-free.sh is the gate's proof).
+        # No OpenSSL; `doCheck` is off, as the laws are the merge gate's `test` step. IT DOES NOT
+        # READ THE RELEASE, so a release commit recompiles nothing (scripts/release-free.sh).
         suzatary-bin = appCrate {
           pname = "suzatary";
           doCheck = false;
-          # The revision `GET /api/about` shows: `appSrcBuild`, a hash of this binary's own sources.
-          # A binary cargo built outside the flake says `dev`.
+          # `SUZATARY_BUILD` is the revision `GET /api/about` shows; a binary cargo built outside
+          # the flake says `dev`.
           SUZATARY_BUILD = appSrcBuild;
           meta = {
             description = "Suzatary's binary, without its release; `.#suzatary` installs both";
@@ -261,13 +232,9 @@
           };
         };
 
-        # `nix build .#suzatary` — the application (docs/ARCHITECTURE.md): the binary above,
-        # COPIED (a link would resolve to `suzatary-bin`, which holds no release), with
-        # `app/release.toml` beside it at `share/suzatary/release.toml`, read at run time. A
-        # release commit rebuilds this copy alone, and `--version` runs before it ships. Door 1
-        # runs `libexec/suzatary/gitleaks` over `share/suzatary/secret-rules.toml`
-        # (`suzatary_cli::stamp`), so no unit's PATH needs gitleaks. `prodrome draw` imports the
-        # design system from `share/suzatary/typst-packages`.
+        # The binary COPIED (a link would resolve to `suzatary-bin`, which holds no release) beside
+        # its release, so a release commit rebuilds this copy alone. The binary finds gitleaks,
+        # the mail tools and the design system at these paths, so no unit's PATH needs them.
         suzatary-app = pkgs.runCommand "suzatary-${appVersion}" {
           release = ./app/release.toml;
           rules = ./scripts/secret-rules.toml;
@@ -288,15 +255,12 @@
             || { echo "the binary does not read its release file as ${appVersion}" >&2; exit 1; }
         '';
 
-        # `suzatary-dev`: EVERY VERB PLUS THE END-TO-END FIXTURE, as a SECOND DERIVATION, not a
-        # flag, which would be a write path for anything that sets an environment variable.
-        # `--whois-fixture` makes every peer one login (headless Chromium arrives from 127.0.0.1,
-        # which no daemon names); `.#suzatary` does not contain the code. `scripts/web-e2e.sh`
-        # reaches for it by store path.
+        # `suzatary-dev`: EVERY VERB PLUS THE END-TO-END FIXTURE (every peer one login), as a SECOND
+        # DERIVATION, not a flag, which would be a write path for anything that sets an environment
+        # variable; `.#suzatary` does not contain the code.
         suzatary-fixture = appCrate {
           pname = "suzatary-fixture";
           doCheck = false;
-          # `suzatary-dev` alone: the one binary built with the feature.
           cargoExtraArgs = "--features fixture --bin suzatary-dev";
           meta = {
             description = "suzatary-dev: the end-to-end fixture — never deployed";
@@ -305,10 +269,8 @@
         };
 
         # THE BROWSER MODULES: `package` compiled to wasm32 from the manifests, the model crates and
-        # `crates` (a server edit rebuilds none), the deploy's build or the gate's (no LTO, no
-        # wasm-opt). Dependencies build once per lock; the glues are `web/` and `nodejs/`; panic
-        # locations are remapped off the vendor directory. `app/wasm` and the pages' are its
-        # instances.
+        # `crates`, so a server edit rebuilds none; panic locations are remapped off the vendor
+        # directory.
         wasmBuilds = {
           optimised = { profile = "wasm-release"; suffix = ""; wasmOpt = true; };
           development = { profile = "wasm-dev"; suffix = "-dev"; wasmOpt = false; };
@@ -337,9 +299,8 @@
                 --profile ${profile} --target wasm32-unknown-unknown -p ${package}
             '';
           };
-          # Its dependency build, keyed on the lock like `cargoArtifacts`, exposed so the merge
-          # gate can root it: a build-time input no output holds, which a collection of the
-          # store took, five minutes of wasm32 dependencies each time.
+          # Exposed so the merge gate can root it: a build-time input no output holds, which a
+          # collection of the store takes.
           deps = depsOf args;
         in {
           inherit deps;
@@ -369,8 +330,7 @@
             meta.description = description;
           });
         };
-        # The Prodrome's module: the glue keeps the name `prodrome` the loader and the tests have always
-        # fetched.
+        # The glue keeps the name `prodrome` the loader and the tests fetch.
         prodromeModule = build: wasmModule build {
           pname = "suzatary-wasm";
           package = "suzatary-wasm";
@@ -382,8 +342,7 @@
         suzatary-wasm = (prodromeModule "optimised").module;
         suzatary-wasm-dev-deps = (prodromeModule "development").deps;
         suzatary-wasm-dev = (prodromeModule "development").module;
-        # The pages in the view-tree shape (docs/FRAMEWORK-PLAN-2026-11-02.md), loaded by the page
-        # that is drawn from them.
+        # The pages in the view-tree shape, loaded by the page that is drawn from them.
         viewsModule = build: wasmModule build {
           pname = "suzatary-views-wasm";
           package = "suzatary-pages";
@@ -430,10 +389,9 @@
           meta.description = "The plugin host's fence tests' adversary: two components, never loaded by the app";
         });
 
-        # THE APP'S REFERENCE PLUGINS (`nix build .#suzatary-plugins`): `ics.wasm`, the calendar's
-        # source (`app/plugin-ics`), beside its schema, built for wasm32-wasip2; it imports
-        # `fetch` and the WASI the host links. The plugin timer roots it (`scripts/plugin-sync.sh`),
-        # and the fence tests load it, so it is held to the adversary's fences.
+        # THE APP'S REFERENCE PLUGINS: `ics.wasm`, the calendar's source, built for wasm32-wasip2;
+        # it imports `fetch` and the WASI the host links, and the fence tests load it, so it is
+        # held to the adversary's fences.
         suzatary-plugins = craneWasi.mkCargoDerivation (commonArgs // {
           pname = "suzatary-plugins";
           src = lib.fileset.toSource {
@@ -467,11 +425,9 @@
         # beside `prodrome_bg.wasm` and loaded when a Typst view is first drawn.
         suzatary-typst-wasm = prodrome.packages.${system}.prodrome-typst-wasm;
 
-        # THE FRONTEND'S WIRE TYPES, GENERATED: `cargo test -p suzatary-api` writes `wire.ts` and
-        # `payload.ts` when `TS_RS_EXPORT_DIR` is set. A derivation, so the frontend's shell needs no
-        # toolchain. It and the vectors below build from `modelSrc` alone (the manifests and the
-        # model crates), so the private tree and the public one give one derivation, rebuilt only
-        # when those crates move.
+        # THE FRONTEND'S WIRE TYPES, GENERATED, so the frontend's shell needs no toolchain. It and
+        # the vectors below build from `modelSrc` alone, so the private tree and the public one give
+        # one derivation.
         suzatary-wire-ts = modelCrate {
           pname = "suzatary-wire-ts";
           doCheck = false;
@@ -523,11 +479,8 @@
           paths = [ suzatary-wire-ts suzatary-pages-ts ];
         };
 
-        # THE FRONTEND BUNDLE, AS A BUILD: content-addressed like the binary, so a rebuild in a dev
-        # checkout cannot overwrite the bundle a running server serves. It runs the same
-        # `scripts/build-web.sh` a dev loop runs, whose innerHTML doors and `as` cast ceiling gate
-        # this build too. A plain `stdenv.mkDerivation`: it compiles no Rust, so it needs
-        # esbuild, tsc and node, and nothing from `cargoArtifacts`.
+        # THE FRONTEND BUNDLE, AS A BUILD: content-addressed, so a rebuild in a dev checkout cannot
+        # overwrite the bundle a running server serves; `scripts/build-web.sh`'s checks gate it too.
         suzatary-web = pkgs.stdenv.mkDerivation {
           pname = "suzatary-web";
           version = "0";
@@ -597,9 +550,7 @@
           meta.description = "fpl/series conformance vectors, regenerated from prodrome's own literal grammar for web/test/wasm.test.ts";
         };
 
-        # `nix build .#suzatary-junk-seed`: THE MONTHLY JUNK SWEEP'S CHURN SEED, the two public
-        # lists above as one sorted `domains.txt` and a `sources.txt` of revs and counts, read at
-        # each digest through `SUZATARY_JUNK_SEED`. Both lists are flake inputs, locked by hash;
+        # THE MONTHLY JUNK SWEEP'S CHURN SEED, read through `SUZATARY_JUNK_SEED`;
         # `suzatary_triage::mail::junk::normalize_seed_file` is the one normaliser.
         suzatary-junk-seed = appCrate {
           pname = "suzatary-junk-seed";
@@ -632,13 +583,10 @@
           meta.description = "Suzatary's Junk churn seed: disposable-email-domains + blocklistproject/Lists, normalised into one domains.txt";
         };
 
-        # The Typst packages every compile here may import, as a package path
-        # (`<path>/local/typst-design/<version>`): the shells export it as
-        # `TYPST_PACKAGE_PATH`, and `scripts/build-web.sh` bundles the same
+        # Every Typst package a compile here may import; `scripts/build-web.sh` bundles the same
         # files for the tab.
         typstPackages = typst-design.lib.packagePath pkgs;
 
-        # A CHECK IS A VERDICT, NOT AN ARTEFACT: `touch $out`.
         fontPaths = [
           "${pkgs.libertinus}/share/fonts/opentype"
           # the working document's body face (typst-design): the CV's and the site's.
@@ -715,9 +663,7 @@
           '';
         };
 
-        # The NixOS module, evaluated into a host's configuration, and the facts a deploy rests on
-        # read off it (nix/module-check.nix); the merge gate's `nix-module` step builds it. The
-        # application's suites are the gate's cargo steps, which run in the shell they need.
+        # The merge gate's `nix-module` step builds it; the application's suites are its cargo steps.
         checks = {
           suzatary-module = import ./nix/module-check.nix {
             inherit nixpkgs system;
@@ -730,10 +676,8 @@
           program = "${apk.sign}/bin/suzatary-sign-apk";
           meta.description = "Sign an unsigned Suzatary APK from $SUZATARY_KEYSTORE";
         };
-        # `nix run <this app at a revision> -- <verb>`, which a user repository's
-        # `./suzatary` runs: the binary with this source as its code root, the
-        # same store path a unit's wrapper gives it, so its scripts and
-        # secretspec.toml are the ones it was built with.
+        # A user repository's `./suzatary`: the binary with this source as its code root, so its
+        # scripts and secretspec.toml are the ones it was built with.
         apps.default = {
           type = "app";
           program = toString (pkgs.writeShellScript "suzatary" ''
@@ -743,12 +687,9 @@
           meta.description = "Suzatary, with this source as its code root";
         };
 
-        # The operator's shell (`nix develop .#triage`): notmuch, lieer, isync and the tools below.
-        #
-        # `.#rust` is the EDITOR's shell for `app/`: the same toolchain the checks above build
-        # with, plus a language server.
+        # `.#rust` is the EDITOR's shell for `app/`.
         devShells.rust = pkgs.mkShell {
-          # `rust-analyzer` is the editor's. No pkg-config, no OpenSSL, no interpreter.
+          # No pkg-config, no OpenSSL, no interpreter.
           packages = rustToolchain.packages ++ testTools.packages ++ [ pkgs.rust-analyzer ];
           inherit (rustToolchain) RUST_BACKTRACE CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS
             CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS;
@@ -756,13 +697,9 @@
         };
 
         devShells.triage = let
-          # The variables this shell sets that a gate's steps read (typst's
-          # fonts and packages, the Rust flags): scripts/train.sh refuses a
-          # gate where such a variable came from anywhere else, and reads
-          # which are the shell's from SUZATARY_SHELL_SETS.
+          # The variables a gate's steps read: scripts/train.sh refuses a gate where one came from
+          # anywhere else, and reads which are the shell's from SUZATARY_SHELL_SETS.
           sets = {
-            # typst and the fonts: the pages, the site and the guide compile in
-            # this shell.
             inherit (testTools) TYPST_FONT_PATHS TYPST_PACKAGE_PATH;
             inherit (rustToolchain) RUST_BACKTRACE CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS
               CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS;
@@ -771,15 +708,12 @@
           # scripts/train.sh gates only inside this shell.
           SUZATARY_SHELL = "triage";
           SUZATARY_SHELL_SETS = builtins.concatStringsSep " " (builtins.attrNames sets);
-          # The browser's fonts are the shell's, not the machine's: a runner
-          # has none, and chromium dies in Skia's font manager with nothing to
-          # fall back to. DejaVu Sans alone is the one font this box holds, so
-          # the e2e suite measures the same text on both.
+          # The browser's fonts are the shell's: a runner has none, and chromium dies in Skia's font
+          # manager with nothing to fall back to; DejaVu Sans alone, so both measure the same text.
           FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts.minimal ]; };
-          # A SHELL IS TOOLS, NOT BUILDS: everything comes from nixpkgs, so entering it builds
-          # nothing of this repository's; the scripts resolve the wasm and vectors they need.
-          # Every command runs through this shell, so the commit-msg hook is wired here, relative
-          # so it is right in every worktree (→ `hookspath`).
+          # A SHELL IS TOOLS, NOT BUILDS: entering it builds nothing of this repository's. Every
+          # command runs through it, so the commit-msg hook is wired here, relative for every
+          # worktree (→ `hookspath`).
           shellHook = ''
             if git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
                && [ -d scripts/hooks ] \
@@ -788,9 +722,7 @@
             fi
           '';
           packages = with pkgs; [
-            # esbuild/typescript/nodejs: the TypeScript frontend (web/) — one
-            # bundle, no npm, tsc as the type gate, node for the unit tests.
-            #
+            # esbuild/typescript/nodejs: the TypeScript frontend (web/), with no npm.
             # ⚠️ NO INTERPRETER HERE: decisions over JSON are verbs of the binary.
             # ⚠️ `nodejs_24` BY NAME, not the alias, which moves with nixpkgs: web-test.sh
             # (`--test`, `crypto.subtle`) and web-e2e.sh (a global `WebSocket`) need node 24.
@@ -807,9 +739,7 @@
             # Resolves secretspec.toml's secrets from `pass`; the `keyring` provider needs a DBus
             # secret service, which this headless box does not run.
             secretspec
-            # Plugins are WebAssembly components (docs/PLUGINS-PLAN-2026-10-02.md):
-            # `wasm-tools component new` wraps a guest, `component wit` reads
-            # back what one imports.
+            # `wasm-tools component new` wraps a plugin guest, `component wit` reads back its imports.
             wasm-tools
             # util-linux: scripts/train.sh's flock, and the `script` that gives
             # the remote gate's keep-alive session its pty.

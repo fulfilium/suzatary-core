@@ -20,7 +20,7 @@ dev=false
 if [[ "${1:-}" == "--dev" ]]; then dev=true; fi
 
 # The files named by their bytes (`shell.BY_CONTENT`): `<name>-<sha256>.<ext>` is the same name in every build that
-# ships the same bytes, so a device keeps one copy across builds. Every bundle that asks for one is handed its name.
+# ships the same bytes, so a device keeps one copy across builds.
 typst_module="typst_bg-$(sha256sum "$SUZATARY_TYPST_WASM/web/typst_bg.wasm" | cut -c1-64).wasm"
 content="{\"typst_bg.wasm\":\"$typst_module\"}"
 

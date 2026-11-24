@@ -3,25 +3,19 @@ description: >
   Restore or keep a job's compiled dependencies (app/target and cargo's
   sources), keyed by everything that decides them.
 
-# WHAT IS KEPT IS THE DEPENDENCIES. A checkout stamps every file with the time
-# it was written, so cargo rebuilds this workspace's own crates on every run
-# whatever the target holds; their units are dropped before saving
-# (target-deps.sh, beside this file), and what the entry carries is the third-party
-# build, which cargo identifies by package, version, compiler, profile,
-# features and flags, never by a file's time. So an entry cannot make a stale
-# crate look fresh: the worst it can be is incomplete, and cargo builds what it
-# lacks.
+# WHAT IS KEPT IS THE DEPENDENCIES: a checkout stamps every file with the time
+# it was written, so cargo rebuilds this workspace's own crates whatever the
+# target holds, and their units are dropped before saving (target-deps.sh);
+# cargo identifies a third-party unit by package, version, compiler, profile,
+# features and flags, never by a file's time, so an entry can be incomplete
+# but never stale.
 #
-# WHOSE BUILD (`for`), since each builds with its own flags and commands, both
-# in the key:
-#   quick  quick.yml's check job: the flags of .github/cargo-ci.toml, installed
-#          here as cargo's own configuration so every step reads the same ones.
-#   gate   the merge gate's cargo lanes (gate.yml): the flags merge-gate.sh and
-#          app-build.sh set, which gate-store.yml saves on master by running
-#          those steps.
-# The key also names the lock, the toolchain and shell (flake.lock, flake.nix)
-# and the manifests' features. A miss restores the nearest older entry, and a
-# job saves under the new key only once its compile step has succeeded, so a
+# WHOSE BUILD (`for`), each with its own flags and commands, both in the key:
+#   quick  quick.yml's check job, with .github/cargo-ci.toml installed as
+#          cargo's own configuration.
+#   gate   gate.yml's cargo lanes, with the flags merge-gate.sh and
+#          app-build.sh set; gate-store.yml saves it on master.
+# A job saves under a new key only once its compile step has succeeded, so a
 # half-built target is never kept under a key that would then always hit.
 inputs:
   for:

@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # HEAD's public tree run as a deploy runs it: a read-only store path, files dated 1970, no
-# `.git`, a `-source` basename, and the units' PATH with no dev shell. It typesets the decisions
-# page, runs `safe-push.sh --dry` over a fresh deployment (no cargo on PATH), writes to a public
-# chain through door 1 with the package's own gitleaks (none on PATH), stores a calendar's
-# link with `secretspec` beside the read-only tree, and runs the followed stores' unit command.
+# `.git`, a `-source` basename, and the units' PATH with no dev shell.
 #
 #   nix develop .#triage -c scripts/deployed-shape.sh [--cached]
 #
@@ -24,7 +21,6 @@ esac
 
 # Under /tmp, not a dev shell's private TMPDIR, so an unprivileged user can reach it.
 scratch="$(mktemp -d /tmp/deployed-shape.XXXXXX)"
-# A red run's evidence is kept here, the last 10.
 evidence="${XDG_STATE_HOME:-$HOME/.local/state}/suzatary/deployed-shape-failures"
 leave() {
   local code=$?
@@ -180,8 +176,7 @@ printf '%s\n' "$link" | "${store[@]}" secretspec set PLUGIN_ICS_WORK --file "$de
   { echo "deployed-shape: the calendar's link did not read back" >&2; exit 1; }
 
 # The followed stores' unit runs `app-bin.sh --deployed follow fetch` from the tree; here the
-# deployed binary is this run's, and the upstream is a branch whose `roadmap/` holds the public
-# chain's objects written above.
+# deployed binary is this run's.
 echo "==> a followed store, fetched by the unit's command beside the read-only tree" >&2
 "${units[@]}" sh -c 'mkdir -p "$1/upstream/roadmap" "$1/roots" &&
   cp -r "$1/data/events-suzatary/objects" "$1/upstream/roadmap/" &&

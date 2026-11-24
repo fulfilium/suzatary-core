@@ -226,7 +226,7 @@ public_pushes() {
   return "$code"
 }
 
-# Outside any `||`, so `set -e` stops the data push at its first failure, as it always has.
+# Outside any `||`, so `set -e` stops the data push at its first failure.
 set +e
 (
   set -e

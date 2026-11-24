@@ -8,8 +8,7 @@
 //       One unit per entry point, reading what its imports reach and each --shared path
 //       (`<entry>=<path>` for that entry alone).
 //   node scripts/gate-units.mjs scenes <metafile.json> <tree> <entries> --app <app-metafile> --static <metafile> [--later <path>...] (and files' flags)
-//       As `files`, each scene also skipping what a page runs only once it fetches it: the
-//       inputs of the app's dynamically loaded chunks, and the --later paths.
+//       As `files`, each scene also skipping its app's dynamically loaded chunks and the --later paths.
 //   node scripts/gate-units.mjs narrow <skips-file> <reads-file>
 //       The skips a scene keeps once it fetched the paths <reads-file> names.
 //

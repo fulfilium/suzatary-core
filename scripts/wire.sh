@@ -5,8 +5,6 @@
 #
 # `$SUZATARY_WIRE_TS` names a directory holding them already (`nix build .#suzatary-web-ts`);
 # without it this runs the derivation's own `cargo test` into a scratch directory.
-#
-#   scripts/wire.sh
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

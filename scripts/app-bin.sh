@@ -24,7 +24,7 @@ fi
 roots="${SUZATARY_ROOTS:-${XDG_STATE_HOME:-$HOME/.local/state}/suzatary/roots-dev}"
 mkdir -p "$roots"
 
-# Whether it built is read off the link; stdout is exactly the store path.
+# stdout is exactly the store path.
 start="$(date +%s.%N)"
 # A commit's is its public tree's, which deploy-build and publication.yml build.
 flake="$repo" link="$roots/app-bin" fetched=()

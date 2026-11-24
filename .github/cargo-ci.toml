@@ -1,22 +1,16 @@
-# The flags every cargo step in CI builds with, in one place: the cargo-target
-# action installs this as $CARGO_HOME/config.toml and names its target by it,
-# so each step of a job, and the scripts it calls, builds on the step before.
-# CI only; the box's builds read app/Cargo.toml alone.
+# The flags every cargo step in CI builds with: the cargo-target action installs
+# this as $CARGO_HOME/config.toml and names its target by it; the box's builds
+# read app/Cargo.toml alone.
 
 [build]
 incremental = false
 
-# No debug info: nobody attaches a debugger to a gate, and it was most of a
-# target's bytes.
+# No debug info: nobody attaches a debugger to a gate.
 [profile.dev]
 debug = 0
 
 [profile.test]
 debug = 0
 
-# No linker here: CI's cargo runs in `nix develop .#rust`, whose Rust flags
-# (flake.nix, `rustToolchain`) link the host's targets with mold, as the box's
-# and the merge gate's do. A `[target]` rustflags here is not instead of the
-# shell's but beside it: cargo passes this file's list and then the
-# environment's, so the linker driver saw `-fuse-ld=lld` and then
-# `-fuse-ld=mold` and took the last.
+# No linker here: `nix develop .#rust` links with mold (flake.nix, `rustToolchain`),
+# and cargo passes a `[target]` rustflags here before the environment's, not instead.

@@ -1,23 +1,19 @@
 name: Gate passes
 
-# THE PASSES THE GATE'S JOBS KEEP FOR EACH OTHER (.github/workflows/gate.yml). Each gate runs on a
-# new branch `gate/<train sha>`, and a run on a branch reads only the Actions caches saved on that
-# branch or on master, so a gate job cannot leave a pass to the next gate's. This runs on master
-# when a Gate run ends: it takes the passes the last gates kept, adds those each job of that run
-# uploaded, and saves them under the run's id, which every gate job restores; then it purges every
-# older entry. So a scene, a unit test or a step whose inputs a train before passed is kept on the
-# runners as it is on the box (scripts/merge-gate.sh, A PASS IS KEPT BY WHAT THE STEP READ).
+# THE PASSES THE GATE'S JOBS KEEP FOR EACH OTHER (.github/workflows/gate.yml). A run on a gate
+# branch reads only the caches saved on it or on master, so this runs on master when a Gate run
+# ends: it adds the passes the run's jobs uploaded to those the last gates kept, saves them under
+# the run's id, which every gate job restores, and purges every older entry.
 #
-# A pass names the tree entries and the environment its step read, so a pass saved here keeps a
-# step only on a tree and a runner image that read the same. It is the word of a gate job, which
-# only a push to a `gate/**` branch runs, and only someone with write access to core can push one.
+# A pass names the tree entries and the environment its step read, so it keeps a step only on a
+# tree and a runner image that read the same; it is the word of a gate job, which only someone with
+# write access to core can start.
 #
-# WHO REACHES WHAT. Only a completed Gate run starts this, in the public repository alone; no pull
-# request runs it. A `workflow_run` job holds this repository's token whoever started the run it
-# follows, so the job runs only after a Gate run that a push to a `gate/` branch of this same
-# repository started; a run from a fork, or from any other event, leaves the passes as they are.
-# It names no secret and pushes nothing. Its token reads the run's artifacts and may delete this
-# repository's Actions caches (`actions: write`), which the purge needs.
+# WHO REACHES WHAT. A `workflow_run` job holds this repository's token whoever started the run it
+# follows, so it runs only after a Gate run that a push to a `gate/` branch of this same repository
+# started, in the public repository alone; a fork's run or any other event leaves the passes as
+# they are. It names no secret and pushes nothing; its token may delete this repository's Actions
+# caches (`actions: write`), which the purge needs.
 on:
   workflow_run:
     workflows: [Gate]

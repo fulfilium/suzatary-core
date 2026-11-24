@@ -43,7 +43,6 @@ if [[ ! "$shards" =~ ^[1-9][0-9]*$ ]]; then
   exit 64
 fi
 
-# A part, so separate machines split the suite (scripts/e2e-part.sh).
 if [[ -n "${SUZATARY_E2E_PART:-}" ]]; then
   part="$(scripts/e2e-part.sh "$SUZATARY_E2E_PART" "$@")" || exit $?
   echo "==> part $SUZATARY_E2E_PART: $(paste -sd' ' <<<"$part")"
@@ -472,8 +471,6 @@ start() { # name [fixture-chain flags…] [-- serve flags…]
   rebind "$name"
 }
 
-# Starts `serve` NAME on a port free now, written into its instance file, and its base into
-# NAME.base.
 rebind() { # name
   local name=$1 port url instance=(--instance "$work/$1/instance.toml")
   port="$(free_port)"
@@ -611,7 +608,6 @@ lines_shape=(
 start lines "${lines_shape[@]}"
 # web/e2e/rescrub.test.ts: lines sealed before lines recorded their rules, for `migrate-scrub`.
 start rescrub --lines "${SUZATARY_E2E_RESCRUB_LINES:-500}" --conversations "${SUZATARY_E2E_RESCRUB_CONVERSATIONS:-30}" --sealed unversioned
-# web/e2e/wide.test.ts: 400 heads.
 start wide --wide 400
 # The service worker's server: its build is read from a file per request, so a scene can deploy
 # under a running tab. Its own, or its worker would serve other files' scenes from cache.

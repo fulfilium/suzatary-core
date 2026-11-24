@@ -1,7 +1,6 @@
 # An APK PROFILE: what one person's Android portal is built with, read from a
 # TOML file and refused at evaluation when it is not one. The generic profile
-# (android/profile/generic.toml) is empty; docs/APKPROFILE-PLAN-2026-10-23.md
-# lists the fields later stages add.
+# (android/profile/generic.toml) is empty.
 #
 #   box    = "<name>.<tailnet>.ts.net"   the box the portal opens, asked at
 #                                        first launch when absent

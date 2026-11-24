@@ -1,30 +1,23 @@
 name: Gate store
 
 # THE STORE THE GATE'S JOBS START FROM (.github/workflows/gate.yml). A run on a branch reads only
-# the Actions caches saved on that branch or on master, and every train gates on a new branch
-# `gate/<train sha>`, so the gate's jobs cannot keep a store for each other. This job saves one,
-# on master, on each publication: the builds the lanes start from that no binary cache serves (the
-# six crane dependency builds and the Prodrome's typst module), under a key of what they are
-# built from. Every gate job restores it and saves nothing. The operator's shell (`.#triage`) is
-# left out: it is 5.1 GB, and cache.nixos.org serves all of it but three small paths a job builds
-# in seconds.
+# the Actions caches saved on that branch or on master, and every train gates on a new branch, so
+# this job saves one on master on each publication: the builds no binary cache serves (the crane
+# dependency builds and the Prodrome's typst module), keyed by what they are built from. The
+# operator's shell is left out: cache.nixos.org serves all of it but three small paths.
 #
-# THE BUDGET. A repository's Actions cache holds 10 GB, and GitHub evicts the least recently used
-# entries past it. This writes one store entry: before saving, the store is collected down to what the
-# roots below hold, and after saving, every older entry of the store is purged. So the cache holds
-# one store, and two only while a new one is saved; the last step fails, loudly, when the entry
-# is larger than half of the 10 GB, and a failed step here is no gate's verdict.
+# THE BUDGET. A repository's Actions cache holds 10 GB and GitHub evicts the least recently used
+# entries past it, so the store is collected down to the roots below before saving, every older
+# entry is purged after, and the size step fails past half of the 10 GB; a failed step here is no
+# gate's verdict.
 #
-# THE CARGO LANES' DEPENDENCY BUILD. Then the same job runs the gate's cargo steps in their shell
-# and keeps `app/target` through the cargo-target action (`for: gate`), which drops the
-# workspace's own units and names the entry by what decides the rest: the toolchain and shell,
-# the lock, the manifests and the gate's flags. gate.yml's checks, tests and guards lanes restore
-# it, so they compile the workspace's crates and no dependency.
+# THE CARGO LANES' DEPENDENCY BUILD. The same job runs the gate's cargo steps and keeps
+# `app/target` through the cargo-target action (`for: gate`), which gate.yml's checks, tests and
+# guards lanes restore.
 #
-# WHO REACHES WHAT. Only a push to master runs this, and only in the public repository (the
-# private one carries the same file and skips it); no pull request runs it. It names no secret and
-# pushes nothing to the Cachix. Its token reads the repository and may delete this repository's
-# Actions caches (`actions: write`), which the purge needs; no job of gate.yml holds that.
+# WHO REACHES WHAT. Only a push to master runs this, in the public repository alone; it names no
+# secret and pushes nothing to the Cachix. Its token may delete this repository's Actions caches
+# (`actions: write`), which the purge needs; no job of gate.yml holds that.
 on:
   push:
     branches: [master]
@@ -122,9 +115,8 @@ jobs:
         uses: ./.github/actions/cargo-target
         with: { for: gate, mode: restore }
 
-      # The steps of the checks, tests and guards lanes that compile, whatever their verdict on
-      # master: a red step still leaves its dependencies built. A gate that did not start (75)
-      # built nothing, so nothing is saved.
+      # A red step still leaves its dependencies built, but a gate that did not start (75) built
+      # nothing, so nothing is saved.
       - id: built
         name: Build what the cargo lanes compile
         if: ${{ !cancelled() && steps.target.outputs.hit != 'true' }}
@@ -139,8 +131,7 @@ jobs:
         uses: ./.github/actions/cargo-target
         with: { for: gate, mode: save }
 
-      # One entry: every older one is purged, and the entry fails here, loudly, past 1.5 GB, which
-      # keeps it and the store inside the 10 GB.
+      # Past 1.5 GB the step fails, which keeps the entry beside the store inside the 10 GB.
       - name: Purge the older dependency builds, and the entry's size
         if: ${{ !cancelled() && steps.built.outcome == 'success' }}
         env:

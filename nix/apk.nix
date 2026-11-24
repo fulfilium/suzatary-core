@@ -1,41 +1,21 @@
 # The Android portal, built as a PURE DERIVATION.
 #
-# WHY NO GRADLE. Gradle resolves its own dependencies from the network at build
-# time, which makes the build a function of what Maven Central served that
-# afternoon — the opposite of everything else here, where the toolchain is
-# pinned in the flake and a rebuild is a hash check. The app is one Java file
-# and four resources; the Android SDK ships the tools that turn those into an
-# APK (aapt2, d8, zipalign, and javac from the JDK), so the whole build is those
-# four commands in order. CI then rebuilds only when an input CHANGED, because
-# that is what a derivation hash means.
+# NO GRADLE: it resolves its dependencies from the network at build time; the SDK's own tools
+# (aapt2, d8, zipalign, and javac) build the one Java file and its resources.
 #
-# WHY ITS OWN pkgs. The Android SDK is unfree and its licence must be accepted;
-# the repo's main pkgs grants unfree to exactly one package BY NAME (claude-code)
-# and that decision should stay legible. Importing nixpkgs again HERE confines
-# "allowUnfree + accept_license" to the file that needs it, so nothing else in
-# the flake silently changes posture.
+# ITS OWN pkgs, so "allowUnfree + accept_license" for the Android SDK stays in the file that
+# needs it and the flake's pkgs grants unfree to claude-code alone.
 #
-# WHY THE BUILD IS x86_64-linux ON EVERY HOST. Measured against the pinned
-# nixpkgs' androidenv/repo.json: Google publishes build-tools for linux (x86_64),
-# macosx and windows and for NO aarch64 Linux, at any revision through 37. On
-# an aarch64 box the package still deploys, and `aapt2` then says "cannot
-# execute binary file: Exec format error" — so a host-native derivation would
-# only fail later and less clearly. Pinning the builder to x86_64-linux says the
-# true thing instead: this artefact needs an x86_64 Linux builder. It also makes
-# the derivation IDENTICAL on every machine, so the store path CI produces and
-# the one a laptop produces are the same path — which is what makes the cache in
-# .github/workflows/release-apk.yml worth having. The APK itself is bytecode and
-# resources; nothing in it is a function of the machine that linked it.
+# x86_64-linux ON EVERY HOST: Google publishes no aarch64 Linux build-tools (aapt2 there fails
+# with "Exec format error"), and one system keeps the store path, and release-apk.yml's cache,
+# the same on every machine.
 #
-# WHY SIGNING IS NOT HERE. A signing key in a derivation is a signing key in the
-# store: world-readable to every user of the box and copied to every substituter
-# it is pushed to. So this produces an UNSIGNED apk plus its sha256, and
-# scripts/sign-apk.sh signs it outside, from a keystore that is a secret.
+# NO SIGNING HERE: a key in a derivation is world-readable in the store and copied to every
+# substituter, so this makes an UNSIGNED apk and its sha256, and scripts/sign-apk.sh signs it.
 {
   nixpkgs,
-  # The host system. Used ONLY for the signer, which is a JVM program.
+  # Used ONLY for the signer, a JVM program.
   system,
-  # The app sources (android/), the web app's icon, and the signing script.
   # android/route/ holds the routes (below); everything else is common.
   src,
   icon,
@@ -52,16 +32,11 @@ let
     android_sdk.accept_license = true;
   };
 
-  # Pinned, and checked against the pinned nixpkgs' repo.json rather than
-  # assumed: 34 is the platform this app targets and 34.0.0 the matching
-  # build-tools. "latest" would make the APK a function of the nixpkgs bump.
+  # Checked against the pinned nixpkgs' repo.json; "latest" would make the APK a function of a nixpkgs bump.
   buildToolsVersion = "34.0.0";
   platformVersion = "34";
 
-  # Only what compiles an APK. No emulator, no system images, no NDK, no cmake,
-  # no sources, and toolsVersion = null drops the legacy `tools` package that
-  # build-tools would otherwise link — each of those is hundreds of megabytes of
-  # closure this build never opens.
+  # Only what compiles an APK; toolsVersion = null drops the legacy `tools` package build-tools would link.
   sdkFor =
     pkgs:
     pkgs.androidenv.composeAndroidPackages {
@@ -79,10 +54,7 @@ let
   # neither of these exposes a bin/ — the tools are addressed by their SDK path.
   toolDirOf = sdk: "${builtins.head sdk.build-tools}/libexec/android-sdk/build-tools/${buildToolsVersion}";
 
-  # 17 rather than whatever `jdk` points at: javac's -source/-target 8 (the
-  # bytecode level d8 reads with no desugaring) is deprecated in newer JDKs and
-  # will eventually be removed. Pinning the JDK keeps a nixpkgs bump from
-  # changing the bytecode this app ships.
+  # Pinned: javac's -source/-target 8 (what d8 reads with no desugaring) is deprecated in newer JDKs.
   jdkOf = pkgs: pkgs.jdk17_headless;
 
   buildPkgs = import nixpkgs {
@@ -104,12 +76,8 @@ let
     filter = path: _: !(lib.hasPrefix "${toString src}/route" path);
   };
 
-  # A ROUTE is how the WebView reaches the box, and the APK is a function of
-  # one. Each names its own Route.java (android/route/<name>/java), the jars
-  # that class compiles and runs against, the native libraries it loads, a
-  # resource overlay, and the package it installs as. `device` is the phone's
-  # own network (the Tailscale app's VPN) and adds nothing; `tsnet` is a
-  # tailnet node inside the app (android/route/tsnet, docs/reports).
+  # A ROUTE is how the WebView reaches the box: `device` is the phone's own network (the
+  # Tailscale app's VPN) and adds nothing; `tsnet` is a tailnet node inside the app.
   routes = {
     device = {
       name = "device";
@@ -128,17 +96,14 @@ let
       ];
       libs = "${node}/jni";
       res = src + "/route/tsnet/res";
-      # Its own package, so it installs BESIDE the portal rather than over
-      # it, and the owner keeps a working app while he tries this one.
+      # Its own package, so it installs BESIDE the portal rather than over it.
       package = "com.bmabsout.suzatary.tsnet";
     };
   };
 
-  # androidx.webkit, for ProxyController: the one supported way to send a
-  # WebView's requests through a proxy. Its classes.jar is all of it the app
-  # needs at run time (only WebViewAssetLoader, unused here, reaches into
-  # androidx.core; the annotation libraries are compile-time only). 1.12.1 is
-  # the newest whose bytecode build-tools 34's d8 reads (1.14.0 crashes it).
+  # androidx.webkit, for ProxyController (the one supported way to proxy a WebView); its
+  # classes.jar is all the app needs. 1.12.1 is the newest whose bytecode build-tools 34's d8
+  # reads (1.14.0 crashes it).
   webkit = buildPkgs.runCommand "androidx-webkit-1.12.1" {
     aar = buildPkgs.fetchurl {
       url = "https://dl.google.com/dl/android/maven2/androidx/webkit/webkit/1.12.1/webkit-1.12.1.aar";
@@ -147,10 +112,9 @@ let
     nativeBuildInputs = [ buildPkgs.unzip ];
   } "mkdir $out && unzip -q $aar classes.jar -d $out";
 
-  # THE NODE: android/route/tsnet/node (Go, tsnet) bound to Java by
-  # gomobile, for arm64 phones only. Go 1.27.1 because tailscale.com v1.104.0
-  # asks for it; the module cache is a fixed-output derivation of go.sum
-  # (proxyVendor), so the build itself reads no network.
+  # THE NODE, bound to Java by gomobile for arm64 only. Go 1.27.1 because tailscale.com v1.104.0
+  # asks for it; the module cache is a fixed-output derivation (proxyVendor), so the build reads
+  # no network.
   ndkVersion = "29.0.14206865";
   nodeSdk = buildPkgs.androidenv.composeAndroidPackages {
     platformVersions = [ platformVersion ];
@@ -250,15 +214,9 @@ let
       runHook preBuild
       export PATH=${toolDir}:$PATH
 
-      # RESOURCES. The tracked res/ tree, plus launcher icons rendered from the
-      # web app's own 512px PNG — so the icon on the home screen and the icon of
-      # the installed PWA are the same picture by construction, not by two
-      # people exporting the same SVG twice. -strip drops the PNG tIME chunk,
-      # which would otherwise put a clock in the output.
-      # THE PROFILE (nix/apk-profile.nix), spelled into a copy of the common
-      # sources: Profile.java names the box or none, and the manifest keeps
-      # its https link filter only for a named box. A token left over is a
-      # build failure.
+      # THE PROFILE is spelled into a copy of the common sources, and a token left over fails
+      # the build. The launcher icons are the web app's own PNG; -strip drops the PNG tIME
+      # chunk, which would put a clock in the output.
       cp -r ${common} android
       chmod -R u+w android
       cp ${profileJava profile} android/java/com/bmabsout/suzatary/Profile.java
@@ -284,10 +242,8 @@ let
       aapt2 compile --dir res -o compiled.zip
       ${lib.optionalString (route.res != null) "aapt2 compile --dir ${route.res} -o overlay.zip"}
 
-      # LINK. --version-code/--version-name inject what the manifest omits, so
-      # the version in a released APK is a fact about the commit it was built
-      # from. --java writes R.java, which MainActivity compiles against, in
-      # the classes' own package whatever the route installs as.
+      # --version-code/--version-name inject what the manifest omits; --java writes R.java in the
+      # classes' own package whatever the route installs as.
       aapt2 link \
         -o base.apk \
         -I ${androidJar} \
@@ -310,12 +266,9 @@ let
       d8 --release --min-api 26 --lib ${androidJar} \
         --output dex $(find classes -name '*.class') ${toString route.jars}
 
-      # d8 cannot append to an archive and aapt2 cannot be told about dex, so
-      # the two halves meet here. -X drops the extra attributes (uid, gid, the
-      # high-resolution timestamps); the touch handles the one -X leaves, the
-      # DOS date in the central directory, which is otherwise the wall clock and
-      # was measured making two builds of identical bytes hash differently. 1980
-      # is the DOS epoch and the SOURCE_DATE_EPOCH the rest of this repo uses.
+      # d8 cannot append to an archive and aapt2 cannot be told about dex, so they meet here; -X
+      # drops the extra attributes and the touch sets the DOS date, otherwise the wall clock, to
+      # 1980, the DOS epoch and this repo's SOURCE_DATE_EPOCH.
       cp base.apk unaligned.apk
       touch -d @315532800 dex/classes.dex
       ( cd dex && zip -q -X ../unaligned.apk classes.dex )
@@ -329,11 +282,8 @@ let
         ( cd native && zip -q -X -r -D ../unaligned.apk lib )
       ''}
 
-      # Android mmaps uncompressed entries straight out of the APK, so they must
-      # be 4-byte aligned; -p additionally page-aligns stored .so files, of
-      # which this app has none (a route's are deflated). An unaligned APK
-      # installs and then runs slower for no reason, which is exactly the kind
-      # of thing nobody notices.
+      # Android mmaps uncompressed entries straight out of the APK, so they must be 4-byte
+      # aligned; -p page-aligns stored .so files, of which there are none (a route's are deflated).
       zipalign -p -f 4 unaligned.apk suzatary-unsigned.apk
       runHook postBuild
     '';
@@ -342,15 +292,10 @@ let
       runHook preInstall
       mkdir -p $out
       cp suzatary-unsigned.apk $out/
-      # The artefact carries its own identity, so the release notes can say what
-      # this is without evaluating the flake a second time or parsing a store
-      # path — the same reason every generated todo block carries authoredBy.
+      # The release notes read the version here, never by evaluating the flake again.
       printf '%s\n' ${versionName} > $out/version
-      # THE BUILD'S FINGERPRINT. The release workflow compares this against the
-      # one already published and skips the upload when they match, so a docs
-      # commit does not mint a new APK for people to install. It is the UNSIGNED
-      # hash on purpose: it is a fact about the inputs alone and does not depend
-      # on a signature algorithm happening to be deterministic.
+      # The release workflow skips the upload when this matches the published one: the UNSIGNED
+      # hash, a fact about the inputs alone, never about a signature's determinism.
       ( cd $out && sha256sum suzatary-unsigned.apk > suzatary-unsigned.apk.sha256 )
       runHook postInstall
     '';
@@ -370,11 +315,8 @@ let
     };
   };
 
-  # THE SIGNER RUNS ANYWHERE A JVM DOES, so it is built for the HOST and not for
-  # x86_64-linux. apksigner is a shell script over apksigner.jar; the x86_64
-  # aapt2 and zipalign sitting beside it in the same package are never invoked.
-  # That distinction is the difference between the owner being able to sign a
-  # downloaded APK on an aarch64 box and not.
+  # THE SIGNER is built for the HOST: apksigner is a script over a jar, and the x86_64 aapt2 and
+  # zipalign beside it are never invoked, so an aarch64 box can sign.
   hostPkgs = import nixpkgs {
     inherit system;
     config = androidConfig;

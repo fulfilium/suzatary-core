@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Leaves in app/target the dependencies' units alone, for this action (cargo-target) to keep. Cargo
-# rebuilds a workspace member whose files a checkout stamped newer, whatever the target holds, and
-# identifies a dependency by what it was built from, never by a file's time; so the members' units
-# are bytes no later tree reads, removed by the names cargo gives their files. A name this misses
-# is bytes kept, never a wrong answer.
+# Leaves in app/target the dependencies' units alone, for the cargo-target action to keep: the
+# members' units, which cargo rebuilds after any checkout, are removed by the names cargo gives
+# their files, and a name this misses is bytes kept, never a wrong answer.
 #
 #   target-deps.sh      from the repository's root, with cargo and jq on PATH
 set -euo pipefail

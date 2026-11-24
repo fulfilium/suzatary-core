@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # The web's static checks, the one spelling of each, called by build-web.sh and web-test.sh.
-# Pure grep over web/src, web/test and web/e2e.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,7 +7,7 @@ cd "$root"
 
 # Escaping: every displayed string came from attacker-controlled mail, so nothing may parse a
 # string into markup except web/src/rich.ts, which holds exactly one innerHTML assignment
-# (counted by occurrence, not line). Every form the platform offers is banned.
+# (counted by occurrence, not line).
 #
 # `--binary-files=text`, never `-I`: `-I` silently skips a file holding a NUL byte, so an
 # `innerHTML =` added to it would build green.

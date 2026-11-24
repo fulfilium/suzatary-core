@@ -30,7 +30,6 @@ const READ = `{
 
 const tokens = JSON.parse(execFileSync("typst", ["eval", READ, "--root", root], { cwd: root, encoding: "utf8" }));
 
-// Indented 2 spaces per depth.
 const cssVars = (theme, depth) =>
   Object.entries(tokens[theme])
     .map(([name, value]) => `${"  ".repeat(depth)}--${name}: ${value};`)

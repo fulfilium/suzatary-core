@@ -1,27 +1,20 @@
 name: Quick checks
 
-# THE PUSH-TIME OPINION, SIZED FOR A SMALL CHANGE (the owner, 2026-09-13: "what
-# would take us down to a minute for small changes?"). It checks every commit
-# message (`plan`) and runs `check` (fmt, clippy, docs) from `cargo` against
-# a restored dependency build. The suite and the browser are the merge
-# gate's (`scripts/merge-gate.sh`), which every train passes before it lands.
+# THE PUSH-TIME OPINION, SIZED FOR A SMALL CHANGE: it checks every commit
+# message (`plan`) and runs `check` (fmt, clippy, docs) against a restored
+# dependency build; the suite and the browser are the merge gate's.
 #
-# A VERDICT IS A FUNCTION OF ITS INPUTS, SO IT IS KEPT. `plan` names the
-# Rust's inputs by the git tree entries they read (`scripts/ci-names.sh`:
-# every path but docs/, android/ and web/) and looks the name up: a `check`
-# that already passed on exactly those bytes, in this workflow as it now
-# stands, is not run again. A docs change costs the commit-message check and
-# nothing else. Only a pass is kept; a failure is the absence of one, so a
-# re-run runs.
+# A VERDICT IS KEPT: a `check` that already passed on exactly the git tree
+# entries the Rust reads (`scripts/ci-names.sh`), in this workflow as it
+# stands, is not run again; only a pass is kept, so a re-run of a failure runs.
 #
 # ONE SET OF FLAGS: `.github/cargo-ci.toml`, installed as cargo's
 # configuration, so every cargo step builds on the step before.
 on:
   push:
     branches: [ master ]
-  # Not on pull requests: each agent session runs the full gate itself and every train is
-  # gated again on the merged tree, so a run per push to a PR branch only spends the
-  # private repository's minutes (928 in the first three days of October 2026).
+  # Not on pull requests: every train is gated again on the merged tree, so a run per push to
+  # a PR branch only spends the private repository's minutes.
   workflow_dispatch: {}
 
 concurrency:

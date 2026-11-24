@@ -4,7 +4,7 @@
 #
 #   scripts/core-settings.sh [<owner>/<repo>]   (default: the remote `core` of this checkout)
 #
-# Idempotent; each step prints what it sets. Only an administrator may move master, else a gate
+# Idempotent. Only an administrator may move master, else a gate
 # branch's workflow could move master and run its own code beside the cache token, and
 # CACHIX_AUTH_TOKEN goes on stdin, so it is in no argument, file or printed line.
 #

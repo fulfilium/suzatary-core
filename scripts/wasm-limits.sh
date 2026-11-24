@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Each wasm module against its limit in <budget> for <system> (`<module> <system> <measured>
-# <limit>`, AGENTS.md, "Derived figures"); exit 1 naming each module over its limit, or with no
+# <limit>`); exit 1 naming each module over its limit, or with no
 # line where the budget has lines for <system>. A system the budget names nowhere is printed, not
 # judged.
 #

@@ -1,31 +1,25 @@
 name: Gate
 
-# THE MERGE GATE'S TREE HALF, ON GITHUB'S RUNNERS (scripts/train.sh gate --remote github). This
-# file runs in suzatary-core, the public repository the train publishes to, where runners cost
-# nothing. The train pushes one commit to a branch `gate/<train sha>`: the train commit's public
-# tree, a function of its tree. Each job checks out that one commit (depth 1, so it reads the tree
-# and no history) and runs one lane of scripts/merge-gate.sh's tree half with `--steps`; the steps
-# that read the private repository run on the box (train.sh's `box_before` and `box_after`), and a
-# guard test holds the lists to every step of the half. The train dispatches master's
-# publication.yml for the same commit, which builds what a deploy builds beside these jobs, and the
-# box waits for that run before it builds them.
+# THE MERGE GATE'S TREE HALF, ON GITHUB'S RUNNERS (scripts/train.sh gate --remote github), run in
+# suzatary-core on a branch `gate/<train sha>` holding the train commit's public tree. Each job
+# checks out that one commit (depth 1, so it reads no history) and runs one lane of
+# scripts/merge-gate.sh's tree half with `--steps`; the steps that read the private repository run
+# on the box (train.sh's `box_before` and `box_after`), and a guard test holds the lists to every
+# step of the half.
 #
-# THE VERDICT IS READ OFF THE STEPS, NOT THE RUN. A job's `gate` step writes the gate's exit code
-# and passes; then `red` fails when the gate exited 1, and `no verdict` fails on any other code. So
-# the train reads red only where a gate found the tree red, and a run that failed any other way (a
-# runner lost, a cancel, a timeout, an install that failed, a gate that did not start) is no
-# verdict, never a red tree.
+# THE VERDICT IS READ OFF THE STEPS, NOT THE RUN: `red` fails only when the gate exited 1, and any
+# other failure (a runner lost, a cancel, a timeout, an install that failed, a gate that did not
+# start) is `no verdict`, never a red tree.
 #
-# NO JOB HOLDS A SECRET. Only a push to a `gate/**` branch runs this, and only someone with write
-# access to core can push one; a fork's push runs in the fork, and no pull request event is named
-# here, so no pull request runs it. The token GitHub hands the jobs reads the repository and
-# nothing else (`contents: read`), and the checkout does not keep it. The jobs push nothing: they
-# read the public `bmabsout` Cachix as a plain substituter, which only publication.yml writes, and
-# the Actions cache's store, which only gate-store.yml writes, from master.
+# NO JOB HOLDS A SECRET. Only a push to a `gate/**` branch runs this, which needs write access to
+# core (a fork's push runs in the fork, and no pull request event is named); the token reads the
+# repository alone and the checkout does not keep it. The jobs push nothing: they read the Cachix
+# as a plain substituter (only publication.yml writes it) and the Actions store gate-store.yml
+# writes from master.
 #
 # THE STORE. A run reads only the caches saved on its branch or on master, and a gate branch is
-# new for every train, so each job restores the store gate-store.yml saves on master (or the
-# newest one before it) and saves nothing. A miss is a cold store: slower, never red.
+# new for every train, so each job restores the store gate-store.yml saves on master and saves
+# nothing; a miss is a cold store, slower, never red.
 on:
   push:
     branches: [ 'gate/**' ]
@@ -53,8 +47,7 @@ jobs:
           - { lane: guards, steps: 'guards', part: '', builds: '', deps: true, wasm: optimised }
           - { lane: script-guards, steps: 'script-guards', part: '', builds: '', deps: false, wasm: optimised }
     steps: &lane
-      # The runner's preinstalled toolchains, none of them used here, hold most of its disk, and
-      # the gate does not start short of 12 GB.
+      # The gate does not start short of 12 GB, most of which the unused preinstalled toolchains hold.
       - &free
         name: Free the runner's disk
         run: |
@@ -67,7 +60,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # Nix with flakes, reading the public Cachix as a plain substituter.
       - &nix
         uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
         with:
@@ -93,8 +85,7 @@ jobs:
         uses: ./.github/actions/cargo-target
         with: { for: gate, mode: restore }
 
-      # The builds this job waited for (`matrix.builds`), imported. A lane that finds none builds
-      # what it reads itself: slower, never red.
+      # A lane that finds none of its builds builds what it reads itself: slower, never red.
       - name: the builds
         if: matrix.builds
         continue-on-error: true
@@ -130,8 +121,7 @@ jobs:
           done
           exit "$missed"
 
-      # The passes the last gates kept (gate-passes.yml). The key names this run, which no entry
-      # holds, so the newest one is read; a miss runs every step.
+      # gate-passes.yml's; the key names this run, which no entry holds, so the newest one is read.
       - name: the passes
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         continue-on-error: true
@@ -144,9 +134,8 @@ jobs:
       - name: the passes, where the gate reads them
         run: if [ -d passes ]; then mv passes .git/gate; fi
 
-      # The shell the gate runs in, apart, so a download that fails here stops the job before its
-      # gate, as no verdict. A shell the tree cannot build is red on the box, whose public-tree
-      # step builds it.
+      # Apart, so a download that fails stops the job before its gate, as no verdict; a shell the
+      # tree cannot build is red on the box, whose public-tree step builds it.
       - name: the shell
         run: nix develop .#triage -c true
 
@@ -196,9 +185,8 @@ jobs:
           echo "::error::the gate did not reach a verdict (exit ${CODE:-none}), which says nothing of the tree"
           exit 1
 
-  # ONE BUILD PER TREE: each job builds the outputs `merge-gate.sh --list` names for it and hands
-  # their closures, named by store path, to the lanes that read them as a binary cache in the run's
-  # artifacts. A failed build is no verdict: each lane that reads it builds it, and is red there.
+  # ONE BUILD PER TREE, handed to the lanes that read it as a binary cache in the run's artifacts;
+  # a failed build is no verdict: each lane that reads it builds it, and is red there.
   build-web:
     name: build (web)
     runs-on: ubuntu-24.04-arm
@@ -255,9 +243,9 @@ jobs:
           - { build: fixture }
     steps: *build
 
-  # The lanes that read the builds: each waits for its builds' jobs to end, whatever they ended as.
-  # The tests and the scenes read the development wasm build; the deploy's bundle (nix-web, which
-  # judges its brotli budget) and the scenes that bound a task's time read the optimised one.
+  # Each waits for its builds' jobs to end, whatever they ended as; the deploy's bundle (nix-web,
+  # which judges its brotli budget) and the timed scenes read the optimised wasm, the rest the
+  # development one.
   gate-web:
     name: gate (${{ matrix.lane }})
     needs: build-web-dev

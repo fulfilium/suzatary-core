@@ -1,17 +1,13 @@
-# What a Suzatary service IS, independent of how it gets started.
-#
-# This file says what a service needs and builds its executable; nix/nixos-module.nix says when
-# and under whom it runs. The `roots` service reads `$SUZATARY_USER_REPO/flake.lock`, builds the
-# tree it names and links it at `$SUZATARY_ROOTS/app`; every other wrapper execs its script from
-# there, read-only.
+# What a Suzatary service needs and its executable; nix/nixos-module.nix says when and under
+# whom it runs. Every wrapper but `roots` execs its script, read-only, from the tree `roots`
+# links at `$SUZATARY_ROOTS/app`.
 { pkgs }:
 
 let
   inherit (pkgs) lib;
 
-  # Every program door 2 runs (scripts/roadmap-push.sh, public-scan.sh and public-tree.sh), by
-  # the name the scripts call it: the hourly pass pushes a public store's clone behind door 2.
-  # app/cli/tests/guards/door_two.rs reads the names off the scripts and holds them to this set.
+  # Every program door 2 runs, by the name its scripts call it, so the hourly pass can push a
+  # public store's clone; app/cli/tests/guards/door_two.rs holds this set to the scripts.
   doorTwo = with pkgs; {
     awk = gawk;
     basename = coreutils;
@@ -56,11 +52,8 @@ let
     util-linux    # flock, for safe-push.sh's push serialization
     claude-code   # the whole point: version-tracked and GC-rooted
     openssh       # git push over ssh, if the remote ever moves off https
-    # The git push in safe-push.sh authenticates through
-    # scripts/git-credential-secretspec.sh, which needs all three: secretspec to
-    # resolve the declared secret, pass+gnupg because `pass` is the provider.
-    # The unattended agent cannot reach any of them — it has no Bash — but the
-    # trusted wrapper that pushes on its behalf must.
+    # safe-push.sh's credential helper needs secretspec and its provider, pass+gnupg;
+    # the agent, with no Bash, reaches none of them.
     secretspec
     pass
     gnupg
@@ -74,8 +67,7 @@ let
         https://cache.nixos.org/nix-cache-info && exit 0
       sleep 5
     done
-    # Five minutes with no substituter is an outage, not a slow boot. Start
-    # anyway: a degraded start visible in the journal beats never coming up.
+    # Five minutes is an outage, not a slow boot: start, visibly, rather than never.
     echo "suzatary: no substituter reachable after 5min, starting anyway" >&2
   '';
 
@@ -85,10 +77,8 @@ let
     roots="''${SUZATARY_ROOTS:-''${XDG_STATE_HOME:-$HOME/.local/state}/suzatary/roots-dev}"
   '';
 
-  # The app the roots refresh last built, ROOTED FOR THIS UNIT under its own
-  # name (scripts/root-serving.sh): the shared link moves on the next deploy and
-  # the daemon collects what nothing roots, while a long-running unit reads its
-  # files from this tree for as long as it runs.
+  # ROOTED FOR THIS UNIT under its own name (scripts/root-serving.sh): the shared link moves on
+  # the next deploy and the daemon collects what nothing roots, while the unit still reads it.
   resolveApp = name: ''
     ${rootsDir}
     app="$(readlink -f "$roots/app" || true)"
@@ -108,9 +98,7 @@ let
     export SUZATARY_INSTANCE
   '';
 
-  # A service that runs one of the app's scripts with the environment it needs.
-  # `runsTheApp` marks it for nix/module-check.nix, which finds a unit that
-  # runs one by its ExecStart.
+  # `runsTheApp` marks it for nix/module-check.nix, which finds a unit that runs one by its ExecStart.
   appService = { name, script, args ? [ ], waitForNet ? true }:
     pkgs.writeShellScriptBin name ''
       set -euo pipefail
@@ -123,19 +111,12 @@ in
 rec {
   inherit doorTwo runtimeDeps waitForNetwork;
 
-  # THE ONE READER OF THE LOCK, started by the module's path unit when
-  # flake.lock changes and by scripts/deploy.sh. It reads only a COMMITTED lock
-  # (the working tree's lock equal to HEAD's), so a lock written and not
-  # committed builds nothing; it builds only a revision of the branch this box
-  # follows (scripts/followed.sh, deploy's own check); it roots the tree before
-  # building it; it refuses
-  # a tree without the lock interface (nix/app-input.nix), whose scripts would
-  # write under their own read-only code root; it builds, under names only it
-  # moves (`lock-`), the app's builds (scripts/app-builds.sh, which
-  # scripts/deploy.sh ran on the same tree before committing the lock, so
-  # this run normally finds them all in the store); and it moves
-  # `$SUZATARY_ROOTS/app` LAST, so a failed run leaves every unit on the app
-  # it ran. The shell profiles keep their current generation only.
+  # THE ONE READER OF THE LOCK. It builds only a COMMITTED lock naming a revision of the branch
+  # this box follows; it roots the tree before building it; it refuses a tree without
+  # nix/app-input.nix, whose scripts would write under their own read-only code root; it builds
+  # under names only it moves (`lock-`); and it moves `$SUZATARY_ROOTS/app` LAST, so a failed
+  # run leaves every unit on the app it ran. It runs the app's `scripts/app-builds.sh`, which
+  # `scripts/deploy.sh` ran on the same tree, and links `app` only after every build succeeds.
   rootsScript = ''
     set -euo pipefail
     export PATH="${lib.makeBinPath runtimeDeps}:''${PATH:-}"
@@ -146,11 +127,8 @@ rec {
       echo "suzatary-roots: $lock is not the committed lock; only a commit is a version (scripts/deploy.sh makes one). Nothing built." >&2
       exit 1
     fi
-    # The revision went through the gate and the operator chose it: one a
-    # deploy here pinned from the branch this box follows (or the pin before,
-    # a revert's way back), on that branch's first-parent chain as the deploy
-    # fetched it, from the remote it follows, whoever committed the lock
-    # (scripts/followed.sh).
+    # Only what went through the gate and the operator chose: a revision a deploy here pinned from
+    # the followed branch's first-parent chain (or the pin before), whoever committed the lock.
     locked() { nix eval --raw --file ${./app-input.nix} --argstr lock "$lock" "$1"; }
     bash ${../scripts/followed.sh} admit "$(git -C "$user" rev-parse --absolute-git-dir)/suzatary-followed.git" \
       "$(locked lockedUrl)" "$(locked lockedRef)" "$(locked revision)" || {
@@ -177,32 +155,21 @@ rec {
     script = "scripts/vault-backup.sh";
   };
 
-  # IMAP IDLE: one connection per Microsoft account, triggering the SAME
-  # `triage` unit above on a debounced wake rather than running the sync
-  # itself — the 5-minute timer stays the fallback, this only lowers the
-  # latency between a real mail arriving and the pipeline seeing it. A
-  # long-running watcher, not a periodic job, so `waitForNet` matters the same
-  # way `web`'s does: the wrapper re-enters `nix develop .#triage` at start.
+  # IMAP IDLE per Microsoft account: it wakes the `triage` unit early, debounced, and never
+  # syncs itself; the 5-minute timer stays the fallback.
   mailIdle = appService {
     name = "suzatary-mail-idle";
     script = "scripts/mail-idle.sh";
     waitForNet = true;
   };
 
-  # The read-only web app over the chain (`suzatary serve`).
-  # A long-running server, not a periodic job — the NixOS module runs it as a
-  # Type=simple unit with no timer. waitForNet is on for the usual reason: the
-  # script re-enters `nix develop .#triage` at start, and an evaluation that
-  # begins before DNS concludes the substituter is unreachable and starts
-  # building from source (2026-08-10).
   plugins = appService {
     name = "suzatary-plugins";
     script = "scripts/plugin-sync.sh";
   };
 
-  # `suzatary follow fetch` by the deployed binary, which evaluates nothing. It waits for the
-  # network first: the timer's catch-up after a boot would otherwise run before it, and a refused
-  # fetch is recorded beside the copy, where every reading of the list says it until the next one.
+  # Waits for the network: the timer's catch-up after a boot would otherwise run first, and a
+  # refused fetch is recorded where every reading of the list shows it until the next one.
   follows = appService {
     name = "suzatary-follows";
     script = "scripts/app-bin.sh";
@@ -216,7 +183,6 @@ rec {
   };
 
   # Bridge runs the .#triage shell's own package, by store path, so a start evaluates nothing.
-  #
   # pass/gnupg stay on PATH: Bridge shells out to `pass` for its keyring, since
   # `keyring` needs a DBus secret-service and dies headless.
   protonBridge = pkgs.writeShellScriptBin "suzatary-proton-bridge" ''

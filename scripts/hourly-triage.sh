@@ -21,8 +21,7 @@ pulse() { app heartbeat "$@"; }
 # implicit, so no hand-placed `pulse failed` could cover them all.
 CURRENT_STAGE=sync
 
-# Installed before anything can fail. On a zero exit it is a no-op; each clean exit records
-# `pulse ok` itself.
+# Installed before anything can fail; each clean exit records `pulse ok` itself.
 outcome_on_exit() {
   local rc=$?
   if [ "$rc" -ne 0 ]; then
@@ -34,7 +33,7 @@ trap outcome_on_exit EXIT
 # Derived as the binary's `Paths` derives it.
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/suzatary"
 mkdir -p "$STATE"
-# The agent's last run: the CLI's whole stream, with its stderr beside it.
+# The CLI's whole stream and its stderr.
 SESSION="$STATE/triage-session.jsonl"
 
 # A full disk breaks things silently (~/.claude.json can be truncated with its backup), so bail
@@ -235,7 +234,6 @@ MCP="$(sed "s|@SUZATARY_BIN@|$SUZATARY_APP/bin/suzatary|" .claude/mcp-suzatary.j
 # reviews and only the owner's tap performs. If `suzatary secretary reviews --since <date>` shows
 # rejection and hold rates climbing, a weaker model is costing the review more than it saves.
 TRIAGE_MODEL=claude-sonnet-5
-#
 # --tools ToolSearch leaves only ToolSearch of the built-in tools, so a shell or file tool is
 # absent, not just denied; the hook stays the belt.
 #

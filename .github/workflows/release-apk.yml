@@ -2,22 +2,15 @@
 # cache is spent only when the shell changed.
 name: Android APK
 
-# ON A RELEASE THAT CHANGES THE PORTAL, NOT ON EVERY TAG (the owner,
-# 2026-10-13). Every train tags a release now, and the web app updates itself
-# behind the portal, so the APK is built only when the Android shell changed
-# since the previous tag (android/, nix/apk.nix, nix/apk-profile.nix, the icon
-# it renders) or the tag starts a new MAJOR, and on a manual dispatch.
+# BUILT ONLY WHEN THE ANDROID SHELL CHANGED since the previous tag (android/,
+# nix/apk.nix, nix/apk-profile.nix, the icon it renders), when the tag starts a
+# new MAJOR, and on a manual dispatch; the web app updates itself behind it.
 #
-# PUBLISHED TO THE VERSION'S OWN RELEASE, NOT A ROLLING ONE (2026-09-13,
-# the owner: "tell me what to do so it autoupdates"). The phone updates through
-# Obtainium, which watches this repository's releases and detects a new build
-# by a NEW TAG — the rolling `app` release, whose tag was always `app`,
-# re-uploaded new bytes under the same name and so was invisible to it. A tag
-# push now creates (or fills) the `v<version>` release; the rolling `app`
-# release remains the target of a manual dispatch, which has no tag. When the
-# APK's bytes are unchanged since the last published build the version's
-# release carries no APK and says so, and Obtainium's "fallback to older
-# releases" finds the one that has it — no install prompt for identical bytes.
+# PUBLISHED TO THE VERSION'S OWN RELEASE: Obtainium, which the phone updates
+# through, detects a new build only by a NEW TAG, so a tag fills the
+# `v<version>` release and a dispatch, which has no tag, the rolling `app`
+# release. A version whose APK bytes are unchanged carries no APK and says so,
+# and Obtainium's "fallback to older releases" finds the one that has it.
 on:
   push:
     tags: [ 'v*' ]
@@ -29,8 +22,6 @@ permissions:
   contents: write
 
 jobs:
-  # Whether this tag needs a new APK: its shell changed since the previous tag, or its major
-  # is new. A dispatch always builds.
   decide:
     runs-on: ubuntu-latest
     outputs:
@@ -72,22 +63,17 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
 
-      # The SDK closure is ~300 MiB plus a JDK; downloading it on every run is
-      # most of this job's time. The primary key includes the app sources so a
-      # hit means "this exact APK has been built before"; the restore prefix is
-      # flake.lock alone, so a change to android/ still reuses the SDK it just
-      # cannot reuse the result. Its own key namespace, apart from quick.yml's.
+      # A hit on the primary key means this exact APK was built before; the
+      # restore prefix is flake.lock alone, so an android/ change reuses the SDK.
       - name: Cache Nix store
         uses: nix-community/cache-nix-action@v7
         with:
           primary-key: apk-${{ runner.os }}-${{ hashFiles('flake.lock', 'nix/apk.nix', 'nix/apk-profile.nix', 'android/**') }}
           restore-prefixes-first-match: apk-${{ runner.os }}-${{ hashFiles('flake.lock') }}
 
-      # THE DEPLOYMENT'S NAMES are the repository's variables, never the
-      # code's: the box the portal opens and the Firebase project that may push
-      # to it. They are written into the APK's profile (nix/apk-profile.nix),
-      # which the build reads. A release without them would be the generic
-      # APK under this repository's package and key, so it fails here.
+      # THE DEPLOYMENT'S NAMES (the box and the Firebase project) are the
+      # repository's variables, never the code's, and a release without them
+      # would be the generic APK under this repository's package and key.
       - name: Build the unsigned APK
         env:
           SUZATARY_PORTAL_HOST: ${{ vars.SUZATARY_PORTAL_HOST }}
@@ -103,9 +89,8 @@ jobs:
           SUZATARY_APK_PROFILE="$profile" \
             nix build --impure --print-build-logs .#apk-profiled-unsigned --out-link result-apk
 
-      # The unsigned build is the reproducible artefact; keep it whether or
-      # not signing can proceed, so a box that CAN sign (an aarch64 box
-      # and cannot build it) fetches this and signs with the vaulted key.
+      # The reproducible artefact, kept whether or not signing proceeds, so a
+      # box that can sign fetches it and signs with the vaulted key.
       - name: Keep the unsigned APK as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -117,11 +102,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # THE CHANGE GATE. The derivation's own sha256 is a fingerprint of its
-      # INPUTS, so comparing it against the one published beside the last APK
-      # answers "is this a different app?" exactly. Without this, every push
-      # that touches flake.lock would mint a new download for a binary nobody's
-      # phone needs — and an install prompt is not free attention.
+      # THE CHANGE GATE: the derivation's sha256 fingerprints its INPUTS, so
+      # comparing it with the one published beside the last APK answers "is
+      # this a different app?" exactly, and an unchanged app prompts no install.
       - name: Decide whether anything changed
         id: gate
         env:
@@ -129,9 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           new=$(cut -d' ' -f1 result-apk/suzatary-unsigned.apk.sha256)
-          # The last PUBLISHED build's fingerprint: the newest release, of any
-          # tag, that carries one (a version whose APK was unchanged carries
-          # none, by the publish step below).
+          # The newest release that carries a fingerprint, of any tag.
           old=""
           for tag in $(gh release list --limit 30 --exclude-drafts --json tagName --jq '.[].tagName'); do
             old=$(gh release download "$tag" --pattern suzatary-unsigned.apk.sha256 --output - 2>/dev/null | cut -d' ' -f1 || true)
@@ -147,9 +128,8 @@ jobs:
           fi
           echo "version=$(cat result-apk/version)" >> "$GITHUB_OUTPUT"
 
-      # Signing needs a key this repo does not and must not contain. Demanding
-      # it only when there is something to publish means a fork, or a run where
-      # nothing changed, never fails for want of a secret it has no use for.
+      # The key, which this repo must not contain, is demanded only when there is
+      # something to publish, so a fork or an unchanged run never fails for it.
       - name: Sign the APK
         if: steps.gate.outputs.changed == 'true'
         env:
@@ -161,10 +141,8 @@ jobs:
             echo "::error::ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD are not set on this repository. An unsigned APK cannot be installed, so nothing is uploaded and this job fails rather than publishing a file that does not work. See scripts/sign-apk.sh for how to mint the keystore."
             exit 1
           fi
-          # umask before the write, and the file dies with the runner. It is
-          # also removed on the way out of this step whether or not signing
-          # succeeded, so a failed sign does not leave a key on disk for the
-          # steps that follow.
+          # umask before the write, and the trap removes the key whether or not
+          # signing succeeded, so no later step finds it on disk.
           umask 077
           keystore="$RUNNER_TEMP/suzatary-release.p12"
           trap 'rm -f "$keystore"' EXIT
@@ -173,9 +151,8 @@ jobs:
           SUZATARY_KEYSTORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \
             nix run .#apk-sign -- result-apk/suzatary-unsigned.apk suzatary.apk
 
-      # THE VERSION'S OWN RELEASE on a tag (what Obtainium watches; see the
-      # header), the rolling `app` release on a dispatch. The unsigned hash
-      # rides along because it is what the gate above reads on the next run.
+      # The unsigned hash rides along because the change gate reads it on the
+      # next run.
       - name: Publish the APK to the release
         if: steps.gate.outputs.changed == 'true'
         env:
@@ -204,9 +181,7 @@ jobs:
             --clobber
           gh release edit "$TARGET" --notes "$notes"
 
-      # A version whose APK did not change still gets its release, saying so,
-      # so the tag is never a release-less tag and the fallback has a reason
-      # to read.
+      # So the tag is never release-less and the fallback has a reason to read.
       - name: Record an unchanged APK on the version's release
         if: steps.gate.outputs.changed == 'false' && github.ref_type == 'tag'
         env:

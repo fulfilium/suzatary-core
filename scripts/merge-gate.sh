@@ -10,8 +10,7 @@
 #   tree     a function of the checked-out tree alone; runs with SUZATARY_INSTANCE naming nothing.
 #   live     the tests that read the owner's data tree, so on the box only.
 #   history  what the commit messages since the merge base with origin/master declare, a check
-#            that compiles nothing; the train runs the same check in its tool before its halves,
-#            and a refusal there writes no verdict.
+#            that compiles nothing.
 #
 # Each step says what it reads beside the tree (`--list`'s second column): `nothing`, or any of
 # `stores` (the owner's stores), `history` (the commits since the merge base) and `runners` (Nix
@@ -21,7 +20,7 @@
 #
 # A pass is kept in .git/gate/<step>/<key>, the key hashing HEAD's tree entries outside the
 # step's `all-but:` paths, the environment the steps read, and proptest's saved
-# counterexamples. The date is not in the key. No step may leave out scripts/, flake.nix or
+# counterexamples. No step may leave out scripts/, flake.nix or
 # flake.lock. Passes are read and kept only for a clean checkout still at HEAD when the gate
 # ends. `together` steps run together (one writes what another reads outside the tree). `unkept`
 # steps run every time.
@@ -71,9 +70,8 @@ case "${SUZATARY_GATE_SERIAL:-}" in
   *) echo "merge-gate.sh: SUZATARY_GATE_SERIAL is 1 or unset, not $SUZATARY_GATE_SERIAL" >&2; exit 64 ;;
 esac
 unset SUZATARY_GATE_SERIAL
-# `cache`, as the train sets it for the box's steps of a gate on GitHub's runners: the public
-# tree's builds come from the binary cache its publication run filled, and one no cache holds is
-# an error, never a build on the box. Unset after reading, as above.
+# `cache` (the train, for a gate on GitHub's runners): the public tree's builds come from the
+# binary cache its publication run filled, and one no cache holds is an error, never a build on the box.
 case "${SUZATARY_GATE_BUILDS:-}" in
   "") cached=() fetched=() ;;
   cache) cached=(--cached) fetched=(--max-jobs 0) ;;
@@ -129,8 +127,7 @@ if [[ -n "${SUZATARY_GATE_EVIDENCE:-}" ]] && ((!list)); then
   mkdir -p "$SUZATARY_GATE_EVIDENCE" && chmod 700 "$SUZATARY_GATE_EVIDENCE" || exit 75
   evidence_head="$(git rev-parse HEAD)" && evidence_head="${evidence_head:0:12}" || exit 75
 fi
-# evidence <step> <code>, in run_step's scope: a red step's $SUZATARY_E2E_SHOTS locked down and the
-# oldest pruned, a green or empty one removed.
+# evidence <step> <code>, in run_step's scope (its $SUZATARY_E2E_SHOTS).
 evidence() {
   local dir="$SUZATARY_E2E_SHOTS"
   if (($2 == 0)); then rm -rf "$dir"; return; fi
@@ -187,7 +184,6 @@ kept_at() {
   } | sha256sum | cut -c1-40)" && printf '%s/%s/%s%s\n' "$kept_dir" "$name" "${unit:+${unit//\//%}/}" "$key"
 }
 
-# `all`, `all-but:<path>[,<path>...]`, `only:<path>[,<path>...]`, `crates`, `files:<dir>` or `unkept`.
 reads_of() {
   local p
   case "$1" in
@@ -209,7 +205,6 @@ reads_of() {
   esac
 }
 
-# `nothing`, or what a step reads beside the tree: some of `stores`, `history` and `runners`.
 beside_of() {
   local what
   [[ "$1" != nothing ]] || { echo "$1"; return; }
@@ -615,8 +610,7 @@ changelog_entry() {
   echo "changelog: $added rides the change"
 }
 step tree changelog       unkept history  changelog_entry
-# Every derived figure against what the commit messages since the merge base declare, by the
-# train's tool (a build of seconds, no workspace compile).
+# Every derived figure against what the commit messages since the merge base declare.
 step history growth       unkept history  scripts/context.sh growth
 
 lane=live
@@ -641,9 +635,8 @@ step live live-all        $live_only stores cargo_app test -q --workspace --test
 # rest. Unkept: the leak guard reads every tracked file.
 mapfile -t box_guards < <(grep -v '^#' app/cli/tests/guards/on-the-box.txt)
 step live live-guards     unkept stores  cargo_app test -q --workspace --test guards --test script-guards -- --exact "${box_guards[@]}"
-# A smoke per gate: the unit tests that read the live chain (`live_web_units`, which merge_gate.rs
-# holds) and the scenes over a copy of the data tree; --nightly runs every unit test. The scenes
-# read the server's code, so this is kept by all but docs/, memory/, android/ and `cli_only`.
+# The unit tests that read the live chain (`live_web_units`, which merge_gate.rs holds) and the
+# scenes over a copy of the data tree; the scenes read the server's code, hence the reads.
 live_web_units=(web/test/wasm.test.ts)
 live_scenes=(pages)
 # HEAD's public tree's fixture binary, which publication.yml pushes (no cache holds the private tree's).
@@ -709,7 +702,7 @@ done
 
 # One `<unit>\t<the paths it skips>` line each, or a failure, saying why on stderr, when the graph
 # cannot be read. It reads the tree alone: the generated wire, which no checkout holds before
-# web-inputs, is external (gate-units.mjs reads an import of it as all of web/src/wire).
+# web-inputs, is external.
 generated_wire=('--external:*/generated/wire' '--external:*/generated/payload' '--external:*/generated/pages')
 units_for() {
   local i="$1" dir

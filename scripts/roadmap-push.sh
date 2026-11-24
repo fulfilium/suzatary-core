@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # The push of a public store's clone: what the box wrote there committed with its pictures drawn
-# again, every commit origin lacks read by door 2 (`public-scan.sh`), then pushed. A push that
-# lost a race merges origin and goes round again; a range the scan refuses is never pushed.
+# again, every commit origin lacks read by door 2 (`public-scan.sh`), then pushed; a range the
+# scan refuses is never pushed.
 #
 #   scripts/roadmap-push.sh <clone> [<subject> [<trailer>...]]
 #
 # Without a subject the commit is the box's ordinary writes, under a fixed subject of its own: a
 # public commit's message holds nothing a private caller wrote. Commits as a fixed identity, never
 # a person's, since door 2 reads each commit's author. Pushes with the credential git already
-# holds for the clone's `origin`. A clone holding nothing new and no commit origin lacks returns at
-# once, with no fetch and no draw. Exits 1 when the scan refused, after one upkeep todo names each
+# holds for the clone's `origin`. Exits 1 when the scan refused, after one upkeep todo names each
 # hit's `file:line` (never the word), filed once for those hits so a pass after it adds nothing;
 # 2 when something else stopped it, the filing included.
 set -euo pipefail
@@ -35,7 +34,6 @@ git=(git -C "$clone")
 exec 9>"$("${git[@]}" rev-parse --path-format=absolute --git-dir)/suzatary-push.lock"
 flock 9
 
-# The pictures as the store now draws them, staged.
 draw() {
   "$bin" prodrome draw --store "$clone" >/dev/null || die "the store did not draw (above)."
   "${git[@]}" add -- roadmap.svg roadmap-dark.svg
@@ -50,8 +48,6 @@ ignore() {
   esac
 }
 
-# Commits what the box wrote (new objects, a moved pin, the store's .gitignore) with the
-# pictures; nothing when nothing.
 commit() {
   local path
   for path in objects flake.lock; do
@@ -66,9 +62,8 @@ commit() {
 }
 
 # A join is a door the store does not own, so its heads are recorded under the store's lock
-# after it, which a reader that has read the clone then reads. The record is owed from the merge
-# until it is done: a pass whose record failed leaves the merge committed, and the next pass
-# records first, before it can find nothing to push. It lists the clone's objects/ once.
+# after it. The record is owed from the merge until it is done: a pass whose record failed leaves
+# the merge committed, and the next pass records first, before it can find nothing to push.
 owed="$("${git[@]}" rev-parse --path-format=absolute --git-path suzatary-record-owed)"
 record() {
   "$bin" prodrome record --store "$clone" >/dev/null \

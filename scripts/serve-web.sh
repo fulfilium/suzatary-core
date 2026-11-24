@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Suzatary's web app, run by suzatary-web.service and `nix run .#web`. Execs the `.#suzatary`
-# binary scripts/app-bin.sh resolves, passing what only run time knows: the tailnet address, the
-# TLS certificate and the resolved bundle (`--dist` overrides the instance's `web/dist`).
+# Suzatary's web app, run by suzatary-web.service and `nix run .#web`.
 #
 # It binds the tailnet address, never 0.0.0.0, and with none it refuses to start: a loopback
 # bind would hand the socket to whatever proxies to it on this box, and an address is not an

@@ -3,35 +3,34 @@
 # scripts/merge-gate.sh and landed as one fast-forward of master.
 #
 #   build <pr>...    train := origin/master, each PR merged in, then the release cut on top
-#   gate [--full]    both halves of scripts/merge-gate.sh on the train (the tool's `train gate`)
+#   gate [--full]    both halves of scripts/merge-gate.sh on the train
 #   bisect           the merge that turned a red half red
 #   land             master and v<version> := the gated train, pushed as one while master has not
 #                    moved; then published; then its release recorded on the roadmap
-#   record [<rev>]   the release at <rev> recorded: its todos done where each is found, the
-#                    roadmap's pin moved and its pictures drawn in one commit, scanned and pushed
+#   record [<rev>]   the release at <rev> recorded: its todos done, the roadmap's pin moved and its
+#                    pictures drawn in one commit, scanned and pushed
 #   nightly          both halves, full, on origin/master; a red one files a todo
 #   check <pr>       the runners' jobs over <pr>'s head merged on master, posted on the PR; no lock
 #   publish [--skip <sha>]... [--admit <path>]... [<rev>]
 #                    core's master += the public tree of each landed commit up to <rev>
 #   set-aside <half> --because <task> "<words>"
-#                    the newest red row of <half> where a land reads it set aside, at a terminal,
-#                    for the reason an open or completed roadmap task gives; a land prints it
+#                    the newest red row of <half> set aside, at a terminal, for a roadmap task's
+#                    reason
 #
-# `--remote github` runs the tree half on core's runners (only a public tree the tool finds
-# publishable leaves the box: its leak guard passed, and it holds no admission core lacks; admitted
-# bytes moved to a new path are no new one, and it says `moved: <old> -> <new>`); the box keeps the
-# steps that read this repository and the live half. Where the tree cannot go out, or its
-# publication run did not fill the binary cache, the gate stops and the box builds nothing: a gate
-# on the box is `gate` without `--remote`, asked for by name. Run inside
-# `nix develop .#triage`, from a clean checkout; it never touches the data repository.
+# `--remote github` runs the tree half on core's runners (only a public tree whose leak guard
+# passed and that holds no admission core lacks leaves the box; admitted bytes moved to a new path
+# are not a new admission); the box keeps the steps that read this repository and the live half. Where the tree cannot go out, or its publication run did not
+# fill the binary cache, the gate stops and the box builds nothing: a gate on the box is `gate`
+# without `--remote`, asked for by name. Run inside `nix develop .#triage`, from a clean checkout;
+# it never touches the data repository.
 #
 # Verdicts go to .git/train/gates/, keyed by half and tree, the live half's also by a digest of the
-# owner's stores read before the run, and only the train's tool reads or writes them (app/tooling,
-# `train table`). A land reads the live half at its newest row's digest; a key holding both a green
-# and a red that no person set aside is a finding.
+# owner's stores read before the run, and only the train's tool reads or writes them. A land reads
+# the live half at its newest row's digest; a key holding both a green and a red that no person set
+# aside is a finding.
 #
-# `gate`, `bisect`, `nightly` and `check` are the tool's (app/tooling, `gate_run.rs`); every other
-# verb runs under the train's lock, which only the tool holds (`train locked`).
+# `gate`, `bisect`, `nightly` and `check` are the tool's; every other verb runs under the train's
+# lock, which only the tool holds.
 #
 # Test seams: the SUZATARY_TRAIN_ names of the tool's `TRAIN_READS`; a stub gate's verdicts are
 # keyed by its own bytes, so a stub's green never lands a train.
@@ -64,8 +63,7 @@ cd "$root"
 # In .git, never in the tree.
 state="$(git rev-parse --path-format=absolute --git-common-dir)/train"
 mkdir -p "$state"
-# Land's return to the train after a refused push; every other verb's lock and stop path is the
-# tool's (`train locked`, `train gate`).
+# Land's return to the train after a refused push.
 return_to=""
 trap '[[ -z "$return_to" ]] || git checkout --quiet "$return_to"' EXIT
 
@@ -113,8 +111,7 @@ growth_of() {
 grown() { sed '/^$/d' <<<"${growth_lines[$1]}"; }
 
 # Every derived figure of the merged tree recorded and staged by the tool, the wasm limits from
-# origin/master's modules as its publication cached them (AGENTS.md, "Derived figures"): no build.
-# On stdout, the figures that moved, for the commit to say.
+# origin/master's modules as its publication cached them: no build. On stdout, the figures that moved.
 figures_line() {
   [[ -e context.toml ]] || return 0
   local out modules=() files=(context.toml)
@@ -168,7 +165,6 @@ trailers() {
 
 trailer_of() { git log -1 --format="%(trailers:key=$2,valueonly,separator= )" "$1" | sed '/^$/d'; }
 
-# The todos the train's merges complete, each once, in merge order.
 train_completes() {
   local commit
   for commit in $(git rev-list --first-parent --reverse "origin/master..HEAD"); do
@@ -434,7 +430,7 @@ halves=(tree live)
 
 # reading <var> <commit> [--half <half>] [--full]: <var> := ok, failed, unknown or finding, of one
 # half or, with no --half, the train's verdict (ok < unknown < failed < finding); from every gate or
-# with --full from full gates. A table the tool cannot read stops the train.
+# with --full from full gates.
 reading() {
   local -n into="$1"
   into="$("$tool" table read "${@:2}")" || die "the verdict table could not be read (above)."
@@ -521,9 +517,8 @@ shipped() {
 
 # record_release <rev>: by <rev>'s app, each step skipped where the roadmap holds it: its Completes:
 # todos done where each is found, the roadmap's pin moved to core's publication of <rev>, then one
-# roadmap commit naming <rev> in `Shipped:` (roadmap-push.sh). No `Tasks:`: nothing to record.
-# The roadmap learns nothing of the private repository: only the version and the landed commit,
-# which core's publication names as its `Source:`.
+# roadmap commit naming <rev> in `Shipped:` (roadmap-push.sh). The roadmap learns nothing of the
+# private repository but the version and the landed commit, which core's publication names.
 record_release() {
   local rev="$1" version tasks subject release completes todo core notes=() todos=()
   version="$(trailer_of "$rev" Release)"
@@ -638,9 +633,9 @@ land() {
   printf '  scripts/deploy.sh %s\n' "$landed"
 }
 
-# set-aside <half> --because <task> "<words>": the task read on the roadmap's head by master's app, as
-# a build reads a `Completes:` todo, and taken only open or completed; the tool sets the train's
-# newest red row of <half> aside, and refuses unless its stdin is a terminal.
+# set-aside <half> --because <task> "<words>": the task read on the roadmap's head by master's app
+# and taken only open or completed; the tool sets the train's newest red row of <half> aside, and
+# refuses unless its stdin is a terminal.
 set_aside() {
   (($# == 4)) && [[ "$2" == --because ]] || usage
   local half="$1" task="$3" words="$4" dir shown failed=0
