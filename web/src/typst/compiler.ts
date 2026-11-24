@@ -44,7 +44,7 @@ export namespace compiler {
 
   type Project = InstanceType<(typeof import("./typst.js"))["Project"]>
 
-  // `files` set once in `p`; a file the module refuses fails every compile, saying why.
+  // A file the module refuses fails every compile, saying why.
   export const world = (p: Project, files: Files): World => {
     const refused = Object.entries(files).flatMap(([k, text]) => [p.set(k, text) ?? []].flat())
     return { compile: (main, state) => (refused.length > 0 ? { type: "Failed", errors: refused } : read(p.compile(main, state))) }

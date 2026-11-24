@@ -89,7 +89,6 @@ export namespace heldvalue {
     return link
   }
 
-  // The last digits a placeholder shows of a value, `""` when it shows none.
   const lastDigits = (value: string): string => {
     const digits = value.replace(/[^0-9]/g, "")
     return digits.length >= 9 ? digits.slice(-4) : ""

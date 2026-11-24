@@ -137,7 +137,6 @@ export namespace d {
     u =>
       isRecord(u) ? lo.map(fields(spec, u), o => checked<A>({ ...u, ...o })) : expected("an object", u)
 
-  // JSON text, parsed and then decoded: an SSE frame, a stored row, the core's answer.
   export const json =
     <A>(a: Decoder<A>): Decoder<A> =>
     u => {

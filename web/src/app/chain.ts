@@ -1,5 +1,4 @@
-// The chains' names, and the one this browser remembers reading. Not in the hash, which says which
-// page, so a todo link opens that id on whichever chain the reader is on.
+// The chain this browser last read is not in the hash, so a todo link opens that id on the chain the reader is on.
 
 import ui from "./ui";
 import registers from "./registers";
@@ -19,7 +18,6 @@ export function isChainName(value: unknown): value is string {
   return typeof value === "string" && /^[a-z][a-z0-9-]{0,31}$/.test(value);
 }
 
-/** The chain a reload opens on: the last one read, or the first. */
 export function remembered(): string {
   const held = ui.cell(registers.chain).get();
   return isChainName(held) ? held : DEFAULT_CHAIN;

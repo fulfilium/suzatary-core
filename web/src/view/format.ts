@@ -22,13 +22,9 @@ export function worded(value: Fulfillment | null): string {
 /** Every modifier `style.css` gives `.chip`, closed so a class the stylesheet lacks is a compile error. */
 export type ChipKind = "" | "prov" | "ok" | "cat" | "kind" | "done" | "queuedmark";
 
-/** One chip style for the whole app: `.chip`, plus one of the modifiers above. */
 export function chip(label: string, kind: ChipKind = ""): HTMLElement {
   return el("span", { class: kind === "" ? "chip" : `chip ${kind}` }, label);
 }
-
-// --- an instant, a day and an age, as a person reads them -------------------
-// Not `time.ts`, whose shapes are the wire's and a date input's contract.
 
 /** An instant a person reads: `2026-09-04T11:32:07` → `2026-09-04 11:32:07`. */
 export function iso(value: string): string {

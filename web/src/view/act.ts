@@ -7,7 +7,7 @@ import { toast } from "./toast"
 import lo from "../algebra/lo"
 
 export namespace act {
-  // What the button is once its effect has answered: pressable again, or spent until the page redraws.
+  // `Spent` keeps the button disabled until the page redraws.
   export type Outcome = { readonly type: "Again" } | { readonly type: "Spent" }
 
   export type T = {

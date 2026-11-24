@@ -11,7 +11,7 @@ import type { TurnRow } from "../wire/generated/wire";
 import { el } from "../view/dom";
 import { hrefOf as routeHref } from "../shell/route";
 
-/** `reference::Reference` in parts. The wire and the store carry its text form; this is what `parse` reads it into. */
+/** `reference::Reference` in parts. */
 export type Reference =
   | { readonly kind: "todo"; readonly chain: string; readonly id: string }
   | { readonly kind: "global"; readonly genesis: string; readonly id: string }
@@ -164,7 +164,6 @@ export function anchor(reference: Reference, className = "reflink", label = prin
   return href === null ? el("span", { class: cls }, label) : el("a", { class: cls, href }, label);
 }
 
-/** The references among these texts, in order. */
 export const parsed = (texts: readonly string[]): Reference[] =>
   texts.flatMap((text) => {
     const reference = parse(text);

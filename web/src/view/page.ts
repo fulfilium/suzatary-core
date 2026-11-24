@@ -1,5 +1,4 @@
-// What a mounted page answers to: a destroy when it is left. The box moving is heard by what the page reads, never told
-// to the page.
+// The box moving is heard by what the page reads, never told to the page.
 
 import { el } from "./dom"
 import { chevronIcon } from "./icons"

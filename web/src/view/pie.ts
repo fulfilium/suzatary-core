@@ -19,7 +19,7 @@ export namespace pie {
   const EDGE = 0.067
 
   // Filled clockwise from twelve o'clock on a faint disc of its own colour, outlined thin in it: the wedge is a dash of
-  // length `share` on a circle of path length 1. `said` is the fraction in words, the mark's accessible name.
+  // length `share` on a circle of path length 1.
   export const view = (share: number, kind: Kind, said: string, size: number = SIZE): SVGSVGElement => {
     const c = size / 2
     const edge = size * EDGE

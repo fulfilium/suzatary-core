@@ -74,13 +74,11 @@ function body(entry: Entry): readonly [HTMLElement, HTMLElement | null] {
 
 /** The footer: the source toggle and "Done", the one act worth a thumb; the rest are on the todo itself. */
 function foot(entry: Entry, source: HTMLElement | null, acted?: Acted): HTMLElement | null {
-  // A footer only when it carries the Done act or the source toggle.
   const done = acted === undefined || isDone(entry) ? null : act.offered(act.gate(), () => actButton(finish(entry), entry.todo, acted, "cardact"), null);
   if (source === null && done === null) return null;
   return el("div", { class: "cardfoot" }, source, done);
 }
 
-/** A click that landed on a control is that control's, not the card's. */
 function onControl(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest("button, a, input, textarea, select") !== null;
 }
@@ -126,7 +124,6 @@ export function todoCard(entry: Entry, options: CardOptions = {}): HTMLElement {
       subs === "" ? null : chip(subs),
       isOpen(entry) ? null : chip(entry.at === "" ? entry.state : `${entry.state} ${dayOf(entry.at, app.now().zone)}`, "done"),
       el("code", { class: "cardid" }, entry.todo),
-      // How long it has been owed, last in the row.
       age === "" ? null : el("span", { class: "cardage", title: entry.authored?.created ?? "" }, age),
     ),
     text,
@@ -188,7 +185,7 @@ function dividerNode(count: number): HTMLElement {
 
 /** The list, keyed by todo id: only a card whose `todos.signature` changed is rebuilt, so scroll, focus and selection survive. */
 export interface CardList {
-  /** The container. Mounted once and never replaced. */
+  /** Mounted once and never replaced. */
   readonly node: HTMLElement;
   update: (priced: readonly Entry[], unpriced: readonly Entry[]) => void;
 }

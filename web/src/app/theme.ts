@@ -13,7 +13,6 @@ export function attributeFor(theme: Theme): string | null {
   return theme === "auto" ? null : theme;
 }
 
-/** What a reader would call each one. */
 export function labelFor(theme: Theme): string {
   switch (theme) {
     case "auto":
@@ -27,7 +26,6 @@ export function labelFor(theme: Theme): string {
 
 const chosen = ui.cell(registers.theme);
 
-/** The theme this tab is showing. */
 export const theme = (): Theme => chosen.get();
 
 function paint(): void {
@@ -44,5 +42,4 @@ export function restoreTheme(): void {
 
 export const setTheme = (next: Theme): void => chosen.set(next);
 
-/** Calls `f` whenever the theme moves, in this tab or another; returns its own removal. */
 export const hearTheme = (f: () => void): (() => void) => chosen.hear(f);

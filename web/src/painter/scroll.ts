@@ -54,8 +54,8 @@ export namespace scroll {
     room.hidden = next === 0
   }
 
-  // One listener for every box: a scroll key moves a box around the key's target, or the document's. Each box once had
-  // its own on `window`, which nothing removed and which held the box after its page was gone.
+  // One listener for every box, so none on `window` holds a box after its page is gone; a scroll key moves the box
+  // around the key's target, or the document's.
   let listening = false
   const keyed = (): void => {
     if (listening) return

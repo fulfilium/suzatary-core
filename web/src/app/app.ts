@@ -1,5 +1,3 @@
-// The shell's whole state: where the tab is, the chain it reads, who it writes as, the stream, the nav and the build's line.
-
 import { isChainName, remembered } from "./chain"
 import shell from "./shell"
 import source from "../algebra/source"
@@ -13,7 +11,6 @@ import login from "./login"
 
 export namespace app {
   export type App = {
-    // Where the tab is, and where it has been: the route register's log.
     log: routelog.Log
     // Whether the place read now was reached by moving the log's pointer (back, forward), so it is read again.
     again: boolean
@@ -26,8 +23,7 @@ export namespace app {
     more: boolean
     stream: Stream
     build: shell.Line
-    // What this device holds of a revoked key's: `Undeleted` once a wipe finishing at load failed again, so this page
-    // stays sealed and writes nothing.
+    // `Undeleted`: a wipe finishing at load failed again, so this page stays sealed and writes nothing.
     held: Held
   }
   export type Held = { type: "Kept" } | { type: "Undeleted" }
@@ -200,8 +196,6 @@ export namespace app {
   }
   const UNDELETED =
     "This device's key was revoked and it could not delete what it holds, so it writes nothing. Close every tab of this site and open it again: it tries again when it loads."
-  // Where a box to write in would be: the box, nothing while the box is asked, or what this device may do and where to
-  // write from.
   export const reach = (a: App): Reach => {
     if (a.held.type === "Undeleted") return reads(UNDELETED)
     switch (a.who.type) {
@@ -231,7 +225,7 @@ export namespace app {
   // The one place a chain becomes a URL; the routes that are no chain's (mail, briefings, devices) do not use it.
   export const apiBase = (a: App): string => `/api/${encodeURIComponent(a.chain)}`
 
-  // This tab's App. The shell dispatches what it hears; every other module reads it, or hears one value of it move.
+  // This tab's App: the shell dispatches, and every other module reads it or hears one value of it move.
   export const tab = source.create(initial(HOME, remembered(), ownerzone.remembered()), step)
   export const now = (): App => tab.state()
   export const dispatch = (e: Event): void => tab.dispatch(e)

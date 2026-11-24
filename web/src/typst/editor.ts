@@ -1,7 +1,6 @@
 // A field that edits Typst: a native textarea over its own shaded twin, completion and hover from typst-ide, the
 // diagnostics under it with their spans marked, and a live preview compiled by the worker and checked by the box's
-// tripwire before it is parsed. Native editing, IME and undo are the textarea's; everything drawn is a function of
-// `edit.State`.
+// tripwire before it is parsed. Everything drawn is a function of `edit.State`.
 
 import edit from "./edit"
 import type { Tripwire } from "../rich"
@@ -10,7 +9,6 @@ import { loadCore } from "../prodrome/core"
 import { el } from "../view/dom"
 
 export namespace editor {
-  // What the editor may do: ask the worker, and reach the box's tripwire.
   export type Effects = { readonly ask: (a: edit.Ask) => Promise<edit.Answer>; readonly tripwire: () => Promise<Tripwire> }
 
   // A compile past this, once the worker is ready, is a loop: the worker is terminated and the text refused.

@@ -1,13 +1,13 @@
-// A reading: what the tab holds of something now, on its way or here, and a way to hear it move; a page is a view
-// of one. `again` asks once more what can be asked (the box), and is nothing for what the tab already holds;
-// `behind` is whether what is held may be behind and since when it stands, null when nothing is.
+// What the tab holds of something now, on its way or here, and a way to hear it move; a page is a view of one.
+// `again` asks the box once more, and is nothing for what the tab already holds; `behind` is null when nothing may be
+// behind.
 
 import lo from "./lo"
 import kept from "./once"
 
 export namespace reading {
-  // What is shown may be behind: an ask failed after it (`why`), or one has been long on its way (`why` null).
-  // `since` is when the answer shown landed, as the tab's clock read it.
+  // An ask failed after what is shown (`why`), or one has been long on its way (`why` null); `since` is when the
+  // answer shown landed, by the tab's clock.
   export type Behind = { readonly why: string | null; readonly since: number }
 
   export type Reading<V> = {
@@ -32,7 +32,6 @@ export namespace reading {
     return { now: () => l, hear: () => nothing, again: nothing, behind: none }
   }
 
-  // A value the tab holds and hears move: a store, a register.
   export const held = <V>(now: () => V, hear: (moved: () => void) => () => void): Reading<V> => {
     const val = last((v: V) => lo.val(v))
     return { now: () => val(now()), hear, again: nothing, behind: none }
@@ -81,8 +80,8 @@ export namespace reading {
     return { now: () => read(r.now()), hear: r.hear, again: r.again, behind: r.behind }
   }
 
-  // The same reading never waited on: its value is where it stands (on its way, failed or here), so a page reading it
-  // beside another draws once the other arrives, and this part fills in when it does.
+  // The same reading never waited on, its value where it stands (on its way, failed or here): a page reading it
+  // beside another draws once the other arrives, and this part fills in later.
   export const unwaited = <V>(r: Reading<V>): Reading<lo.T<V>> => {
     const read = last((l: lo.T<V>): lo.T<lo.T<V>> => lo.val(l))
     return { now: () => read(r.now()), hear: r.hear, again: r.again, behind: r.behind }

@@ -7,8 +7,6 @@ import term from "./term";
 import { describeConflicts } from "./conflicts";
 import time from "../app/time";
 
-// --- the filter --------------------------------------------------------------
-
 /** "any" or one exact value, since `""` is itself a category. */
 export type Choice = { readonly tag: "any" } | { readonly tag: "is"; readonly value: string };
 
@@ -25,7 +23,6 @@ export interface Filter {
   readonly query: string;
   /** Only what waits on a human: unconfirmed content, or a register two writers moved at once. */
   readonly attention: boolean;
-  /** Only what is blocked on someone else (`waiting_on`). */
   readonly waiting: boolean;
   /** Only a deadline in the next fortnight, any `Decay` in the whole spec, since a `Conj` or `Gate` can bury it. */
   readonly dated: boolean;
@@ -58,7 +55,7 @@ function decayEndDates(spec: SpecNode): string[] {
   return term.nodes(spec).flatMap((node) => (node.kind === "decay" && typeof node["endDate"] === "string" ? [node["endDate"]] : []));
 }
 
-/** Any `Decay` whose `endDate` falls in `[now, now + FORTNIGHT_DAYS days]`, both ends inclusive; `now` is passed, so this stays pure. */
+/** Any `Decay` whose `endDate` falls in `[now, now + FORTNIGHT_DAYS days]`, both ends inclusive. */
 export function isDated(entry: Entry, now: string): boolean {
   const spec = entry.authored?.spec ?? null;
   if (spec === null) return false;
@@ -129,17 +126,14 @@ export function isUnconfirmed(entry: Entry): boolean {
   return entry.unconfirmed; // the server decides: it holds the actor roster
 }
 
-// --- what may be done to a todo ----------------------------------------------
-
 /** The five acts: `done` is `complete` on the wire, `tend` a pass at a recurring todo ("Did it"). */
 export type ActionName = "done" | "tend" | "cancel" | "reopen" | "confirm";
 
-/** The act that finishes this round of a todo: a recurring one is done again, not done. */
 export const finish = (entry: Entry): ActionName => (entry.recurring ? "tend" : "done");
 
 /**
- * Which acts apply, in the order offered. `confirm` rides along whenever the server says unconfirmed, since
- * the roster lives there; the one over-offer is answered by the box, better than hiding it on a guess.
+ * Which acts apply, in the order offered; `confirm` rides along whenever the server says unconfirmed, since the
+ * roster lives there, and the one over-offer is deliberate: the box answers it, better than hiding it on a guess.
  */
 export function applicable(entry: Entry): ActionName[] {
   const acts: ActionName[] = isDone(entry) ? ["reopen"] : [finish(entry), "cancel"];
@@ -168,8 +162,6 @@ export function matches(entry: Entry, filter: Filter, now: string): boolean {
     chosen(filter.category, categoryOf(entry)) && chosen(filter.kind, kindOf(entry)) && matchesQuery(entry, filter.query)
   );
 }
-
-// --- order -------------------------------------------------------------------
 
 /** The list order: ascending whole percent as the store holds it, ties on id so a redraw never shuffles; then every row with no number, by id. */
 export function byUrgency(a: Entry, b: Entry): number {
@@ -200,8 +192,6 @@ export function listing(entries: readonly Entry[], filter: Filter, now: string):
 export function total(list: Listing): number {
   return list.priced.length + list.unpriced.length;
 }
-
-// --- the preview -------------------------------------------------------------
 
 /** One line of typst source for a card's clamp: only whitespace collapsed, nothing interpreted. */
 export function preview(body: string): string {

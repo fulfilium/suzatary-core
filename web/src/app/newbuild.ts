@@ -1,6 +1,5 @@
-// The page's half of the app shell. A page of an old build loads its own build's files from its cache, so it reloads
-// by itself only when they are gone (`lost`); a newer build is offered across the top, and the one a page started on is
-// said once.
+// The page's half of the app shell: an old build's page reloads by itself only when its cached files are gone
+// (`lost`); a newer build is offered across the top, and the one a page started on is said once.
 
 import http from "../wire/http"
 import type d from "../wire/decoder"
@@ -26,7 +25,6 @@ export namespace newbuild {
     return lo.val({ version: field("version"), build: field("build") })
   }
 
-  // The line's one value: nothing, the build this page started on, a served build offered, or one the reader dismissed.
   export type State =
     | { readonly type: "None" }
     | { readonly type: "Updated"; readonly version: string; readonly revision: string }
@@ -83,7 +81,6 @@ export namespace newbuild {
     }
   }
 
-  // What the page reaches: the box's build, the build this device last announced, the line, and the reload.
   export type Effects = {
     readonly about: () => Promise<About>
     readonly announced: { readonly read: () => readonly string[]; readonly set: (id: string) => void }
@@ -153,8 +150,7 @@ export namespace newbuild {
     await Promise.all(names.filter(kept).map(n => caches.delete(n)))
   }
 
-  // The box's build as heard, kept where the worker answers `b/current` (`app/worker.ts`), so the next start runs it
-  // with nothing asked of the network.
+  // The box's build as heard, kept where the worker answers `b/current` (`app/worker.ts`) for the next start.
   const heard = async (a: About): Promise<About> => {
     if (a.build === "" || !("caches" in window)) return a
     await caches

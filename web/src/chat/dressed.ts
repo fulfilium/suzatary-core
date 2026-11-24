@@ -55,13 +55,12 @@ export namespace dressed {
     })
   }
 
-  // What a reading lacks that only the box says.
   type Needs = { readonly missing: readonly AnsweredBlock[]; readonly drawing: readonly ProposalRow[] }
   const NOTHING: Needs = { missing: [], drawing: [] }
 
   // `read`, asked again until it lacks nothing the box was not already asked for: the box is asked once for each block
-  // and each proposal, and one it does not answer stays as the replicas read it. `drawBy` draws proposals, and each ask
-  // is handed every one drawn so far.
+  // and each proposal, and one it does not answer stays as the replicas read it; each ask is
+  // handed every proposal `drawBy` drew so far.
   const dressedBy = async <R>(
     read: R,
     ask: (drawn: readonly questions.Drawn[]) => Promise<R>,
@@ -85,8 +84,7 @@ export namespace dressed {
   // Nothing waits on the network before the pricing, so `held` is what was priced.
   export const inbox = (at: string, memory: MemoryPayload | null, lane: lanes.Lane): Promise<text.Text<storesync.Proposals>> => storesync.proposals(at, memory, lane)
 
-  // The worker's text as it printed it, read again while it lacks a block the box was not yet asked for. Measured as
-  // `read:Stream`, the ask and the turns' words together.
+  // The worker's text as it printed it, read again while it lacks a block the box was not yet asked for.
   export const stream = async (chosen: readonly string[], pages: number, lane: lanes.Lane): Promise<text.Text<Dressed<Streamed>>> => {
     const start = performance.now()
     const ask = (): Promise<questions.Worded<Dressed<Streamed>>> => storesync.streamed(chosen, pages, lane)

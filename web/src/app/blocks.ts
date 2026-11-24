@@ -1,5 +1,5 @@
-// The rendered blocks as the page reads them, through the core's worker, the one reader and writer of the device's rows.
-// The page writes no block to the device and hashes no source.
+// The rendered blocks, read through the core's worker, the one reader and writer of the device's rows: the page writes
+// no block to the device and hashes no source.
 
 import rendered from "./rendered"
 import remote from "../prodrome/remote"
@@ -30,9 +30,9 @@ export namespace blocks {
       }),
   }
 
-  // The HTML this device holds for `key`, now or once a join keeps it: what the painter places a block from, so a block
-  // placed before its fold was kept shows its HTML when the fold lands, and its plain text until then. It waits for a
-  // join before it reads, so a join that lands while the read is on its way is heard too; whichever answers first wins.
+  // The HTML this device holds for `key`, now or once a join keeps it. The painter places a block from it, so a block
+  // placed before its fold was kept shows its plain text until the fold lands. It waits for a join before it reads, so a join
+  // that lands while the read is on its way is heard too; whichever answers first wins.
   export const held = (key: table.Key): Promise<string | null> =>
     new Promise<string>(answer => {
       awaited.set(key, [...(awaited.get(key) ?? []), answer])

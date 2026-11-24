@@ -1,12 +1,7 @@
 /**
- * The keyed list's plan.
- *
- * The property that matters is not "the ops are minimal" but "applying them
- * produces exactly the new order" — so most of this drives a tiny array the way
- * `card.ts` drives the DOM, over hand-picked shapes and then over a few hundred
- * random ones. Minimality is checked separately, because it is the whole point:
- * a plan that moved every node would be correct and would still throw away the
- * scroll position this exists to keep.
+ * The keyed list's plan: applying the ops produces exactly the new order, over
+ * hand-picked and random shapes. Minimality is checked separately: a plan that
+ * moved every node would be correct and still throw away the scroll position.
  */
 
 import { test } from "node:test";
@@ -66,8 +61,7 @@ test("examples: each plan lands on the new order, moving no more nodes than it m
 });
 
 test("random folds: applying the plan always yields the new order", () => {
-  // A deterministic generator: a failing case has to be reproducible, and a
-  // seeded xorshift is twenty characters against a dependency.
+  // Seeded, so a failing case is reproducible.
   let seed = 0x5eed;
   const next = (): number => {
     seed ^= seed << 13;
@@ -79,7 +73,6 @@ test("random folds: applying the plan always yields the new order", () => {
   for (let round = 0; round < 400; round += 1) {
     const pick = (): string[] => {
       const kept = pool.filter(() => next() % 3 !== 0);
-      // shuffle
       for (let i = kept.length - 1; i > 0; i -= 1) {
         const j = next() % (i + 1);
         [kept[i], kept[j]] = [kept[j] as string, kept[i] as string];

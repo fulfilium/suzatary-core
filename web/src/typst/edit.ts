@@ -1,5 +1,5 @@
 // Editing Typst source in the tab: what the editor's worker is asked and answers, the source drawn in shaded runs, and
-// the text a stored title opens as. Pure; `editor.ts` draws it and `worker.ts` answers it.
+// the text a stored title opens as.
 
 import d from "../wire/decoder"
 import lo from "../algebra/lo"
@@ -27,7 +27,6 @@ export namespace edit {
   export type Asked = { readonly id: number; readonly ask: Ask }
   export type Answered = { readonly id: number; readonly answer: Answer }
 
-  // A run of the source: its text, the syntax it is, and whether a diagnostic covers it.
   export type Run = { readonly text: string; readonly tag: string | null; readonly marked: boolean }
 
   // The key the text is compiled under, in the worker and on the box alike.
@@ -92,22 +91,20 @@ export namespace edit {
   export const line = (source: string, x: Diagnostic): string =>
     `${x.from === null ? "" : `${position(source, x.from)}: `}${x.message}${x.hints.map(h => ` (hint: ${h})`).join("")}`
 
-  // A title stored in escaped prose opens in that prose, so editing it never shows the escape's backslashes; its
-  // characters then read in markup, which the preview shows. Markup a writer wrote opens unchanged.
+  // A title stored in escaped prose opens in that prose, so editing it never shows the escape's backslashes; markup
+  // a writer wrote opens unchanged.
   export type Opened = { readonly text: string; readonly wasProse: boolean }
   export const opened = (stored: string, prose: (markup: string) => string | undefined): Opened => {
     const p = prose(stored)
     return p === undefined || p === stored ? { text: stored, wasProse: false } : { text: p, wasProse: true }
   }
 
-  // The completion an item makes: the text with the item in place of what was typed, and where the caret goes.
   export const accept = (source: string, caret: number, o: Offer, i: Item): { readonly source: string; readonly caret: number } =>
     ({ source: source.slice(0, o.from) + i.insert + source.slice(caret), caret: o.from + i.cursor })
 
   // Typing a name (or `#` before one) asks for completions; anything else closes them.
   export const asks = (before: string): boolean => /[\p{L}\p{N}_.#-]$/u.test(before)
 
-  // One editor: the text, and the worker's latest answers about it. Each answer names the source it is about.
   export type State = {
     readonly source: string
     readonly shade: { readonly source: string; readonly spans: readonly Span[] }

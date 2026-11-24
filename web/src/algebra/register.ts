@@ -1,9 +1,7 @@
-// A register: its value is a function of its writes, read as the discrete order's completion of its FRONTIER, the
-// writes no other write descends from. That reading (`of`) is the one every register in the tab is read by, whatever
-// represents its order: a store's frontier comes from the core, named by object; a ui register stored in this
-// browser carries its order as version vectors (one writer per tab makes each replica's writes a chain, so a past is
-// a vector), and the join of two is the frontier of their union, so a write two replicas made without seeing each
-// other is a conflict the reading shows, never a write lost.
+// A register's value is the discrete order's completion of its FRONTIER, the writes no other write descends from
+// (`of`, for every register in the tab). A ui register in this browser carries its order as version vectors (one
+// writer per tab makes each replica's writes a chain), and the join of two is the frontier of their union, so a
+// write two replicas made unseen by each other is a conflict the reading shows, never a write lost.
 
 import lo from "./lo"
 import d from "../wire/decoder"
@@ -14,7 +12,6 @@ export namespace register {
   export type Write<A> = { readonly by: string; readonly n: number; readonly seen: Clock; readonly v: A }
   // An antichain under descent, in dot order, so equal sets are equal arrays.
   export type T<A> = readonly Write<A>[]
-  // The discrete order's completion: one value, or every distinct value of the frontier (twins once).
   export type Reading<A> =
     | { readonly type: "Unwritten" }
     | { readonly type: "Value"; readonly v: A }
@@ -46,9 +43,8 @@ export namespace register {
     return [{ by, n, seen: { ...seen, [by]: n }, v }]
   }
 
-  // A frontier with each write's past cut to the replicas the frontier holds a write of. Its reading is the same, and
-  // so is every verdict between its writes and any write resting on them; what it forgets is how to read a write it
-  // had superseded arriving again, so only a store no superseded write re-enters may keep it cut.
+  // Each write's past cut to the replicas the frontier holds: every reading and verdict stays, but a superseded write
+  // arriving again misreads, so only a store no superseded write re-enters may keep it cut.
   export const cut = <A>(r: T<A>): T<A> =>
     r.map(w => ({ ...w, seen: Object.fromEntries(r.flatMap((u): [string, number][] => ((k = w.seen[u.by]) => (k === undefined ? [] : [[u.by, k]]))())) }))
 

@@ -7,7 +7,6 @@ import time from "../app/time";
 
 const DWELL_MS = 6000;
 
-/** One button a toast can carry, alongside its message. */
 export interface ToastAction {
   readonly label: string;
   readonly onClick: () => void;

@@ -3,7 +3,6 @@
 
 import type { Reverses } from "../wire/generated/wire";
 
-/** How long an undo stays offered on its toast, in milliseconds. */
 export const UNDO_WINDOW_MS = 8000;
 
 /** Whether an undo offered at `shownAt` is still live: a click that raced the toast's timer fires nothing. */
@@ -11,7 +10,6 @@ export function undoStillLive(shownAt: number, now: number): boolean {
   return now - shownAt < UNDO_WINDOW_MS;
 }
 
-/** One event's own kind, for [`actLabel`] to look up what an undo's note points at. */
 export type KindOf = (hash: string) => string | undefined;
 
 /**

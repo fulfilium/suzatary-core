@@ -1,6 +1,5 @@
-// What the box answers is data: numbers, strings, booleans, null, arrays and plain records of them, and what the tab
-// builds of it, sets and maps. Its equality is the one data derives, element by element, member by member and field
-// by field; anything else is itself alone.
+// What the box answers is data (numbers, strings, booleans, null, arrays and plain records) and what the tab builds of
+// it, sets and maps; its equality is structural, and anything else equals only itself.
 
 export namespace data {
   const plain = (x: object): boolean => Object.getPrototypeOf(x) === Object.prototype || Object.getPrototypeOf(x) === null

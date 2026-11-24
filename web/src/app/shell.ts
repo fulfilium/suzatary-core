@@ -15,7 +15,6 @@ export namespace shell {
     | { type: "Current" }
     | { type: "Kept"; kept: Kept }
     | { type: "Pass" }
-  // Every cache of this origin, by what it holds.
   export type Cache = { type: "Build"; id: string } | { type: "Content" } | { type: "Heard" } | { type: "Foreign" }
   // What a page running a build says of it, by the builds this device last ran: nothing on its first, once on a new one.
   export type News = { type: "Known" } | { type: "First"; id: string } | { type: "New"; id: string }

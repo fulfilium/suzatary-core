@@ -1,5 +1,4 @@
-// A conversation's window grouped into rounds where it is read, in the core's worker: each round by the indices of its
-// turns and cards, with the owner's day it opened on and its label, so the page draws the rounds it is given. A page
+// A conversation's window grouped into rounds in the core's worker. A page
 // holds one answer, never a join of several: it asks for every turn it holds, back to its first (`covering`), so its
 // rounds are always the rounds of the turns it holds, however long a round runs.
 
@@ -8,7 +7,6 @@ import time from "../app/time"
 import { dayLabel, dayOf } from "./days"
 import { type Round, rounds } from "./rounds"
 
-// The window the core reads.
 type CoreWindow = import("../prodrome/core").Window
 
 export namespace grouped {
@@ -71,7 +69,6 @@ export namespace grouped {
     return { ...p, rounds: shapes }
   }
 
-  // A round as the page draws it, its turns and cards read from what the page holds by their indices.
   export const resolve = (s: Shape, turns: ReadonlyMap<number, TurnRow>, cards: ReadonlyMap<number, ProposalRow>): Round => {
     const placed = (index: number) => {
       const turn = turns.get(index)

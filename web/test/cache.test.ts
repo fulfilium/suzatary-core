@@ -1,11 +1,6 @@
 /**
- * The cached fold.
- *
- * Two properties. It is SLIM — the two fields that make a fold megabytes never
- * reach `localStorage`, and a regression there would silently stop the cache
- * working at all (a quota exception is swallowed by design). And it is PARSED,
- * not trusted: a cache written by an older build, half-written, or edited by
- * hand becomes `null` and costs one network fetch, never a broken page.
+ * The cached fold is SLIM (the two fields that make a fold megabytes never reach `localStorage`, whose quota exception
+ * is swallowed) and PARSED: an older build's, half-written or hand-edited cache is `null` and costs one fetch.
  */
 
 import { test } from "node:test";
@@ -95,8 +90,7 @@ test("anything else in localStorage is nothing, not a broken page", () => {
 });
 
 test("a cache whose entries are the wrong shape is refused whole", () => {
-  // The same guard a backend drift meets: an older build's Entry is not this
-  // build's, and half a fold is worse than none.
+  // An older build's Entry is not this build's, and half a fold is worse than none.
   assert.equal(parseFold('{"at":"t","tip":"","fetchedAt":1,"entries":[{"todo":"a"}]}'), null);
 });
 

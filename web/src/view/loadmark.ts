@@ -1,4 +1,4 @@
-// The one loading mark: a pie filling from the fulfillment scale's bad end to its good end (design A of four).
+// The one loading mark: a pie filling from the fulfillment scale's bad end to its good end.
 // Another design is this file and its block in style.css, and nothing else.
 
 import { svg } from "./dom"

@@ -1,6 +1,5 @@
-// A value on its way: still loading, failed in the box's words, or here. A
-// value with phases of its own nests a second sum in `V`, never a boolean
-// beside this one.
+// A value on its way: still loading, failed in the box's words, or here; a value with phases of its own nests a
+// second sum in `V`, never a boolean beside this one.
 
 export namespace lo {
   export type T<V> =
@@ -8,7 +7,7 @@ export namespace lo {
     | { readonly type: "Error"; readonly e: string }
     | { readonly type: "Val"; readonly v: V }
 
-  // A value that has settled: failed or here, never on its way; what a reading of bytes already held answers.
+  // What a reading of bytes already held answers.
   export type Settled<V> = Exclude<T<V>, { readonly type: "Loading" }>
 
   export const loading: T<never> = { type: "Loading" }
@@ -45,7 +44,6 @@ export namespace lo {
   export const withDefault = <A, D = A>(l: T<A>, d: D): A | D => (l.type === "Val" ? l.v : d)
   export const isVal = <A>(l: T<A>): boolean => l.type === "Val"
 
-  // A failure in the words a person reads: an error's message, anything else as it prints.
   export const reason = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
   export const of = <A>(p: Promise<A>): Promise<Settled<A>> => p.then(val, (e: unknown) => error(reason(e)))

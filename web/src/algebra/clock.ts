@@ -4,8 +4,7 @@
 import time from "../app/time"
 
 export namespace clock {
-  // An instant on this device's clock, epoch milliseconds, and whether something moves there (`exact`) or it is a
-  // bound that may come before anything does; or never.
+  // Epoch milliseconds on this device's clock; not `exact` is a bound that may come before anything moves.
   export type Next = { readonly type: "Never" } | { readonly type: "At"; readonly ms: number; readonly exact: boolean }
 
   export const never: Next = { type: "Never" }
@@ -23,7 +22,7 @@ export namespace clock {
 
   export const sooner = (...ns: readonly Next[]): Next => ns.reduce(meet, never)
 
-  // The wire's `next`: an instant is a point in time, so it is armed on this device's clock as it is.
+  // An instant is a point in time, so it is armed on this device's clock as it is.
   export const of = (next: { readonly at: string; readonly exact: boolean } | null): Next => {
     const ms = next === null ? null : time.ms(next.at)
     return ms === null || next === null ? never : at(ms, next.exact)
@@ -32,24 +31,23 @@ export namespace clock {
   // The owner's next midnight after `ms`, when what is printed to the day (an age, today's date) moves.
   export const nextDay = (zone: time.Zone, ms: number): Next => at(time.nextDay(zone, ms))
 
-  // How long a bound that comes back at once is waited for: the first wait, doubling to the longest. An exact answer
-  // is waited for exactly; a conservative one may come before anything moves, and asked again at once could come back
-  // at once again (a window over a term that moves answers "now"), so it is paced.
+  // A conservative bound asked again at once could come back at once again (a window over a moving term answers
+  // "now"), so it is paced from the first wait, doubling to the longest; an exact answer is waited for exactly.
   export const FIRST_PACE_MS = 1000
   export const LONGEST_PACE_MS = 60_000
 
-  // The wakes that fired: the last one's instant, and the pace after it.
   export type Pacer = { readonly last: number; readonly pace: number }
 
   export const START: Pacer = { last: -Infinity, pace: FIRST_PACE_MS }
 
   const heldBack = (n: Next, p: Pacer): boolean => fold(n, { Never: () => false, At: (ms, exact) => !exact && ms < p.last + p.pace })
 
-  // The wake for `n`: a bound sooner than the pace after the last wake waits for it. A function of the answer and the
-  // wakes that fired, never of when it is asked, so arming again on every change of the store moves nothing.
+  // A bound sooner than the pace after the last wake waits for it.
+  // A function of the answer and the wakes that fired, never of when it is asked, so arming again on every change of
+  // the store moves nothing.
   export const paced = (n: Next, p: Pacer): Next => (heldBack(n, p) ? at(p.last + p.pace, false) : n)
 
-  // After the wake for `n` fired at `now`: a wake the pace held back doubles it, any other resets it.
+  // A wake the pace held back doubles it, any other resets it.
   export const fired = (n: Next, p: Pacer, now: number): Pacer => ({
     last: now,
     pace: heldBack(n, p) ? Math.min(2 * p.pace, LONGEST_PACE_MS) : FIRST_PACE_MS,
@@ -66,8 +64,7 @@ export namespace clock {
   // One timer reaches no further than 2³¹ − 1 ms; a wake beyond it re-arms from there.
   const FURTHEST = 2 ** 31 - 1
 
-  // `k` once at `n`, never for `never`; returns the disarm. A timer counts the time this device is awake, so a caller
-  // arms again when it wakes from sleep.
+  // Returns the disarm; a timer counts only the time this device is awake, so a caller arms again after sleep.
   export const wake = (n: Next, k: () => void, fx: Timers = browser): (() => void) => {
     let h: number | null = null
     const arm = (ms: number): void => {
@@ -81,7 +78,7 @@ export namespace clock {
     }
   }
 
-  // One wake, armed again with each new answer and paced only by the wakes that fired: arming disarms the last.
+  // Arming disarms the last wake; only the wakes that fired move the pace.
   export const pacer = (fx: Timers = browser): ((n: Next, k: () => void) => void) => {
     let p = START
     let disarm = (): void => {}

@@ -9,14 +9,12 @@ import { el } from "../view/dom"
 import compiler from "./compiler"
 
 export namespace draw {
-  // What a node of a view's tree is to the draw, whatever the view: its kind and its key among its siblings, and
-  // its own bytes for the kit (`Drawn`), or its children alone (`Run`).
+  // A node's own bytes for the kit (`Drawn`), or its children alone (`Run`).
   export type Part =
     | { readonly type: "Drawn"; readonly kind: string; readonly key: string; readonly own: string }
     | { readonly type: "Run"; readonly kind: string; readonly key: string; readonly own: string }
 
-  // What a node draws: its own element, by its key, with its children's drawings inside it; or, for a run of
-  // rows, nothing of its own, its children drawn in its place.
+  // A node's own element with its children's drawings inside it; or, for a run of rows, its children in its place.
   export type Drawn =
     | {
         readonly type: "Element"
@@ -33,9 +31,7 @@ export namespace draw {
 
   const problem = (reason: string): Element => el("div", { class: "problem typstproblem" }, reason)
 
-  // What drawing needs: the view's world and main file, the door, a tabulation of each node's own element by its
-  // own content (a pure function of it, so a node renamed by its children alone compiles nothing), and an ear for
-  // how many nodes each wave compiled.
+  // `owned` tabulates each node's element by its own content, so a node renamed by its children alone compiles nothing.
   export type Effects = {
     readonly world: compiler.World
     readonly main: string

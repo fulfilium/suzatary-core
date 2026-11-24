@@ -1,9 +1,9 @@
 // Typst's HTML on this device, the box's tabulation synced by union: each key the box's own, named by the core both run
-// (a function's name and its source's `memo::name`), so a kept copy is never stale. The worker's table stands in front
-// of the device's `blocks` store, beside the replicas. Either may drop any entry, the least recently used first; a key
-// the box answers twice, differently, is a finding, told to the box and dropped. ⚠️ The device keeps an answer block
-// only while the core's held keys open the words it renders (`Lines.admits`), and only of this build's functions, so
-// a block of erased words is written by no join and swept by the next compaction.
+// (a function's name and its source's `memo::name`), so a kept copy is never stale. The worker's table and the device's
+// rows may each drop any entry, least recently used first; a key the box answers twice, differently, is a finding,
+// told to the box and dropped. ⚠️ The device keeps an answer block only while the core's held keys open the words it
+// renders (`Lines.admits`), and only of this build's functions, so a block of erased words is written by no join and
+// swept by the next compaction.
 
 import table from "../algebra/table"
 import idb from "./idb"
@@ -59,7 +59,6 @@ export namespace rendered {
     readonly behind: () => Promise<void>
   }
 
-  // A table in memory alone, of the functions `fs`.
   export const memory = (fs: ReadonlySet<string>, t: table.Table<string> = table.of(table.lru(KEPT))): Store => ({
     get: ks => Promise.resolve(ks.map(k => table.hit(t.get(k)) ?? null)),
     join: ps => Promise.resolve(t.join(ps.filter(([k]) => ours(fs)(k)))),
@@ -106,7 +105,7 @@ export namespace rendered {
     return answered.map(a => a?.html ?? null)
   }
 
-  // The database a build before the blocks moved beside the replicas kept them in, deleted at the worker's start.
+  // The database earlier builds kept blocks in, deleted at the worker's start.
   export const DB = "suzatary-rendered"
 
   const isRow = (v: unknown): v is Row =>
@@ -229,7 +228,6 @@ export namespace rendered {
   // The device's rows, made once by each tab's worker (`questions.serve`), with the functions its core keeps blocks of.
   export const device = (own: ReadonlySet<string>, admit: Admit): Device => indexed({ budget: BUDGET, now: Date.now, own, admit })
 
-  // What the page asks of the worker for the device's rows.
   export type Asking = {
     readonly get: (ks: readonly table.Key[]) => Promise<(string | null)[]>
     readonly join: (pairs: readonly Pair[]) => Promise<table.Key[]>

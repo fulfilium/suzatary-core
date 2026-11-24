@@ -78,8 +78,8 @@ export namespace time {
     return Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"), ((t % 1000) + 1000) % 1000)
   }
 
-  // The zone's offset from UTC at `t`, in minutes, as the browser names it (`GMT+05:30`, or `GMT` for none): one
-  // string for each reading, where the wall clock's face is seven parts.
+  // The zone's offset from UTC at `t`, in minutes, as the browser names it (`GMT+05:30`, or `GMT` for none):
+  // one string for each reading, where the wall clock's face is seven parts.
   const offsetFaces = new Map<string, Intl.DateTimeFormat>()
   const offsetAt = (z: Zone, t: number): number => {
     const known = offsetFaces.get(z.name) ?? new Intl.DateTimeFormat("en-US", { timeZone: z.name, timeZoneName: "longOffset" })

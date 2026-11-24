@@ -1,5 +1,3 @@
-// What this device keeps: whether the browser may evict it, how much of the render budget is spent, and the key it signs with.
-
 import rendered from "./rendered"
 import blocks from "./blocks"
 import once from "../algebra/once"
@@ -19,8 +17,7 @@ export namespace device {
   export const persistOf = (supported: boolean, granted: boolean): Persist =>
     !supported ? { type: "Unsupported" } : granted ? { type: "Granted" } : { type: "Denied" }
 
-  // Asked once per load: a browser that said no keeps saying no until the site is used more, and asking changes nothing;
-  // a browser that failed to answer is asked again.
+  // Asked once per load: a browser that said no says no until the site is used more; one that failed is asked again.
   export const persist = once.of(async (): Promise<Persist> => {
     const s = typeof navigator === "undefined" ? undefined : navigator.storage
     if (s === undefined || typeof s.persist !== "function") return persistOf(false, false)

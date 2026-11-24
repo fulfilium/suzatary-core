@@ -1,9 +1,8 @@
 // A device whose key was revoked deletes what it holds: every database of this origin (the replica, the rendered
 // text, the key), every cache of it (each build's, the content cache, the build last heard) and the browser's key-value
-// storage, then loads afresh as a new device. A wipe is
-// marked in that storage before it deletes anything. Every other tab of the device hears the mark and, by the mark as
-// it reads it then, wipes too or, the wipe already over, loads afresh, so no tab writes the revoked device's acts back;
-// a page that loads with the mark finishes the wipe, so a reload in the middle of one does not leave a new key beside
+// storage, then loads afresh as a new device. A wipe is marked in that storage before it deletes anything. Every other
+// tab hears the mark and, by the mark as it reads it then, wipes too or loads afresh, so no tab writes the revoked
+// device's acts back; a page that loads with the mark finishes the wipe, so a reload mid-wipe leaves no new key beside
 // the old device's storage.
 
 import { DB_NAME } from "../prodrome/objects"
@@ -15,7 +14,6 @@ export namespace wipe {
   // The key-value storage's record that a wipe has begun and not ended.
   export const MARK = "suzatary.wiping"
 
-  // What the storage says of a wipe, read once.
   export type Mark = { type: "Clear" } | { type: "Begun" }
 
   export const markOf = (value: string | null): Mark => (value === null ? { type: "Clear" } : { type: "Begun" })
@@ -34,7 +32,6 @@ export namespace wipe {
     readonly mark: () => void
     readonly marked: () => Mark
     readonly reload: () => void
-    // The key this page signs with, and the one this device keeps now.
     readonly signing: () => signer.Here
     readonly kept: () => Promise<signer.Kept>
     // A finished wipe that failed again: this page stays sealed, and says it could not delete what it holds.

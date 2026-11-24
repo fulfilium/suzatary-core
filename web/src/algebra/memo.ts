@@ -4,8 +4,8 @@
 import table from "./table"
 
 export namespace memo {
-  // A node's content name covers its own bytes and its children's names, in order, so a change renames exactly
-  // the path from it to the root; the host names nodes (the core's `memo_name`), this module only compares names.
+  // A node's name covers its own bytes and its children's names, so a change renames exactly its path to the root;
+  // the host names nodes (the core's `memo_name`).
   export type Name = string
   export type Namer = (own: string, kids: Name[]) => Name
 
@@ -27,7 +27,6 @@ export namespace memo {
   // What a fold answers: anything but `undefined`, which a cache answers for a key it does not hold.
   export type Value = NonNullable<unknown>
 
-  // One layer of the functor: a node, its children's results in their order.
   export type Layer<A, R extends Value> = { readonly name: Name; readonly v: A; readonly rs: readonly R[] }
 
   // An algebra applied to a wave of layers at once, `apply(ls) = ls.flatMap(l => apply([l]))`, so a step with a
@@ -49,14 +48,13 @@ export namespace memo {
   // A finding is a key holding two values: computed, neither used, and reported.
   export type Outcome = "Hit" | "Computed" | "Finding"
 
-  // A node the fold looked at, at its distance from the root; a computed node's time is its share of its wave's.
+  // A computed node's time is its share of its wave's.
   export type Visit = { readonly name: Name; readonly depth: number; readonly outcome: Outcome; readonly ms: number }
   export type Report = { readonly visits: readonly Visit[]; readonly waves: readonly { readonly nodes: number; readonly ms: number }[] }
 
   export type Counts = { readonly hits: number; readonly computed: number; readonly findings: number; readonly ms: number }
   const none: Counts = { hits: 0, computed: 0, findings: 0, ms: 0 }
 
-  // The counts at each depth, the root's first.
   export const byDepth = (r: Report): Counts[] =>
     r.visits.reduce<Counts[]>((ds, x) => {
       const at = ds[x.depth] ?? none
@@ -76,9 +74,8 @@ export namespace memo {
     return s.r
   }
 
-  // The algebra folded bottom-up, never entering a subtree whose top the table holds; the nodes it must compute
-  // go in waves, each the nodes whose children are known, one `apply` per wave. A name seen twice in one fold is
-  // computed once and hits the second time; a key holding two values is computed and never chosen.
+  // Bottom-up, never entering a subtree whose top the table holds, one `apply` per wave of nodes whose children are
+  // known; a name seen twice in one fold is computed once, and a key holding two values is computed and never chosen.
   export const fold = <A, R extends Value>(alg: Algebra<A, R>, t: Tree<A>, cache: table.Table<R>, clock: () => number = () => performance.now()): [R, Report] => {
     const visits: Visit[] = []
     const waves: Slot<A, R>[][] = []
@@ -121,7 +118,7 @@ export namespace memo {
   const ends = (n: Name): boolean => parseInt(n.slice(-1), 16) % 4 === 0
 
   // A long sequence balanced into a tree of the host's chunks, its shape a function of the elements alone, so an
-  // edit renames a logarithmic spine and two hosts holding one sequence build one tree. `undefined` for none.
+  // edit renames a logarithmic spine and two hosts holding one sequence build one tree.
   // A run closes by `cut`: the node's name, or, where elements have an identity apart from their content, a name
   // of that identity (and a chunk's, of its children's), so an edit of content never moves a cut.
   export const balance = <T>(xs: readonly T[], cut: (t: T) => Name, chunk: (run: T[]) => T): T | undefined => {

@@ -7,7 +7,6 @@ import type memo from "../algebra/memo"
 import type compiler from "./compiler"
 
 export namespace kit {
-  // A view's main file, by its key, and every file it may import; each compile hands it a wave of nodes.
   export type Module = { readonly main: string; readonly files: compiler.Files }
 
   export type View = "list.typ"
@@ -18,7 +17,6 @@ export namespace kit {
   // Every package file, already keyed the way typst-wasm finds it (`@local/typst-design:0.1.0/lib.typ`).
   const packages = d.json(d.rec(d.str))
 
-  // Every file of the kit, the views included, keyed the way a view imports it, and the packages beside them.
   const library = (): Promise<compiler.Files> =>
     Promise.all([
       ...shell.TYPST.map(f => text(f).then((t): compiler.Files => ({ [`/${f}`]: t }))),

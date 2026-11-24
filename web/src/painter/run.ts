@@ -18,7 +18,6 @@ export namespace run {
   export type Handler<I, E> = (effect: E, send: (input: I) => void) => void
   export type T<I> = { readonly send: (input: I) => void; readonly destroy: () => void }
 
-  // An input as its step's measure names it: its type, and the ask it answers.
   const named = (input: Input<unknown, unknown, unknown>): string =>
     input.type === "Context" ? input.type : `${input.type} ${JSON.stringify(input.ask)}`
 

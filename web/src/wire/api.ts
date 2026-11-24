@@ -101,7 +101,6 @@ export const tapProposal = (
     TAP_BOUND,
   );
 
-/** The tap of a card's fix. */
 export const fixProposal = (id: string, index: number): Promise<ConversationPayload> =>
   http.act(proposalPath(id, index, "tap"), { fix: true } satisfies Tapping, payload.ConversationPayload, TAP_BOUND);
 

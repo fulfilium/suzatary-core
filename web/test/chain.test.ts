@@ -1,20 +1,6 @@
 /**
- * THE SLUG GUARD, which is a PARSE and not a formality.
- *
- * `chain.ts`'s own header says what it is for: a chain name is a PATH SEGMENT
- * (`/api/<chain>/fold`), and the selection is remembered in `localStorage`,
- * which is an input from outside the program like any other. A hand-edited or
- * stale entry must not become `/api/../fold` — so the value that comes back is
- * parsed against the same rule `suzatary_base::chains::ChainName` keeps, and a
- * value that is not a slug opens the default chain instead.
- *
- * `theme.ts`'s equivalent three-line guard has had a test since it shipped;
- * this one is the older and the more load-bearing of the two, and had none.
- *
- * What is pinned here is the guard and the BOUNDARY, not the storage: what a
- * browser does with `localStorage` needs a browser, and `kv.ts` already
- * degrades to "no stored value" under node — which is why the default is
- * observable here at all.
+ * The slug guard: a chain name is a path segment and the remembered selection is input from outside the program, so a
+ * value that is no slug by `suzatary_base::chains::ChainName`'s rule opens the default chain, never `/api/../fold`.
  */
 
 import { test } from "node:test";
@@ -58,9 +44,7 @@ test("the guard admits a slug of up to 32 and refuses traversal, separators, cas
 });
 
 test("a store this browser cannot read opens on the first chain", () => {
-  // Under node there is no `window`, so the stored value reads as absent — the
-  // same answer a private window, cleared site data or a browser that blocks
-  // storage gives. The app opens on `life` either way.
+  // Under node there is no `window`, so the stored value reads as absent, as in a private window.
   assert.equal(remembered(), DEFAULT_CHAIN);
   assert.equal(app.now().chain, DEFAULT_CHAIN);
   assert.equal(app.apiBase(app.now()), `/api/${DEFAULT_CHAIN}`);

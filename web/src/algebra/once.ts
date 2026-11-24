@@ -1,5 +1,5 @@
-// A run's answer, kept: `of` keeps a success and forgets a failure, so the next call asks again; `shared` keeps a run
-// only while it is in flight, so a call during it joins it and a call after it starts another.
+// `of` keeps a success and forgets a failure, so the next call asks again; `shared` keeps a run only while it is in
+// flight, so a call during it joins it and a call after it starts another.
 
 export namespace once {
   export type T<A> = { readonly get: () => Promise<A>; readonly forget: () => void }

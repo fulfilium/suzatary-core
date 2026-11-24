@@ -89,12 +89,10 @@ test("law: carrying what was typed into a body drawn again dispatches nothing, t
   forAll(300, (r, seed) => {
     const before = rows(r)
     const from = new El("DIV").add(...before.map(rowOf))
-    // A person types into some text fields and ticks some boxes.
     for (const f of fieldsOf(from)) {
       if (f.type === "checkbox" && r.bool()) f.checked = !f.checked
       else if (f.type !== "checkbox" && r.bool()) f.value = r.string("xyz", 1 + r.int(4))
     }
-    // The reading reorders the rows, adds one, and draws some with values of its own.
     const after = [...r.array(r.int(2), () => ({ key: "new", drawn: ["", "", ""] })), ...[...before].reverse()].map(row =>
       r.bool(0.3) ? { ...row, drawn: row.drawn.map(d => (d === "" ? "moved" : d)) } : row,
     )

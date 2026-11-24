@@ -1,25 +1,14 @@
 /**
- * THE REFERENCE GRAMMAR, IN THE BROWSER'S HALF OF IT.
+ * The reference grammar, in the browser's half of it. `suzatary_base::reference` is the authority;
+ * `web/src/chat/refs.ts` is a second reader, because the linking happens here over prose with no offsets,
+ * so where the two could disagree is pinned:
  *
- * `suzatary_base::reference` is the authority: it refuses a reference on the
- * way in and it decides what the stored bytes mean. `web/src/chat/refs.ts` is the
- * SECOND reader, and it exists because the linking happens here, over prose
- * that arrives as one string with no offsets. Two readers of one grammar is
- * exactly the shape this repository normally refuses, so the ones that could
- * disagree are pinned:
+ * - THE EIGHT SPELLINGS are the same eight `suzatary_base::reference`'s own test asserts, character for
+ *   character: if either side changes one, one of the two files goes red.
+ * - THE ROUND TRIP: whatever `print` writes, `parse` reads back as the same value.
+ * - THE TOKENISER LOSES NOTHING: concatenating every token's source is the input.
  *
- * - THE EIGHT SPELLINGS are the same eight `suzatary_base::reference`'s own test
- *   asserts, character for character. If either side changes one, one of the
- *   two files goes red.
- * - THE ROUND TRIP is a law here as it is there: whatever `print` writes,
- *   `parse` reads back as the same value.
- * - THE TOKENISER LOSES NOTHING: concatenating every token's source is the
- *   input. A scan that silently ate a character would be a page quietly
- *   misquoting the model, which is worse than a missed link.
- *
- * Nothing here touches the DOM: `anchor` and `textWithReferences` build nodes
- * and belong to the browser scenes (`web/e2e/secretary.test.ts`), which is
- * where a link that does not navigate would show up.
+ * `anchor` and `textWithReferences` build nodes and belong to the browser scenes (`web/e2e/secretary.test.ts`).
  */
 
 import { test } from "node:test";
@@ -91,8 +80,7 @@ test("a string that is not a reference is not one", () => {
   }
 });
 
-/** NOTHING IS DROPPED AND NOTHING IS INVENTED. The one property that matters
- * for a tokeniser over somebody's prose. */
+/** NOTHING IS DROPPED AND NOTHING IS INVENTED. */
 test("the tokens reassemble into exactly the input", () => {
   for (const text of [
     "",
@@ -111,13 +99,10 @@ test("the tokens reassemble into exactly the input", () => {
   }
 });
 
-/** How prose splits around the things it names. A reference starts at a
- * boundary, so a word that ENDS in one is a word ("notodo:life/x" would
- * otherwise link, and wrongly). A thread id may hold a dot, so the scan refuses
- * one at the end rather than swallowing the full stop. A bare `todo:<id>` is
- * DELIBERATELY not matched: it is the spelling typst's `#link("todo:x")` uses,
- * rewritten by `rich.ts`, and it names a todo on whichever chain is open, the
- * ambiguity `Reference::Todo` carries a chain to avoid. */
+/** A reference starts at a boundary, so a word that ENDS in one is a word ("notodo:life/x"). A thread id
+ * may hold a dot, so the scan refuses one at the end rather than swallowing the full stop. A bare
+ * `todo:<id>` is DELIBERATELY not matched: it is typst's `#link("todo:x")` spelling, which `rich.ts` rewrites,
+ * and it names a todo on whichever chain is open. */
 test("a sentence splits into prose and the things it names, at boundaries only", () => {
   const cases: [string, ReturnType<typeof tokenise>][] = [
     [
@@ -147,13 +132,9 @@ test("a sentence splits into prose and the things it names, at boundaries only",
 });
 
 /**
- * `urlTokens` IS THE DECISION `textWithReferences` LINKS ON, PURE OF THE DOM
- * (decision `boxturnslink`): an act turn's
- * own device-code URL becomes a link and a model turn's stays plain text —
- * `textWithReferences(text, who)` gates this call on `who === "act"`, which is
- * the browser scene's to prove (`web/e2e`), since that is where a link that
- * does not `target="_blank"`/`rel="noopener"` would show up. What is checked
- * here is the boundary this module owns: WHICH substring is a linkable URL.
+ * `urlTokens` is the decision `textWithReferences` links on (decision `boxturnslink`): an act turn's URL
+ * becomes a link and a model turn's stays plain text; the gate on `who` and the anchor's `rel="noopener"`
+ * are the browser scene's to prove (`web/e2e`).
  */
 test("an http or https url is its own token, split out of the prose, and a non-web scheme never is", () => {
   const cases: [string, ReturnType<typeof urlTokens>][] = [

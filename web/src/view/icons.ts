@@ -23,7 +23,6 @@ function icon(...paths: string[]): SVGSVGElement {
   );
 }
 
-/** The disclosure chevron the cards and the panels share. */
 export const chevronIcon = (): SVGSVGElement => icon("M8.5 5.5l7 6.5-7 6.5");
 
 // The act icons, each beside its word: a tick alone is a guess about what "done" means.
@@ -41,7 +40,6 @@ export const undoIcon = (): SVGSVGElement => icon("M4 9h9.5a5.5 5.5 0 0 1 0 11H8
 export const confirmIcon = (): SVGSVGElement =>
   icon("M12 3.2l7 2.6v6.1c0 4.2-2.9 7.2-7 8.9-4.1-1.7-7-4.7-7-8.9V5.8z", "M8.6 11.8l2.5 2.5 4.4-4.8");
 
-/** A plus: add. */
 export const plusIcon = (): SVGSVGElement => icon("M12 5v14", "M5 12h14");
 
 export const clipIcon = (): SVGSVGElement =>
@@ -54,5 +52,4 @@ export const lockIcon = (): SVGSVGElement => icon("M6.5 11h11v9h-11z", "M9 11V8a
 export const sendIcon = (): SVGSVGElement => icon("M12 19V5.5", "M6.5 11L12 5.5l5.5 5.5");
 
 
-/** A magnifier: the list's one control for searching, filtering and grouping it. */
 export const searchIcon = (): SVGSVGElement => icon("M10.5 4.5a6 6 0 1 1 0 12 6 6 0 0 1 0-12z", "M15 15l4.5 4.5");

@@ -1,7 +1,6 @@
-// The ui tier: the tab's own registers (where it is, what is open, what is typed), each declared once with where its
-// writes go. A `Tab` register has one writer, this tab, so it is a plain value in memory. A `Device` one lives in this
-// browser's storage, a register whose writes carry their past, joined across the browser's tabs; an `Owner` one too,
-// and its writes are what another device would be handed (`receive`).
+// The ui tier's registers, each declared once with where its writes go. A `Tab` one has one writer, this tab, so it is
+// a plain value in memory; a `Device` one is this browser's storage, writes that carry their past, joined across its
+// tabs; an `Owner` one too, and its writes are what another device would be handed (`receive`).
 
 import register from "../algebra/register"
 import kv from "./kv"

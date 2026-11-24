@@ -5,7 +5,6 @@ const BOUNDARY = /[^a-z0-9]/;
 
 function isBoundary(text: string, at: number): boolean {
   const before = text[at - 1];
-  // Position 0 and an `at` past the end are both boundaries.
   return before === undefined || BOUNDARY.test(before);
 }
 
@@ -28,8 +27,7 @@ export function score(query: string, text: string): number | null {
     previous = found;
     at = found + 1;
   }
-  // A late first hit is worth less, and a long text is a weaker answer than a
-  // short one that matched as well.
+  // A late first hit and a long text score less.
   return total - hay.indexOf((needle[0] ?? "").toLowerCase()) * 0.4 - hay.length * 0.02;
 }
 

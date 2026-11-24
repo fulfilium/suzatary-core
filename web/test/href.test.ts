@@ -1,7 +1,3 @@
-/**
- * `view/href.ts` — what an anchor typst emitted may lead to, read as the browser reads it.
- */
-
 import { test } from "node:test";
 import assert from "node:assert/strict";
 

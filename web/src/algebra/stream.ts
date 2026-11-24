@@ -1,6 +1,5 @@
-// A stream the box keeps open: its frames while it is up, the reconnect the browser's own, given up after GIVE_UP
-// failures with no open between them, or at once when the browser has closed it, and opened anew when the network
-// may be back.
+// A stream the box keeps open, the reconnect the browser's own: given up after GIVE_UP failures with no open between
+// them, or at once when the browser has closed it, and opened anew when the network may be back.
 
 export namespace stream {
   export type Health = { readonly type: "Open" } | { readonly type: "Trying"; readonly failures: number } | { readonly type: "GivenUp" }
@@ -31,9 +30,8 @@ export namespace stream {
 
   export type Ends = { readonly frame: (data: string) => void; readonly opened?: () => void; readonly gaveUp?: () => void }
 
-  // What says the network may be back: the browser going online, the tab shown again, and a slow tick for a tab that
-  // stays shown and online while the box restarts. `back` opens nothing unless the stream was given up, so the tick
-  // is no poll. Returns its own removal.
+  // The slow tick is for a tab that stays shown and online while the box restarts; `back` opens nothing unless the
+  // stream was given up, so the tick is no poll.
   export type Wake = (back: () => void) => () => void
 
   export const TICK_MS = 30_000
@@ -46,8 +44,7 @@ export namespace stream {
     return () => (clearInterval(tick), window.removeEventListener("online", back), document.removeEventListener("visibilitychange", shown))
   }
 
-  // Every open is told, a reconnect's included. A given-up stream is a new one when `wake` says the network may be
-  // back, so a phone off the network for a while, or a box restarting, is heard again. Returns its own closing.
+  // Every open is told, a reconnect's included; a given-up stream is made anew when `wake` says the network may be back.
   export const open = (make: () => Socket, ends: Ends, wake: Wake = browser): (() => void) => {
     let s = make()
     let h: Health = START

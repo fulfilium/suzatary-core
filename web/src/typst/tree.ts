@@ -27,7 +27,6 @@ export namespace viewtree {
   // its todo, any other node its kind.
   export const key = (n: Node): string => (n.type === "Row" ? n.row.ref : n.type)
 
-  // A node as the draw sees it.
   export const part = (p: Part): draw.Part => ({ type: p.node.type === "Run" ? "Run" : "Drawn", kind: p.node.type, key: key(p.node), own: p.own })
 
   // Least fulfilled first, a todo with no number last, ties by reference, so a redraw never shuffles.

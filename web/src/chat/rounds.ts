@@ -84,8 +84,6 @@ export function rounds(turns: readonly TurnRow[], proposals: readonly ProposalRo
   return built.map((round) => ({ ...round, proposals: placed.get(round.key) ?? [] }));
 }
 
-// --- the fold line -----------------------------------------------------------
-
 /** A verb sorted into what a reader recognises; one outside the four families prints as itself, never an invented bucket. */
 export function verbFamily(verb: string): string {
   if (verb === "search" || verb === "show" || verb === "thread") return "mail";

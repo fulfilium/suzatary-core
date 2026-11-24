@@ -1,6 +1,6 @@
-// Two lists of keys in, the smallest set of moves out, so a redraw keeps scroll, selection and focus.
-// Kept keys already in relative order (a longest increasing subsequence) stay; removals come
-// first, then inserts and moves from the end backwards, so `before` names a key already placed.
+// The smallest set of moves between two lists of keys, so a redraw keeps scroll, selection and focus. Kept keys in
+// relative order (a longest increasing subsequence) stay; removals come first, then inserts and moves from the end
+// backwards, so `before` names a key already placed.
 
 export type Op =
   // `before` is the key it must precede, or null for the end.

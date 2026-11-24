@@ -26,9 +26,9 @@ export namespace idb {
       r.onerror = () => no(new Error(String(r.error)))
     })
 
-  // Each database opened once by this thread, under the `indexedDB` that opened it, and kept open: opening one costs
-  // hundreds of milliseconds on a phone, a transaction over an open one almost nothing. A connection is let go when
-  // another asks to change or delete the database, which waits on every open one, and when the browser closes it.
+  // Each database opened once by this thread and kept open: opening one costs hundreds of milliseconds on a phone. A
+  // connection is let go when another asks to change or delete the database, which waits on every open one, and when
+  // the browser closes it.
   const opened = new Map<string, Promise<IDBDatabase>>()
   const forget = (name: string, db: Promise<IDBDatabase>): void => {
     if (opened.get(name) === db) opened.delete(name)
@@ -67,8 +67,7 @@ export namespace idb {
     return db
   }
 
-  // Every connection this thread holds closed and let go, so the next transaction opens its database again: what a
-  // test does between devices.
+  // Every connection this thread holds closed and let go, so the next transaction opens its database again.
   export const reset = (): void => {
     for (const db of opened.values()) void db.then(c => c.close(), () => {})
     opened.clear()
@@ -78,8 +77,7 @@ export namespace idb {
   // answers that its connection to the database's server was lost.
   const lost = (e: unknown): boolean => e instanceof DOMException && (e.name === "InvalidStateError" || e.name === "UnknownError")
 
-  // `work` runs in one transaction over the store `d` names and the stores `beside` name in the same database, and
-  // answers once that transaction has committed. A lost connection is let go, so the next transaction reopens it.
+  // `work` in one transaction over `d`'s store and `beside`, answered once it committed; a lost connection is let go.
   const over = async <T>(d: Db, beside: readonly string[], mode: IDBTransactionMode, work: (s: IDBObjectStore, tx: IDBTransaction) => Promise<T>): Promise<T> => {
     const connection = open(d)
     const db = await connection
@@ -107,8 +105,7 @@ export namespace idb {
     return over(d, [], mode, s => work(s))
   }
 
-  // `within` over `d`'s store and each of `beside`, stores of the same database: one transaction over all, so a write to
-  // one commits with the writes to the others or none does.
+  // One transaction over `d`'s store and each of `beside`, so a write to one commits with the others or none does.
   export const withBeside = async <T>(d: Db, beside: readonly Db[], mode: IDBTransactionMode, work: (s: IDBObjectStore, beside: readonly IDBObjectStore[]) => Promise<T>): Promise<T> => {
     if (!available()) throw new Error("this browser keeps nothing (no IndexedDB)")
     const other = beside.find(b => b.name !== d.name)

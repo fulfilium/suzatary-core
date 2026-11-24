@@ -85,7 +85,6 @@ export namespace http {
   }
   export const NOT_MODIFIED = 304
 
-  // How a read is bounded: a whole-answer timeout (`Wall`), or a longest silence between pieces (`Silence`).
   export type Bound = { readonly type: "Wall" } | { readonly type: "Silence"; readonly ms: number }
   export const WALL: Bound = { type: "Wall" }
 
@@ -101,7 +100,7 @@ export namespace http {
     return { signal: c.signal, heard, done: () => clearTimeout(t) }
   }
 
-  // The body as text, each piece counting as heard.
+  // Each piece counts as heard.
   const textOf = async (response: Response, signal: AbortSignal, heard: () => void): Promise<string> => {
     const body = response.body
     if (body === null) return response.text()
@@ -259,8 +258,7 @@ export namespace http {
 
   // A post the browser still delivers once the page is gone (`keepalive`), within its 64 KiB for such requests: a larger
   // one goes as `act` does, and what it carried is posted again at the next load.
-  // Bounded like a read: a post the box never answers fails, unanswered, and goes with the next sync, so nothing waits
-  // on it for ever.
+  // Bounded like a read, so nothing waits on it for ever: an unanswered post goes with the next sync.
   export const handOver = <A>(path: string, body: unknown, decoder: d.Decoder<A>): Promise<A> =>
     inflight.held(acting(path, body, wait.MS, "Outlives")).then(t => decoded(path, decoder, JSON.parse(t)))
 

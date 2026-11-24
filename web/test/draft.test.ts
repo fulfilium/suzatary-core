@@ -1,13 +1,8 @@
 /**
- * The write side, as functions.
- *
- * Three things are pinned here and each of them is a mechanism the app rests
- * on. The REQUEST carries the act header — that is the CSRF half of "a browser
- * tab is a trusted actor", and `gate::check_csrf` refuses without it,
- * so a build that dropped it would produce an app whose every button 403s. The
- * box's ANSWERS to a write are decoded strictly, so an answer this build does
- * not know is no answer rather than an empty list. And CONFIRM is offered
- * exactly where the server says a todo is unconfirmed.
+ * The write side, as functions. The REQUEST carries the act header, the CSRF half `gate::check_csrf` refuses
+ * without, so a build that dropped it would 403 every button. The box's ANSWERS to a write are decoded strictly,
+ * so an answer this build does not know is no answer rather than an empty list. CONFIRM is offered exactly where
+ * the server says a todo is unconfirmed.
  */
 
 import { test } from "node:test";
@@ -18,8 +13,6 @@ import d from "../src/wire/decoder";
 import http from "../src/wire/http";
 import type { Entry } from "../src/wire/generated/wire";
 import { applicable } from "../src/todo/todos";
-
-// --- the request -------------------------------------------------------------
 
 test("a write carries the act header, the JSON content type and the POST method", () => {
   const request = http.actRequest({ todo: "file83b" });
@@ -64,8 +57,6 @@ test("the authoring's answer is an event print and the todo it is about", () => 
   assert.equal(d.is(payload.AuthoredPayload)({ event: "Authored(…)", revision: null }), false);
   assert.equal(d.is(payload.AuthoredPayload)({ todo: "renewthelease", event: "Authored(…)" }), false, "revision is null, never absent");
 });
-
-// --- what applies ------------------------------------------------------------
 
 function entry(over: Partial<Entry> = {}): Entry {
   return {

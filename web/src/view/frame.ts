@@ -34,9 +34,9 @@ export namespace frame {
     // What the page asks of the world given what it shows, run once a value is drawn; what comes back is an event.
     readonly effects?: (v: S, fx: Effects<E>) => void
     readonly islands?: (dispatch: (e: E) => void, again: () => void) => { readonly [k in K]: Island<S> }
-    // What stands around the column, drawn once: a column beside it.
+    // What stands around the column, drawn once.
     readonly around?: (column: HTMLElement, at: At<K>) => HTMLElement
-    // The shape of what the page draws, for the placeholder shown while it waits; a page of text by default.
+    // The placeholder's shape; a page of text by default.
     readonly shape?: placeholder.Shape
     // Whether a value read still waits on more before it has anything to show (the box asked, the chain folding): the
     // frame's placeholder stays, the one node since the page opened.
@@ -114,7 +114,6 @@ export namespace frame {
     }
   }
 
-  // What the status line says: the page waits, failed, shows what may be behind, or nothing.
   type Said = { readonly type: "Waiting" } | { readonly type: "Failed"; readonly e: string } | { readonly type: "Behind"; readonly behind: reading.Behind } | { readonly type: "Quiet" }
 
   const said = <S, E, K extends string>(f: Page<S, E, K>, p: lo.T<S>, stale: reading.Behind | null): Said =>
@@ -148,8 +147,6 @@ export namespace frame {
   }
 
   // Idempotent: the parts show `p` whatever they showed before, and an island's node stays where it is.
-  // `stale` is whether what is shown may be behind, said under the heading with when it was read, and a Retry when an
-  // ask failed.
   const paint = <S, E, K extends string>(parts: Parts, f: Page<S, E, K>, p: lo.T<S>, stale: reading.Behind | null, fx: Effects<E>, at: At<K>, kept: ReadonlySet<Node>, carry: (to: readonly Node[]) => void): void => {
     const v = lo.withDefault(p, null)
     const mast = v === null || typeof f.masthead !== "function" ? [parts.head] : nodes(f.masthead(v, at))

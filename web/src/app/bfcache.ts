@@ -1,5 +1,5 @@
-// A document kept in the back/forward cache with its streams open holds the sockets the next one needs: what it keeps
-// open is closed when it is hidden, and opened once again when it comes back from the cache.
+// A document in the back/forward cache with its streams open holds the sockets the next one needs, so they close when
+// it is hidden and open once again when it comes back.
 
 export namespace bfcache {
   export type Window = {

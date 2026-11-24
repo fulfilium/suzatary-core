@@ -12,10 +12,8 @@ export namespace curve {
   // Seconds, with now inside [from, to].
   export type Window = { readonly from: number; readonly now: number; readonly to: number }
 
-  // Half of what has happened, half of what is coming.
   export const thirtyDays = (now: number): Window => ({ from: now - 15 * DAY, now, to: now + 15 * DAY })
 
-  // A moment in seconds and what the core said it is worth then.
   export type Sample = { readonly t: number; readonly v: number }
   // Ascending in t.
   export type Samples = readonly [Sample, ...Sample[]]
@@ -48,7 +46,6 @@ export namespace curve {
       ).run,
     )
 
-  // Where the straight line from a to b meets x.
   const meet = (a: Sample, b: Sample, x: number): Sample => ({ t: a.t + ((x - a.v) / (b.v - a.v)) * (b.t - a.t), v: x })
 
   // When the line first goes below x: now if it already is, never if it stays at or above.
@@ -87,13 +84,10 @@ export namespace curve {
     return down === null ? `${said} ${rest}` : `${said}; ${edge === fulfillment.FINE ? "watch" : "problem"} ${within(down - now.t)}`
   }
 
-  // --- the view ----------------------------------------------------------------
-
   // The drawing's own units: the frame is W wide and H tall, and stretches to its box.
   export const W = 1000
   export const H = 100
 
-  // A time to a pixel, linear over the window's span.
   export const x = (win: Window, w: number) => (t: number): number => ((t - win.from) / (win.to - win.from)) * w
   // A value to a height, 1 at the top.
   export const y = (v: number): number => (1 - v) * H
@@ -134,8 +128,7 @@ export namespace curve {
   const date = (at: number, said: string, cls: string): HTMLElement =>
     el("span", { class: `curvedate ${cls}`, style: `left:${pct(at)}` }, said)
 
-  // Thirty days in one thick line inside a frame from 0 to 100%, the past faded, a thin line at now
-  // and a dot at now's value, then the start, a week back, now, a week ahead and the end.
+  // Thirty days in one line inside a frame from 0 to 100%, the past faded, a line and a dot at now.
   export const line = (d: Drawn, zone: time.Zone): HTMLElement => {
     const { window: w } = d
     const h = halves(d)

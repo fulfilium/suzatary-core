@@ -1,10 +1,7 @@
 /**
- * `serial`: one run at a time and one queued behind it. The law is the one an
- * act needs from a sync: a call is answered by a run that STARTED after the
- * call, so whatever was sealed before calling is in the run that answers it.
- * Coalescing a call into the run already in flight broke exactly that: the
- * run had read what to push before the act existed, and its answer resolved
- * the act's sync as if the act had gone.
+ * `serial`'s law, the one an act needs from a sync: a call is answered by a run
+ * that STARTED after the call, so whatever was sealed before calling is in it; a
+ * run already in flight read what to push before the act existed.
  */
 
 import { test } from "node:test";

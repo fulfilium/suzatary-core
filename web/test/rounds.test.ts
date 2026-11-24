@@ -1,7 +1,4 @@
-/**
- * The transcript regrouped into rounds, by each row's own `index` field. Pure, so
- * every shape below is a plain object — no DOM, no fetch.
- */
+/** The transcript regrouped into rounds, by each row's own `index` field. */
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -182,11 +179,8 @@ interface FixtureTurn {
 }
 
 /**
- * THE SAME FIXTURE `suzatary_conversations::secretary::about`'s OWN TEST READS
- * — one transcript, two
- * independent groupings, pinned to agree: Rust's `round_spans` answers
- * `[(0,3),(4,5),(6,7)]` over the same eight turns, and this asserts `rounds`
- * partitions the identical three spans.
+ * THE SAME FIXTURE `suzatary_conversations::secretary::about`'s OWN TEST READS: Rust's `round_spans` answers
+ * `[(0,3),(4,5),(6,7)]` over the same eight turns, and `rounds` must partition the identical three spans.
  */
 test("the shared fixture groups into the same three spans the Rust side pins", () => {
   const rows = JSON.parse(readFileSync("app/conversations/tests/about-fixture.json", "utf8")) as FixtureTurn[];

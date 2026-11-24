@@ -1,12 +1,6 @@
 /**
- * The list, as a function.
- *
- * The home page's whole behaviour — which todos, in what order, under which
- * heading — is `todos.ts`, and these are the properties it must not lose. The
- * first one is the system's: **LOW MEANS URGENT**, ascending. A regression that
- * flipped it would look like a working app showing exactly the wrong todo
- * first, which is why it is pinned here as well as on the box, where
- * `site::urgency` and `suzatary todos open` order the same way.
+ * The list, as a function: **LOW MEANS URGENT**, ascending. A regression that flipped it would show exactly the
+ * wrong todo first, so it is pinned here as well as on the box (`site::urgency`, `suzatary todos open`).
  */
 
 import { test } from "node:test";
@@ -68,8 +62,6 @@ function entry(over: Partial<Entry> = {}): Entry {
   };
 }
 
-// --- the ordering ------------------------------------------------------------
-
 test("the order: ascending fulfillment, the lowest number the most urgent; ties on the id; an unpriced todo last", () => {
   const cases: [string, Entry[], string[]][] = [
     ["the lowest number is the most urgent", [entry({ todo: "b", value: 0.9 }), entry({ todo: "a", value: 0.2 })], ["a", "b"]],
@@ -78,8 +70,6 @@ test("the order: ascending fulfillment, the lowest number the most urgent; ties 
   ];
   for (const [why, rows, order] of cases) assert.deepEqual(rows.sort(byUrgency).map((each) => each.todo), order, why);
 });
-
-// --- the listing -------------------------------------------------------------
 
 test("unpriced todos are shown under their own heading, never hidden", () => {
   const list = listing(
@@ -91,10 +81,6 @@ test("unpriced todos are shown under their own heading, never hidden", () => {
   assert.deepEqual(list.unpriced.map((each) => each.todo), ["n"]);
   assert.equal(total(list), 3);
 });
-
-// --- the remembered filter ---------------------------------------------------
-
-// --- the card's signature -----------------------------------------------------
 
 test("the signature changes when a card's own fields change", () => {
   const open = entry({ value: 0.2 });
@@ -113,12 +99,7 @@ test("the signature ignores the stream: an append no card shows is not a redraw"
   assert.equal(signature(entry({ stream: [] })), signature(entry({ stream: ["a", "b"] })));
 });
 
-/**
- * A DECISION IS NOT A TODO. The
- * document has separated them since the kind existed; this pins that the
- * list does too, because a decision priced at 55% sitting among the open
- * todos is exactly what shipped to the box on 19 September.
- */
+/** A DECISION IS NOT A TODO: a priced decision must never sit among the open todos. */
 test("the listing leaves decisions to the Inbox", () => {
   const rows = [
     entry({ todo: "harrowreply", value: 0.42 }),
@@ -133,8 +114,6 @@ test("the listing leaves decisions to the Inbox", () => {
   assert.equal(isDecision(rows[1]!), true);
   assert.equal(isDecision(rows[0]!), false);
 });
-
-// --- the fixture the browser scenes read --------------------------------------
 
 /** The box's fold of the six-todo fixture chain (`web_vectors.rs`), at the instant it was folded. */
 const fixture = JSON.parse(readFileSync("app/api/tests/web/fold.json", "utf8")) as { at: string; entries: Entry[] };

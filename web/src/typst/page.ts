@@ -19,7 +19,6 @@ import place from "./place"
 import once from "../algebra/once"
 
 export namespace typstpage {
-  // What a page names to be drawn: its name in the report, the kit's view, its state's tree and each node's part.
   export type Spec<S, A> = {
     readonly page: string
     readonly module: kit.View
@@ -48,7 +47,6 @@ export namespace typstpage {
   // How many nodes the redraw under way compiled: User Timing's, never read by the app.
   let compiled = 0
 
-  // The tab's Typst, fetched once: the module, the core and the kit.
   const tools: reading.Reading<Tools> = reading.once(async (): Promise<Tools> => {
     const t0 = performance.now()
     const [typst, core] = await Promise.all([compiler.load(), loadCore()])
@@ -90,7 +88,6 @@ export namespace typstpage {
   // The view, an island of a frame page: handed every value, drawn once the tab's Typst is here, the latest value
   // then; a node that fails to compile is said in its place.
   export const island = <S, A>(v: View<S, A>, cls: string): frame.Island<S> & { readonly node: HTMLElement } => {
-    // Until the tab's Typst is here, the place shows the list's placeholder rather than standing empty.
     const loading = placeholder.view(placeholder.ROWS)
     const host = el("div", { class: cls }, loading)
     let latest: { readonly s: S } | null = null

@@ -38,10 +38,9 @@ export namespace onscreen {
   }
 
   // Whether `next` may replace what is shown. The tab's own reading is the truth while it holds objects, so the box's
-  // only boots a tab that has none; of two by one reader, the later in the causal order stays whichever arrived last,
-  // and of two concurrent ones the one shown stays. Where the order is not known here (the tab holds none of what they
-  // name) the later answer is taken, since one reader's answers are asked one at a time. A cached fold only ever
-  // boots an empty tab.
+  // only boots a tab that has none; of one reader's two, the causally later stays, of concurrent ones the one shown,
+  // and with the order unknown here the later answer is taken (one reader's are asked one at a time). A cache boots
+  // only an empty tab.
   const replaces = (next: By, was: Fold, ancestry: Ancestry): boolean =>
     was.type === "Unloaded" ||
     (next.type !== "Cached" &&
@@ -90,5 +89,4 @@ export namespace onscreen {
 }
 export default onscreen
 
-/** The app's one fold on screen. */
 export const store = source.create<onscreen.Fold, onscreen.Event>(onscreen.UNLOADED, onscreen.step)

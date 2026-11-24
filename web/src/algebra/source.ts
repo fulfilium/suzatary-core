@@ -10,9 +10,8 @@ export namespace source {
     readonly dispatch: (e: E) => void
   }
 
-  // The listener gets the event too: a page may redraw per event kind (a
-  // `delta` animates, a `window` decides the scroll), which the state alone
-  // cannot answer. A step returning the same value (`Object.is`) wakes nobody.
+  // The listener gets the event too, because a page may redraw per event kind; a step returning the same value
+  // (`Object.is`) wakes nobody.
   export const create = <S, E>(initial: S, step: Step<S, E>): Source<S, E> => {
     let s = initial
     const ls = new Set<Listener<S, E>>()

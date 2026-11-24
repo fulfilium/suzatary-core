@@ -1,8 +1,6 @@
-// What the tab asks the box and holds no replica of (mail, the calendar, the settings): one register per question,
-// its answers ordered by the ask that brought each, this tab's own count, a total order. The reading is the answer
-// of the greatest ask held, so an answer to an earlier ask arriving late is below it and never shown, and a failed
-// ask leaves the answer that stands. Asked when first read, when read again after nobody read it, and when the box
-// moves; a question nobody reads is never asked.
+// What the tab asks the box and holds no replica of: one register per question, its answers ordered by the ask that
+// brought each, so a late answer to an earlier ask is never shown and a failed ask leaves the answer that stands.
+// Asked when first read, when read again after nobody read it, and when the box moves; one nobody reads is never asked.
 
 import data from "../algebra/data"
 import lo from "../algebra/lo"
@@ -14,7 +12,6 @@ export namespace asked {
   // An answer, with when it landed: data, never part of the order.
   type Landed<A> = Stamped<A> & { readonly at: number }
 
-  // A register in the total order of asks: the newest answer held, the newest ask made and the newest that failed.
   export type Register<V> = { readonly answer: Landed<V> | null; readonly asked: number; readonly failed: Stamped<string> | null }
 
   export const empty: Register<never> = { answer: null, asked: 0, failed: null }
@@ -43,21 +40,18 @@ export namespace asked {
     : slow && r.asked > r.answer.n ? { why: null, since: r.answer.at }
     : null
 
-  // An ask on its way this long is said to be. How long it may take is the request's to bound (`wire/wait.ts`), never
-  // the register's: an ask may be the tab's own work too.
+  // An ask on its way this long is said to be; bounding it is the request's (`wire/wait.ts`), never the register's,
+  // since an ask may be the tab's own work too.
   export const SLOW_MS = 1500
 
   let count = 0
   const families = new Set<() => void>()
   const ears = new Set<() => void>()
 
-  // How many questions of one shape keep their registers when nobody reads them: one evicted is asked again when
-  // it is read again, so the bound changes what is asked and never what is read.
+  // Unread registers kept per shape: one evicted is asked again when read, so the bound never changes what is read.
   export const KEPT = 64
 
-  // Questions of one shape, `print` naming each argument: a register per name. `same` is the answers' equality: an
-  // answer equal to the one standing moves nothing and wakes nobody; by default the box's answers are data, equal
-  // field by field.
+  // A register per question, named by `print`; an answer `same` as the one standing moves nothing and wakes nobody.
   export const family = <A, V>(
     print: (a: A) => string,
     ask: (a: A) => Promise<V>,
@@ -77,8 +71,7 @@ export namespace asked {
       c.said = said
       for (const ear of [...c.ears]) ear()
     }
-    // Asks made while one is in flight are one ask, made when it lands: the register's order makes any number of
-    // asks safe, and this makes them few.
+    // Asks made while one is in flight are one, made when it lands: the order makes many safe, this makes them few.
     const again = (c: Cell): void => {
       if (c.asking) return void (c.due = true)
       const n = (count += 1)
@@ -134,7 +127,6 @@ export namespace asked {
     }
   }
 
-  // One question with no argument.
   export const question = <V>(ask: () => Promise<V>, same?: (x: V, y: V) => boolean): reading.Reading<V> =>
     family<null, V>(() => "", ask, same)(null)
 

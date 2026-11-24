@@ -50,7 +50,6 @@ export const parseFold = (raw: unknown): CachedFold | null =>
     null,
   );
 
-/** Checked by the caller, so the decision is visible rather than a swallowed exception. */
 export function fits(printed: string): boolean {
   return printed.length <= MAX_CHARS;
 }

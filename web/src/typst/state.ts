@@ -49,7 +49,6 @@ export namespace viewstate {
     readonly open: Opened
   }
 
-  // What the tab already holds: the fold's entries at its instant, the chain, the open todo, whether it writes.
   export type Held = {
     readonly entries: readonly Entry[]
     readonly at: string

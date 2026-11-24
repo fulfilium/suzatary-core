@@ -13,7 +13,6 @@ export namespace table {
     | { readonly type: "Finding"; readonly vs: readonly V[] }
 
   export const key = (fn: string, arg: string): Key => `${fn} ${arg}`
-  // The function a key names, `key`'s first argument.
   export const fnOf = (k: Key): string => k.slice(0, Math.max(0, k.indexOf(" ")))
 
   export const fold = <V, R>(l: Lookup<V>, on: { readonly miss: () => R; readonly hit: (v: V) => R; readonly finding: (vs: readonly V[]) => R }): R =>
@@ -22,8 +21,7 @@ export namespace table {
   // The value where the key holds exactly one; a finding is no answer.
   export const hit = <V>(l: Lookup<V>): V | undefined => (l.type === "Hit" ? l.v : undefined)
 
-  // Which keys go, told of every key touched and asked for a victim after every write: it decides what is
-  // remembered, never what anything means.
+  // Decides what is remembered, never what anything means.
   export type Evict = {
     readonly touched: (k: Key) => void
     readonly forgot: (k: Key) => void
@@ -32,7 +30,6 @@ export namespace table {
 
   export const keep = (): Evict => ({ touched: () => {}, forgot: () => {}, victim: () => undefined })
 
-  // At most `capacity` keys, the least recently touched first.
   export const lru = (capacity: number): Evict => {
     const recent = new Set<Key>()
     return {
@@ -46,7 +43,7 @@ export namespace table {
     readonly get: (k: Key) => Lookup<V>
     // True when the key now holds a second value for the first time: a finding.
     readonly insert: (k: Key, v: V) => boolean
-    // The union into this table, answering every key it made a finding of.
+    // Answers every key the union made a finding of.
     readonly join: (pairs: Iterable<readonly [Key, V]>) => Key[]
     readonly remove: (k: Key) => boolean
     readonly pairs: () => [Key, V][]
