@@ -1,13 +1,13 @@
 //! How the conversations' schema crosses into the browser's module: each line under
 //! `conversation`, its one register by name, and the register's value as the line's literal.
 
-use prodrome_core::schema::Schema;
+use prodrome_data::schema::Schema;
 use prodrome_wasm_exports::Json;
 use prodrome_wasm_exports::wire::json_literal;
 use serde_json::Value;
 
 use crate::secretary::line_event::{LineEvent, LineVocabulary};
-use prodrome_core::fold::sole::Only;
+use prodrome_data::fold::sole::Only;
 
 impl Json for LineEvent {
     fn key_fields(_: &LineVocabulary) -> Vec<&str> {
@@ -31,7 +31,7 @@ impl Json for LineEvent {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
     use proptest::prelude::*;
 
     use super::*;
@@ -41,7 +41,7 @@ mod tests {
     use suzatary_conversations::secretary::store::Entry;
 
     fn said(text: &str, minute: u32) -> LineEvent {
-        let at = prodrome_core::literal::Datetime::new(2026, 10, 1, 12, minute, 0, 0)
+        let at = prodrome_data::literal::Datetime::new(2026, 10, 1, 12, minute, 0, 0)
             .expect("an instant");
         let entry = Entry::Said {
             at,

@@ -3,8 +3,8 @@
 use crate::gate::Door;
 use crate::portal::Portal;
 use crate::secretary::routes::{Cards, Perform, Post};
-use prodrome_core::memo::{Cache, Lru};
-use prodrome_core::store::frontier::Frontiers;
+use prodrome_memo::{Cache, Lru};
+use prodrome_store::store::frontier::Frontiers;
 use suzatary_api::clienterror::Limiter;
 use suzatary_api::routes::Books;
 use suzatary_base::capability;
@@ -66,7 +66,7 @@ use axum::extract::connect_info::IntoMakeServiceWithConnectInfo;
 use axum::http::{HeaderValue, header};
 pub use conversation_worker::Workers;
 pub use live::Live;
-use prodrome_core::fpl::instant_of;
+use prodrome_data::instant::instant_of;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -428,7 +428,7 @@ impl State {
             noticing: Arc::default(),
             secrets_answered: Arc::default(),
             epochs: Arc::new(Epochs::remembered()),
-            frontiers: Arc::new(Frontiers::remembered(prodrome_core::store::frontier::KEPT)),
+            frontiers: Arc::new(Frontiers::remembered(prodrome_store::store::frontier::KEPT)),
             portal: Arc::new(Portal::Quiet),
             projects: Arc::new(|| Ok(None)),
             models,

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use suzatary_os::present::Present as _;
 
 use axum::Json;
-use prodrome_core::store::Replica as _;
+use prodrome_store::store::Replica as _;
 use suzatary_api::routes;
 use suzatary_base::refusal::Refusal;
 use suzatary_cards::settings::overview::{

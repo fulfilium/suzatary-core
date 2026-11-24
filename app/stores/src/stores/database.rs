@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use prodrome_core::declared::Declared;
+use prodrome_declared::Declared;
 
 use super::{Kind, Store};
 use crate::asks::AskEvent;

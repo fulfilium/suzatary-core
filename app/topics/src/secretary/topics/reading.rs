@@ -1,14 +1,14 @@
-//! The topic stores as the Prodrome's tag sets (`prodrome_core::tags`, SPEC law 48): a
+//! The topic stores as the Prodrome's tag sets (`prodrome_tags`, SPEC law 48): a
 //! [`Target`] carries [`Topic`]s.
 
 use crate::wire::topics::TopicsPayload;
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::literal::Datetime;
-use prodrome_core::registers::{Node, Prodrome, fold};
-use prodrome_core::schema::Schema;
-use prodrome_core::tags::membership::{Pair, Presence};
-use prodrome_core::tags::{Tagging, alias, membership, set};
+use prodrome_dag::registers::{Node, Prodrome, fold};
+use prodrome_data::literal::Datetime;
+use prodrome_data::schema::Schema;
+use prodrome_tags::membership::{Pair, Presence};
+use prodrome_tags::{Tagging, alias, membership, set};
 
 use crate::secretary::topics::provenance::{Owner, Provenance};
 use crate::secretary::topics::standing::{Opening, Standing, Suggestion};
@@ -282,7 +282,7 @@ pub fn bar(reading: &Reading) -> TopicsPayload {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::schema::headed::Body as _;
+    use prodrome_data::schema::headed::Body as _;
 
     use super::*;
 

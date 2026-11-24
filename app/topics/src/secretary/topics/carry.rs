@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use suzatary_lines::secretary::targets::Round;
 
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 use serde::Deserialize;
 
 use crate::secretary::topics::reading::MembershipEvent;

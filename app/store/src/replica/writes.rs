@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use serde::{Deserialize, Serialize};
 
 use crate::replica::held::Node;

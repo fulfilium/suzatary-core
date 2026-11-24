@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use sha2::{Digest, Sha256};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use suzatary_lines::secretary::line_form::{LinePulling, LineReplica};
 use suzatary_lines::secretary::outlines::Parsed;
 use suzatary_lines::secretary::step::Step;

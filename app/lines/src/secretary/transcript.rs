@@ -5,10 +5,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::{Actor, Envelope, Hash};
-use prodrome_core::literal::Datetime;
-use prodrome_core::registers::Node;
-use prodrome_core::schema::Schema as _;
+use prodrome_dag::registers::Node;
+use prodrome_data::event::{Actor, Envelope, Hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::schema::Schema as _;
 
 pub use crate::secretary::claim::Retry;
 use crate::secretary::claim::{Asked, Bound, Claims, Due, Line, Mark, Standing, Wakes};
@@ -370,7 +370,7 @@ impl Transcript {
     /// at `now` reads it.
     #[must_use]
     pub(crate) fn asked(&self, now: Datetime) -> Vec<Asked> {
-        let now = prodrome_core::fpl::instant_of(now);
+        let now = prodrome_data::instant::instant_of(now);
         let mut afresh: BTreeMap<&Hash, Datetime> = BTreeMap::new();
         for (place, written) in self.lines.iter().enumerate() {
             if let Entry::Again { at, question, .. } = &written.entry {
@@ -399,7 +399,7 @@ impl Transcript {
                 } else {
                     Wakes::RidesAlong
                 },
-                bound: if now - prodrome_core::fpl::instant_of(asked) <= ANSWERED_WITHIN {
+                bound: if now - prodrome_data::instant::instant_of(asked) <= ANSWERED_WITHIN {
                     Bound::Within
                 } else {
                     Bound::Past
@@ -1487,7 +1487,7 @@ fn waiting_reseals(
         .iter()
         .filter_map(|name| lines.literals(std::slice::from_ref(name)).ok()?.pop()?)
         .filter_map(|print| {
-            prodrome_core::event::parse_envelope::<LineEvent>(&vocabulary, &print).ok()
+            prodrome_data::event::parse_envelope::<LineEvent>(&vocabulary, &print).ok()
         })
         .filter_map(|object| object.event().cloned());
     for line in left_out {
@@ -1822,7 +1822,7 @@ pub fn judgments<'e>(entries: impl IntoIterator<Item = &'e Entry>) -> BTreeMap<H
 /// reader of a turn's taint reads it so.
 pub fn judge(
     name: &Hash,
-    actor: &prodrome_core::event::Actor,
+    actor: &prodrome_data::event::Actor,
     entry: &mut Entry,
     judgments: &BTreeMap<Hash, Taint>,
 ) {

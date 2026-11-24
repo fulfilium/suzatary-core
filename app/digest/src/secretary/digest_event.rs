@@ -5,12 +5,12 @@
 //! leave a call uncounted. Two summaries no later write descends from are a conflict, never
 //! settled by time.
 
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::literal::{Datetime, ProdromeError, Value};
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::literal::{Datetime, ProdromeError, Value};
 
-use prodrome_core::fold::sole::{One, Only, Whole};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal as _};
-use prodrome_core::schema::headed::{Body, Constructors, Event};
+use prodrome_data::fold::sole::{One, Only, Whole};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal as _};
+use prodrome_data::schema::headed::{Body, Constructors, Event};
 
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::{Asking, Beside};
@@ -279,7 +279,7 @@ impl Body for Said {
             },
             "Retracted" => Said::Retracted,
             other => {
-                return Err(prodrome_core::literal::codec::no_arm(Self::NAME, other));
+                return Err(prodrome_data::literal::codec::no_arm(Self::NAME, other));
             }
         };
         Event::new(
@@ -294,8 +294,8 @@ impl Body for Said {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::{canonical, parse_event};
-    use prodrome_core::schema::Schema as _;
+    use prodrome_data::event::{canonical, parse_event};
+    use prodrome_data::schema::Schema as _;
     use proptest::prelude::*;
 
     use super::*;

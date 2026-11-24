@@ -119,7 +119,7 @@ pub enum LineShape {
     Began { covers: Vec<Covered>, run: RunId },
     /// A question asked again, by its line's name.
     Again {
-        question: prodrome_core::event::Hash,
+        question: prodrome_data::event::Hash,
         how: suzatary_conversations::secretary::store::Rewind,
         by: String,
     },

@@ -1,7 +1,7 @@
 //! Who set a topic on a target: the owner, whose topic is kept, or the secretary, whose topic is a
 //! suggestion it may revise or drop.
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 

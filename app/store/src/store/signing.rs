@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use prodrome_core::event::{Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::schema::Schema;
-use prodrome_core::sign::{Secret, Signed};
+use prodrome_dag::sign::{Secret, Signed};
+use prodrome_data::event::{Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::schema::Schema;
 
 use super::{Prodrome, Reads, StoreError, WriteLock};
 

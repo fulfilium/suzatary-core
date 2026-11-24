@@ -4,8 +4,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use prodrome_core::event::Actor;
-use prodrome_core::schema::Schema as _;
+use prodrome_data::event::Actor;
+use prodrome_data::schema::Schema as _;
 use proptest::prelude::*;
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT, Daily, SETUP};

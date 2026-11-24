@@ -3,10 +3,10 @@
 //! store with everything resting on it.
 
 use crate::stores::Kind;
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use suzatary_store::receipt::{RefusalEvent, RefusalVocabulary};
 
-prodrome_core::word_literal!(Kind: Kind::ALL.iter().copied() => |kind| kind.name());
+prodrome_data::word_literal!(Kind: Kind::ALL.iter().copied() => |kind| kind.name());
 
 /// The actor the box writes every refusal as.
 #[must_use]

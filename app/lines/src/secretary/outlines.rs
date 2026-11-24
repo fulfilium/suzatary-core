@@ -5,9 +5,9 @@
 use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
-use prodrome_core::fpl;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Hash;
+use prodrome_data::instant;
+use prodrome_data::literal::Datetime;
 
 use crate::secretary::outline::{self, Outline};
 use crate::secretary::step::Step;
@@ -103,9 +103,9 @@ impl Parsed {
                 name: name(&node.hash)?,
                 conversation: ConversationId::new(conversation.clone())
                     .map_err(|e| NotANode(e.to_string()))?,
-                at: fpl::parse_iso(at)
+                at: instant::parse_iso(at)
                     .map_err(|e| NotANode(e.to_string()))
-                    .and_then(|at| fpl::datetime_of(at).map_err(|e| NotANode(e.to_string())))?,
+                    .and_then(|at| instant::datetime_of(at).map_err(|e| NotANode(e.to_string())))?,
                 parents: node
                     .parents
                     .iter()

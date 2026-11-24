@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 use serde::Deserialize;
 
 use crate::secretary::topics::reading::MembershipEvent;

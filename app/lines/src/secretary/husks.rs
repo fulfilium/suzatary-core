@@ -21,11 +21,11 @@ pub fn keys_of(
     conversations: crate::secretary::conversations::Conversations<'_>,
     graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
     retired: &crate::secretary::transcript::Retired,
-    sent: &[prodrome_core::event::Hash],
+    sent: &[prodrome_data::event::Hash],
 ) -> Answered<BTreeMap<String, String>> {
     let reads = conversations.reads();
     let slots = |name: &locked_text::KeyName| reads.key(name);
-    let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
+    let line = |name: &prodrome_data::event::Hash| graph.dag().get(name)?.event();
     let mut keys = BTreeMap::new();
     for name in sent
         .iter()
@@ -48,8 +48,8 @@ pub fn keys_of(
 pub fn husks(
     conversations: crate::secretary::conversations::Conversations<'_>,
     graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
-    names: &[prodrome_core::event::Hash],
-) -> Answered<BTreeMap<prodrome_core::event::Hash, String>> {
+    names: &[prodrome_data::event::Hash],
+) -> Answered<BTreeMap<prodrome_data::event::Hash, String>> {
     let sent = keys_of(conversations, graph, &retired(graph), names)?;
     Ok(husked(graph, &sent, names))
 }
@@ -58,8 +58,8 @@ pub fn husks(
 pub fn husked(
     graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
     sent: &BTreeMap<String, String>,
-    names: &[prodrome_core::event::Hash],
-) -> BTreeMap<prodrome_core::event::Hash, String> {
+    names: &[prodrome_data::event::Hash],
+) -> BTreeMap<prodrome_data::event::Hash, String> {
     names
         .iter()
         .filter_map(|name| {
@@ -67,7 +67,7 @@ pub fn husked(
             if line.keys().any(|key| sent.contains_key(key.as_str())) {
                 return None;
             }
-            Some((name.clone(), prodrome_core::store::Husk::of(line)?.print()))
+            Some((name.clone(), prodrome_data::husk::Husk::of(line)?.print()))
         })
         .collect()
 }
@@ -79,12 +79,12 @@ pub fn husked(
 pub fn dead(
     conversations: crate::secretary::conversations::Conversations<'_>,
     graph: &suzatary_store::store::Graph<crate::secretary::line_event::LineEvent>,
-    names: &[prodrome_core::event::Hash],
-) -> Answered<BTreeSet<prodrome_core::event::Hash>> {
+    names: &[prodrome_data::event::Hash],
+) -> Answered<BTreeSet<prodrome_data::event::Hash>> {
     let retired = retired(graph);
     let reads = conversations.reads();
     let slots = |name: &locked_text::KeyName| reads.key(name);
-    let line = |name: &prodrome_core::event::Hash| graph.dag().get(name)?.event();
+    let line = |name: &prodrome_data::event::Hash| graph.dag().get(name)?.event();
     let mut dead = BTreeSet::new();
     'lines: for name in names {
         let Some(held) = line(name) else { continue };

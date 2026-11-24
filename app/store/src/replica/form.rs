@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use serde::{Deserialize, Serialize};
 
 use crate::replica::frontier::Frontier;

@@ -90,7 +90,7 @@ pub enum LineWriter {
 impl LineWriter {
     /// The writer of a line written as `actor`.
     #[must_use]
-    pub fn of(actor: &prodrome_core::event::Actor) -> Self {
+    pub fn of(actor: &prodrome_data::event::Actor) -> Self {
         if crate::secretary::transcript::by_the_box(actor) {
             LineWriter::Box
         } else {

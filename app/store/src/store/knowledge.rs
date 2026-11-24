@@ -2,11 +2,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::declared::{Datum, Declared, Key, Registers, Slot};
-use prodrome_core::fold::Product;
-use prodrome_core::policy::Everything;
-use prodrome_core::registers::{Node, fold};
-use prodrome_core::schema::Schema;
+use prodrome_dag::registers::{Node, fold};
+use prodrome_data::fold::Product;
+use prodrome_data::policy::Everything;
+use prodrome_data::schema::Schema;
+use prodrome_declared::{Datum, Declared, Key, Registers, Slot};
 
 /// Each entity's registers, as their maximal values under the declared order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -26,7 +26,7 @@ impl Knowledge {
         let folded = fold(nodes);
         let mut known = BTreeMap::new();
         for (key, stream) in folded.entities() {
-            let registers: Registers<'_> = prodrome_core::fold::read(stream, None, &Everything);
+            let registers: Registers<'_> = prodrome_dag::fold::read(stream, None, &Everything);
             let read: BTreeMap<Slot, BTreeSet<Datum>> = registers
                 .registers()
                 .into_iter()

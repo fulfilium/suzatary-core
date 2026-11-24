@@ -127,7 +127,7 @@ proptest! {
         let mut outlines = Outlines::default();
         let mut held: BTreeSet<usize> = BTreeSet::new();
         let parsed = |n: usize| if n == LINES { genesis_node() } else { node(n, &lines[n]) };
-        let hash = |n: usize| prodrome_core::event::Hash::new(if n == LINES { genesis() } else { name(n) }).expect("a name");
+        let hash = |n: usize| prodrome_data::event::Hash::new(if n == LINES { genesis() } else { name(n) }).expect("a name");
         for (add, drop) in moves {
             let drop: BTreeSet<usize> = drop.into_iter().filter(|n| !add.contains(n)).collect();
             outlines.hold(add.iter().map(|n| parsed(*n)).collect(), &drop.iter().map(|n| hash(*n)).collect::<Vec<_>>());

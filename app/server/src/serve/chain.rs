@@ -1,7 +1,7 @@
 //! A chain's routes: its objects, its folds, one todo, and who is reading it.
 
 use axum::Json;
-use prodrome_core::event::{Actor, TodoId};
+use prodrome_data::event::{Actor, TodoId};
 use suzatary_api::routes;
 use suzatary_api::{query, wire};
 use suzatary_base::capability::Datetime;
@@ -37,7 +37,7 @@ pub(crate) struct Treeing {
     by: wire::TreeBy,
 }
 
-pub(crate) struct Since(prodrome_core::store::frontier::Since);
+pub(crate) struct Since(prodrome_store::store::frontier::Since);
 
 pub(crate) struct Wanted(query::Hashes);
 
@@ -45,7 +45,7 @@ pub(crate) struct Wanted(query::Hashes);
 /// held before them.
 pub(crate) struct Literals {
     pub(super) objects: Vec<String>,
-    pub(super) since: prodrome_core::store::frontier::Since,
+    pub(super) since: prodrome_store::store::frontier::Since,
     /// What travels beside them, read by the store posted to ([`suzatary_store::admission::Beside`]).
     pub(super) keys: std::collections::BTreeMap<String, Vec<String>>,
 }

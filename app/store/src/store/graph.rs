@@ -2,10 +2,10 @@ use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Envelope, Hash};
-use prodrome_core::registers::Node;
-use prodrome_core::schema::Schema;
+use prodrome_dag::dag::Dag;
+use prodrome_dag::registers::Node;
+use prodrome_data::event::{Envelope, Hash};
+use prodrome_data::schema::Schema;
 
 use super::StoreError;
 

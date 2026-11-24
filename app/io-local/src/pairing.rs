@@ -51,8 +51,8 @@ pub fn fresh() -> Result<(Code, Salt), String> {
 mod tests {
     use super::*;
 
-    fn ada() -> prodrome_core::event::Actor {
-        prodrome_core::event::Actor::new("ada").expect("a roster name")
+    fn ada() -> prodrome_data::event::Actor {
+        prodrome_data::event::Actor::new("ada").expect("a roster name")
     }
 
     #[test]

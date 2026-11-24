@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use proptest::prelude::*;
 use sha2::{Digest, Sha256};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use suzatary_lines::secretary::held_replica::{HeldReplica, Moved};
 use suzatary_lines::secretary::line_form::{
     LineDelta, LineFrame, LinePulling, LineReplica, frame, unframe,

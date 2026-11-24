@@ -4,8 +4,8 @@
 //! never a body.
 
 use crate::server::Server;
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::sign::{PublicKey, Signed};
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::sign::{PublicKey, Signed};
 use suzatary_api::wire::{DrawnPayload, Erasing, RecordPayload, Yes};
 use suzatary_base::capability::{Clock, Secret};
 use suzatary_base::capability::{Datetime, Typeset};
@@ -98,7 +98,7 @@ pub struct Cards<'a> {
 
 /// The chains a standing changeset names, each folded once.
 struct Drawn<'a> {
-    nodes: std::collections::BTreeMap<String, (Preview, prodrome_core::policy::Untrusted)>,
+    nodes: std::collections::BTreeMap<String, (Preview, prodrome_data::policy::Untrusted)>,
     typeset: &'a dyn Typeset,
     now: Moment,
     categories: Vec<String>,
@@ -2309,7 +2309,7 @@ mod tests {
         let said = |said| InboxEvent {
             proposal: id.clone(),
             at,
-            actor: prodrome_core::event::Actor::new("ada").expect("an actor"),
+            actor: prodrome_data::event::Actor::new("ada").expect("an actor"),
             said,
         };
         let events: Vec<InboxEvent> = std::iter::once(said(Said::Asked(Box::new(asked))))
@@ -2581,7 +2581,7 @@ mod tests {
             vec![
                 suzatary_memory::secretary::words::Gone::Erased {
                     erasure: suzatary_memory::secretary::erasure::Erasure::Asked {
-                        by: prodrome_core::event::Actor::new("ada").expect("an actor"),
+                        by: prodrome_data::event::Actor::new("ada").expect("an actor"),
                     },
                 }
                 .into(),
@@ -2710,7 +2710,7 @@ mod tests {
     fn endorsed() -> TapAnswer {
         TapAnswer::Endorsed(suzatary_signatures::signatures::Endorsement {
             key: suzatary_connect::cast::keys::root(),
-            signature: prodrome_core::sign::Signature::new("00".repeat(64)).expect("a signature"),
+            signature: prodrome_data::sign::Signature::new("00".repeat(64)).expect("a signature"),
         })
     }
 
@@ -2901,7 +2901,7 @@ mod tests {
     #[test]
     fn a_device_card_needs_an_endorsement_and_a_root() {
         let card = Proposal::Act(Act::Device(suzatary_signatures::signatures::Enrolment {
-            actor: prodrome_core::event::Actor::new("ada").expect("an actor"),
+            actor: prodrome_data::event::Actor::new("ada").expect("an actor"),
             key: suzatary_connect::cast::keys::root(),
         }));
         let refusal = refused(prepared(&card, &TapAnswer::Plain, &with_ntfy()));

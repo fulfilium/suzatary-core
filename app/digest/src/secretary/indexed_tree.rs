@@ -3,8 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::digest::{Node, Tree};
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
+use prodrome_digest::{Node, Tree};
 
 /// `tree`, and the path of child positions from its root to each node it names.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,14 +46,14 @@ impl<M> IndexedTree<M> {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::digest::Leaf;
+    use prodrome_digest::Leaf;
 
     use super::*;
 
     /// A log of `lines` lines, each resting on the one before.
     fn tree(lines: usize) -> Tree<()> {
         let names: Vec<Hash> = (0..lines)
-            .map(|n| prodrome_core::memo::name(format!("line {n}").as_bytes(), []))
+            .map(|n| prodrome_memo::name(format!("line {n}").as_bytes(), []))
             .collect();
         let leaves = names
             .iter()
@@ -69,7 +69,7 @@ mod tests {
                 measure: (),
             })
             .collect();
-        prodrome_core::digest::tree(leaves)
+        prodrome_digest::tree(leaves)
             .expect("no cycle")
             .expect("lines")
     }
@@ -77,7 +77,7 @@ mod tests {
     /// The index is a cache of [`Tree::node`]: for every name, held or not, both answer alike.
     #[test]
     fn the_index_finds_what_the_tree_finds() {
-        let absent = prodrome_core::memo::name(b"no line", []);
+        let absent = prodrome_memo::name(b"no line", []);
         for lines in [1, 2, 3, 7, 40, 333] {
             let tree = tree(lines);
             let indexed = IndexedTree::of(tree.clone());

@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use prodrome_core::event::{Envelope, Hash};
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{Envelope, Hash};
+use prodrome_data::schema::Schema;
 
 use super::{Gets, Graph, Reads, StoreError};
 

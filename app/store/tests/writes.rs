@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use proptest::prelude::*;
 use suzatary_store::receipt::Grounds;
 use suzatary_store::replica::held::Node;

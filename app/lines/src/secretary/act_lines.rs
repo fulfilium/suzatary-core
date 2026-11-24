@@ -103,16 +103,16 @@ pub fn note_act(
 #[must_use]
 pub fn heard_from_objects(
     events: &[suzatary_record::record::TodoEvent],
-    actor: &prodrome_core::event::Actor,
+    actor: &prodrome_data::event::Actor,
     chain: &suzatary_base::chains::ChainName,
     before: &dyn Fn(
         &suzatary_record::record::Authored,
     ) -> Option<suzatary_record::record::Authored>,
 ) -> Vec<ActLine> {
     use suzatary_record::record::TodoEvent;
-    let line = |todo: &prodrome_core::event::TodoId,
+    let line = |todo: &prodrome_data::event::TodoId,
                 at,
-                by: &prodrome_core::event::Actor,
+                by: &prodrome_data::event::Actor,
                 note: &str,
                 verb| {
         (by == actor && !note.trim().is_empty()).then(|| ActLine {
@@ -127,7 +127,7 @@ pub fn heard_from_objects(
         })
     };
     let moved =
-        |l: &prodrome_core::event::Lifecycle, verb| line(&l.todo, l.at, &l.actor, &l.note, verb);
+        |l: &prodrome_data::event::Lifecycle, verb| line(&l.todo, l.at, &l.actor, &l.note, verb);
     events
         .iter()
         .filter_map(|event| match event {

@@ -9,16 +9,16 @@
 use std::collections::BTreeSet;
 
 use base64::Engine as _;
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::literal::{Datetime, ProdromeError, Table, Value, Vocabulary, print_literal};
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::literal::{Datetime, ProdromeError, Table, Value, Vocabulary, print_literal};
+use prodrome_data::schema::Schema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::secretary::line_shape::{self, LineShape};
 use crate::secretary::saying::Saying;
-use prodrome_core::fold::sole::{One, Only, Whole};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, no_arm, record};
+use prodrome_data::fold::sole::{One, Only, Whole};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, no_arm, record};
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::store::Entry;
@@ -1031,7 +1031,7 @@ const LINES: &[Constructor] = &[
 pub struct LineVocabulary;
 
 impl Vocabulary for LineVocabulary {
-    fn signature(&self, name: &str) -> Option<prodrome_core::literal::Signature<'_>> {
+    fn signature(&self, name: &str) -> Option<prodrome_data::literal::Signature<'_>> {
         Table(LINES).find(name).or_else(|| {
             Table(&[
                 SCRUBBED,
@@ -1086,9 +1086,9 @@ impl Schema for LineEvent {
     }
 
     fn husk(
-        print: &prodrome_core::store::Other<'_>,
-    ) -> Option<prodrome_core::store::HuskObject<Self>> {
-        prodrome_core::store::HuskObject::of_other(print).ok()
+        print: &prodrome_data::husk::Other<'_>,
+    ) -> Option<prodrome_data::husk::HuskObject<Self>> {
+        prodrome_data::husk::HuskObject::of_other(print).ok()
     }
 }
 
@@ -1125,7 +1125,7 @@ fn line_of(
 
 /// A line every key of whose words is let go is kept as its husk: each slot's words dropped, the
 /// name of the key they were locked under all that is left of them.
-impl prodrome_core::store::Husking for LineEvent {
+impl prodrome_data::husk::Husking for LineEvent {
     type Seal = KeyName;
     type Husks = HuskVocabulary;
 
@@ -1166,7 +1166,7 @@ impl prodrome_core::store::Husking for LineEvent {
 pub struct HuskVocabulary;
 
 impl Vocabulary for HuskVocabulary {
-    fn signature(&self, name: &str) -> Option<prodrome_core::literal::Signature<'_>> {
+    fn signature(&self, name: &str) -> Option<prodrome_data::literal::Signature<'_>> {
         Table(LINES)
             .find(name)
             .or_else(|| Table(&[DROPPED, DROPPED_LOCKED]).find(name))
@@ -1211,7 +1211,7 @@ fn parsed<T: DeserializeOwned>(fields: Fields<'_>, name: &str) -> Result<T, Prod
 mod tests {
     use std::sync::atomic::{AtomicU8, Ordering};
 
-    use prodrome_core::event::{canonical, parse_event};
+    use prodrome_data::event::{canonical, parse_event};
 
     use proptest::prelude::Strategy as _;
 

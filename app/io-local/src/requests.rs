@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use suzatary_signatures::signatures::{Answer, Requested, WINDOW_SECONDS};
 use suzatary_store::store::{Doc, Gets as _, StoreError};
 
@@ -174,9 +174,9 @@ mod tests {
 
     /// The record of the request named by `seed`'s bytes, signed by a fixed device key.
     fn record(seed: &[u8]) -> Requested {
-        let signed = prodrome_core::sign::Secret::new(&"1".repeat(64))
+        let signed = prodrome_dag::sign::Secret::new(&"1".repeat(64))
             .expect("a seed")
-            .sign(&prodrome_core::memo::name(seed, []));
+            .sign(&prodrome_memo::name(seed, []));
         Requested {
             name: signed.object.as_str().to_owned(),
             method: "POST".to_owned(),

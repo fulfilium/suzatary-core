@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 use crate::secretary::derived::Derived;
 use crate::secretary::held_lines::{HeldLines, TheBox};

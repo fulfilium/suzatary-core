@@ -3,8 +3,8 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::Hash;
-use prodrome_core::schema::Schema;
+use prodrome_data::event::Hash;
+use prodrome_data::schema::Schema;
 
 use crate::secretary::held_replica::NotAnAnswer;
 use crate::wire::lines::{ObjectsPayload, ReceiptPayload};

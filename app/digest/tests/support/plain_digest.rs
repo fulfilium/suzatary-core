@@ -4,9 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use prodrome_core::digest::Cycle;
-use prodrome_core::event::{Actor, Envelope, Hash, parents_of};
-use prodrome_core::registers::Node;
+use prodrome_dag::registers::Node;
+use prodrome_data::event::{Actor, Envelope, Hash, parents_of};
+use prodrome_digest::Cycle;
 
 use super::{Digest, Kept, Placed, Shape, under_kept};
 use crate::secretary::digest_event::DigestEvent;

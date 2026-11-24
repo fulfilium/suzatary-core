@@ -97,17 +97,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1795519432,
-        "narHash": "sha256-8ojRz5pzURv8cAkknP6GkZDfPhgwtUFDzHtENJoeprU=",
+        "lastModified": 1795546150,
+        "narHash": "sha256-25IynEOyxY6pSZRqWfmx8X8bREkWnE1uxpaL2CzBYuQ=",
         "owner": "fulfilium",
         "repo": "prodrome",
-        "rev": "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0",
+        "rev": "39c408f59f266c67c32fbe94630ea464e3470da4",
         "type": "github"
       },
       "original": {
         "owner": "fulfilium",
         "repo": "prodrome",
-        "rev": "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0",
+        "rev": "39c408f59f266c67c32fbe94630ea464e3470da4",
         "type": "github"
       }
     },

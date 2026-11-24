@@ -21,7 +21,9 @@ suzatary-memory.workspace = true
 suzatary-mail.workspace = true
 suzatary-health.workspace = true
 suzatary-triage.workspace = true
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_memo.workspace = true
+prodrome_store.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 serde.workspace = true
@@ -32,6 +34,7 @@ hex.workspace = true
 ring.workspace = true
 
 [dev-dependencies]
+prodrome_dag.workspace = true
 suzatary-topics.workspace = true
 # Programs and PDFs a test makes, and its scratch directories.
 suzatary-testkit = { path = "../testkit" }

@@ -19,8 +19,8 @@ use super::chain::Literals;
 use super::guard::{Poster, Reader};
 use super::params::{Asked, Params};
 use super::reply::Immutable;
-use prodrome_core::event;
-use prodrome_core::event::Hash;
+use prodrome_data::event;
+use prodrome_data::event::Hash;
 use suzatary_base::refusal;
 use suzatary_lines::secretary::line_event;
 
@@ -74,7 +74,7 @@ enum Pulled {
 
 pub(crate) struct Since {
     store: Pulled,
-    since: prodrome_core::store::frontier::Since,
+    since: prodrome_store::store::frontier::Since,
 }
 
 impl Params for Since {
@@ -233,19 +233,19 @@ pub(crate) fn take(
 /// What the lines' rule reads beyond the lines: the deployment's root key, whose lines are the
 /// operator's, and the uploads a person's turn names.
 struct Beyond {
-    root: prodrome_core::sign::PublicKey,
+    root: prodrome_data::sign::PublicKey,
     uploads: Option<std::sync::Arc<super::Uploads>>,
-    now: prodrome_core::literal::Datetime,
+    now: prodrome_data::literal::Datetime,
 }
 
 impl suzatary_lines::secretary::lines_rule::World for Beyond {
-    fn now(&self) -> prodrome_core::literal::Datetime {
+    fn now(&self) -> prodrome_data::literal::Datetime {
         self.now
     }
 
     fn seat(
         &self,
-        signer: &prodrome_core::sign::PublicKey,
+        signer: &prodrome_data::sign::PublicKey,
     ) -> suzatary_signatures::signatures::Seat {
         if *signer == self.root {
             suzatary_signatures::signatures::Seat::Operator
@@ -292,7 +292,7 @@ fn posted_lines(posted: &[String]) -> std::collections::BTreeSet<Hash> {
 /// Each conversation a taken line is in told to its worker, so what the line starts is written;
 /// and for a taken stop, each round the stop's line ended told to stop.
 fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
-    use prodrome_core::schema::Schema as _;
+    use prodrome_data::schema::Schema as _;
     let vocabulary = line_event::LineVocabulary;
     let mut conversations = std::collections::BTreeSet::new();
     for literal in posted {
@@ -322,7 +322,7 @@ fn woken(state: &super::State, posted: &[String], receipt: &ReceiptPayload) {
     }
 }
 
-pub(crate) struct LinesSince(prodrome_core::store::frontier::Since);
+pub(crate) struct LinesSince(prodrome_store::store::frontier::Since);
 
 impl Params for LinesSince {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {

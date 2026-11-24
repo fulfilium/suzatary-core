@@ -11,7 +11,7 @@ pub struct SystemClock;
 impl Clock for SystemClock {
     fn now(&self) -> Datetime {
         // `literal::Datetime` admits years 1..=9999, which a set system clock cannot leave.
-        prodrome_core::fpl::datetime_of(chrono::Utc::now().naive_utc())
+        prodrome_data::instant::datetime_of(chrono::Utc::now().naive_utc())
             .expect("the system clock reads a year in 1..=9999")
     }
 }
@@ -23,10 +23,11 @@ mod tests {
     /// The machine's zone never enters: the clock reads UTC on a box set to any zone.
     #[test]
     fn the_system_clock_reads_utc() {
-        let utc = prodrome_core::fpl::datetime_of(chrono::Utc::now().naive_utc())
+        let utc = prodrome_data::instant::datetime_of(chrono::Utc::now().naive_utc())
             .expect("a year in range");
         let read = SystemClock.now();
-        let apart = prodrome_core::fpl::instant_of(read) - prodrome_core::fpl::instant_of(utc);
+        let apart =
+            prodrome_data::instant::instant_of(read) - prodrome_data::instant::instant_of(utc);
         assert!(
             apart.num_seconds().abs() < 60,
             "{read:?} is not UTC's {utc:?}"

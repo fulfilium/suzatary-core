@@ -11,7 +11,9 @@ name = "suzatary_topics"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_dag.workspace = true
+prodrome_tags.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-store.workspace = true

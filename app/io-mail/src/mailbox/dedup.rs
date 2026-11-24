@@ -161,8 +161,8 @@ impl ParsedDate {
     /// The header's numbers as a naive instant, no timezone applied; `None` when they form no
     /// real calendar instant (a day of 32).
     #[must_use]
-    pub fn to_naive_datetime(&self) -> Option<prodrome_core::literal::Datetime> {
-        prodrome_core::literal::Datetime::new(
+    pub fn to_naive_datetime(&self) -> Option<prodrome_data::literal::Datetime> {
+        prodrome_data::literal::Datetime::new(
             self.year,
             self.month,
             self.day,

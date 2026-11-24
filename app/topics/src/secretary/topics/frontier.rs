@@ -2,14 +2,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Actor;
-use prodrome_core::fold::Product as _;
-use prodrome_core::fold::sole::{Bodies, One, Only};
-use prodrome_core::policy::Everything;
-use prodrome_core::registers::Prodrome;
-use prodrome_core::schema::Schema as _;
-use prodrome_core::tags::Tagging;
-use prodrome_core::tags::membership::{Membership, MembershipEvent, Pair, Presence};
+use prodrome_dag::registers::Prodrome;
+use prodrome_data::event::Actor;
+use prodrome_data::fold::Product as _;
+use prodrome_data::fold::sole::{Bodies, One, Only};
+use prodrome_data::policy::Everything;
+use prodrome_data::schema::Schema as _;
+use prodrome_tags::Tagging;
+use prodrome_tags::membership::{Membership, MembershipEvent, Pair, Presence};
 
 /// Every pair that a write reached, with the presence its frontier reads (the greatest) and the
 /// writers of the frontier's writes of that presence.
@@ -21,7 +21,7 @@ pub fn writers<S: Tagging>(
         .iter()
         .filter_map(|(pair, stream)| {
             let registers: One<'_, Bodies<Membership<S>>> =
-                prodrome_core::fold::read(stream, None, &Everything);
+                prodrome_dag::fold::read(stream, None, &Everything);
             let stamps = registers.reading(Only);
             let presence = stamps
                 .iter()

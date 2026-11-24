@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::sync::LazyLock;
 
-use prodrome_core::digest::Measure as _;
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
+use prodrome_digest::Measure as _;
 
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Kinds, Label};

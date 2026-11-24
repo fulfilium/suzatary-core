@@ -6,8 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::digest::{Measure as _, Node, Part};
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
+use prodrome_digest::{Measure as _, Node, Part};
 
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Label};

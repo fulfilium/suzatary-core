@@ -1,6 +1,6 @@
 //! Learning what a source reported into a declared store, idempotently.
 
-use prodrome_core::declared::Declared;
+use prodrome_declared::Declared;
 
 use super::{Knowledge, Prodrome, StoreError};
 
@@ -38,7 +38,7 @@ pub mod doors;
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::declared::Declaration;
+    use prodrome_declared::Declaration;
 
     use super::Knowledge;
     use super::doors::{SCHEMA, seen};

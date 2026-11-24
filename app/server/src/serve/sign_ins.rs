@@ -74,11 +74,11 @@ impl SignIns {
                 );
                 drop(open);
                 self.close_when_lapsed();
-                let lapses = prodrome_core::fpl::instant_of(now)
+                let lapses = prodrome_data::instant::instant_of(now)
                     + chrono::Duration::from_std(LASTS).unwrap_or_default();
                 Performed::Tried(Tried::Running {
                     began: stamp(now),
-                    expires_at: prodrome_core::fpl::iso(lapses),
+                    expires_at: prodrome_data::instant::iso(lapses),
                 })
             }
             Err(failed) => Performed::Tried(Tried::NotSent {

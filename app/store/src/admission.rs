@@ -7,10 +7,10 @@
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
-use prodrome_core::change::Change;
-use prodrome_core::dag::Dag;
-use prodrome_core::event::Hash;
-use prodrome_core::schema::Schema;
+use prodrome_dag::dag::Dag;
+use prodrome_data::change::Change;
+use prodrome_data::event::Hash;
+use prodrome_data::schema::Schema;
 
 /// On which grounds a store's own rule refuses a change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,7 +73,7 @@ pub struct Post<'a, 'e, A: Admission + ?Sized> {
     pub held: &'a A::Held<'e>,
     pub world: &'a A::World,
     /// The keys the post's signatures of this change name; the shared rule proves them.
-    pub signers: &'a [prodrome_core::sign::PublicKey],
+    pub signers: &'a [prodrome_dag::sign::PublicKey],
 }
 
 /// A store's own rule for what a tab posts to it.

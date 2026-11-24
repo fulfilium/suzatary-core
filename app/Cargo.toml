@@ -21,17 +21,21 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 # Renamed from `prodrome`, its `[lib] name`, so the code spells it one way. ⚠️ BY REVISION,
-# NEVER BY BRANCH: the seven `rev`s here, `app/Cargo.lock`, `flake.nix`'s `inputs.prodrome.url`
+# NEVER BY BRANCH: the eleven `rev`s here, `app/Cargo.lock`, `flake.nix`'s `inputs.prodrome.url`
 # and `flake.lock` move together, ONE sha, so the binary and the browser's wasm read SPEC.md
 # alike. ⚠️ No default features: the reference payload is not linked; the record is ours.
-prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0", default-features = false }
+prodrome_core = { package = "prodrome-core", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4", default-features = false }
 # The data a store holds, which the core re-exports; derive with `#[literal(crate = prodrome_data)]`.
-prodrome_data = { package = "prodrome-data", git = "https://github.com/fulfilium/prodrome", rev = "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0" }
-prodrome_memo = { package = "prodrome-memo", git = "https://github.com/fulfilium/prodrome", rev = "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0" }
-prodrome_dag = { package = "prodrome-dag", git = "https://github.com/fulfilium/prodrome", rev = "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0" }
-prodrome_declared = { package = "prodrome-declared", git = "https://github.com/fulfilium/prodrome", rev = "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0" }
+prodrome_data = { package = "prodrome-data", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
+prodrome_memo = { package = "prodrome-memo", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
+prodrome_dag = { package = "prodrome-dag", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
+prodrome_declared = { package = "prodrome-declared", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
+prodrome_store = { package = "prodrome-store", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
+prodrome_tags = { package = "prodrome-tags", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
+prodrome_nest = { package = "prodrome-nest", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
+prodrome_digest = { package = "prodrome-digest", git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
 # The Prodrome's exports generic over a schema, which `wasm` instantiates at this application's.
-prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0" }
+prodrome-wasm-exports = { git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4" }
 suzatary-address = { path = "address" }
 suzatary-base = { path = "base" }
 suzatary-record = { path = "record" }
@@ -152,7 +156,7 @@ ts-rs = "11"
 typst-syntax = "=0.15.1"
 # THE CLOSED WORLD authored markup compiles in: the Prodrome's typst-wasm without `html` and
 # `plugin`, the crate the tab fetches, at `prodrome_core`'s revision.
-prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0", default-features = false }
+prodrome-typst-wasm = { git = "https://github.com/fulfilium/prodrome", rev = "39c408f59f266c67c32fbe94630ea464e3470da4", default-features = false }
 # THE FACES A DRAWING IS SET IN (`prodrome draw`): typst's own, at the typst this lock links, in
 # the binary, so no font the machine holds reaches a picture.
 typst-assets = { version = "=0.15.1", features = ["fonts"] }

@@ -1,7 +1,7 @@
 use std::sync::{Mutex, PoisonError};
 
-use prodrome_core::memo::{Cache, Evict, Key, Lookup, name};
-use prodrome_core::schema::Schema;
+use prodrome_data::schema::Schema;
+use prodrome_memo::{Cache, Evict, Key, Lookup, name};
 
 use super::{Prodrome, StoreError};
 

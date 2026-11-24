@@ -3,7 +3,7 @@
 
 use std::fmt::Debug;
 
-use prodrome_core::fold::Order;
+use prodrome_data::fold::Order;
 use proptest::prelude::*;
 
 /// `≤` is reflexive, antisymmetric and transitive over every triple of `values`.

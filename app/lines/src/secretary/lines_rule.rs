@@ -28,10 +28,10 @@ use std::rc::Rc;
 
 use suzatary_conversations::secretary::queue;
 
-use prodrome_core::change::Change;
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Envelope, Hash};
-use prodrome_core::literal::Datetime;
+use prodrome_dag::dag::Dag;
+use prodrome_data::change::Change;
+use prodrome_data::event::{Envelope, Hash};
+use prodrome_data::literal::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_held::attachment::{Attachment, AttachmentId};
 use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
@@ -189,7 +189,7 @@ pub trait World {
 
     /// The seat a line signed by `signer` speaks from: the operator's for the deployment's root
     /// key, a device's for any other.
-    fn seat(&self, signer: &prodrome_core::sign::PublicKey) -> Seat;
+    fn seat(&self, signer: &prodrome_data::sign::PublicKey) -> Seat;
 
     /// The upload `id` as a person's turn holds it, or none where the box holds no such upload.
     fn upload(&self, id: &AttachmentId) -> Result<Option<Upload>, String>;
@@ -421,7 +421,7 @@ fn stamped(
     change: &Change<LineEvent>,
     post: &Post<'_, '_, LinesRule>,
 ) -> Result<(), Inadmissible> {
-    use prodrome_core::schema::Schema as _;
+    use prodrome_data::schema::Schema as _;
     let poster = change.event.actor().as_str();
     let someone_else =
         || Inadmissible::finally("a line is the poster's own, and this one names someone else");
@@ -661,7 +661,7 @@ fn stops(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissible
 /// `Again`, an edit's, and the edit's own question, which takes up an edit's `Again` (only that
 /// line sets anything aside, so it is judged by its `Again`'s checks as it arrives).
 fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(), Inadmissible> {
-    use prodrome_core::schema::Schema as _;
+    use prodrome_data::schema::Schema as _;
     let refused = |why: &str| Err(Inadmissible::finally(why));
     let id = change.event.conversation();
     let Some(read) = post.held.transcript(id) else {
@@ -672,9 +672,9 @@ fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(
     };
     let lines = read.lines();
     let (question, how, deps): (
-        &prodrome_core::event::Hash,
+        &prodrome_data::event::Hash,
         Rewind,
-        Vec<prodrome_core::event::Hash>,
+        Vec<prodrome_data::event::Hash>,
     ) = if let LineShape::Again { question, how, .. } = change.event.shape() {
         (question, *how, change.deps.clone())
     } else {
@@ -764,7 +764,7 @@ fn taken_up<'r>(
     read: &'r Transcript,
     change: &Change<LineEvent>,
     post: &Post<'_, '_, LinesRule>,
-) -> Option<(usize, &'r prodrome_core::event::Hash)> {
+) -> Option<(usize, &'r prodrome_data::event::Hash)> {
     let after = post.held.after(post.name, change)?;
     let lines = read.lines();
     (0..lines.len()).find_map(|at| {
@@ -795,14 +795,14 @@ fn reopens(
     read: &Transcript,
     change: &Change<LineEvent>,
     post: &Post<'_, '_, LinesRule>,
-    question: &prodrome_core::event::Hash,
+    question: &prodrome_data::event::Hash,
 ) -> bool {
     let Some(after) = post.held.after(post.name, change) else {
         return false;
     };
     let stored = read.stored();
     let lines = read.lines();
-    let settled: BTreeSet<&prodrome_core::event::Hash> = read
+    let settled: BTreeSet<&prodrome_data::event::Hash> = read
         .turn_lines()
         .into_iter()
         .enumerate()

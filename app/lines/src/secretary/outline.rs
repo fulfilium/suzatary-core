@@ -5,8 +5,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Hash;
+use prodrome_data::literal::Datetime;
 
 use crate::secretary::step::Step;
 use crate::secretary::targets::rounds;

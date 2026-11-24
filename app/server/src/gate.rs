@@ -15,7 +15,7 @@ use axum::extract::{ConnectInfo, Request, State as AxumState};
 use axum::http::uri::{Authority, Uri};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use suzatary_base::capability::{Peer, Whois, WhoisError};
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_connect::deployment::Deployment;
@@ -315,7 +315,7 @@ pub(crate) fn who(request: &axum::http::Extensions) -> Result<Admitted, Refusal>
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use prodrome_core::policy::Untrusted;
+    use prodrome_data::policy::Untrusted;
 
     use super::*;
     use suzatary_base::capability::Login;

@@ -8,15 +8,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use prodrome_core::dag::{Excluded, Unread};
-use prodrome_core::event::{Envelope, Hash, parents_of, parse_envelope};
-use prodrome_core::memo::{self, Algebra, Cache, Report, Tree};
+use prodrome_dag::dag::{Excluded, Unread};
+use prodrome_data::event::{Envelope, Hash, parents_of, parse_envelope};
+use prodrome_memo::{self as memo, Algebra, Cache, Report, Tree};
 
 use crate::secretary::derived::Derived;
 use crate::secretary::line_event::{LineEvent, LineVocabulary};
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::transcript::{self, Transcript, Write};
-use prodrome_core::store::Husk;
+use prodrome_data::husk::Husk;
 use suzatary_base::answer::Renderable;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::store::{Entry, NotAConversation, Stored};
@@ -630,11 +630,11 @@ impl<F: Folds> HeldLines<F> {
             .filter(|(name, _)| !self.prints.contains_key(name))
             .map(|(name, bytes)| {
                 HASHES.with(|count| count.set(count.get() + 1));
-                let print = match prodrome_core::dag::decode::<LineEvent>(
+                let print = match prodrome_dag::dag::decode::<LineEvent>(
                     &LineVocabulary,
                     &name,
                     &bytes,
-                    prodrome_core::store::Sender::Stranger,
+                    prodrome_data::husk::Sender::Stranger,
                 ) {
                     Ok(stored) => Print::of(stored.into_object()),
                     Err(why) => Print::Unread(why),

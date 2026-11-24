@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 use crate::secretary::conversations::Conversations;
 use suzatary_base::refusal::Refusal;
@@ -48,8 +48,8 @@ pub fn census(conversations: Conversations<'_>, large: usize) -> Result<Census, 
     let mut dead = crate::secretary::husks::dead(conversations, &graph, &names)?;
     dead.retain(|name| {
         graph.dag().get(name).is_some_and(|object| match object {
-            prodrome_core::event::Envelope::Change(change) => {
-                prodrome_core::store::Husking::holds_sealed(&change.event)
+            prodrome_data::event::Envelope::Change(change) => {
+                prodrome_data::husk::Husking::holds_sealed(&change.event)
             }
             _ => false,
         })
@@ -67,7 +67,7 @@ pub fn census(conversations: Conversations<'_>, large: usize) -> Result<Census, 
                 census.dead_bytes += bytes;
                 census.husks += husk.len();
             }
-            Some(_) if line.is_some_and(prodrome_core::store::Husking::holds_sealed) => {
+            Some(_) if line.is_some_and(prodrome_data::husk::Husking::holds_sealed) => {
                 census.retired.add(bytes);
             }
             None if bytes > large => {
@@ -94,7 +94,7 @@ pub fn admitted(
     now: impl Fn(&Hash) -> Option<Vec<u8>>,
 ) -> Result<Vec<String>, Refusal> {
     use crate::secretary::line_event::{LineEvent, LineVocabulary};
-    use prodrome_core::store::HuskObject;
+    use prodrome_data::husk::HuskObject;
     let graph = conversations.lines.graph()?;
     let names: Vec<Hash> = was.iter().map(|(name, _)| name.clone()).collect();
     let dead = crate::secretary::husks::dead(conversations, &graph, &names)?;
@@ -102,11 +102,11 @@ pub fn admitted(
         .iter()
         .filter(|(name, whole)| {
             // The commit is no keeper of record: only bytes that hash to the name are a whole.
-            let whole = prodrome_core::dag::decode::<LineEvent>(
+            let whole = prodrome_dag::dag::decode::<LineEvent>(
                 &LineVocabulary,
                 name,
                 whole,
-                prodrome_core::store::Sender::Stranger,
+                prodrome_data::husk::Sender::Stranger,
             )
             .ok();
             let husk = now(name)
@@ -115,8 +115,8 @@ pub fn admitted(
             husk.is_none()
                 || husk
                     != match whole {
-                        Some(prodrome_core::store::Stored::Whole(
-                            prodrome_core::event::Envelope::Change(change),
+                        Some(prodrome_data::husk::Stored::Whole(
+                            prodrome_data::event::Envelope::Change(change),
                         )) => HuskObject::of(&change),
                         _ => None,
                     }
@@ -134,7 +134,7 @@ pub fn admitted(
 /// A finding for each husk the lines hold under a line a key may still open: one the prune did not
 /// write, which reads as words gone that are not.
 pub fn stray(conversations: Conversations<'_>) -> Result<Vec<String>, Refusal> {
-    use prodrome_core::store::Husking as _;
+    use prodrome_data::husk::Husking as _;
     let graph = conversations.lines.graph()?;
     let husks: Vec<Hash> = graph
         .objects()

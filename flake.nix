@@ -9,7 +9,7 @@
     #
     # PINNED TO THE COMMIT `app/Cargo.toml` names, as two shas would be two readings of one spec:
     # move this url (with `flake.lock`), the `rev`s in `app/Cargo.toml` and `app/Cargo.lock` together.
-    prodrome.url = "github:fulfilium/prodrome/a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0";
+    prodrome.url = "github:fulfilium/prodrome/39c408f59f266c67c32fbe94630ea464e3470da4";
     # One nixpkgs in the closure: this pin carries what the Prodrome's build needs, `cargo`/`rustc`
     # and `wasm-bindgen-cli_0_2_127` (in lockstep with the `=0.2.127` crate).
     prodrome.inputs.nixpkgs.follows = "nixpkgs";

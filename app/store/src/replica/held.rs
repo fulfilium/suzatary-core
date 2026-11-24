@@ -3,7 +3,7 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 use crate::replica::frontier::Frontier;
 use crate::replica::word::Word;

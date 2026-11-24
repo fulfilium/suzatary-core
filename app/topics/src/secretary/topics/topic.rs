@@ -122,7 +122,7 @@ impl std::fmt::Display for Topic {
     }
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     Topic => |topic| topic.as_str().to_owned(),
 );
 

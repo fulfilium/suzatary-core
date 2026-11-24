@@ -4,9 +4,9 @@
 //! Every reading takes no lock; the non-monotone questions are the writes', asked under the
 //! history's hold ([`Held`]).
 
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
-use prodrome_core::schema::Schema;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
+use prodrome_data::schema::Schema;
 use suzatary_lines::secretary::{conversations, transcript};
 
 use crate::secretary::digests::{Digests, ReadDigests};
@@ -541,7 +541,7 @@ pub(crate) fn whole<E: Schema>(store: &dyn Reads<E>, store_name: &str) -> Result
     }
     let names: Vec<&str> = left_out
         .iter()
-        .map(prodrome_core::event::Hash::as_str)
+        .map(prodrome_data::event::Hash::as_str)
         .collect();
     Err(Refusal::conflict(format!(
         "the {store_name} store's read left out {}: nothing is deleted or decided until it reads \

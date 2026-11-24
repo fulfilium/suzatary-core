@@ -8,7 +8,7 @@
 //! closed exactly when nothing it kept rests on what it lost (and, landing whole, it holds the
 //! heads its word names).
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 

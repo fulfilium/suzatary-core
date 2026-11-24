@@ -1,7 +1,7 @@
 //! What a deploy of the lines' new readings changes for a store, read on a copy of it before the
 //! deploy (`suzatary secretary owed --compare`). It opens no words, so it needs no key.
 
-use prodrome_core::schema::Schema as _;
+use prodrome_data::schema::Schema as _;
 
 use crate::secretary::claim;
 use crate::secretary::conversations::ReadConversations;
@@ -71,10 +71,10 @@ pub fn compare(
 
 fn compared(read: &Transcript, now: Datetime) -> Compared {
     let owed = owed_before_claims(read);
-    let since = prodrome_core::fpl::instant_of(now) - transcript::ANSWERED_WITHIN;
+    let since = prodrome_data::instant::instant_of(now) - transcript::ANSWERED_WITHIN;
     let interrupted = owed.iter().any(|&turn| {
         let said = &read.stored().turns[turn];
-        prodrome_core::fpl::instant_of(said.at) >= since && answered(&said.turn)
+        prodrome_data::instant::instant_of(said.at) >= since && answered(&said.turn)
     });
     let covers = read.resumes(now, |_| true, claim::Retry::Allowed);
     let turns = |lines: &[usize]| -> Vec<usize> {

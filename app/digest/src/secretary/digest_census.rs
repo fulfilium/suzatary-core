@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::digest::Node;
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
+use prodrome_digest::Node;
 
 use crate::secretary::compaction::{Compaction, InView, Reach, Rung, short};
 use crate::secretary::digest::{Digest, Standing};

@@ -1,6 +1,6 @@
 //! Where a replica stands with the box.
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 use crate::wire::store::SinceRead;
 

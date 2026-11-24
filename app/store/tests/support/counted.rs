@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use prodrome_core::event::{Envelope, Hash};
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{Envelope, Hash};
+use prodrome_data::schema::Schema;
 
 use super::{Graph, Prodrome, Reads, StoreError, WriteLock};
 

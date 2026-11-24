@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 /// The box's epoch, heads and prodromes, heard at `fetched_at`.
 /// A drop or a rollback holds less but has a later epoch all the same.

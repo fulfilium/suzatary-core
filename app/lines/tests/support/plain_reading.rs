@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::event::{Envelope, Hash};
+use prodrome_data::event::{Envelope, Hash};
 
 use super::{
     Named, Through, Transcript, by_conversation, erasures, lines_of, reseals, superseded,
@@ -46,7 +46,7 @@ pub fn of_objects(
     objects: impl IntoIterator<Item = (Hash, Envelope<LineEvent>)>,
     slots: &impl Slots,
 ) -> Result<BTreeMap<ConversationId, Transcript>, ReadFailed> {
-    let nodes = prodrome_core::dag::Dag::from_iter(objects)
+    let nodes = prodrome_dag::dag::Dag::from_iter(objects)
         .nodes()
         .map_err(|failed| ReadFailed::Unreadable(failed.to_string()))?;
     Ok(transcripts(&nodes, slots)?)

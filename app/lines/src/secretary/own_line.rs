@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::event::{Envelope, Hash, parse_envelope};
+use prodrome_data::event::{Envelope, Hash, parse_envelope};
 use sha2::{Digest as _, Sha256};
 
 use crate::secretary::line_event::{LineEvent, LineVocabulary};
@@ -107,7 +107,7 @@ impl OwnLine {
     /// [`OwnLine::read`]'s, which a line just sealed never meets.
     pub fn sealed(line: &Envelope<LineEvent>, keys: &[TextKey]) -> Result<Self, String> {
         let keys = keys.iter().map(|key| (key.name(), spelled(key))).collect();
-        Self::read(prodrome_core::event::canonical_envelope(line), &keys)
+        Self::read(prodrome_data::event::canonical_envelope(line), &keys)
     }
 
     #[must_use]

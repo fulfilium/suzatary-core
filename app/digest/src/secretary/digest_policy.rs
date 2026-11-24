@@ -4,9 +4,9 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::policy::{Policy, Standing};
-use prodrome_core::schema::Schema as _;
+use prodrome_dag::policy::{Policy, Standing};
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::schema::Schema as _;
 
 use crate::secretary::digest_event::DigestEvent;
 

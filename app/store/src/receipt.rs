@@ -5,12 +5,12 @@ use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::fmt::Debug;
 
-use prodrome_core::event::{Actor, Envelope, Hash};
-use prodrome_core::fold::sole::{One, Only, Whole};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal};
-use prodrome_core::literal::{Datetime, ProdromeError, Value};
-use prodrome_core::schema::Schema as _;
-use prodrome_core::schema::headed::{Body, Constructors, Event};
+use prodrome_data::event::{Actor, Envelope, Hash};
+use prodrome_data::fold::sole::{One, Only, Whole};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal};
+use prodrome_data::literal::{Datetime, ProdromeError, Value};
+use prodrome_data::schema::Schema as _;
+use prodrome_data::schema::headed::{Body, Constructors, Event};
 
 /// The request `key` refused for good.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,7 +102,7 @@ where
         let grounds = match fields.name() {
             "Refused" => Grounds::Final,
             "Outdated" => Grounds::Outdated,
-            other => return Err(prodrome_core::literal::codec::no_arm(Self::NAME, other)),
+            other => return Err(prodrome_data::literal::codec::no_arm(Self::NAME, other)),
         };
         Ok(refused(
             fields.get("request")?,
@@ -146,7 +146,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::{Envelope, canonical, parse_event};
+    use prodrome_data::event::{Envelope, canonical, parse_event};
 
     use super::*;
 
@@ -174,7 +174,7 @@ mod tests {
             assert_eq!(back, event);
             let genesis = Hash::new("b".repeat(64)).expect("a name");
             let change =
-                prodrome_core::change::mk_change(genesis, Vec::new(), back).expect("a change");
+                prodrome_data::change::mk_change(genesis, Vec::new(), back).expect("a change");
             let objects = [(request.clone(), Envelope::Change(change))];
             let said = refusals(objects.iter().map(|(n, o)| (n, o)), &"lines".to_owned());
             assert_eq!(

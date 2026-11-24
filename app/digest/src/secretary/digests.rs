@@ -6,8 +6,8 @@
 //! one the sweep asks under.
 
 use crate::secretary::compacting::Compacting;
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::literal::Datetime;
 
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Beside;
@@ -129,8 +129,8 @@ impl ReadDigests<'_> {
                 let event = object.event()?;
                 (matches!(event.body(), digest_event::Said::Retracted)
                     && matches!(
-                        prodrome_core::policy::Policy::standing(&policy, object.name(), event),
-                        prodrome_core::policy::Standing::Binds
+                        prodrome_dag::policy::Policy::standing(&policy, object.name(), event),
+                        prodrome_data::policy::Standing::Binds
                     ))
                 .then(|| object.name().clone())
             })

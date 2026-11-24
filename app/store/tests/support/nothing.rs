@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{Envelope, Hash, mk_sealed, seal_hash};
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{Envelope, Hash, mk_sealed, seal_hash};
+use prodrome_data::schema::Schema;
 use suzatary_base::capability::Nothing;
 
 use crate::store::{Doc, Gets, Lists, Prodrome, Reads, StoreError, WriteLock};

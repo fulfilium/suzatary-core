@@ -2,8 +2,8 @@
 
 use crate::gate::{actor_of, writer_of};
 use axum::http::HeaderMap;
-use prodrome_core::event::Actor;
-use prodrome_core::sign::PublicKey;
+use prodrome_data::event::Actor;
+use prodrome_data::sign::PublicKey;
 use suzatary_base::capability::Login;
 use suzatary_base::refusal::Refusal;
 use suzatary_signatures::signatures::Admitted;

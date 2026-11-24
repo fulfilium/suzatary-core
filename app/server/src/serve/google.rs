@@ -25,7 +25,7 @@ use super::guard::Reader;
 use super::params::{Asked, Params};
 use super::{Chained, State};
 use crate::gate::actor_of;
-use prodrome_core::fpl::instant_of;
+use prodrome_data::instant::instant_of;
 use suzatary_connect::settings::{Configuration, Edits};
 use suzatary_google::google;
 
@@ -89,7 +89,7 @@ impl google_sign_in::Consents for Consenting {
         card: &ProposalId,
         account: &EmailAddress,
         scopes: &Scopes,
-        by: &prodrome_core::event::Actor,
+        by: &prodrome_data::event::Actor,
         now: Datetime,
         then: Then,
     ) -> Performed {
@@ -156,7 +156,7 @@ impl google_sign_in::Consents for Consenting {
         );
         Performed::Tried(Tried::Running {
             began: stamp(now),
-            expires_at: prodrome_core::fpl::iso(until),
+            expires_at: prodrome_data::instant::iso(until),
         })
     }
 }

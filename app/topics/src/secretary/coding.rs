@@ -159,7 +159,7 @@ pub fn dropped(
     conversations: Conversations<'_>,
     id: &ConversationId,
     index: usize,
-    by: &prodrome_core::event::Actor,
+    by: &prodrome_data::event::Actor,
     reason: &str,
     at: Datetime,
 ) -> Result<Session, Refusal> {

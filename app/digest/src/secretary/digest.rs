@@ -9,14 +9,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use suzatary_triage::rule::ReadingName;
 
-use prodrome_core::digest::{self, Cycle, Leaf, Measure as _, Tree, View};
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::fold::Product as _;
-use prodrome_core::fold::sole::{One, Only, Whole};
-use prodrome_core::literal::Datetime;
-use prodrome_core::registers::{Node, fold};
-use prodrome_core::schema::Schema as _;
-use prodrome_core::topo;
+use prodrome_dag::registers::{Node, fold};
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::fold::Product as _;
+use prodrome_data::fold::sole::{One, Only, Whole};
+use prodrome_data::literal::Datetime;
+use prodrome_data::schema::Schema as _;
+use prodrome_data::topo;
+use prodrome_digest::{self as digest, Cycle, Leaf, Measure as _, Tree, View};
 
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::{Asking, Beside};
@@ -133,7 +133,7 @@ impl Shape {
     /// The node of the tree named `name`: a leaf is named by its line, unless the line was
     /// carried or words of it erased.
     #[must_use]
-    pub fn node(&self, name: &Hash) -> Option<&prodrome_core::digest::Node<Label>> {
+    pub fn node(&self, name: &Hash) -> Option<&prodrome_digest::Node<Label>> {
         self.tree.as_ref()?.node(name)
     }
 
@@ -232,7 +232,7 @@ pub fn under_kept(
             .as_ref()
             .and_then(|tree| tree.node(node))
             .is_some();
-        let name = prodrome_core::memo::name(
+        let name = prodrome_memo::name(
             if held {
                 b"in the tree"
             } else {
@@ -248,12 +248,12 @@ pub fn under_kept(
                 for retraction in stream.iter().filter(|stamp| {
                     matches!(stamp.event.body(), Said::Retracted)
                         && matches!(
-                            prodrome_core::policy::Policy::standing(
+                            prodrome_dag::policy::Policy::standing(
                                 &policy,
                                 &stamp.name,
                                 &stamp.event
                             ),
-                            prodrome_core::policy::Standing::Binds
+                            prodrome_data::policy::Standing::Binds
                         )
                 }) {
                     gone.extend(
@@ -265,7 +265,7 @@ pub fn under_kept(
                     );
                 }
                 let registers: One<'_, Whole<DigestEvent>> =
-                    prodrome_core::fold::read(stream, None, &policy);
+                    prodrome_dag::fold::read(stream, None, &policy);
                 let words = |name: &TextName| if held { words(name) } else { None };
                 let mut candidates: Vec<Candidate> = registers
                     .reading(Only)
@@ -461,7 +461,7 @@ fn leaves_of<'l>(
             (identity.clone(), false)
         } else {
             let renamed =
-                prodrome_core::memo::name(b"erased line", std::iter::once(identity).chain(&keys));
+                prodrome_memo::name(b"erased line", std::iter::once(identity).chain(&keys));
             (renamed, true)
         };
         carries.insert(name, identity);
@@ -498,7 +498,7 @@ fn taints<'l>(
                             at: line.at(),
                             parents,
                             writer: suzatary_lines::wire::lines::LineWriter::of(
-                                prodrome_core::schema::Schema::actor(line),
+                                prodrome_data::schema::Schema::actor(line),
                             ),
                         },
                     )
@@ -647,7 +647,7 @@ impl Digest {
     }
 
     #[must_use]
-    pub fn node(&self, name: &Hash) -> Option<&prodrome_core::digest::Node<Label>> {
+    pub fn node(&self, name: &Hash) -> Option<&prodrome_digest::Node<Label>> {
         self.shape.tree.as_ref()?.node(name)
     }
 

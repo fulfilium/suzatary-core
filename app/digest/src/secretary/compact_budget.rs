@@ -3,8 +3,8 @@
 //!
 //! Both windows are rolling and end at the instant asked about.
 
-use prodrome_core::fpl::{Instant, instant_of};
-use prodrome_core::literal::Datetime;
+use prodrome_data::instant::{Instant, instant_of};
+use prodrome_data::literal::Datetime;
 
 use crate::secretary::digest_spent::Spent;
 
@@ -140,7 +140,7 @@ mod tests {
 
     fn attempt(minute: i64, calls: u32, sent: u64) -> (Datetime, Spent) {
         (
-            prodrome_core::fpl::datetime_of(at(minute)).expect("a datetime"),
+            prodrome_data::instant::datetime_of(at(minute)).expect("a datetime"),
             Spent { calls, sent },
         )
     }

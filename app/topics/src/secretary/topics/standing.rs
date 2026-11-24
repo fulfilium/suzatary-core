@@ -2,8 +2,8 @@
 //! writes of its names there. Only the cases the secretary may change carry a token its planners
 //! take.
 
-use prodrome_core::literal::Datetime;
-use prodrome_core::tags::membership;
+use prodrome_data::literal::Datetime;
+use prodrome_tags::membership;
 use suzatary_lines::secretary::transcript;
 
 use crate::secretary::topics::reading::{MembershipEvent, Reading};

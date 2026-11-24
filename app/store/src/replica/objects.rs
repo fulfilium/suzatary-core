@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 
-use prodrome_core::event::{Envelope, Hash, parents_of, parse_envelope};
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{Envelope, Hash, parents_of, parse_envelope};
+use prodrome_data::schema::Schema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 

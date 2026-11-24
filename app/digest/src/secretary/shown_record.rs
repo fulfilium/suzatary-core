@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use prodrome_core::digest::{Node, Part, Tree};
+use prodrome_digest::{Node, Part, Tree};
 use serde_json::{Value, json};
 
 use crate::secretary::compaction::Reading;

@@ -5,14 +5,14 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use serde::{Deserialize, Serialize};
 
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::outlines::Parsed;
 use crate::secretary::step::Step;
 use crate::wire::lines::{LineWriter, NodeHeader, SkeletonNode};
-use prodrome_core::store::Husk;
+use prodrome_data::husk::Husk;
 use suzatary_conversations::secretary::store::RunId;
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::{KEY_BYTES, KeyName};
@@ -365,11 +365,11 @@ fn key_name(bytes: &Name) -> Result<KeyName, String> {
 pub(crate) fn line_header(line: &crate::secretary::line_event::LineEvent) -> NodeHeader {
     NodeHeader::Line {
         conversation: line.conversation().as_str().to_owned(),
-        at: prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(line.at())),
+        at: prodrome_data::instant::iso(prodrome_data::instant::instant_of(line.at())),
         kind: line.shape().name().to_owned(),
         keys: line.keys().map(|key| key.as_str().to_owned()).collect(),
         step: Step::of(line.shape()),
-        writer: LineWriter::of(prodrome_core::schema::Schema::actor(line)),
+        writer: LineWriter::of(prodrome_data::schema::Schema::actor(line)),
     }
 }
 
@@ -377,21 +377,21 @@ pub(crate) fn line_header(line: &crate::secretary::line_event::LineEvent) -> Nod
 /// on, its print's length and its header.
 #[must_use]
 pub fn skeleton_node(
-    name: &prodrome_core::event::Hash,
-    envelope: &prodrome_core::event::Envelope<LineEvent>,
+    name: &prodrome_data::event::Hash,
+    envelope: &prodrome_data::event::Envelope<LineEvent>,
 ) -> SkeletonNode {
     sized_node(
         name,
         envelope,
-        prodrome_core::event::canonical_envelope(envelope).len(),
+        prodrome_data::event::canonical_envelope(envelope).len(),
     )
 }
 
 /// One line's node, sized by `size`.
 #[must_use]
 pub fn sized_node(
-    name: &prodrome_core::event::Hash,
-    envelope: &prodrome_core::event::Envelope<LineEvent>,
+    name: &prodrome_data::event::Hash,
+    envelope: &prodrome_data::event::Envelope<LineEvent>,
     size: usize,
 ) -> SkeletonNode {
     let header = match envelope.event() {
@@ -402,7 +402,7 @@ pub fn sized_node(
     };
     SkeletonNode {
         hash: name.as_str().to_owned(),
-        parents: prodrome_core::event::parents_of(envelope)
+        parents: prodrome_data::event::parents_of(envelope)
             .iter()
             .map(|parent| parent.as_str().to_owned())
             .collect(),
@@ -411,8 +411,8 @@ pub fn sized_node(
     }
 }
 
-fn constructor<E>(envelope: &prodrome_core::event::Envelope<E>) -> &'static str {
-    use prodrome_core::event::Envelope;
+fn constructor<E>(envelope: &prodrome_data::event::Envelope<E>) -> &'static str {
+    use prodrome_data::event::Envelope;
     match envelope {
         Envelope::Sealed { .. } => "Sealed",
         Envelope::Woven { .. } => "Woven",

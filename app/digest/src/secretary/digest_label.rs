@@ -5,7 +5,7 @@
 //! node's label is the join of its lines', computed from the lines alone, never told by the
 //! model that summarised them.
 
-use prodrome_core::digest::Measure;
+use prodrome_digest::Measure;
 
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;

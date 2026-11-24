@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 thread_local! {
     /// The chain objects taken in on this thread while a [`recording`] runs.

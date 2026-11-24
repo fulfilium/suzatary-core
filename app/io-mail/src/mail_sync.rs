@@ -109,7 +109,7 @@ pub fn read_report(path: &Path) -> std::io::Result<Option<(SyncReport, SystemTim
 /// A file's time as the box's clock spells an instant: naive and UTC, as every `at` is.
 fn instant(at: SystemTime) -> Option<Datetime> {
     let utc: chrono::DateTime<chrono::Utc> = at.into();
-    prodrome_core::fpl::datetime_of(utc.naive_utc()).ok()
+    prodrome_data::instant::datetime_of(utc.naive_utc()).ok()
 }
 
 #[cfg(test)]

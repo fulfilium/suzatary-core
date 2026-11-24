@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 use crate::secretary::readings::{Dress, Place, turn};
 use crate::secretary::topics::reading::Reading;

@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 use crate::secretary::held_lines::HeldLines;
 use crate::secretary::line_event::LineEvent;
@@ -14,7 +14,7 @@ use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, Lin
 use crate::secretary::outlines::{Frontier, NotANode, Outlines, Parsed, Scope};
 use crate::secretary::own_line::OwnLine;
 use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
-use prodrome_core::event::{Actor, Envelope};
+use prodrome_data::event::{Actor, Envelope};
 use suzatary_base::answer::Renderable;
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
@@ -159,7 +159,7 @@ impl Writer<'_> {
         keys: &[suzatary_memory::secretary::locked_text::TextKey],
         deps: Vec<Hash>,
     ) -> Result<OwnLine, NotSealed> {
-        let change = prodrome_core::change::mk_change(self.genesis.clone(), deps, line)
+        let change = prodrome_data::change::mk_change(self.genesis.clone(), deps, line)
             .map_err(|e| NotSealed::Change(e.to_string()))?;
         Ok(
             OwnLine::sealed(&Envelope::Change(change), keys).unwrap_or_else(|_| {
@@ -288,7 +288,7 @@ pub enum NotItsHusk {
     #[error("the box answered a husk for {0}, which names no line this replica reads")]
     Unknown(String),
     #[error("{0}: {1}")]
-    Unread(String, prodrome_core::store::NotAHusk),
+    Unread(String, prodrome_data::husk::NotAHusk),
     #[error("the box's husk for {0} is not the line its node says")]
     Header(String),
     #[error("the box answered a husk for {0}, whose words a live key this replica holds opens")]
@@ -1056,7 +1056,7 @@ impl HeldReplica {
                     })
                     .ok_or_else(|| NotItsHusk::Unknown(shown.clone()))?;
                 let husk =
-                    prodrome_core::store::Husk::<crate::secretary::line_event::LineEvent>::read(
+                    prodrome_data::husk::Husk::<crate::secretary::line_event::LineEvent>::read(
                         &text,
                     )
                     .map_err(|e| NotItsHusk::Unread(shown.clone(), e))?;

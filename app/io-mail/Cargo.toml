@@ -23,7 +23,9 @@ suzatary-mail.workspace = true
 suzatary-health.workspace = true
 suzatary-triage.workspace = true
 suzatary-google.workspace = true
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_declared.workspace = true
+prodrome_store.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 # The JSON this crate parses: notmuch's output and the Gmail API's answers.

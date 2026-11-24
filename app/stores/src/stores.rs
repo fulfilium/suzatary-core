@@ -12,8 +12,8 @@ mod in_memory;
 #[path = "../tests/support/scene.rs"]
 mod scene;
 
-use prodrome_core::declared::Declared;
-use prodrome_core::schema::Schema;
+use prodrome_data::schema::Schema;
+use prodrome_declared::Declared;
 
 use crate::asks::AskEvent;
 use suzatary_digest::secretary::digest_event::DigestEvent;
@@ -192,8 +192,8 @@ impl Kind {
     /// Who may change a store's `objects/` besides this application, which decides how
     /// `Objects` opens it.
     #[must_use]
-    pub const fn doors(self) -> prodrome_core::store::Doors {
-        use prodrome_core::store::Doors;
+    pub const fn doors(self) -> prodrome_store::store::Doors {
+        use prodrome_store::store::Doors;
         match self {
             // In the data repository, which a pull, a checkout or a restore from git changes.
             Kind::Chain

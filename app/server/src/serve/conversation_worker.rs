@@ -6,7 +6,7 @@
 //! never across a firing, and a task leaves only under the lock [`Workers::nudge`] takes, so no
 //! nudge is lost.
 
-use prodrome_core::event::{Actor, Hash};
+use prodrome_data::event::{Actor, Hash};
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;

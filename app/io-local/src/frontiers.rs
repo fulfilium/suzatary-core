@@ -1,4 +1,4 @@
-//! The box's recorded frontiers on disk (`prodrome_core::store::frontier`), box-local and never
+//! The box's recorded frontiers on disk (`prodrome_store::store::frontier`), box-local and never
 //! backed up: a lost record costs a replica one full pull. Layout: a directory per store (`/`
 //! spelled `-`), a file per frontier named by its token with one tip per line, and `ring`
 //! listing the store's tokens, newest last.
@@ -6,8 +6,8 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use prodrome_core::event::Hash;
-use prodrome_core::store::frontier::{Frontiers, KEPT, Records, Token, Unrecorded};
+use prodrome_data::event::Hash;
+use prodrome_store::store::frontier::{Frontiers, KEPT, Records, Token, Unrecorded};
 use suzatary_store::store::{Doc as _, Gets as _};
 
 use crate::docs::{DocCodec, Docs};
@@ -129,10 +129,10 @@ const RINGS: DocCodec<String, Vec<Token>> = DocCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prodrome_core::dag::Dag;
-    use prodrome_core::event::{Envelope, seal_hash};
-    use prodrome_core::genesis::mk_genesis;
-    use prodrome_core::store::frontier::{Reached, Since};
+    use prodrome_dag::dag::Dag;
+    use prodrome_data::event::{Envelope, seal_hash};
+    use prodrome_data::genesis::mk_genesis;
+    use prodrome_store::store::frontier::{Reached, Since};
     use suzatary_topics::secretary::topics::reading::MembershipEvent;
 
     /// A token is the sha256 of the tips, one per line: the stored file names depend on it.

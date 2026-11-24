@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::event::Hash;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Hash;
+use prodrome_data::literal::Datetime;
 use suzatary_base::answer::Renderable;
 use suzatary_held::redact::Scrubbed;
 
@@ -60,12 +60,12 @@ pub struct Place {
 
 impl std::fmt::Display for Place {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use prodrome_core::literal::codec::Literal as _;
+        use prodrome_data::literal::codec::Literal as _;
         write!(
             f,
             "{} at {}, slot {}, key {}",
             self.conversation,
-            prodrome_core::literal::print_literal(&self.at.to_value()),
+            prodrome_data::literal::print_literal(&self.at.to_value()),
             self.slot,
             self.key
         )

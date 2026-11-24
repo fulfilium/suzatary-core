@@ -74,7 +74,7 @@ impl Operator {
 
     fn today(&self) -> chrono::NaiveDate {
         self.zone
-            .day(prodrome_core::fpl::instant_of(self.clock.now()))
+            .day(prodrome_data::instant::instant_of(self.clock.now()))
     }
 
     /// A one-off widening of the corpus; the CLI's alone, since the routine run must stay cheap.
@@ -113,7 +113,7 @@ impl Operator {
             .iter()
             .map(|account| account.email.as_str())
             .collect();
-        let now = prodrome_core::fpl::instant_of(self.clock.now());
+        let now = prodrome_data::instant::instant_of(self.clock.now());
         match suzatary_triage::mail::watch::ring(&self.watches, self, &own, now) {
             Ok(failed) => {
                 for refused in failed {
@@ -136,7 +136,7 @@ impl Corpus for Operator {
     fn sync(&self) -> Result<suzatary_mail::mail::sync_report::SyncReport, CorpusError> {
         let report = self.syncer.sync(self.today());
         self.ring();
-        let at = prodrome_core::fpl::instant_of(self.clock.now());
+        let at = prodrome_data::instant::instant_of(self.clock.now());
         self.health
             .join(&suzatary_health::health::Healths::of_sync(&report, at))
             .map_err(|failed| {

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::saying::Saying;
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use suzatary_conversations::secretary::store::RunId;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_inbox::secretary::stamp::Stamp;
@@ -129,7 +129,7 @@ impl Step {
 
 /// A line name as its text.
 mod name {
-    use prodrome_core::event::Hash;
+    use prodrome_data::event::Hash;
     use serde::{Deserialize as _, Deserializer, Serializer};
 
     pub(super) fn serialize<S: Serializer>(name: &Hash, to: S) -> Result<S::Ok, S::Error> {
@@ -143,7 +143,7 @@ mod name {
 
 /// Line names as their text.
 mod names {
-    use prodrome_core::event::Hash;
+    use prodrome_data::event::Hash;
     use serde::{Deserialize as _, Deserializer, Serializer};
 
     pub(super) fn serialize<S: Serializer>(names: &[Hash], to: S) -> Result<S::Ok, S::Error> {

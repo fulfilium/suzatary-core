@@ -17,7 +17,7 @@ use super::guard::Reader;
 use super::params::{Asked, Params};
 use super::secretary::conversation_named;
 use super::{Chained, State};
-use prodrome_core::sign;
+use prodrome_data::sign;
 
 pub(crate) struct Drawn {
     id: ConversationId,

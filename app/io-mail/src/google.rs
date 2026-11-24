@@ -393,15 +393,15 @@ pub fn learn(
     occurrences: &[Occurrence],
     at: suzatary_base::capability::Datetime,
 ) -> Result<suzatary_store::store::Learnt, String> {
-    use prodrome_core::store::Replica as _;
-    let schema = prodrome_core::declared::Declaration::admit(suzatary_google::google::SCHEMA)
+    use prodrome_store::store::Replica as _;
+    let schema = prodrome_declared::Declaration::admit(suzatary_google::google::SCHEMA)
         .map_err(|refused| format!("the calendar's schema: {refused}"))?;
     // Held until the learning ends, so no sync at another schema empties the store under it.
     let begun = suzatary_io_chains::plugin_store::PluginStore::at(root)
         .begin(&schema)
         .map_err(|failed| failed.to_string())?;
     let store = begun.store();
-    let actor = prodrome_core::event::Actor::new(suzatary_google::google::ACTOR)
+    let actor = prodrome_data::event::Actor::new(suzatary_google::google::ACTOR)
         .map_err(|refused| refused.to_string())?;
     let items = occurrences
         .iter()
@@ -607,7 +607,7 @@ mod tests {
 
     #[test]
     fn a_store_that_kept_an_address_is_emptied_before_any_fetch() {
-        use prodrome_core::declared::Declaration;
+        use prodrome_declared::Declaration;
         use suzatary_google::calendar::{
             Attendees, CalendarName, Content, Occurrence, OccurrenceId, Status, When,
         };
@@ -624,7 +624,7 @@ mod tests {
         let before = Declaration::admit(&before).expect("the schema before");
         let dir = suzatary_testkit::scratch("calendar-address");
         let root = dir.path().join("store");
-        let kept = prodrome_core::event::parse_event(
+        let kept = prodrome_data::event::parse_event(
             &before,
             &format!(
                 "Learned(occurrence='PLUGIN_GOOGLE_ADA 20261019T090000Z review@example.test', \

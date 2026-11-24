@@ -140,7 +140,7 @@ pub(crate) fn watches(
     call: &Call<Reader, (), ()>,
 ) -> Result<Json<suzatary_triage::wire::triage::WatchesPayload>, Refusal> {
     let caps = call.chain.caps;
-    let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
+    let now = prodrome_data::instant::instant_of(caps.secretary.clock.now());
     Ok(Json(watch::listed(caps.secretary.watches, now)?))
 }
 
@@ -149,7 +149,7 @@ pub(crate) fn cancel_watch(
     call: &Call<Tap, Watched, ()>,
 ) -> Result<Json<suzatary_triage::wire::triage::WatchesPayload>, Refusal> {
     let caps = call.chain.caps;
-    let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
+    let now = prodrome_data::instant::instant_of(caps.secretary.clock.now());
     watch::cancel(caps.secretary.watches, &call.params.0, now)?;
     Ok(Json(watch::listed(caps.secretary.watches, now)?))
 }

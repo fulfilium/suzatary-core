@@ -115,7 +115,7 @@ async fn run(
                         tracing::info!("compactor: {hold}");
                         said = Some(hold);
                     }
-                    let now = prodrome_core::fpl::instant_of(caps.secretary.clock.now());
+                    let now = prodrome_data::instant::instant_of(caps.secretary.clock.now());
                     wait = Some((hold.until() - now).to_std().unwrap_or_default());
                 }
                 Ok(Ok(Round::Idle)) => {}

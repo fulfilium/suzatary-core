@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 use serde_json::{Value, json};
 
 use crate::secretary::topics::provenance::Provenance;

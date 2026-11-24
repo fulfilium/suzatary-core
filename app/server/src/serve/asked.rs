@@ -15,8 +15,8 @@ use axum::body::Body;
 use axum::http::request::Parts;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use prodrome_core::event::Hash;
-use prodrome_core::sign::PublicKey;
+use prodrome_data::event::Hash;
+use prodrome_data::sign::PublicKey;
 use suzatary_base::refusal::Refusal;
 use suzatary_signatures::signatures::Admitted;
 use suzatary_signatures::signatures::{

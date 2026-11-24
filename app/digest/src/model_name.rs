@@ -29,7 +29,7 @@ impl ModelName {
     }
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     ModelName => |name| name.as_str().to_owned(),
 );
 

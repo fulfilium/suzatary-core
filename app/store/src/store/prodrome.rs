@@ -1,11 +1,11 @@
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{Envelope, Hash};
-use prodrome_core::literal::ProdromeError;
-use prodrome_core::policy::Policy;
-use prodrome_core::registers::Node;
-use prodrome_core::schema::Schema;
-use prodrome_core::store::EventStore;
+use prodrome_dag::policy::Policy;
+use prodrome_dag::registers::Node;
+use prodrome_data::event::{Envelope, Hash};
+use prodrome_data::literal::ProdromeError;
+use prodrome_data::schema::Schema;
+use prodrome_store::store::EventStore;
 
 use super::StoreError;
 
@@ -37,7 +37,7 @@ pub fn begun<E: Schema, Pol: Policy<E>>(
 
 /// Every name a DAG leaves out of its history, and every object resting on one.
 #[must_use]
-pub fn left_out<E: Schema>(dag: &prodrome_core::dag::Dag<E>) -> BTreeSet<Hash> {
+pub fn left_out<E: Schema>(dag: &prodrome_dag::dag::Dag<E>) -> BTreeSet<Hash> {
     dag.excluded()
         .into_iter()
         .flat_map(|excluded| std::iter::once(excluded.name).chain(excluded.resting))
@@ -87,7 +87,7 @@ pub trait Reads<E: Schema>: Sync {
             .map(|name| {
                 objects
                     .get(name)
-                    .map(prodrome_core::event::canonical_envelope)
+                    .map(prodrome_data::event::canonical_envelope)
             })
             .collect())
     }

@@ -9,10 +9,10 @@ use std::collections::BTreeSet;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use prodrome_core::digest::Node;
-use prodrome_core::event::{Envelope, Hash};
-use prodrome_core::fpl::instant_of;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::{Envelope, Hash};
+use prodrome_data::instant::instant_of;
+use prodrome_data::literal::Datetime;
+use prodrome_digest::Node;
 
 use crate::model_name::ModelName;
 use crate::secretary::compact::Compact;

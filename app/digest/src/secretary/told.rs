@@ -9,8 +9,8 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::ops::Range;
 
-use prodrome_core::digest::{Measure as _, Tree};
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
+use prodrome_digest::{Measure as _, Tree};
 
 use serde_json::{Value, json};
 

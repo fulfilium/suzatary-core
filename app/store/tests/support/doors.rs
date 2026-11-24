@@ -1,7 +1,7 @@
 //! A declared schema of doors, seen open or shut: what the learning laws learn.
 
-use prodrome_core::declared::{Declaration, Declared};
-use prodrome_core::event::parse_event;
+use prodrome_data::event::parse_event;
+use prodrome_declared::{Declaration, Declared};
 
 pub const SCHEMA: &str = "Schema(key='door', events=(Event(name='Seen', fields=(Field(name='door', \
     type=Text()), Field(name='at', type=Instant()), Field(name='actor', type=Text()), \

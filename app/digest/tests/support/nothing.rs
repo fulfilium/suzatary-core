@@ -4,7 +4,7 @@ use suzatary_base::capability::Nothing;
 use suzatary_lines::secretary::conversations;
 
 /// No owner: nothing here believes a retraction or an erasure.
-static NO_OWNERS: std::collections::BTreeSet<prodrome_core::event::Actor> =
+static NO_OWNERS: std::collections::BTreeSet<prodrome_data::event::Actor> =
     std::collections::BTreeSet::new();
 
 impl crate::secretary::memories::Memories<'static> {

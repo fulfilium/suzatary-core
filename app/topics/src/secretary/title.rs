@@ -3,7 +3,7 @@
 //! The job holds no verb and no session, and an answer that is not a [`Title`] is
 //! refused, never repaired past the first line.
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::conversations::Conversations;
 
