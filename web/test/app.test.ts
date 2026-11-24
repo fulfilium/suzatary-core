@@ -4,17 +4,17 @@ import assert from "node:assert/strict"
 import app from "../src/app/app"
 import shell from "../src/app/shell"
 import login from "../src/app/login"
-import { hrefOf } from "../src/shell/route"
-import { forAll, route, type Rng } from "./gen"
+import { hrefOfAddress } from "../src/shell/route"
+import { address, forAll, type Rng } from "./gen"
 
 const CHAINS = ["life", "suzatary", "other", "..", "Life"]
 const ADA = login.of({ login: "ada@example.invalid", actor: "ada" })
 
 // One generator per arm, keyed by the tag: an arm with no generator here is a type error.
 const arms: { [K in app.Event["type"]]: (r: Rng) => Extract<app.Event, { type: K }> } = {
-  Went: r => ({ type: "Went", route: route(r) }),
-  Replaced: r => ({ type: "Replaced", route: route(r) }),
-  Moved: r => ({ type: "Moved", at: r.int(4), route: route(r) }),
+  Went: r => ({ type: "Went", to: address(r) }),
+  Replaced: r => ({ type: "Replaced", to: address(r) }),
+  Moved: r => ({ type: "Moved", at: r.int(4), to: address(r) }),
   Kept: r => ({ type: "Kept", kept: { scroll: r.int(900), focus: r.pick(["", "row/a", "row/b"]) } }),
   Pinned: r => ({ type: "Pinned", chain: r.pick(CHAINS) }),
   Met: r => ({ type: "Met", me: login.of({ login: r.pick(["", "ada@example.invalid", "grace@example.invalid"]), actor: r.pick([null, "ada", "grace"]) }), served: r.array(r.int(3), () => r.pick(["life", "suzatary"])), categories: r.array(r.int(3), () => r.pick(["work", "home"])), zone: { name: r.pick(["UTC", "America/New_York", "Europe/London", "Europe/Berlin", "Pacific/Chatham"]) } }),
@@ -34,11 +34,11 @@ const arms: { [K in app.Event["type"]]: (r: Rng) => Extract<app.Event, { type: K
 const TAGS = Object.keys(arms) as app.Event["type"][]
 const event = (r: Rng): app.Event => arms[r.pick(TAGS)](r)
 const walk = (r: Rng, n = 30): app.App =>
-  r.array(n, () => event(r)).reduce(app.step, app.initial(route(r), r.pick(["life", "suzatary"])))
+  r.array(n, () => event(r)).reduce(app.step, app.initial(address(r), r.pick(["life", "suzatary"])))
 // A walk of a device that deleted what every revoked key left: no `Undeleted`, after which nothing writes again.
 const KEPT_TAGS = TAGS.filter(tag => tag !== "Undeleted")
 const walkKept = (r: Rng, n = 30): app.App =>
-  r.array(n, () => arms[r.pick(KEPT_TAGS)](r)).reduce(app.step, app.initial(route(r), r.pick(["life", "suzatary"])))
+  r.array(n, () => arms[r.pick(KEPT_TAGS)](r)).reduce(app.step, app.initial(address(r), r.pick(["life", "suzatary"])))
 
 const frozen = <T>(v: T): T => {
   if (typeof v === "object" && v !== null) {
@@ -85,7 +85,7 @@ test("law: a place never moves the chain, a new place closes the sheet, and only
     const a = walk(r)
     const b = app.step(a, arms[r.pick(PLACES)](r))
     assert.equal(b.chain, a.chain, "only a pick moves the chain")
-    if (hrefOf(app.route(b)) !== hrefOf(app.route(a))) assert.equal(b.more, false)
+    if (hrefOfAddress(app.address(b)) !== hrefOfAddress(app.address(a))) assert.equal(b.more, false)
     for (const tag of TAGS.filter(t => !(PLACES as readonly string[]).includes(t))) assert.equal(app.step(a, arms[tag](r)).log, a.log, tag)
   })
 })
@@ -94,7 +94,7 @@ test("law: only a route change or More moves the sheet, so an answer landing aft
   forAll(300, r => {
     const open = app.step(walk(r), { type: "More", open: true })
     for (const tag of TAGS.filter(t => !(PLACES as readonly string[]).includes(t) && t !== "More")) assert.equal(app.step(open, arms[tag](r)).more, true, tag)
-    assert.equal(app.step(open, { type: "Went", route: app.route(open) }).more, true, "the same route is not a change")
+    assert.equal(app.step(open, { type: "Went", to: app.address(open) }).more, true, "the same route is not a change")
     assert.equal(app.step(open, arms.Kept(r)).more, true, "keeping what the view had is not a change")
   })
 })
@@ -120,7 +120,7 @@ test("law: a chain switch starts a new connection's heads and keeps what the liv
 })
 
 test("who writes and the build's line are App's, read through its derived values", () => {
-  const a = app.initial({ type: "todos" }, "life")
+  const a = app.initial({ route: { type: "todos" }, tree: "" }, "life")
   assert.equal(app.writes(a), false)
   const b = app.step(a, { type: "Met", me: ADA, served: ["life", "suzatary"], categories: [], zone: { name: "America/New_York" } })
   assert.deepEqual(b.zone, { name: "America/New_York" }, "the owner's zone is the box's answer")
@@ -146,9 +146,9 @@ test("who writes and the build's line are App's, read through its derived values
 test("law: a place is read again exactly when the log's pointer moved to it, and gone to afresh otherwise", () => {
   forAll(300, r => {
     const a = walk(r)
-    const there = app.step(a, { type: "Went", route: route(r) })
+    const there = app.step(a, { type: "Went", to: address(r) })
     if (there.log !== a.log) assert.equal(there.again, false)
-    const back = app.step(there, { type: "Moved", at: there.log.at - 1, route: there.log.entries[there.log.at - 1]?.route ?? route(r) })
+    const back = app.step(there, { type: "Moved", at: there.log.at - 1, to: there.log.entries[there.log.at - 1]?.address ?? address(r) })
     if (back.log !== there.log) assert.equal(back.again, true)
     for (const tag of TAGS.filter(t => !(PLACES as readonly string[]).includes(t))) assert.equal(app.step(back, arms[tag](r)).again, back.again, tag)
   })
@@ -174,7 +174,7 @@ test("/api/me is parsed once: no login is this box's own node, a login with no a
 })
 
 test("a tab that may not write says so and where to write from; one still asking says nothing", () => {
-  const a = app.initial({ type: "todos" }, "life")
+  const a = app.initial({ route: { type: "todos" }, tree: "" }, "life")
   const met = (me: login.Met) => app.step(a, { type: "Met", me, served: [], categories: [], zone: { name: "UTC" } })
   const said = (b: app.App): string => { const r = app.reach(b); return r.type === "Reads" ? r.said : "" }
   const toSettings = (b: app.App): boolean => { const r = app.reach(b); return r.type === "Reads" && r.settings }

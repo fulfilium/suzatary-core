@@ -12,6 +12,7 @@ import { storeOf } from "./held"
 import { conversationOf, lackingIn, listOfLines, objectsOf, planOf, searchOf } from "../src/prodrome/core"
 import lines from "../src/prodrome/lines"
 import content from "../src/prodrome/content"
+import http from "../src/wire/http"
 import { sha256Hex } from "../src/prodrome/verify"
 import type { SkeletonNode, SkeletonPayload } from "../src/wire/generated/wire"
 import { forAll, forAllAsync, type Rng } from "./gen"
@@ -222,9 +223,10 @@ test("an opened conversation's names go out before the whole store's batches sti
 })
 
 test("over HTTP/1.1 one content answer is out at a time, beside the three streams, under the browser's six a host", () => {
-  assert.equal(content.atOnce("http/1.1"), 1)
-  assert.equal(content.atOnce(""), 1, "a protocol the browser has not said is read as HTTP/1.1")
-  assert.equal(content.atOnce("h2"), 4)
+  assert.equal(http.atOnce(content.AT_ONCE, "http/1.1"), 1)
+  assert.equal(http.atOnce(content.AT_ONCE, ""), 1, "a protocol the browser has not said is read as HTTP/1.1")
+  assert.equal(http.atOnce(content.AT_ONCE, "h2"), 4)
+  assert.equal(http.atOnce(content.AT_ONCE, "h3"), 4)
 })
 
 test("law: the core's plan keeps the newest conversations whole, in order, within the budget", () => {

@@ -8,6 +8,7 @@ import inflight from "../app/inflight"
 import primed from "../app/primed"
 import wait from "./wait"
 import text from "./text"
+import { measure } from "../app/perf"
 
 export namespace http {
   // `status` is 0 when the answer came and its shape was wrong, so a page can tell a 404 from a drift without reading prose.
@@ -83,6 +84,11 @@ export namespace http {
     }
     return ""
   }
+  // How many answers a caller keeps out at once: over HTTP/1.1 a browser opens at most six connections to a host and a
+  // page holds some open for streams; over HTTP/2 and 3 one connection carries every request. A protocol the browser
+  // has not said is read as HTTP/1.1.
+  export type AtOnce = { readonly h1: number; readonly multiplexed: number }
+  export const atOnce = (bound: AtOnce, said: string = protocol()): number => (said === "h2" || said === "h3" ? bound.multiplexed : bound.h1)
   export const NOT_MODIFIED = 304
 
   export type Bound = { readonly type: "Wall" } | { readonly type: "Silence"; readonly ms: number }
@@ -163,7 +169,12 @@ export namespace http {
 
   // A read is signed too, so a device whose key was revoked is told to wipe itself however it next asks.
   export const get = <A>(path: string, decoder: d.Decoder<A>, bound: Bound = WALL, keeping: Keeping = "Kept"): Promise<A> =>
-    body(path, bound, keeping).then(t => decoded(path, decoder, JSON.parse(t)))
+    body(path, bound, keeping).then(t => {
+      const start = performance.now()
+      const a = decoded(path, decoder, JSON.parse(t))
+      measure("http:decode", start, { path: path.split("?")[0], bytes: t.length })
+      return a
+    })
 
   // The box's body as it came, for a reader that parses it itself.
   export const read = (path: string, bound: Bound = WALL, keeping: Keeping = "Kept"): Promise<text.Text<unknown>> => body(path, bound, keeping).then(text.said)

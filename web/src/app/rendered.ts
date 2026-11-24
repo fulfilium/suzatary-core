@@ -7,6 +7,7 @@
 
 import table from "../algebra/table"
 import idb from "./idb"
+import http from "../wire/http"
 import { BLOCKS, REPLICA } from "../prodrome/objects"
 
 export namespace rendered {
@@ -74,8 +75,9 @@ export namespace rendered {
     return answered.html
   }
 
-  // How many of the box's answers `throughAll` waits on at once: a browser asks one host six at a time anyway.
-  const ASKING = 6
+  // How many of the box's answers `throughAll` waits on at once: as many as a browser asks one host over HTTP/1.1, and
+  // over HTTP/2 a first screen's blocks in two or three rounds of the network's latency.
+  const ASKING: http.AtOnce = { h1: 6, multiplexed: 32 }
 
   // `through` for many at once, in one read and one write of the device. A failed ask is null.
   export const throughAll = async (
@@ -99,7 +101,7 @@ export namespace rendered {
         )
       }
     }
-    await Promise.all(Array.from({ length: Math.min(ASKING, misses.length) }, next))
+    await Promise.all(Array.from({ length: Math.min(http.atOnce(ASKING), misses.length) }, next))
     const joins = answered.flatMap(a => (a === null || a.join === null ? [] : [a.join]))
     if (joins.length > 0) await store.join(joins)
     return answered.map(a => a?.html ?? null)

@@ -67,9 +67,11 @@ fn read<P: Page>(s: &str, lineage: &Tiles<P>) -> Tiles<P> {
         let formed = form::check(&root, &lineage.home, &Page::pin).is_ok();
         (read_whole && formed).then_some(root)
     });
+    // A tail that starts as a node does is a tree, damaged or not; any other `~` is the page's own.
+    let a_tree = tail.is_some_and(|t| t.starts_with(['|', '-']));
     match tree {
         Some(root) => lineage.grow(&root),
-        None if P::parse(s).is_some() => bare(s, lineage),
+        None if !a_tree && P::parse(s).is_some() => bare(s, lineage),
         None => bare(head, lineage),
     }
 }

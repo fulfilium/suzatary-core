@@ -2,7 +2,7 @@ import { isChainName, remembered } from "./chain"
 import shell from "./shell"
 import source from "../algebra/source"
 import heads from "../prodrome/heads"
-import { HOME, type Route, forwarded } from "../shell/route"
+import { type Address, HOME, type Route, bare, forwardedAddress } from "../shell/route"
 import routelog from "../shell/routelog"
 import time from "./time"
 import type { WaitingPayload } from "../wire/generated/wire"
@@ -43,9 +43,9 @@ export namespace app {
   export type Link = { type: "Quiet" } | { type: "Connected" } | { type: "Named"; heads: heads.Heads } | { type: "Off" }
 
   export type Event =
-    | { type: "Went"; route: Route }
-    | { type: "Replaced"; route: Route }
-    | { type: "Moved"; at: number; route: Route }
+    | { type: "Went"; to: Address }
+    | { type: "Replaced"; to: Address }
+    | { type: "Moved"; at: number; to: Address }
     | { type: "Kept"; kept: routelog.Kept }
     | { type: "Pinned"; chain: string }
     | { type: "Met"; me: login.Met; served: readonly string[]; categories: readonly string[]; zone: time.Zone }
@@ -63,8 +63,8 @@ export namespace app {
   export const QUIET: Stream = { heads: heads.NONE, link: { type: "Quiet" } }
   export const NO_LINE: shell.Line = { type: "None" }
 
-  export const initial = (route: Route, chain: string, zone: time.Zone = time.UTC): App => ({
-    log: routelog.of(forwarded(route)),
+  export const initial = (to: Address, chain: string, zone: time.Zone = time.UTC): App => ({
+    log: routelog.of(forwardedAddress(to)),
     again: false,
     chain,
     who: ASKING,
@@ -88,7 +88,7 @@ export namespace app {
 
   // A new place closes the sheet.
   const placed = (a: App, log: routelog.Log): App => {
-    const moved = !routelog.same(routelog.route(log), route(a))
+    const moved = !routelog.same(routelog.address(log), address(a))
     return log === a.log ? a : { ...a, log, more: a.more && !moved }
   }
 
@@ -142,11 +142,11 @@ export namespace app {
   export const step = (a: App, e: Event): App => {
     switch (e.type) {
       case "Went":
-        return via(a, placed(a, routelog.go(a.log, forwarded(e.route))), false)
+        return via(a, placed(a, routelog.go(a.log, forwardedAddress(e.to))), false)
       case "Replaced":
-        return via(a, placed(a, routelog.replace(a.log, forwarded(e.route))), false)
+        return via(a, placed(a, routelog.replace(a.log, forwardedAddress(e.to))), false)
       case "Moved":
-        return via(a, placed(a, routelog.to(a.log, e.at, forwarded(e.route))), true)
+        return via(a, placed(a, routelog.to(a.log, e.at, forwardedAddress(e.to))), true)
       case "Kept":
         return placed(a, routelog.keep(a.log, e.kept))
       case "Pinned":
@@ -177,6 +177,7 @@ export namespace app {
   }
 
   export const route = (a: App): Route => routelog.route(a.log)
+  export const address = (a: App): Address => routelog.address(a.log)
   export const actor = (a: App): string | null => actorOf(a.who)
   const WRITES: Reach = { type: "Writes" }
   const WAITS: Reach = { type: "Waits" }
@@ -226,7 +227,7 @@ export namespace app {
   export const apiBase = (a: App): string => `/api/${encodeURIComponent(a.chain)}`
 
   // This tab's App: the shell dispatches, and every other module reads it or hears one value of it move.
-  export const tab = source.create(initial(HOME, remembered(), ownerzone.remembered()), step)
+  export const tab = source.create(initial(bare(HOME), remembered(), ownerzone.remembered()), step)
   export const now = (): App => tab.state()
   export const dispatch = (e: Event): void => tab.dispatch(e)
   export const hear = <T>(of: (a: App) => T, heard: (t: T) => void, same: (t: T, was: T) => boolean = Object.is): (() => void) => {

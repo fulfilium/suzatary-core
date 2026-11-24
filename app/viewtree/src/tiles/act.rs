@@ -10,7 +10,8 @@ use super::tree::Tree;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Act<P> {
-    /// A page of the focused leaf's kind replaces it. A pinned page becomes the focused
+    /// A page the focused workspace already shows takes the focus, and nothing else moves. Else a
+    /// page of the focused leaf's kind replaces it. A pinned page becomes the focused
     /// workspace's end: it replaces a pinned end, or the end of a full workspace, or is added
     /// after the last child. Any other page goes beside (`open::beside`).
     Open(P),
@@ -26,8 +27,15 @@ pub enum Act<P> {
     /// Swaps the focused child with its neighbour, in the nearest node below the root on the
     /// direction's axis that has one; nothing moves when either child holds a pinned leaf.
     Move(Dir),
-    /// Sets the share of the focused child of the nearest node that fits.
-    Resize(Share),
+    /// Sets the shares of two neighbouring children of a node that fits, the one holding the
+    /// leaf `before` and the one right after it holding `after`: the children either side of the
+    /// divider that names those leaves (`Divider`). Where no such two children stand, nothing
+    /// changes.
+    Resize {
+        before: Id,
+        after: Id,
+        shares: [Share; 2],
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,18 +73,34 @@ pub fn act<P: Page>(tiles: Tiles<P>, act: Act<P>) -> Tiles<P> {
             let root = tiles.root.on_focus(|tree| shifted(tree, dir)).0;
             Tiles { root, ..tiles }
         }
-        Act::Resize(share) => {
-            let (root, _) = resized(tiles.root, share);
-            Tiles { root, ..tiles }
-        }
+        Act::Resize {
+            before,
+            after,
+            shares,
+        } => Tiles {
+            root: resized(tiles.root, before, after, shares),
+            ..tiles
+        },
     }
 }
 
 fn opened<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
+    let shown = tiles
+        .root
+        .focus
+        .tree
+        .leaves()
+        .iter()
+        .find(|l| *l.page() == page)
+        .map(|l| l.id());
+    if let Some(id) = shown {
+        return Tiles {
+            root: open::focus(tiles.root, id),
+            ..tiles
+        };
+    }
     let focused = tiles.focused().page();
-    if *focused == page {
-        tiles
-    } else if focused.kind() == page.kind() {
+    if focused.kind() == page.kind() {
         here(tiles, page)
     } else {
         match page.pin() {
@@ -240,20 +264,29 @@ fn shifted<P: Page>(tree: Tree<Leaf<P>>, dir: Dir) -> (Tree<Leaf<P>>, Done) {
     (Tree::Node(n), done)
 }
 
-fn resized<L>(n: Node<L>, share: Share) -> (Node<L>, Done) {
-    let (mut n, done) = n.on_focus(|tree| match tree {
-        Tree::Node(c) => {
-            let (c, done) = resized(c, share);
-            (Tree::Node(c), done)
+fn resized<P>(n: Node<Leaf<P>>, before: Id, after: Id, shares: [Share; 2]) -> Node<Leaf<P>> {
+    let holding = |id: Id| {
+        n.parts()
+            .position(|p| p.tree.leaves().iter().any(|l| l.id() == id))
+    };
+    match (holding(before), holding(after), n.fit) {
+        (Some(i), Some(j), Fit::Fits) if j == i + 1 => n.map_parts(|k, part| Part {
+            share: match k {
+                k if k == i => shares[0],
+                k if k == j => shares[1],
+                _ => part.share,
+            },
+            ..part
+        }),
+        (Some(i), Some(j), Fit::Fits | Fit::Never) if i == j => {
+            n.map_parts(|k, part| match part.tree {
+                Tree::Node(c) if k == i => Part {
+                    tree: Tree::Node(resized(c, before, after, shares)),
+                    ..part
+                },
+                tree => Part { tree, ..part },
+            })
         }
-        leaf @ Tree::Leaf(_) => (leaf, Done::No),
-    });
-    match (done, n.fit) {
-        (Done::Yes, _) => (n, Done::Yes),
-        (Done::No, Fit::Fits) => {
-            n.focus.share = share;
-            (n, Done::Yes)
-        }
-        (Done::No, Fit::Never) => (n, Done::No),
+        _ => n,
     }
 }

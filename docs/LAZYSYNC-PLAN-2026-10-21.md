@@ -1,7 +1,8 @@
 # LAZYSYNC — a store's skeleton eagerly, its content by hash on demand
 
 *Status: OPEN for roadmap `lazysync`, stages 4 to 6 (§12). Stages 1 to 3 (the
-lines) have landed. `coreskeleton` (§16) is designed and built by
+lines) have landed; what a new device's first load measures of them, and what
+is left of the lines by need, is `docs/COLDSYNC-PLAN-2026-11-24.md`. `coreskeleton` (§16) is designed and built by
 `docs/ONEOWNER-PLAN-2026-11-02.md` stage 3. Section numbers are kept because
 other plans cite them.*
 

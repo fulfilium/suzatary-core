@@ -61,7 +61,7 @@ fn id(t: &Tiles<Pg>, p: &Pg) -> Id {
         .expect("the page is in the tree")
 }
 
-fn tile(a: &Arranged, id: Id) -> Option<Rect> {
+fn tile(a: &Arranged<Pg>, id: Id) -> Option<Rect> {
     a.tiles.iter().find(|t| t.id == id).map(|t| t.rect)
 }
 
@@ -71,14 +71,14 @@ fn new(home: Node<Pg>) -> Tiles<Pg> {
 }
 
 /// The root's row: the bar.
-fn bar(a: &Arranged) -> &viewtree::tiles::Row {
+fn bar(a: &Arranged<Pg>) -> &viewtree::tiles::Row<Pg> {
     a.rows
         .iter()
         .find(|r| r.node.is_empty())
         .expect("the root draws its row")
 }
 
-fn crumbs(a: &Arranged) -> Vec<Vec<(At, Id)>> {
+fn crumbs(a: &Arranged<Pg>) -> Vec<Vec<(At, Id)>> {
     a.rows
         .iter()
         .filter(|r| !r.node.is_empty())
@@ -297,7 +297,7 @@ fn a_slide_deck_arranges_its_presenter_and_its_audience() {
         a.tiles
             .iter()
             .find(|t| t.id == id(&presenter, p))
-            .map(|t| (t.rect, t.page))
+            .map(|t| (t.rect, t.fill))
             .expect("drawn")
     };
     assert_eq!(
@@ -321,7 +321,7 @@ fn a_slide_deck_arranges_its_presenter_and_its_audience() {
     let b = arrange(&audience, at(1600, 1200), &M);
     assert!(b.rows.is_empty() && b.dividers.is_empty());
     assert_eq!(
-        (b.tiles[0].rect, b.tiles[0].page),
+        (b.tiles[0].rect, b.tiles[0].fill),
         (rect(0, 0, 1600, 1200), rect(0, 150, 1600, 900))
     );
 }

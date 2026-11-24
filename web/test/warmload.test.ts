@@ -86,6 +86,10 @@ let holds = 1
 let proposals = box.inbox.length
 let topicStores: Record<"topics" | "topic-aliases", StoredObject[]> = { topics: [begun("topics")], "topic-aliases": [begun("topic-aliases")] }
 let down = false
+// What the box was asked, in order (`skeleton sent`, `skeleton answered`, `inbox sent`), and what the skeleton's answer
+// waits on before it goes.
+let asked: string[] = []
+let skeletonHeld: Promise<void> = Promise.resolve()
 const json = (v: unknown): Response => new Response(JSON.stringify(v), { status: 200, headers: { "content-type": "application/json" } })
 Object.assign(globalThis, {
   fetch: async (input: string | URL, init?: RequestInit): Promise<Response> => {
@@ -93,7 +97,13 @@ Object.assign(globalThis, {
     const method = init?.method ?? "GET"
     const url = new URL(String(input), "http://box")
     const since = url.searchParams.get("since") ?? ""
-    if (url.pathname === "/api/stores/lines/skeleton") return json(answer(holds, since))
+    if (url.pathname === "/api/stores/lines/skeleton") {
+      asked.push("skeleton sent")
+      await skeletonHeld
+      asked.push("skeleton answered")
+      return json(answer(holds, since))
+    }
+    if (url.pathname === "/api/stores/inbox/objects" && method === "GET") asked.push("inbox sent")
     if (url.pathname === "/api/stores/asks/objects") return json(objectsAnswer([], since))
     const store = /^\/api\/stores\/(inbox|topics|topic-aliases)\/objects$/.exec(url.pathname)?.[1] as "inbox" | "topics" | "topic-aliases" | undefined
     if (store !== undefined && method === "POST" && store !== "inbox") {
@@ -474,5 +484,28 @@ test("a tab another tab's landing wakes reads it with no pull of its own, and wi
       device.lose = () => false
     }
     for (const t of [landing, woken]) await t.ask({ type: "Pull" })
+  }
+})
+
+test("the inbox is pulled beside the lines, so a reading waits on neither behind the other, and once more after the lines' pull ends", async () => {
+  fakeIndexedDB()
+  down = false
+  holds = order.length
+  proposals = inbox.length
+  let release = (): void => {}
+  skeletonHeld = new Promise(go => (release = go))
+  asked = []
+  try {
+    const pulled = tab().ask({ type: "Pull" })
+    for (let waited = 0; asked.length < 2 && waited < 100; waited += 1) await new Promise(next => setTimeout(next, 10))
+    assert.deepEqual([...asked].sort(), ["inbox sent", "skeleton sent"], "the inbox is asked while the lines' skeleton is still out")
+    release()
+    assert.equal(await pulled, true)
+    const ended = asked.lastIndexOf("skeleton answered")
+    assert.ok(asked.indexOf("inbox sent", ended) > ended, `an inbox pull begins after the lines' pull ends, so it holds every proposal they name: ${asked.join(", ")}`)
+  } finally {
+    release()
+    skeletonHeld = Promise.resolve()
+    await settled()
   }
 })

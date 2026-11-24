@@ -4,9 +4,11 @@
 
 import type { ContentPayload, SkeletonNode } from "../wire/generated/wire"
 import idb from "../app/idb"
+import http from "../wire/http"
 import lo from "../algebra/lo"
 import { CONTENT } from "./objects"
 import phases from "./phases"
+import { measure } from "../app/perf"
 import { sha256Hex } from "./verify"
 
 export namespace content {
@@ -44,10 +46,10 @@ export namespace content {
   export const MOST_HASHES = 64
   export const MOST_BYTES = 1 << 20
 
-  // Over HTTP/2 one connection carries every request. Over HTTP/1.1 a browser opens at most six to the box, a page holds
-  // three open for streams (its chain's, the stores', a conversation's) and a pull piece may hold one more, so one answer
-  // is out at a time and a connection stays free for every other request.
-  export const atOnce = (protocol: string): number => (protocol === "h2" || protocol === "h3" ? 4 : 1)
+  // Over HTTP/1.1 a page holds three of its six connections open for streams (its chain's, the stores', a
+  // conversation's) and a pull piece may hold one more, so one answer is out at a time and a connection stays free for
+  // every other request.
+  export const AT_ONCE: http.AtOnce = { h1: 1, multiplexed: 4 }
 
   export type Row = { readonly hash: string; readonly literal: string }
   // Not checked against its name, which it does not hash to: the reader checks it against the line's node.
@@ -206,9 +208,14 @@ export namespace content {
     const send = async (lane: Lane, sent: readonly SkeletonNode[]): Promise<void> => {
       const names = sent.map(n => n.hash)
       try {
-        const rows = await fx.ask(names).then(a => admit(names, a))
+        const answer = await fx.ask(names)
+        const start = performance.now()
+        const rows = await admit(names, answer)
+        measure("content:admit", start, { lane, names: names.length })
         if (rows.type === "Error") throw new Error(rows.e)
+        const kept = performance.now()
         await keep(fx, lane, rows.v)
+        measure("content:kept", kept, { lane })
         settled(names, fx.came)
         settle(names, { type: "Came" })
       } catch (e: unknown) {

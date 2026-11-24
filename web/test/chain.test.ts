@@ -3,6 +3,7 @@
  * value that is no slug by `suzatary_base::chains::ChainName`'s rule opens the default chain, never `/api/../fold`.
  */
 
+import { bare } from "../src/shell/route";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -51,7 +52,7 @@ test("a store this browser cannot read opens on the first chain", () => {
 });
 
 test("a pin moves the chain only to another slug, and a refusal leaves it where it was", () => {
-  const at = app.initial({ type: "inbox" }, DEFAULT_CHAIN);
+  const at = app.initial(bare({ type: "inbox" }), DEFAULT_CHAIN);
   assert.equal(app.step(at, { type: "Pinned", chain: DEFAULT_CHAIN }), at, "the chain it is already on has not moved");
   assert.equal(app.step(at, { type: "Pinned", chain: ".." }), at, "a traversal is ignored");
   const other = app.step(at, { type: "Pinned", chain: "ops" });

@@ -86,7 +86,21 @@ proptest! {
             prop_assert_eq!(covers(&pieces(&a), screen(at)), Ok(()));
             prop_assert_eq!(drawn(&a).len(), a.tiles.len());
             for p in &a.tiles {
-                prop_assert!(inside(p.page, p.rect));
+                prop_assert!(inside(p.fill, p.rect));
+            }
+        }
+    }
+
+    /// Every tile and every crumb carries the page of the leaf it names.
+    #[test]
+    fn every_tile_and_crumb_carries_its_leafs_page((home, m, first, steps) in run()) {
+        for (_, _, t, at) in states(home, first, &steps) {
+            let a = arrange(&t, at, &m);
+            for p in &a.tiles {
+                prop_assert_eq!(t.page(p.id), Some(&p.page));
+            }
+            for c in a.rows.iter().flat_map(|r| r.shown.iter().chain(&r.more)) {
+                prop_assert_eq!(t.page(c.to), Some(&c.page));
             }
         }
     }
@@ -132,7 +146,7 @@ proptest! {
                 continue;
             }
             for p in &a.tiles {
-                let (w, h) = least_of(t.page(p.id).expect("a drawn tile is a leaf"), &m);
+                let (w, h) = least_of(&p.page, &m);
                 prop_assert!(u64::from(p.rect.w.0) >= w && u64::from(p.rect.h.0) >= h, "{:?} under {}x{}", p.rect, w, h);
             }
         }
@@ -215,14 +229,18 @@ proptest! {
         }
     }
 
-    /// A tile `Opens::Beside` exactly when opening, from it, a page of the shape it declares
-    /// draws the tile and that page together.
+    /// A tile `Opens::Beside` exactly when opening, from it, a page of the shape it declares that
+    /// its workspace does not show draws the tile and that page together.
     #[test]
     fn opens_says_whether_an_open_from_the_tile_is_drawn_beside_it((home, m, first, steps) in run()) {
         for (_, _, t, at) in states(home, first, &steps) {
             for p in arrange(&t, at, &m).tiles {
-                let page = t.page(p.id).expect("a drawn tile is a leaf").clone();
+                let page = p.page.clone();
                 let from = act(t.clone(), Act::Focus(p.id));
+                // A page the workspace shows already is focused, not opened.
+                if from.root().focus.tree.leaves().iter().any(|l| *l.page() == page.opened()) {
+                    continue;
+                }
                 let opened = act(from.clone(), Act::Open(page.opened()));
                 let before = ids(&from);
                 let new = ids(&opened).into_iter().find(|id| !before.contains(id));
@@ -375,5 +393,87 @@ proptest! {
         let back = parse(&s, &t);
         prop_assert_eq!(back.check(), Ok(()));
         prop_assert_eq!(print(&parse(&print(&back), &back)), print(&back));
+    }
+}
+
+/// The tree with every share One: what a resize may not change.
+fn unshared(n: &Node<Leaf<Pg>>) -> Node<Leaf<Pg>> {
+    let part = |p: &viewtree::tiles::Part<Leaf<Pg>>| viewtree::tiles::Part {
+        share: Share::One,
+        tree: match &p.tree {
+            Tree::Leaf(l) => Tree::Leaf(l.clone()),
+            Tree::Node(c) => Tree::Node(unshared(c)),
+        },
+    };
+    Node {
+        axis: n.axis,
+        fit: n.fit,
+        before: n.before.iter().map(part).collect(),
+        focus: Box::new(part(&n.focus)),
+        after: n.after.iter().map(part).collect(),
+    }
+}
+
+proptest! {
+    #![proptest_config(cases(256))]
+
+    /// A resize changes nothing but shares, and twice is once.
+    #[test]
+    fn a_resize_changes_only_shares_and_twice_is_once((home, _m, first, steps) in run()) {
+        for (was, a, now, _) in states(home, first, &steps) {
+            if let Some(r @ Act::Resize { .. }) = a {
+                prop_assert_eq!(unshared(now.root()), unshared(was.root()));
+                prop_assert_eq!(&act(now.clone(), r), &now);
+            }
+        }
+    }
+
+    /// Every divider stands at its stop `now`, and its stops stand in order along its axis. A
+    /// resize to a stop puts the divider at the stop's place and gives every drawn tile its least
+    /// size, the same tiles drawn.
+    #[test]
+    fn a_resize_to_a_stop_puts_the_divider_there((home, m, first, steps) in run()) {
+        for (_, _, t, at) in states(home, first, &steps) {
+            let a = arrange(&t, at, &m);
+            for d in &a.dividers {
+                let along = |r: viewtree::tiles::Rect| match d.axis {
+                    viewtree::tiles::Axis::Across => r.x,
+                    viewtree::tiles::Axis::Down => r.y,
+                };
+                prop_assert_eq!(d.stops.get(d.now).map(|s| s.at), Some(along(d.rect)));
+                prop_assert!(d.stops.windows(2).all(|w| w[0].at < w[1].at));
+                for s in &d.stops {
+                    let moved = act(t.clone(), Act::Resize { before: d.before, after: d.after, shares: s.shares });
+                    let b = arrange(&moved, at, &m);
+                    let line = b.dividers.iter().find(|e| (e.before, e.after) == (d.before, d.after));
+                    prop_assert_eq!(line.map(|e| along(e.rect)), Some(s.at));
+                    prop_assert_eq!(drawn(&b), drawn(&a));
+                    if b.tiles.len() > 1 {
+                        for p in &b.tiles {
+                            let (w, h) = least_of(&p.page, &m);
+                            prop_assert!(u64::from(p.rect.w.0) >= w && u64::from(p.rect.h.0) >= h);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(cases(256))]
+
+    /// An open of a page the focused workspace shows focuses the first tile showing it and moves
+    /// nothing else, so an open never puts a page in a workspace twice.
+    #[test]
+    fn an_open_of_a_page_shown_focuses_it((home, _m, first, steps) in run(), i in any::<prop::sample::Index>()) {
+        for (_, _, t, _) in states(home, first, &steps) {
+            let shown = t.root().focus.tree.leaves();
+            let page = shown[i.index(shown.len())].page();
+            let first = shown.iter().find(|l| l.page() == page).map(|l| l.id());
+            let opened = act(t.clone(), Act::Open(page.clone()));
+            prop_assert_eq!(Some(opened.focused().id()), first);
+            prop_assert_eq!(first.map(|id| act(t.clone(), Act::Focus(id))), Some(opened));
+        }
     }
 }

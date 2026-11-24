@@ -16,7 +16,7 @@
  * array, `array` is a length and a loop.
  */
 
-import type { Route } from "../src/shell/route";
+import type { Address, Route } from "../src/shell/route";
 import type { Authored, Block, Entry, FailureClass, Group, LineStanding, OverviewLine } from "../src/wire/generated/wire";
 import lo from "../src/algebra/lo";
 import type kv from "../src/app/kv";
@@ -144,6 +144,12 @@ export function day(r: Rng): string {
  * covers the whole grammar. Nothing checks that this list is complete: a new
  * arm of `Route` needs its case added here by hand.
  */
+// An address: mostly a route alone, sometimes with a tree after it (a desk's print, or one it would not read).
+export function address(r: Rng): Address {
+  const tree = r.pick(["", "", "", "|!(|(%2F,*),,,,,,,)", "|!(|(%2F,todo%2Fa,*),,,,,,,)", "-(*,x)"]);
+  return { route: route(r), tree };
+}
+
 export function route(r: Rng): Route {
   const id = (): string => r.string(SLUG, 1 + r.int(16));
   const refs = (): string[] => r.array(r.int(3), () => referenceText(r));

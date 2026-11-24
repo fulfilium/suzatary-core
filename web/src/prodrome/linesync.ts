@@ -96,7 +96,7 @@ export namespace linesync {
       asked: bytes => fx.bars({ type: "Asked", name: "lines", bytes }),
       came: bytes => fx.bars({ type: "Came", name: "lines", bytes }),
       lost: bytes => fx.bars({ type: "Lost", name: "lines", bytes }),
-      atOnce: () => content.atOnce(http.protocol()),
+      atOnce: () => http.atOnce(content.AT_ONCE),
       lacking: names => lackingOf(held, names),
       held: rows => Promise.resolve(holdAdmitted(held, rows)),
       husked: husks => stepped(held.take_husks(JSON.stringify(husks))),
@@ -425,7 +425,12 @@ export namespace linesync {
             keep: async a => {
               fx.told(`epoch/${KEPT}`, excluded.behind(KEPT, held.went_back(a.epoch)))
               fx.bars({ type: "Piece", name: NAME, size: a.size, weight: a.weight })
-              await append(held.piece(JSON.stringify(a), JSON.stringify(a.keys), time.now()))
+              const start = performance.now()
+              const frame = held.piece(JSON.stringify(a), JSON.stringify(a.keys), time.now())
+              measure("lines:piece", start, { nodes: a.nodes.length })
+              const kept = performance.now()
+              await append(frame)
+              measure("lines:kept", kept)
               // Each piece lands as it comes: the box sends the newest conversation first, each
               // piece closed under parents, so a reading draws from the first while the rest come.
               // The landed row is behind the box's heads until the last; only a whole pull says a

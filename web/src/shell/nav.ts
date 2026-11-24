@@ -1,5 +1,5 @@
 // The navigation, in words: the four a phone opens the app for, and More for the rest: the chain switcher, the owner's
-// other places, this app's own pages apart from them, and the theme. `nav.of(app, theme)` is the bar as a value;
+// other places, this app's own pages apart from them, and the theme. `nav.of(app, theme, workspace)` is the bar as a value;
 // `paint` puts it in the bar.
 
 import app from "../app/app";
@@ -70,8 +70,9 @@ export namespace nav {
     return OVERFLOW.some((tab) => tab.route.type === activeFor(route));
   }
 
-  export const of = (a: app.App, theme: Theme): View => {
-    const here = activeFor(app.route(a));
+  // `workspace` is the one the tiles stand in, which a page opened from another workspace's page does not move.
+  export const of = (a: app.App, theme: Theme, workspace: Route): View => {
+    const here = activeFor(workspace);
     const link = (tab: Tab): Link => ({
       label: tab.label,
       href: hrefOf(tab.route),
@@ -82,7 +83,7 @@ export namespace nav {
     return {
       tabs: TABS.map(link),
       more: {
-        on: inOverflow(app.route(a)),
+        on: inOverflow(workspace),
         open: a.more,
         picks,
         places: PLACES.map(link),

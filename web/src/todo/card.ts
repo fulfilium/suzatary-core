@@ -89,9 +89,6 @@ function selecting(): boolean {
   return selection !== null && selection.toString().trim() !== "";
 }
 
-function goTo(todo: string): void {
-  address.go({ type: "todo", id: todo });
-}
 
 export function todoCard(entry: Entry, options: CardOptions = {}): HTMLElement {
   const category = categoryOf(entry);
@@ -137,7 +134,8 @@ export function todoCard(entry: Entry, options: CardOptions = {}): HTMLElement {
         ),
     foot(entry, source, options.acted),
   );
-  const open = options.open ?? goTo;
+  // A card is no link: it opens its todo through the same door a link in its tile takes (`address.open`).
+  const open = options.open ?? ((todo: string) => address.open(card, hrefOf({ type: "todo", id: todo })));
   card.addEventListener("click", (event: MouseEvent) => {
     if (onControl(event.target) || selecting()) return;
     open(entry.todo);

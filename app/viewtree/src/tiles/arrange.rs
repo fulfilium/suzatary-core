@@ -1,7 +1,7 @@
 //! The arrangement: a function of the tiles and the viewport alone.
 
 use super::apportion::apportion;
-use super::arranged::{Arranged, At, Crumb, Divider, Opens, Placed, Row, Scroller};
+use super::arranged::{Arranged, At, Crumb, Divider, Opens, Placed, Row, Scroller, Stop};
 use super::leaf::{Id, Leaf};
 use super::node::{Axis, Node, Share};
 use super::open::{self, MOST};
@@ -30,7 +30,7 @@ pub struct Measures {
 /// (`apportion`), a divider between each two. A viewport smaller than a leaf's least still draws
 /// the leaf, at the viewport's size.
 #[must_use]
-pub fn arrange<P: Page>(tiles: &Tiles<P>, at: Viewport, m: &Measures) -> Arranged {
+pub fn arrange<P: Page>(tiles: &Tiles<P>, at: Viewport, m: &Measures) -> Arranged<P> {
     let drawn = walk(&tiles.root, at, m);
     let cx = Cx {
         root: &tiles.root,
@@ -56,6 +56,73 @@ pub fn arrange<P: Page>(tiles: &Tiles<P>, at: Viewport, m: &Measures) -> Arrange
     out
 }
 
+/// A node's drawn children as `place` divides them: the start and length of its body along its
+/// axis, and each child's least and share.
+struct Split {
+    start: Px,
+    length: Px,
+    kids: Vec<(Px, Share)>,
+}
+
+impl Split {
+    /// The places of the divider after child `j`: its place now first, then every pair of shares
+    /// for it and the child after it that gives no child less than its least; one per place, in
+    /// order along the axis, with the index of its place now.
+    fn stops(&self, j: usize, now: [Share; 2], d: Px) -> (Vec<Stop>, usize) {
+        let all = [Share::One, Share::Two, Share::Three];
+        let mut pairs: Vec<[Share; 2]> = all
+            .iter()
+            .flat_map(|&x| all.iter().map(move |&y| [x, y]))
+            .collect();
+        pairs.sort_by_key(|p| p[0].weight() + p[1].weight());
+        let mut out: Vec<Stop> = Vec::new();
+        let mut here = Px(0);
+        for (shares, current) in
+            std::iter::once((now, true)).chain(pairs.into_iter().map(|p| (p, false)))
+        {
+            let kids: Vec<(Px, u32)> = self
+                .kids
+                .iter()
+                .enumerate()
+                .map(|(k, &(least, share))| {
+                    let share = match k {
+                        k if k == j => shares[0],
+                        k if k == j + 1 => shares[1],
+                        _ => share,
+                    };
+                    (least, share.weight())
+                })
+                .collect();
+            let (sizes, gaps) = lengths(self.length, &kids, d);
+            if !current && binds(&sizes, &kids) {
+                continue;
+            }
+            let at = sizes
+                .iter()
+                .take(j + 1)
+                .chain(gaps.iter().take(j))
+                .fold(self.start, |a, &l| a + l);
+            if current {
+                here = at;
+            }
+            if out.iter().all(|s| s.at != at) {
+                out.push(Stop { at, shares });
+            }
+        }
+        out.sort_by_key(|s| s.at);
+        let now = out.iter().filter(|s| s.at < here).count();
+        (out, now)
+    }
+}
+
+/// Whether a child's share of the length the children divide is under its least.
+fn binds(sizes: &[Px], kids: &[(Px, u32)]) -> bool {
+    let inner: u128 = sizes.iter().map(|l| u128::from(l.0)).sum();
+    let total: u128 = kids.iter().map(|&(_, w)| u128::from(w)).sum();
+    kids.iter()
+        .any(|&(least, w)| inner * u128::from(w) < u128::from(least.0) * total)
+}
+
 struct Cx<'t, 'm, P> {
     root: &'t Node<Leaf<P>>,
     at: Viewport,
@@ -68,14 +135,15 @@ fn place<P: Page>(
     edge: Edge,
     path: &mut Vec<usize>,
     cx: &Cx<'_, '_, P>,
-    out: &mut Arranged,
+    out: &mut Arranged<P>,
 ) {
     let m = cx.m;
     match drawn {
         Drawn::Leaf(l) => out.tiles.push(Placed {
             id: l.id(),
+            page: l.page().clone(),
             rect,
-            page: l.page().shape().fill(rect),
+            fill: l.page().shape().fill(rect),
             scroll: Scroller::Tile,
             opens: opens(cx, l),
         }),
@@ -87,13 +155,23 @@ fn place<P: Page>(
             } else {
                 rect
             };
-            let shares = node.parts().skip(*first).map(|p| p.share);
+            let shares: Vec<Share> = node
+                .parts()
+                .skip(*first)
+                .take(kids.len())
+                .map(|p| p.share)
+                .collect();
             let leasts: Vec<(Px, u32)> = kids
                 .iter()
-                .zip(shares)
+                .zip(shares.iter().copied())
                 .map(|(k, s)| (along(k.extent(m), node.axis), Share::weight(s)))
                 .collect();
             let (sizes, gaps) = lengths(length(body, node.axis), &leasts, m.divider);
+            let split = Split {
+                start: start(body, node.axis),
+                length: length(body, node.axis),
+                kids: leasts.iter().map(|&(l, _)| l).zip(shares).collect(),
+            };
             let kids: Vec<_> = kids.iter().collect();
             let mut at = Px(0);
             for (j, (kid, size)) in kids.iter().zip(sizes).enumerate() {
@@ -108,13 +186,21 @@ fn place<P: Page>(
                 );
                 path.pop();
                 at = at + size;
-                if let (Some(next), Some(&gap)) = (kids.get(j + 1), gaps.get(j)) {
+                if let (Some(next), Some(&gap), Some(&(_, a)), Some(&(_, b))) = (
+                    kids.get(j + 1),
+                    gaps.get(j),
+                    split.kids.get(j),
+                    split.kids.get(j + 1),
+                ) {
+                    let (stops, now) = split.stops(j, [a, b], m.divider);
                     out.dividers.push(Divider {
                         rect: cut(body, node.axis, at, gap),
                         node: path.clone(),
                         axis: node.axis,
                         before: nearest(kid, End::Last),
                         after: nearest(next, End::First),
+                        stops,
+                        now,
                     });
                     at = at + gap;
                 }
@@ -141,15 +227,15 @@ fn lengths(length: Px, children: &[(Px, u32)], d: Px) -> (Vec<Px>, Vec<Px>) {
     }
 }
 
-fn row<P>(
+fn row<P: Clone>(
     node: &Node<Leaf<P>>,
     first: usize,
     drawn: usize,
     rect: Rect,
     path: &[usize],
     m: &Measures,
-) -> Row {
-    let crumbs: Vec<Crumb> = node
+) -> Row<P> {
+    let crumbs: Vec<Crumb<P>> = node
         .parts()
         .enumerate()
         .map(|(i, p)| {
@@ -160,8 +246,10 @@ fn row<P>(
             } else {
                 At::After
             };
+            let leaf = p.tree.focused();
             Crumb {
-                to: p.tree.focused().id(),
+                to: leaf.id(),
+                page: leaf.page().clone(),
                 at,
             }
         })
@@ -260,6 +348,13 @@ fn along(s: Size, axis: Axis) -> Px {
     match axis {
         Axis::Across => s.w,
         Axis::Down => s.h,
+    }
+}
+
+fn start(r: Rect, axis: Axis) -> Px {
+    match axis {
+        Axis::Across => r.x,
+        Axis::Down => r.y,
     }
 }
 

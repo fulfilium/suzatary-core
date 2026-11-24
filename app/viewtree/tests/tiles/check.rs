@@ -9,7 +9,7 @@ use viewtree::tiles::{
 
 use super::page::Pg;
 
-pub fn pieces(a: &Arranged) -> Vec<Rect> {
+pub fn pieces(a: &Arranged<Pg>) -> Vec<Rect> {
     a.tiles
         .iter()
         .map(|t| t.rect)
@@ -62,7 +62,7 @@ pub fn screen(at: Viewport) -> Rect {
 }
 
 /// The smallest rectangle around the drawn tiles and the dividers between them.
-pub fn bounds(a: &Arranged) -> Option<Rect> {
+pub fn bounds(a: &Arranged<Pg>) -> Option<Rect> {
     let all: Vec<Rect> = a
         .tiles
         .iter()
@@ -87,7 +87,7 @@ fn bound(all: &[Rect]) -> Option<Rect> {
 }
 
 /// The pieces that meet the region lie inside it and cover it.
-pub fn region(a: &Arranged) -> Result<(), String> {
+pub fn region(a: &Arranged<Pg>) -> Result<(), String> {
     let Some(b) = bounds(a) else {
         return Err("nothing drawn".to_owned());
     };
@@ -98,7 +98,7 @@ pub fn region(a: &Arranged) -> Result<(), String> {
     covers(&within, b)
 }
 
-pub fn drawn(a: &Arranged) -> BTreeSet<Id> {
+pub fn drawn(a: &Arranged<Pg>) -> BTreeSet<Id> {
     a.tiles.iter().map(|t| t.id).collect()
 }
 
@@ -228,7 +228,7 @@ pub fn extent(tree: &Tree<Leaf<Pg>>, lit: &BTreeSet<Id>, m: &Measures) -> (u64, 
 
 /// The rectangle a child at `path` was given: around its tiles, and the rows and dividers of
 /// its nodes.
-pub fn given(a: &Arranged, tree: &Tree<Leaf<Pg>>, path: &[usize]) -> Option<Rect> {
+pub fn given(a: &Arranged<Pg>, tree: &Tree<Leaf<Pg>>, path: &[usize]) -> Option<Rect> {
     let ids: BTreeSet<Id> = tree.leaves().iter().map(|l| l.id()).collect();
     let all: Vec<Rect> = a
         .tiles

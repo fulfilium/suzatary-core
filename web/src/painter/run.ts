@@ -37,6 +37,7 @@ export namespace run {
     gone: ((n: Node) => void) | undefined,
     box: () => Element,
     refresh?: painter.Refresh,
+    layer: HTMLElement | null = null,
   ): T<I> => {
     let live = true
     const inputs = mailbox.of<I>(input => void step(named(input), () => deliver(page, input)))
@@ -56,7 +57,7 @@ export namespace run {
         return true
       })
     const send = inputs.send
-    const dom = painter.create(root, foreign, blocks, (id, on, words) => step("event", () => page.event(id, on, words)), gone, refresh)
+    const dom = painter.create(root, foreign, blocks, (id, on, words) => step("event", () => page.event(id, on, words)), gone, refresh, layer)
     step("first", () => page.first())
     return { send, destroy: () => ((live = false), dom.destroy(), page.free()) }
   }

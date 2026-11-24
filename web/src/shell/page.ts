@@ -40,6 +40,8 @@ export namespace page {
     bar("updated", "excludedbar updatedbar"),
     // tabindex=-1 so the router can put the keyboard here when a page has no heading of its own (`view/focus.ts`).
     el("main", { id: "view", tabindex: "-1" }),
+    // What a page draws as the window's (a sheet, a scrim), above every tile (`shell/tiles.ts`).
+    el("div", { id: "layers" }),
   ]
 
   // This build's stylesheets, beside its `app.js`; settled once each has loaded or failed, so the body is drawn styled.

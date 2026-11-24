@@ -1,25 +1,34 @@
 //! The app's tiles: the bar's destinations as the root's workspaces and a page's route as a
 //! leaf, arranged for the room the tiles stand in and printed for the host
 //! (`web/src/shell/tiles.ts`), which draws what this answers and decides nothing.
+//!
+//! The desk holds the tree. An open from a tile and a resize at a divider are acts on it; any
+//! other address (Back, a typed hash, the bar) is read with `tiles::parse`. The address is the
+//! tree's print, a bare hash wherever the tree is a workspace's home or a home with one page
+//! opened from it.
 
 use serde::Serialize;
 use ts_rs::TS;
 use viewtree::tiles::{
-    self, Arranged, At, Axis, Fit, Measures, Node, Page, Part, Px, Rect, Share, Tiles, Tree, Unfit,
-    Viewport,
+    self, Act, Arranged, At, Axis, Fit, Id, Leaf, Measures, Node, Page, Part, Px, Rect, Share,
+    Tiles, Tree, Unfit, Viewport,
 };
 
 use crate::measure;
-use crate::route::Route;
+use crate::route::{Kind, Route};
 use crate::runtime::Opens;
 
 pub struct Desk {
     tiles: Tiles<Route>,
+    /// The shares set at dividers in this tab: each row a resize left, by the kinds of its
+    /// children in order, drawn on every node of those kinds the desk holds. The address does not
+    /// carry them.
+    resized: Vec<(Vec<Kind>, Vec<Share>)>,
 }
 
 /// What the host draws, every rectangle in the room's frame: the box the tiles stand in, under
-/// the window's chrome. The root's row is the bar, which the chrome draws (`nav.ts`) until the
-/// address carries the tree, so it is not here.
+/// the window's chrome. The root's row is the bar, which the window's chrome draws (`nav.ts`), so
+/// it is not here.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct Drawing {
     pub scroll: Scroller,
@@ -82,15 +91,48 @@ pub enum Stands {
     After,
 }
 
-/// A divider between two drawn children of the node at `node`, named by the tile before it.
+/// A divider between two drawn children of the node at `node`, named by the tiles either side.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct Line {
     #[ts(type = "number[]")]
     pub node: Vec<usize>,
     #[ts(type = "number")]
     pub before: u64,
+    #[ts(type = "number")]
+    pub after: u64,
     pub rect: Area,
     pub axis: Along,
+    /// Where it may stand, in order along its axis; `now` indexes the one it stands at.
+    pub stops: Vec<Notch>,
+    #[ts(type = "number")]
+    pub now: usize,
+}
+
+/// A place a divider snaps to: its start along its axis in the room's frame, and the weights, 1
+/// to 3, of the shares either side of it there, which `Desk::resize` takes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+pub struct Notch {
+    pub at: u32,
+    pub shares: [u32; 2],
+}
+
+fn weight(s: Share) -> u32 {
+    match s {
+        Share::One => 1,
+        Share::Two => 2,
+        Share::Three => 3,
+    }
+}
+
+/// The share of a weight `weight` gives back; none for any other number.
+#[must_use]
+pub fn share(weight: u32) -> Option<Share> {
+    match weight {
+        1 => Some(Share::One),
+        2 => Some(Share::Two),
+        3 => Some(Share::Three),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -131,17 +173,96 @@ impl Desk {
             rest.into_iter().map(part).collect(),
             0,
         );
-        Tiles::new(home).map(|tiles| Desk { tiles })
+        Tiles::new(home).map(|tiles| Desk {
+            tiles,
+            resized: Vec::new(),
+        })
     }
 
-    /// The address moved: its tree, read against these tiles.
-    pub fn go(&mut self, hash: &str) {
-        self.tiles = tiles::parse(&Route::parse(hash).print(), &self.tiles);
+    /// The address moved: its tree, read against these tiles, unless it is the address of the
+    /// tree the desk holds, whose tiles then stay as they are.
+    pub fn go(&mut self, address: &str) {
+        if address != self.address() {
+            let bare = address.strip_prefix('#').unwrap_or(address);
+            self.tiles = tiles::parse(bare, &self.tiles);
+        }
+    }
+
+    /// The focused workspace, as the bar's link to it, `#` first: the bar lights it at the act,
+    /// before any page of it has drawn.
+    #[must_use]
+    pub fn workspace(&self) -> String {
+        self.tiles.workspace().href()
+    }
+
+    /// The tree's print, `#` first.
+    #[must_use]
+    pub fn address(&self) -> String {
+        format!("#{}", tiles::print(&self.tiles))
+    }
+
+    /// A link followed in the tile `key`: the page `href` names opens from that tile, by the
+    /// layout's one rule. A workspace's home, as the bar's own links, is that workspace, and so is
+    /// any page opened from a tile no longer drawn.
+    pub fn open(&mut self, key: u32, href: &str) {
+        let page = Route::parse(href);
+        match self.leaf(key) {
+            Some(id) if page.home() != page => {
+                let focused = tiles::act(self.tiles.clone(), Act::Focus(id));
+                self.tiles = tiles::act(focused, Act::Open(page));
+            }
+            Some(_) | None => self.go(&page.href()),
+        }
+    }
+
+    /// The divider between the tiles `before` and `after` set to `shares`: the two children
+    /// beside it take them, and every other child of their node keeps its share. The row of shares
+    /// that leaves is what the desk keeps, for every node whose children are of those kinds, so a
+    /// later resize of another divider of the row starts from the row as it stands, and no pair
+    /// set apart from its row undoes another.
+    pub fn resize(&mut self, before: u32, after: u32, shares: [Share; 2]) {
+        let (Some(b), Some(a)) = (self.leaf(before), self.leaf(after)) else {
+            return;
+        };
+        let acted = tiles::act(
+            self.shown(),
+            Act::Resize {
+                before: b,
+                after: a,
+                shares,
+            },
+        );
+        if let Some(row) = row(acted.root(), b, a) {
+            let kinds = kinds(row);
+            self.resized.retain(|(k, _)| *k != kinds);
+            self.resized
+                .push((kinds, row.parts().map(|p| p.share).collect()));
+        }
     }
 
     #[must_use]
     pub fn tiles(&self) -> &Tiles<Route> {
         &self.tiles
+    }
+
+    fn leaf(&self, key: u32) -> Option<Id> {
+        self.tiles
+            .root()
+            .parts()
+            .flat_map(|p| p.tree.leaves())
+            .map(tiles::Leaf::id)
+            .find(|id| id.key() == u64::from(key))
+    }
+
+    /// The tree with the rows of shares set in this tab.
+    fn shown(&self) -> Tiles<Route> {
+        self.tiles.clone().reshared(&|n: &Node<Leaf<Route>>| {
+            let k = kinds(n);
+            self.resized
+                .iter()
+                .find(|(kinds, _)| *kinds == k)
+                .map(|(_, s)| s.clone())
+        })
     }
 
     /// `arrange` for the room the tiles stand in, with each tile's route.
@@ -152,19 +273,18 @@ impl Desk {
             w: room.w,
             h: room.h + m.row,
         };
+        let shown = self.shown();
         let Arranged {
             tiles,
             dividers,
             rows,
-        } = tiles::arrange(&self.tiles, at, &m);
+        } = tiles::arrange(&shown, at, &m);
         let area = |r: Rect| Area {
             x: r.x.0,
             y: (r.y - m.row).0,
             w: r.w.0,
             h: r.h.0,
         };
-        // Every id `arrange` names is a leaf of these tiles.
-        let href = |id| self.tiles.page(id).map(Route::href);
         let scroll = if tiles.iter().any(|t| t.scroll == tiles::Scroller::Document) {
             Scroller::Document
         } else {
@@ -174,17 +294,15 @@ impl Desk {
             scroll,
             tiles: tiles
                 .into_iter()
-                .filter_map(|t| {
-                    Some(Drawn {
-                        key: t.id.key(),
-                        href: href(t.id)?,
-                        rect: area(t.rect),
-                        page: area(t.page),
-                        opens: match t.opens {
-                            tiles::Opens::Beside => Opens::Beside,
-                            tiles::Opens::Over => Opens::Over,
-                        },
-                    })
+                .map(|t| Drawn {
+                    key: t.id.key(),
+                    href: t.page.href(),
+                    rect: area(t.rect),
+                    page: area(t.fill),
+                    opens: match t.opens {
+                        tiles::Opens::Beside => Opens::Beside,
+                        tiles::Opens::Over => Opens::Over,
+                    },
                 })
                 .collect(),
             rows: rows
@@ -196,15 +314,13 @@ impl Desk {
                         .shown
                         .iter()
                         .chain(&r.more)
-                        .filter_map(|c| {
-                            Some(Crumb {
-                                href: href(c.to)?,
-                                at: match c.at {
-                                    At::Before => Stands::Before,
-                                    At::Drawn => Stands::Drawn,
-                                    At::After => Stands::After,
-                                },
-                            })
+                        .map(|c| Crumb {
+                            href: c.page.href(),
+                            at: match c.at {
+                                At::Before => Stands::Before,
+                                At::Drawn => Stands::Drawn,
+                                At::After => Stands::After,
+                            },
                         })
                         .collect(),
                     node: r.node,
@@ -212,14 +328,30 @@ impl Desk {
                 .collect(),
             dividers: dividers
                 .into_iter()
-                .map(|d| Line {
-                    before: d.before.key(),
-                    rect: area(d.rect),
-                    axis: match d.axis {
-                        Axis::Across => Along::Across,
-                        Axis::Down => Along::Down,
-                    },
-                    node: d.node,
+                .map(|d| {
+                    let row = match d.axis {
+                        Axis::Across => Px(0),
+                        Axis::Down => m.row,
+                    };
+                    Line {
+                        before: d.before.key(),
+                        after: d.after.key(),
+                        rect: area(d.rect),
+                        axis: match d.axis {
+                            Axis::Across => Along::Across,
+                            Axis::Down => Along::Down,
+                        },
+                        now: d.now,
+                        stops: d
+                            .stops
+                            .into_iter()
+                            .map(|s| Notch {
+                                at: (s.at - row).0,
+                                shares: s.shares.map(weight),
+                            })
+                            .collect(),
+                        node: d.node,
+                    }
                 })
                 .collect(),
         }
@@ -246,8 +378,27 @@ mod host {
                 .map_err(|e| wasm_bindgen::JsError::new(&format!("{e:?}")))
         }
 
-        pub fn go(&mut self, hash: &str) {
-            self.desk.go(hash);
+        pub fn go(&mut self, address: &str) {
+            self.desk.go(address);
+        }
+
+        pub fn address(&self) -> String {
+            self.desk.address()
+        }
+
+        pub fn workspace(&self) -> String {
+            self.desk.workspace()
+        }
+
+        pub fn open(&mut self, key: u32, href: &str) {
+            self.desk.open(key, href);
+        }
+
+        /// `before` and `after` the shares' weights, 1 to 3; any other weight changes nothing.
+        pub fn resize(&mut self, from: u32, to: u32, before: u32, after: u32) {
+            if let (Some(b), Some(a)) = (super::share(before), super::share(after)) {
+                self.desk.resize(from, to, [b, a]);
+            }
         }
 
         /// The room's `w` and `h` in pixels at the 16px root.
@@ -255,5 +406,26 @@ mod host {
             serde_json::to_string(&self.desk.drawing(Viewport { w: Px(w), h: Px(h) }))
                 .map_err(|e| wasm_bindgen::JsError::new(&e.to_string()))
         }
+    }
+}
+
+/// A node's children, each by the kind of the leaf it shows.
+fn kinds(n: &Node<Leaf<Route>>) -> Vec<Kind> {
+    n.parts().map(|p| p.tree.focused().page().kind()).collect()
+}
+
+/// The node whose child holding `before` stands right before its child holding `after`.
+fn row(n: &Node<Leaf<Route>>, before: Id, after: Id) -> Option<&Node<Leaf<Route>>> {
+    let holds = |id: Id| {
+        n.parts()
+            .position(|p| p.tree.leaves().iter().any(|l| l.id() == id))
+    };
+    match (holds(before), holds(after)) {
+        (Some(i), Some(j)) if j == i + 1 => Some(n),
+        (Some(i), Some(j)) if i == j => n.parts().nth(i).and_then(|p| match &p.tree {
+            Tree::Node(c) => row(c, before, after),
+            Tree::Leaf(_) => None,
+        }),
+        (Some(_) | None, Some(_) | None) => None,
     }
 }

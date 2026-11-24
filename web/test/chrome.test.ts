@@ -11,10 +11,11 @@ import type shell from "../src/app/shell"
 import excluded from "../src/prodrome/excluded"
 import onscreen from "../src/app/store"
 import { forAll, route, type Rng } from "./gen"
+import { bare } from "../src/shell/route"
 
 const event = (r: Rng): app.Event =>
   r.pick<() => app.Event>([
-    () => ({ type: "Went", route: route(r) }),
+    () => ({ type: "Went", to: bare(route(r)) }),
     () => ({ type: "Pinned", chain: r.pick(["life", "suzatary"]) }),
     () => ({ type: "Met", me: r.pick<login.Met>([{ type: "Box" }, { type: "Reads", login: "reader@example.invalid" }, { type: "Writes", login: "ada@example.invalid", actor: "ada" }]), served: r.pick([[], ["life"], ["life", "suzatary"]]), categories: [], zone: time.UTC }),
     () => ({ type: "Waiting", waiting: { count: r.int(5), unplaced: {} } }),
@@ -26,6 +27,7 @@ const event = (r: Rng): app.Event =>
   ])()
 const seen = (r: Rng): chrome.Seen => ({
   room: r.pick(["Beside", "Over"] as const),
+  workspace: route(r),
   fold: r.pick<() => onscreen.Fold>([
     () => onscreen.UNLOADED,
     () => ({ type: "Shown", entries: [], at: "t", by: { type: "Box", heads: ["a1"], fetchedAt: r.int(1e9), next: null, fresh: r.bool() } }),
@@ -35,7 +37,7 @@ const seen = (r: Rng): chrome.Seen => ({
   excluded: r.pick([excluded.NOTHING, excluded.left([{ name: "a1", why: "not held", resting: ["b2"] }]), excluded.left([], [{ chain: "suzatary", why: "a hole" }])]),
   theme: r.pick(["auto", "light", "dark"] as const),
 })
-const walk = (r: Rng): app.App => r.array(r.int(30), () => event(r)).reduce(app.step, app.initial(route(r), "life"))
+const walk = (r: Rng): app.App => r.array(r.int(30), () => event(r)).reduce(app.step, app.initial(bare(route(r)), "life"))
 
 test("law: a drawn shell is a function of App — plain data, the same for equal Apps, whatever else the tab holds", () => {
   forAll(300, r => {
@@ -61,14 +63,14 @@ test("a part is painted only when its value moved", () => {
     build: () => void painted.push("build"),
   })
   // A login that writes, on a page with no room beside it: leaving for the conversation moves no panel.
-  const a = app.step(app.initial({ type: "inbox" }, "life"), { type: "Met", me: { type: "Writes", login: "ada@example.invalid", actor: "ada" }, served: ["life"], categories: [], zone: time.UTC })
-  const fold = { fold: onscreen.UNLOADED, excluded: excluded.NOTHING, theme: "auto" as const, room: "Over" as const }
+  const a = app.step(app.initial(bare({ type: "inbox" }), "life"), { type: "Met", me: { type: "Writes", login: "ada@example.invalid", actor: "ada" }, served: ["life"], categories: [], zone: time.UTC })
+  const fold = { fold: onscreen.UNLOADED, excluded: excluded.NOTHING, theme: "auto" as const, room: "Over" as const, workspace: { type: "inbox" } as const }
   const loaded: onscreen.Fold = { type: "Shown", entries: [], at: "t", by: { type: "Cached", fetchedAt: 0 } }
   paint(chrome.of(a, fold))
   paint(chrome.of(app.step(a, { type: "Waiting", waiting: { count: 0, unplaced: {} } }), fold))
-  paint(chrome.of(app.step(a, { type: "Went", route: { type: "conversation", id: "default", refs: [] } }), fold))
-  paint(chrome.of(a, { fold: loaded, excluded: excluded.NOTHING, theme: "auto", room: "Over" }))
-  paint(chrome.of(a, { fold: loaded, excluded: excluded.left([{ name: "a1", why: "not held", resting: [] }]), theme: "auto", room: "Over" }))
+  paint(chrome.of(app.step(a, { type: "Went", to: bare({ type: "conversation", id: "default", refs: [] }) }), { ...fold, workspace: { type: "secretary", refs: [], topics: [] } }))
+  paint(chrome.of(a, { fold: loaded, excluded: excluded.NOTHING, theme: "auto", room: "Over", workspace: { type: "inbox" } }))
+  paint(chrome.of(a, { fold: loaded, excluded: excluded.left([{ name: "a1", why: "not held", resting: [] }]), theme: "auto", room: "Over", workspace: { type: "inbox" } }))
   assert.deepEqual(painted, ["nav", "panel", "live", "stale", "excluded", "signing", "build", "nav", "nav", "stale", "excluded"])
 })
 

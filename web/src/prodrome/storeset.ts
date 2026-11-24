@@ -176,8 +176,9 @@ export namespace storeset {
     // Which stores a reading has asked for so far: a reconnect pulls those alone.
     let wanted: "None" | Scope = "None"
 
-    // The lines, then the inbox, which then holds every proposal they name; the topic stores beside them after their
-    // hand-over, and the asks after those posts.
+    // The inbox beside the lines, so a reading waits on neither behind the other, and again once the lines are pulled: a
+    // pull begun after theirs holds every proposal they name, as the box files a record before its line. The topic
+    // stores beside them after their hand-over, and the asks after those posts.
     const all = (): Promise<boolean> => {
       wanted = "All"
       const topicPulls = Promise.all(
@@ -201,7 +202,8 @@ export namespace storeset {
           void writes.said("lines").catch(failed("lines"))
           return pulled
         })
-      return linesPulled.then(l => inbox.sync.want().then(i => asked.then(t => l && i && t)))
+      const inboxBeside = inbox.sync.want()
+      return Promise.all([linesPulled, inboxBeside]).then(([l]) => inbox.sync.want().then(i => asked.then(t => l && i && t)))
     }
     // The inbox alone; a move pulls the rest too once a reading asked for all.
     const inboxOnly = (): Promise<boolean> => {

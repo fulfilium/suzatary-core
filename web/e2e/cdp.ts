@@ -264,6 +264,10 @@ const NAMED: Record<string, KeySpec> = {
   Tab: { key: "Tab", code: "Tab", keyCode: 9, text: "\t" },
   ArrowDown: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
   ArrowUp: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
+  ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
+  ArrowRight: { key: "ArrowRight", code: "ArrowRight", keyCode: 39 },
+  Home: { key: "Home", code: "Home", keyCode: 36 },
+  End: { key: "End", code: "End", keyCode: 35 },
   Backspace: { key: "Backspace", code: "Backspace", keyCode: 8 },
 };
 
@@ -317,6 +321,24 @@ const NO_BODY = [204, 304];
  * multi-step read is written as an immediately-invoked arrow function, and
  * what comes back is whatever it returns by value.
  */
+/** A network as Chromium emulates it: each request waits `latency` ms and moves at the throughputs, in bytes a second. */
+export type Conditions = { readonly offline: boolean; readonly latency: number; readonly downloadThroughput: number; readonly uploadThroughput: number };
+const NO_CONDITIONS: Conditions = { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 };
+
+/** One request as it ended: its path, who made it, when it was sent, answered and ended (epoch ms), its status (0 where
+ * none came), the protocol it went over, the bytes it moved on the wire and its body's bytes once decoded. */
+export type Wired = {
+  readonly url: string;
+  readonly from: "page" | "worker";
+  readonly sent: number;
+  readonly answered: number;
+  readonly ended: number;
+  readonly status: number;
+  readonly protocol: string;
+  readonly bytes: number;
+  readonly decoded: number;
+};
+
 export class Page {
   /** What to do with an intercepted request; null when nothing is. */
   private answer: Verdict | null = null;
@@ -332,6 +354,8 @@ export class Page {
   /** Each attached worker's session, with the URL of its script, oldest first. */
   private readonly workers = new Map<string, string>();
   private coldOn = false;
+  /** The network `network` last set, which every worker attached later is given too; null is the box's own. */
+  private networkOn: Conditions | null = null;
 
   /** The sentence `refuse` answers with. */
   private refusal = "";
@@ -675,6 +699,29 @@ export class Page {
       return aim.down === true && (now === null || now === undefined) ? null : aim.at;
     })()`).catch(() => null);
     return missed === null ? null : `it moved under the press, which met ${missed} instead`;
+  }
+
+  /** One step of a press: a mouse's left button, or a finger, going down, moving held, or let go at `at`. */
+  async pointer(step: "Down" | "Move" | "Up", at: readonly [number, number], by: "Mouse" | "Finger"): Promise<void> {
+    const [x, y] = at;
+    if (by === "Mouse") {
+      const common = { x, y, button: "left", clickCount: 1 };
+      if (step === "Down") await this.command("Input.dispatchMouseEvent", { ...common, type: "mouseMoved", button: "none", buttons: 0 });
+      const type = step === "Down" ? "mousePressed" : step === "Move" ? "mouseMoved" : "mouseReleased";
+      await this.command("Input.dispatchMouseEvent", { ...common, type, buttons: step === "Up" ? 0 : 1 });
+    } else {
+      const type = step === "Down" ? "touchStart" : step === "Move" ? "touchMove" : "touchEnd";
+      await this.command("Input.dispatchTouchEvent", { type, touchPoints: step === "Up" ? [] : [{ x, y, id: 1 }] });
+    }
+  }
+
+  /** A press at the path's first point, moved through the rest and let go at the last. */
+  async drag(path: readonly (readonly [number, number])[], by: "Mouse" | "Finger"): Promise<void> {
+    const [first, ...rest] = path;
+    if (first === undefined) return;
+    await this.pointer("Down", first, by);
+    for (const p of rest) await this.pointer("Move", p, by);
+    await this.pointer("Up", path[path.length - 1] ?? first, by);
   }
 
   /** The reader's own scroll: a mouse wheel turned over the middle of the viewport, as a page's input sees it. */
@@ -1137,6 +1184,7 @@ export class Page {
    * throttles a page's main thread alone, and refuses the throttle for a worker. */
   private async toWorker(child: string): Promise<void> {
     await this.connection.send("Network.setCacheDisabled", { cacheDisabled: this.coldOn }, child).catch(() => {});
+    await this.connection.send("Network.emulateNetworkConditions", this.networkOn ?? NO_CONDITIONS, child).catch(() => {});
   }
 
   /**
@@ -1275,15 +1323,61 @@ export class Page {
     await this.command("Emulation.setCPUThrottlingRate", { rate });
   }
 
-  /** A phone-class network, or the box's own again with `null`: each request waits `latency` ms and moves at the throughputs, in bytes a second. */
-  async network(
-    conditions: { offline: boolean; latency: number; downloadThroughput: number; uploadThroughput: number } | null,
-  ): Promise<void> {
+  /** A phone-class network, or the box's own again with `null`: each request waits `latency` ms and moves at the throughputs, in bytes a second.
+   * Every worker attached (`attachWorkers`) is given it too, since the core's worker makes the stores' requests. */
+  async network(conditions: Conditions | null): Promise<void> {
+    this.networkOn = conditions;
     await this.command("Network.enable", {});
-    await this.command(
-      "Network.emulateNetworkConditions",
-      conditions ?? { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 },
-    );
+    await this.command("Network.emulateNetworkConditions", conditions ?? NO_CONDITIONS);
+    await Promise.all([...this.workers.keys()].map((w) => this.toWorker(w)));
+  }
+
+  /** Every request the page and its attached workers make from now until the returned stop, each as it ended. */
+  async wire(): Promise<() => readonly Wired[]> {
+    type Open = { url: string; from: "page" | "worker"; sent: number; answered: number; status: number; protocol: string; received: number; decoded: number };
+    const open = new Map<string, Open>();
+    const done: Wired[] = [];
+    // The network's clock is monotonic; the first request's wall time places it on the epoch's.
+    let offset: number | null = null;
+    const at = (seconds: unknown): number => (typeof seconds === "number" ? seconds * 1000 + (offset ?? 0) : NaN);
+    const key = (p: Record<string, unknown>, session?: string): string => `${session ?? ""}/${String(p["requestId"])}`;
+    let on = true;
+    this.connection.on("Network.requestWillBeSent", (p, session) => {
+      if (!on) return;
+      if (offset === null && typeof p["wallTime"] === "number" && typeof p["timestamp"] === "number") offset = (p["wallTime"] - p["timestamp"]) * 1000;
+      const r = p["request"] as { url?: string } | undefined;
+      const from = session !== undefined && this.workers.has(session) ? "worker" : "page";
+      open.set(key(p, session), { url: (r?.url ?? "").replace(/^https?:\/\/[^/]+/, ""), from, sent: at(p["timestamp"]), answered: NaN, status: 0, protocol: "", received: 0, decoded: 0 });
+    });
+    this.connection.on("Network.responseReceived", (p, session) => {
+      const o = open.get(key(p, session));
+      if (o === undefined) return;
+      o.answered = at(p["timestamp"]);
+      const r = p["response"] as { status?: number; protocol?: string } | undefined;
+      o.status = r?.status ?? 0;
+      o.protocol = r?.protocol ?? "";
+    });
+    // A worker's request ends with no encoded length, so its body's chunks are counted as they come.
+    this.connection.on("Network.dataReceived", (p, session) => {
+      const o = open.get(key(p, session));
+      if (o === undefined) return;
+      if (typeof p["encodedDataLength"] === "number") o.received += p["encodedDataLength"];
+      if (typeof p["dataLength"] === "number") o.decoded += p["dataLength"];
+    });
+    const end = (p: Record<string, unknown>, session: string | undefined): void => {
+      const o = open.get(key(p, session));
+      if (o === undefined) return;
+      open.delete(key(p, session));
+      const { received, ...wired } = o;
+      done.push({ ...wired, ended: at(p["timestamp"]), bytes: Math.max(received, typeof p["encodedDataLength"] === "number" ? p["encodedDataLength"] : 0) });
+    };
+    this.connection.on("Network.loadingFinished", (p, session) => end(p, session));
+    this.connection.on("Network.loadingFailed", (p, session) => end(p, session));
+    await this.command("Network.enable", {});
+    return () => {
+      on = false;
+      return [...done];
+    };
   }
 
   /** Every request whose URL matches one of `patterns` (`*` any run) failed, by the page and by every worker it runs, as

@@ -130,7 +130,9 @@ pub enum Step {
     Close,
     Focus(prop::sample::Index),
     Move(Dir),
-    Resize(Share),
+    /// The leaf at the index and the one after it in the tree's order: often the two either side
+    /// of a divider, and otherwise a pair a resize leaves alone.
+    Resize(prop::sample::Index, [Share; 2]),
 }
 
 pub fn step() -> impl Strategy<Value = Step> {
@@ -146,7 +148,7 @@ pub fn step() -> impl Strategy<Value = Step> {
         2 => Just(Step::Close),
         2 => any::<prop::sample::Index>().prop_map(Step::Focus),
         2 => dir.prop_map(Step::Move),
-        1 => share().prop_map(Step::Resize),
+        2 => (any::<prop::sample::Index>(), share(), share()).prop_map(|(i, a, b)| Step::Resize(i, [a, b])),
     ]
 }
 
@@ -169,7 +171,15 @@ pub fn the_act(tiles: &Tiles<Pg>, step: &Step) -> Act<Pg> {
             Act::Focus(ids[i.index(ids.len())])
         }
         Step::Move(d) => Act::Move(*d),
-        Step::Resize(s) => Act::Resize(*s),
+        Step::Resize(i, shares) => {
+            let ids = ids(tiles);
+            let k = i.index(ids.len());
+            Act::Resize {
+                before: ids[k],
+                after: ids[(k + 1) % ids.len()],
+                shares: *shares,
+            }
+        }
     }
 }
 

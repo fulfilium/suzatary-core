@@ -16,7 +16,7 @@ import { UNDO_WINDOW_MS } from "../todo/undo"
 import drain from "./drain"
 import frame from "../view/frame"
 import address from "../shell/address"
-import { parseRoute } from "../shell/route"
+import { parseAddress, parseRoute } from "../shell/route"
 import run from "../painter/run"
 import scroll from "../painter/scroll"
 import soon from "../painter/soon"
@@ -76,9 +76,19 @@ export namespace program {
   const whoOf = (a: app.App): Who => ({ me: app.actor(a), reach: app.reach(a) })
   const same = (w: Who, was: Who): boolean => w.me === was.me && app.sameReach(w.reach, was.reach)
 
-  // Where a page stands: whether a page it opens would stand beside it, told again when that moves.
-  export type Placed = { readonly opens: () => Opens; readonly hear: (moved: () => void) => () => void }
-  const OVER: Placed = { opens: () => "Over", hear: () => () => {} }
+  // Where a page stands: whether what it opens is drawn beside it (told again when that moves), and where its `Go` and
+  // `Replace` go, a new entry of the history or the one the reader is at. A page in a tile opens from its tile; any other
+  // reads the address alone.
+  export type Placed = {
+    readonly opens: () => Opens
+    readonly hear: (moved: () => void) => () => void
+    readonly go: (href: string, how: "Went" | "Replaced") => void
+  }
+  const OVER: Placed = {
+    opens: () => "Over",
+    hear: () => () => {},
+    go: (href, how) => (how === "Went" ? address.went(parseAddress(href)) : address.replaced(parseAddress(href))),
+  }
 
   const context = (placed: Placed): Context => {
     const a = app.now()
@@ -120,13 +130,13 @@ export namespace program {
 
   // Kept in this tab's memory only (no register, replica or storage) so a later act resends it; the page never holds it.
   const secrets = new Map<string, string>()
-  const secretOf = (root: HTMLElement, s: Secret): { readonly value: string | undefined } | null => {
+  const secretOf = (field: (name: string) => Element | null, s: Secret): { readonly value: string | undefined } | null => {
     switch (s.type) {
       case "None":
         return { value: undefined }
       case "Field": {
-        const field = root.querySelector(`[data-field="${CSS.escape(s.field)}"]`)
-        const value = field instanceof HTMLInputElement ? field.value : ""
+        const at = field(s.field)
+        const value = at instanceof HTMLInputElement ? at.value : ""
         secrets.set(s.keep, value)
         return { value }
       }
@@ -199,8 +209,9 @@ export namespace program {
   type In = Input<unknown, unknown, unknown>
   type Out = Effect<unknown, unknown, unknown>
 
-  // The scroll box is the document's, or one the page draws itself, found once drawn; `lane` is the shell's behind the page.
-  export type Around = { readonly box?: () => Element; readonly lane?: lanes.Lane; readonly told?: (said: unknown) => void; readonly placed?: Placed }
+  // The scroll box is the document's, or one the page draws itself, found once drawn; `lane` is the shell's behind the page;
+  // `layer` is where it draws what it marks as the window's (`painter.create`).
+  export type Around = { readonly box?: () => Element; readonly lane?: lanes.Lane; readonly told?: (said: unknown) => void; readonly placed?: Placed; readonly layer?: HTMLElement }
   const page_ = (): Element => document.scrollingElement ?? document.documentElement
 
   // Only the module is awaited: the page draws when the caller calls what this returns.
@@ -208,8 +219,14 @@ export namespace program {
     const box = around.box ?? page_
     const lane = around.lane ?? lanes.FIRST
     const placed = around.placed ?? OVER
+    const layer = around.layer ?? null
     const glue = await module()
     return root => {
+      // A field the page drew, in its root or in its layer.
+      const field = (name: string): Element | null => {
+        const at = `[data-field="${CSS.escape(name)}"]`
+        return root.querySelector(at) ?? layer?.querySelector(at) ?? null
+      }
       const held_ = new Map<string, () => void>()
       const timers = new Set<ReturnType<typeof setTimeout>>()
       const frames = new Set<number>()
@@ -307,7 +324,7 @@ export namespace program {
           case "NewKey":
             return void settled(signer.renew().then(() => text.printed(null))).then(answered(e.ask))
           case "Act": {
-            const secret = secretOf(root, e.secret)
+            const secret = secretOf(field, e.secret)
             if (secret === null) return answered(e.ask)(done({ type: "Already" }))
             // Told as answered, a taken answer reaches the page before the read-back; anything else waits for it.
             let told = false
@@ -329,25 +346,25 @@ export namespace program {
             return void frames.add(f)
           }
           case "Focus": {
-            const field = root.querySelector(`[data-field="${CSS.escape(e.field)}"]`)
+            const at = field(e.field)
             const busy = document.activeElement
-            if (!(field instanceof HTMLElement)) return
-            if (busy !== field && (busy instanceof HTMLInputElement || busy instanceof HTMLTextAreaElement)) return
-            field.focus()
+            if (!(at instanceof HTMLElement)) return
+            if (busy !== at && (busy instanceof HTMLInputElement || busy instanceof HTMLTextAreaElement)) return
+            at.focus()
             // A field takes the caret at the end of its words; anything else is brought into sight.
-            if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) return field.setSelectionRange(field.value.length, field.value.length)
-            return field.scrollIntoView({ block: "nearest" })
+            if (at instanceof HTMLInputElement || at instanceof HTMLTextAreaElement) return at.setSelectionRange(at.value.length, at.value.length)
+            return at.scrollIntoView({ block: "nearest" })
           }
           case "Scroll":
             return e.to.type === "Keep" ? undefined : scroll.move(box(), root, e.to)
           case "Copy":
             return void navigator.clipboard.writeText(e.text).then(() => toast("Copied"), (x: unknown) => toast(lo.reason(x)))
           case "Go":
-            return address.go(parseRoute(e.href))
+            return placed.go(e.href, "Went")
           case "Leave":
             return address.leave(e.href)
           case "Replace":
-            return address.replace(parseRoute(e.href))
+            return placed.go(e.href, "Replaced")
           case "Back":
             return address.back(parseRoute(e.fallback))
           case "Toast":
@@ -376,7 +393,7 @@ export namespace program {
       const program = new glue[page](flags)
       const t2 = performance.now()
       const keeps = (e: Out): boolean => e.type === "Scroll" && e.to.type === "Keep"
-      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, keeps, parts.gone, box, parts.refresh)
+      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, keeps, parts.gone, box, parts.refresh, layer)
       const t3 = performance.now()
       performance.measure("page:draw", { start: t0, end: t3, detail: { page, read: "Program", flags: Math.round(t1 - t0), made: Math.round(t2 - t1), first: Math.round(t3 - t2) } })
       const told = (): void => running.send({ type: "Context", ...context(placed) })

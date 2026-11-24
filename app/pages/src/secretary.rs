@@ -750,7 +750,7 @@ fn sheet(m: &Model, bar: &[TopicInUse]) -> Option<Node<Msg>> {
     };
     let breaks = matches!(check, Check::Breaks(_));
     Some(
-        view! { Div "topicsheet" {Role => "dialog", AriaLabel => renaming.map_or_else(|| "Add a topic".to_owned(), |t| format!("Rename {t}"))} [
+        view! { Div "topicsheet" {Role => "dialog", Data("layer") => "window", AriaLabel => renaming.map_or_else(|| "Add a topic".to_owned(), |t| format!("Rename {t}"))} [
             view! { H2 "topicsheethead" [renaming.map_or_else(|| "Add a topic".to_owned(), |t| format!("Rename “{t}”"))] },
             (!offered.is_empty()).then(|| view! { Div "chiprow topicoffers" [offered.iter().map(|t| view! { Button "chipbtn" {Type => "button"} @click(Msg::Write(t.topic.clone())) [t.topic.as_str()] }).collect::<Vec<_>>()] }),
             view! { Form "topicform" @submit(Msg::Submit) [

@@ -62,8 +62,24 @@ export namespace painter {
         : ""
 
   // `gone` hears each foreign part the painter takes out, so the host can stop what it started for it.
-  export const create = (root: HTMLElement, foreign: Foreign, blocks: Blocks, report: Report, gone: (n: Node) => void = () => {}, refresh: Refresh = () => false): T => {
+  //
+  // An element the view marks `data-layer` is the window's (a sheet, a scrim): the painter draws it in `layer`, above
+  // the page and every tile beside it, and leaves an empty text in its place, which the patches that place its siblings
+  // find. Its parts, its listeners and its removal stay the view's. With no layer, it stays in place.
+  export const create = (
+    root: HTMLElement,
+    foreign: Foreign,
+    blocks: Blocks,
+    report: Report,
+    gone: (n: Node) => void = () => {},
+    refresh: Refresh = () => false,
+    layer: HTMLElement | null = null,
+  ): T => {
     const nodes = new Map<number, Node>([[0, root]])
+    // A layered element's place among its siblings, and the element a place holds.
+    const places = new Map<Node, Text>()
+    const held = new Map<Node, Element>()
+    const spot = (n: Node): Node => places.get(n) ?? n
     const ids = new WeakMap<Node, number>()
     // Each foreign part's kind and key, so new props ask the host for the same part again.
     const foreigns = new Map<number, readonly [string, string]>()
@@ -84,9 +100,31 @@ export namespace painter {
     const placed = (id: number, n: Node, parent: number, before: number): void => {
       nodes.set(id, n)
       ids.set(n, id)
-      node(parent).insertBefore(n, before === 0 ? null : node(before - 1))
+      node(parent).insertBefore(n, before === 0 ? null : spot(node(before - 1)))
+    }
+    const lift = (e: Element): void => {
+      if (layer === null || places.has(e)) return
+      const place = document.createTextNode("")
+      e.parentNode?.replaceChild(place, e)
+      layer.appendChild(e)
+      places.set(e, place)
+      held.set(place, e)
+    }
+    const lower = (e: Element): void => {
+      const place = places.get(e)
+      if (place === undefined) return
+      place.parentNode?.replaceChild(e, place)
+      places.delete(e)
+      held.delete(place)
     }
     const forget = (n: Node): void => {
+      const lifted = held.get(n)
+      if (lifted !== undefined) {
+        held.delete(n)
+        places.delete(lifted)
+        lifted.remove()
+        return forget(lifted)
+      }
       const id = ids.get(n)
       if (id === undefined) return
       nodes.delete(id)
@@ -159,11 +197,13 @@ export namespace painter {
             const id = varint(r)
             const [name, value] = [string(r), string(r)]
             set(element(id), name, value)
+            if (name === "data-layer") lift(element(id))
             break
           }
           case OP.Unset: {
             const e = element(varint(r))
             const name = string(r)
+            if (name === "data-layer") lower(e)
             if (name === "value" && field(e)) e.value = ""
             if (name === "checked" && e instanceof HTMLInputElement) e.checked = false
             if (name === "href") (e.removeAttribute("target"), e.removeAttribute("rel"))
@@ -186,13 +226,14 @@ export namespace painter {
           }
           case OP.Move: {
             const [id, parent, before] = [varint(r), varint(r), varint(r)]
-            node(parent).insertBefore(node(id), before === 0 ? null : node(before - 1))
+            node(parent).insertBefore(spot(node(id)), before === 0 ? null : spot(node(before - 1)))
             break
           }
           case OP.Remove: {
             const n = node(varint(r))
-            n.parentNode?.removeChild(n)
-            forget(n)
+            const at = spot(n)
+            at.parentNode?.removeChild(at)
+            forget(at)
             break
           }
           case OP.Listen: {
@@ -248,7 +289,7 @@ export namespace painter {
       }
     }
 
-    return { apply, destroy: () => (foreigns.forEach((_, id) => gone(node(id))), root.replaceChildren()) }
+    return { apply, destroy: () => (foreigns.forEach((_, id) => gone(node(id))), held.forEach(e => e.remove()), root.replaceChildren()) }
   }
 }
 export default painter

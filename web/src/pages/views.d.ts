@@ -45,11 +45,20 @@ export class TodosPage extends Page {}
 /** The list drawn by Typst (`app/pages/src/typstlist.rs`). */
 export class TypstPage extends Page {}
 
-/** The tiles of the app's pages (`app/pages/src/desk.rs`): the address moves them, and a viewport draws them. */
+/** The tiles of the app's pages (`app/pages/src/desk.rs`): the tree, its acts, its address, and its drawing. */
 export class Desk {
   /** Throws where the bar's destinations are not a well-formed home. */
   constructor();
-  go(hash: string): void;
+  /** An address, read unless it is the desk's own print. */
+  go(address: string): void;
+  /** The tree's print, `#` first. */
+  address(): string;
+  /** The focused workspace's home, `#` first. */
+  workspace(): string;
+  /** The page `href` names, opened from the tile `key`. */
+  open(key: number, href: string): void;
+  /** The divider between the tiles `before` and `after` to the shares of weights `a` and `b`, 1 to 3. */
+  resize(before: number, after: number, a: number, b: number): void;
   /** JSON of `Drawing`, for a viewport in pixels at the 16px root. */
   drawing(w: number, h: number): string;
   free(): void;

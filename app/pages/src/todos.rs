@@ -2102,6 +2102,8 @@ impl Model {
                 ] },
                 view! { Div "pickerbody" [head] },
             ] },
+            // Beside its sheet, in one stacking context: drawn in the window's layer, it would cover
+            // the sheet wherever an engine makes the tile a stacking context.
             view! { Div "scrim" {Hidden => !self.up} @click(Msg::Sheet(SheetMsg::Down)) },
         ]
     }

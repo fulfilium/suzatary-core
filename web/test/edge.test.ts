@@ -1,8 +1,8 @@
 /**
  * THE CHROME'S ONE EDGE (docs/TILEDLAYOUT-PLAN-2026-11-22.md §13): the window's chrome asks the window, at one width,
  * `--m-wide`. The tiles ask the room they stand in (`main`, the window less the gutters and the open panel) whether it
- * holds a list, a divider and a column; no length ties the two questions, and `web/e2e/tiles.test.ts` holds that no tile
- * stands under a bar in either chrome.
+ * holds a list, a divider and a column, and `web/e2e/tiles.test.ts` holds that no tile stands under a bar in either
+ * chrome.
  */
 
 import { test } from "node:test";

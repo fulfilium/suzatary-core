@@ -21,7 +21,7 @@ allowance = 2000
 
 [ratchet]
 # The repository's reading set in tokens, as the train's build recorded it.
-reading = 3242312
+reading = 3242849
 
 # The USE of each unit over `budget.use`, as the train's build recorded it; a unit back within the
 # budget leaves the table.
@@ -158,6 +158,9 @@ task = "coreskeleton"
 [[in_force]]
 file = "docs/LAZYSYNC-PLAN-2026-10-21.md"
 task = "lazysync"
+[[in_force]]
+file = "docs/COLDSYNC-PLAN-2026-11-24.md"
+task = "coldsyncslow"
 [[in_force]]
 file = "docs/MEMORYDIGEST-PLAN-2026-10-06.md"
 task = "memorydigest"

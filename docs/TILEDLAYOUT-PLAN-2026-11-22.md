@@ -230,7 +230,7 @@ pub enum Act<P> {
     Close,         // the focused tile
     Focus(Id),     // the leaf a crumb, a tile or a workspace names
     Move(Dir),     // swap the focused tile's page with its neighbour's
-    Resize(Share), // the focused child's share
+    Resize { before: Id, after: Id, shares: [Share; 2] }, // the shares either side of a divider (§14)
 }
 pub fn act<P: Page>(tiles: Tiles<P>, act: Act<P>) -> Tiles<P>   // total
 ```
@@ -833,3 +833,54 @@ What stage b did not reach, on purpose, and the stage each goes in:
 Every page is under exactly one mechanism: the address names a leaf, the desk arranges it, and the host mounts it in
 a tile. The panel, the More sheet, the add sheet and the toast are the window's chrome, not tiles, and none of them is
 placed by the arrangement.
+
+## 14. Stage c, first half: what it holds
+
+- **The desk's state is the tree** (`app/pages/src/desk.rs`). A link followed in a tile, a page's `Go` and `Replace`,
+  and a part of a page that opens a page without being a link (a todo's card, through an `open` event from its own
+  element) are `desk.open(tile, href)`: `Focus` on the tile, then `Open` by §3's one rule. An open of a page the focused
+  workspace already shows focuses that tile, so an open never puts a page in a workspace twice. Any other address (Back, a
+  typed hash, the bar, the palette) is read with `parse`, unless it is the desk's own print, whose tiles stay. A link to
+  a workspace's home is that workspace, as the bar's own link is, and an open from a tile no longer drawn is read as an
+  address.
+- **The address is the tree's print**, and the route log holds it (`web/src/shell/route.ts`, `Address`: the focused
+  route and the tree after `~`, `""` for a bare hash). Every hash a person has is still a bare hash; a tree appears only
+  after an open from an opened page. A `~` followed by `|` or `-` is a tree, damaged or not; a damaged one reads as its
+  head's page. An address the desk reads otherwise than it was written is replaced by its print.
+  Back is the history of addresses, and the host keeps every live tile whose page is still drawn (by `href`, as stage b
+  did), so Back after an open leaves the tile it was opened from as it was.
+- **`Arranged<P>`**: a placed tile and a crumb carry their leaf's page, so the desk joins nothing.
+- **A resize names its divider**: `Act::Resize { before, after, shares }`, the two leaves either side. Each `Divider`
+  carries its `stops` (every pair of shares under which no drawn child of its node is under its least, and the pair it
+  has now) and the index of the place it stands at. **A resize of one divider sets the shares of the two children
+  beside it; every other child of the node keeps its share.** The desk keeps the row of shares that leaves, by the
+  kinds of the node's children in order, and draws it on every node of those kinds (`Tiles::reshared`), so a resize of
+  the row's other divider starts from the row as it stands; the address does not carry them (stage d).
+- **The divider** is a separator in the host: a drag of a mouse or a finger stands it at the stop nearest the pointer,
+  a tap on its handle steps it, and the arrows, Home and End step it as a separator does. Its gap (24 px) is the mouse's
+  hit area, and a 44 px handle at its middle is a finger's; the lines' layer stands above the tiles so the handle is
+  taken where it reaches over a tile's edge. A divider with one stop has no handle.
+- **The crumbs**: the one just before the drawn tiles is Back where Back lands on its page, and any other a link to its
+  page, so a crumb goes where it says; a crumb names a page that is not a workspace's home by what it is (`Todo`,
+  `Message`).
+- **The bar lights the focused workspace**, `Tiles::workspace`, read from the desk as an address moves the tree.
+- **The window's layers**: a page marks an element `data-layer`, and the painter draws it in its tile's part of
+  `#layers`, leaving an empty text in its place among its siblings, so the patches that place them find it. The topic
+  sheet is so marked. The add sheet and its scrim stay in the list's tile, together: a modal's sheet and scrim share one
+  stacking context, which a scrim in the window's layer and a sheet in a tile do not where an engine makes the tile a
+  stacking context; they rise inside the tile together in the second half.
+- **A list alone on a wide room**: a lone tile scrolls the document and its page stands in the reading column at the
+  room's middle, as every page alone now does (the wide chrome's rule that held a column at the brand's edge is gone;
+  the header still holds still, which is what the audit's X4 asked). An empty leaf beside the list was refused: §3's law that a workspace of one
+  leaf draws one tile, and §7's phone, whose list is its first screen, would each need an exception, and the leaf would
+  need an address that names nothing.
+
+What this half did not do, and where it goes:
+
+- **The conversations column and the Typst list's pane as tiles.** Each needs a page of its own for what it draws (the
+  conversations as a list; the Typst list's open todo is a `Todo` already), opened before or beside its page by the
+  open rule, and a bare hash that reads as that tree: `#/secretary/<id>` reads today as the conversation alone, because
+  the stream and a conversation are one kind. Splitting the kinds and giving the conversations a route is the next
+  step; until then both stay page content that follows the tile's `opens`.
+- **The second half**: hidden tiles kept and fed, the secretary's panel as the pinned leaf, the add sheet inside its
+  tile.

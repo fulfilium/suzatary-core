@@ -3,7 +3,7 @@
 //! this parser and `web/src/shell/route.ts`'s both read to the same print (`web/test/laws.test.ts`).
 
 use proptest::prelude::*;
-use suzatary_pages::desk::{Desk, Scroller};
+use suzatary_pages::desk::{Area, Desk, Drawing, Scroller, share};
 use suzatary_pages::route::Route;
 use viewtree::tiles::{self, Page, Px, Viewport};
 
@@ -153,6 +153,13 @@ fn spells(s: &str) -> bool {
     })
 }
 
+/// A hash with a `~` before `|` or `-` is read as an address with a tree, damaged or not, and
+/// stands for its head when the tree does not read: no route this app prints holds one but a
+/// message id that spells `~|` or `~-`, which a hash cannot tell from a tree cut short.
+fn bare(h: &str) -> bool {
+    !(h.contains("~|") || h.contains("~-"))
+}
+
 proptest! {
     /// `print` is a section of `parse`: a route parsed from any hash prints as a hash that parses
     /// back to it, so every link the app writes reads as the page it names.
@@ -164,9 +171,9 @@ proptest! {
     }
 
     /// The layout's address of a bare hash is that bare hash: its tree has the route focused,
-    /// and prints as the route alone, so the address a person sees stays today's.
+    /// and prints as the route alone, so every hash a person has is its own address.
     #[test]
-    fn a_bare_hash_is_its_own_address(h in hash()) {
+    fn a_bare_hash_is_its_own_address(h in hash().prop_filter("bare", |h| bare(h))) {
         let r = Route::parse(&h);
         let mut desk = Desk::new().expect("the destinations are a home");
         desk.go(&h);
@@ -174,12 +181,12 @@ proptest! {
         prop_assert_eq!(tiles::print(desk.tiles()), r.print());
     }
 
-    /// Today's layouts: a page drawn alone scrolls the document, and only a todo, beside the list
-    /// it is opened from, makes two tiles, exactly where the room holds both least widths and a
-    /// divider, at any height. The todo alone stands under the Todos workspace's crumb row; the
-    /// two stand either side of one divider, named by the list.
+    /// A bare hash's layout: a page drawn alone scrolls the document, and only a todo, beside the
+    /// list it is opened from, makes two tiles, exactly where the room holds both least widths
+    /// and a divider, at any height. The todo alone stands under the Todos workspace's crumb row;
+    /// the two stand either side of one divider, named by the list.
     #[test]
-    fn a_bare_hash_draws_todays_layout(h in hash(), at in viewport()) {
+    fn a_bare_hash_draws_its_home_and_its_page(h in hash().prop_filter("bare", |h| bare(h)), at in viewport()) {
         let r = Route::parse(&h);
         let mut desk = Desk::new().expect("the destinations are a home");
         desk.go(&h);
@@ -203,4 +210,91 @@ proptest! {
             prop_assert_eq!(rows, if todo { vec![vec![0]] } else { vec![] });
         }
     }
+
+    /// Links followed in drawn tiles, through the desk: each address the desk prints, read by a
+    /// desk that never saw it, prints the same address and draws the same pages in the same
+    /// rectangles, at two rooms; and the address before an open draws again what was drawn before
+    /// it, which is Back.
+    #[test]
+    fn an_open_reads_back_from_its_address(first in hash(), opens in prop::collection::vec((any::<prop::sample::Index>(), link()), 1..6), at in viewport(), other in viewport()) {
+        let mut desk = Desk::new().expect("the destinations are a home");
+        desk.go(&first);
+        for (i, h) in opens {
+            let key = pick(&desk, at, i);
+            let (was, drawn) = (desk.address(), placed(&desk, at));
+            desk.open(key, &h);
+            let address = desk.address();
+            let mut cold = Desk::new().expect("the destinations are a home");
+            cold.go(&address);
+            prop_assert_eq!(cold.address(), address.clone());
+            for room in [at, other] {
+                prop_assert_eq!(placed(&cold, room), placed(&desk, room));
+            }
+            let mut back = Desk::new().expect("the destinations are a home");
+            back.go(&address);
+            back.go(&was);
+            prop_assert_eq!(placed(&back, at), drawn);
+        }
+    }
+
+    /// A resize at a divider, over any opens, rooms and resizes before it: the divider then
+    /// stands at the stop asked, with its shares; the same tiles stand; and the same resize again
+    /// changes nothing.
+    #[test]
+    fn a_resize_holds_the_stop_asked(first in hash(), opens in prop::collection::vec((any::<prop::sample::Index>(), link()), 0..5), resizes in prop::collection::vec((viewport(), any::<prop::sample::Index>(), any::<prop::sample::Index>()), 1..8)) {
+        let mut desk = Desk::new().expect("the destinations are a home");
+        desk.go(&first);
+        for (i, h) in opens {
+            let at = Viewport { w: Px(1920), h: Px(900) };
+            let key = pick(&desk, at, i);
+            desk.open(key, &h);
+        }
+        for (at, d, s) in resizes {
+            let was = desk.drawing(at);
+            let Some(line) = (!was.dividers.is_empty()).then(|| was.dividers[d.index(was.dividers.len())].clone()) else {
+                continue;
+            };
+            let stop = line.stops[s.index(line.stops.len())];
+            let shares = stop.shares.map(|w| share(w).expect("a drawing's weights are shares"));
+            let (b, a) = (small(line.before), small(line.after));
+            desk.resize(b, a, shares);
+            let now = desk.drawing(at);
+            let held = now.dividers.iter().find(|l| (l.before, l.after) == (line.before, line.after));
+            prop_assert_eq!(held.and_then(|l| l.stops.get(l.now)).copied(), Some(stop));
+            prop_assert_eq!(keys(&now), keys(&was));
+            desk.resize(b, a, shares);
+            prop_assert_eq!(desk.drawing(at), now);
+        }
+    }
+}
+
+/// A page a link opens: any hash, or often one of the pages that stand beside one another.
+fn link() -> impl Strategy<Value = String> {
+    prop_oneof![
+        1 => hash(),
+        2 => prop::sample::select(vec!["#/todo/a", "#/todo/b", "#/mail/m", "#/mail/thread/t", "#/secretary/c", "#/briefings/2026-01-02", "#/inbox"]).prop_map(str::to_owned),
+    ]
+}
+
+/// The key of a drawn tile, as the host hands it to the desk.
+fn small(key: u64) -> u32 {
+    u32::try_from(key).expect("a test's keys are small")
+}
+
+fn pick(desk: &Desk, at: Viewport, i: prop::sample::Index) -> u32 {
+    let keys = keys(&desk.drawing(at));
+    small(keys[i.index(keys.len())].0)
+}
+
+fn keys(d: &Drawing) -> Vec<(u64, String)> {
+    d.tiles.iter().map(|t| (t.key, t.href.clone())).collect()
+}
+
+/// What a person sees of a drawing: each tile's page and rectangle, and the scroller.
+fn placed(desk: &Desk, at: Viewport) -> (Scroller, Vec<(String, Area)>) {
+    let d = desk.drawing(at);
+    (
+        d.scroll,
+        d.tiles.into_iter().map(|t| (t.href, t.rect)).collect(),
+    )
 }

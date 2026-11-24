@@ -140,6 +140,36 @@ impl<L> Node<L> {
         )
     }
 
+    /// The same node with each child, by its place among the children, made by `f`.
+    pub(crate) fn map_parts(self, mut f: impl FnMut(usize, Part<L>) -> Part<L>) -> Node<L> {
+        let at = self.index();
+        let Node {
+            axis,
+            fit,
+            before,
+            focus,
+            after,
+        } = self;
+        let before = before
+            .into_iter()
+            .enumerate()
+            .map(|(k, p)| f(k, p))
+            .collect();
+        let focus = Box::new(f(at, *focus));
+        let after = after
+            .into_iter()
+            .enumerate()
+            .map(|(k, p)| f(at + 1 + k, p))
+            .collect();
+        Node {
+            axis,
+            fit,
+            before,
+            focus,
+            after,
+        }
+    }
+
     pub fn map<'a, M>(&'a self, f: &impl Fn(&'a L) -> M) -> Node<M> {
         Node {
             axis: self.axis,

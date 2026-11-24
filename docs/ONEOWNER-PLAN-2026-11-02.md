@@ -258,6 +258,13 @@ three warm loads after the snapshot is written; the target is under 2.5 s).
    `Proposals`, asked after the stream, while the stream waits on the read,
    holding it 0.21 to 0.29 s. So the core dominates: its scope of the stream and
    the inbox's reading answered in the stream's wait.
+
+   *Measured at 2.1.239* (the same scene, two runs of three warm loads, the wasm
+   as the web build ships it): the first draw 2.61, 2.47, 2.31, 2.27, 2.42, 2.42 s
+   (five of six under 2.5 s); the stream answered 1.59, 1.52, 1.50, 1.40, 1.51,
+   1.59 s from asked. Not met: from the stream asked, the lines are restored by
+   0.53 to 0.73 s, the stream's content is read by 0.82 to 1.11 s, the worker has
+   read the stream by 0.92 to 1.29 s, and its answer goes 0.3 s later.
 6. **The chains into the core.** The chains become replicas of the generic kind
    in the worker; the page's `source` becomes a view; `remote.hold` and P3, P1,
    P2 and W1 go; writes seal through the core (with or after LOCALWRITES stage

@@ -9,10 +9,10 @@ import assert from "node:assert/strict";
 
 import aside from "../src/chat/aside";
 import app from "../src/app/app";
-import { parseRoute } from "../src/shell/route";
+import { parseAddress } from "../src/shell/route";
 import { forAll } from "./gen";
 
-const at = (hash: string): aside.Placement => aside.placement(app.initial(parseRoute(hash), "life"), "Beside");
+const at = (hash: string): aside.Placement => aside.placement(app.initial(parseAddress(hash), "life"), "Beside");
 const page = (hash: string): aside.Page => {
   const p = at(hash);
   assert.equal(p.type, "Beside", hash);

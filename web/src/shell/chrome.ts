@@ -10,6 +10,7 @@ import type onscreen from "../app/store"
 import type shell from "../app/shell"
 import type { Theme } from "../app/theme"
 import type { Opens } from "../wire/generated/pages"
+import type { Route } from "./route"
 
 export namespace chrome {
   export type Chrome = {
@@ -22,8 +23,9 @@ export namespace chrome {
     build: shell.Line
   }
   // What the banner dates besides App: the fold on screen and what its readings of the objects it holds left out; the
-  // theme the More sheet offers; and whether the window has room for the panel beside the page.
-  export type Seen = { fold: onscreen.Fold; excluded: excluded.Left; theme: Theme; room: Opens }
+  // theme the More sheet offers; whether the window has room for the panel beside the page; and the workspace the bar
+  // lights, the desk's focused one (`tiles.Host.workspace`).
+  export type Seen = { fold: onscreen.Fold; excluded: excluded.Left; theme: Theme; room: Opens; workspace: Route }
   export type Live = { className: string; meaning: string }
   // What the page says of this browser's key: nothing, or why it only reads.
   export type Signing = { said: string | null }
@@ -42,7 +44,7 @@ export namespace chrome {
   // page's own link is not drawn there (`style.css`, beside the panel's rules).
   export const of = (a: app.App, seen: Seen): Chrome => {
     return {
-      nav: nav.of(a, seen.theme),
+      nav: nav.of(a, seen.theme, seen.workspace),
       panel: aside.placement(a, seen.room),
       live: liveOf(a.stream.link),
       stale: stale.of(app.live(a), seen.fold),

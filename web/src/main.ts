@@ -32,7 +32,7 @@ import { updatePanel } from "./chat/panel";
 import tiles from "./shell/tiles";
 import pages from "./pages/table";
 import frame from "./view/frame";
-import { hrefOf } from "./shell/route";
+import { hrefOfAddress } from "./shell/route";
 import address from "./shell/address";
 import routelog from "./shell/routelog";
 import kept from "./view/kept";
@@ -63,7 +63,7 @@ await page.draw(import.meta.url);
 
 const desk = once.of(async () => new (await program.module()).Desk()).get;
 // The room moved (the window, the open panel): the chrome is drawn again, as the panel reads it.
-const host = tiles.install(byId("view"), desk, () => paint(chrome.of(app.now(), seen())));
+const host = tiles.install(byId("view"), byId("layers"), desk, () => paint(chrome.of(app.now(), seen())));
 
 const paint = chrome.painter({
   nav: (now, was) => nav.paint(byId("tabbar"), now, was, app.dispatch),
@@ -100,7 +100,7 @@ async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean,
   const route = app.route(a);
   // The box's fold, which carries what it rendered, is asked for beside a page's module, not after it (once per tab).
   if (pages.folds[route.type] === "Shown") void ensureFold().catch(() => {});
-  const made = await host.go(route, fresh, again);
+  const made = await host.go(app.address(a), fresh, again);
   paint(chrome.of(app.now(), seen()));
   // No page drawn anew: the pages on screen took the move on themselves.
   if (turn !== latest || made.length === 0) return;
@@ -235,7 +235,8 @@ function switched(): void {
   askWhoAndWhere();
 }
 
-const seen = (): chrome.Seen => ({ fold: store.state(), excluded: readings.left(), theme: theme(), room: host.room() });
+// Before the tiles are first drawn, the bar lights the address's own page.
+const seen = (): chrome.Seen => ({ fold: store.state(), excluded: readings.left(), theme: theme(), room: host.room(), workspace: host.workspace() ?? app.route(app.now()) });
 
 let drawn: app.App | null = null;
 
@@ -255,7 +256,7 @@ function draw(a: app.App): void {
   if (was === null) {
     go(a, true, false);
     idle(() => void time.date(a.zone, time.now()));
-  } else if (moved || hrefOf(app.route(was)) !== hrefOf(app.route(a)))
+  } else if (moved || hrefOfAddress(app.address(was)) !== hrefOfAddress(app.address(a)))
     go(a, moved, true, !moved && a.again);
   // The served chains land after the first paint, and the list's title is drawn from them, wherever the list is drawn.
   else if (host.drawn().some(pages.lists) && listTitle(was.chain, was.served) !== listTitle(a.chain, a.served)) go(a, true, false, true);
@@ -290,7 +291,7 @@ sweep.run(sweep.local, ui.tab);
 setPaletteOpener(openPalette);
 // The first route may pin another chain than the remembered one the replica was loaded with.
 const loaded = app.now();
-app.dispatch({ type: "Replaced", route: address.install() });
+app.dispatch({ type: "Replaced", to: address.install() });
 address.settle();
 if (app.now().chain !== loaded.chain) forgetChainReplica();
 // Before the first route, so the first paint is the last fold seen, in the right colours.
