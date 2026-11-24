@@ -649,7 +649,8 @@ app.scene("at 960 by 900, a conversation opened from the inbox stands beside it 
 app.scene("on a phone, after an open in place the crumb before is a link to its page, not Back to the page replaced", async () => {
   await openAgents(412);
   await app.page.click(".tile .todoview .sourcelink");
-  await app.page.waitFor(`location.hash.startsWith("#/mail/e2e-message-hash") && document.querySelector(".tile .todoview") === null`, { timeout: 20000 });
+  // The message's page is drawn in its tile: a tile is in the document a task before its page is.
+  await app.page.waitFor(`location.hash.startsWith("#/mail/e2e-message-hash") && document.querySelector(".tile .todoview") === null && (document.querySelector("#view > .tile")?.firstElementChild ?? null) !== null`, { timeout: 20000 });
   // Another message, opened from the first: one kind, so it takes the first's place.
   await app.page.evaluate(`document.querySelector("#view > .tile").firstElementChild.dispatchEvent(new CustomEvent("suzatary:open", { bubbles: true, cancelable: true, detail: "#/mail/e2e-other-hash" }))`);
   await app.page.waitFor(`location.hash.startsWith("#/mail/e2e-other-hash")`, { timeout: 20000 });
