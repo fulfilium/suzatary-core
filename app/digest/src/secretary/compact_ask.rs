@@ -1,5 +1,5 @@
-//! What the compactor is asked: the log as it stands and one node's children, and every answer
-//! it gave that did not fit.
+//! What the compactor is asked: the log as it stands and one node's children, and, after an
+//! answer that did not fit, one note on the answers so far.
 //!
 //! The log hides the words of every tainted part, and for a node of nothing but the owner's words
 //! every other part too, so a node's label is true of what the compactor read.
@@ -43,15 +43,11 @@ impl Versioned for Asking {
 
     fn parts(beside: Beside) -> Vec<String> {
         // What the rule does on a fixed probe, not a list of what it reads.
-        let question = Ask::new(vec!["log".to_owned()], vec!["span".to_owned()])
-            .tried(
-                "answer".to_owned(),
-                Unfit::Long {
-                    bytes: 1,
-                    cut: "cut".to_owned(),
-                },
-            )
-            .tried("answer".to_owned(), Unfit::NotALine);
+        let question = || Ask::new(vec!["log".to_owned()], vec!["span".to_owned()]);
+        let too_long = Unfit::Long {
+            bytes: 1,
+            cut: "cut".to_owned(),
+        };
         let log: Vec<String> = probe()
             .into_iter()
             .filter_map(|(label, words)| {
@@ -60,8 +56,9 @@ impl Versioned for Asking {
             .map(|body| body.text(2))
             .collect();
         let cut = digest_view::fit(log.clone(), PROBE_CUT, Keep::Earliest);
-        [PROMPT.to_owned(), question.text()]
+        [PROMPT.to_owned(), question().text()]
             .into_iter()
+            .chain([too_long, Unfit::NotALine].map(|unfit| question().tried(unfit).text()))
             .chain(log)
             .chain(cut)
             .chain([VIEW_BYTES, NODE_BYTES, LINE_BYTES].map(|bytes| bytes.to_string()))
@@ -171,14 +168,8 @@ impl Beside {
 pub struct Ask {
     log: Vec<String>,
     span: Vec<String>,
-    tries: Vec<Try>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Try {
-    /// What was said, its spaces joined.
-    pub answer: String,
-    pub unfit: Unfit,
+    /// How each earlier answer did not fit, in order.
+    tries: Vec<Unfit>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -208,18 +199,20 @@ impl Ask {
     }
 
     #[must_use]
-    pub fn tries(&self) -> &[Try] {
-        &self.tries
+    pub fn last(&self) -> Option<&Unfit> {
+        self.tries.last()
     }
 
     #[must_use]
-    pub fn tried(mut self, answer: String, unfit: Unfit) -> Self {
-        self.tries.push(Try { answer, unfit });
+    pub fn tried(mut self, unfit: Unfit) -> Self {
+        self.tries.push(unfit);
         self
     }
 
     /// What the compactor reads after [`PROMPT`]. The log comes first and changes least, so it is
-    /// the prefix a model's cache can keep.
+    /// the prefix a model's cache can keep. A retry adds one note: each earlier answer's size and
+    /// the last one cut at the limit, never an earlier answer's words, so each retry's question
+    /// is a few bytes longer than the last and no two calls of one attempt record one `Asked`.
     #[must_use]
     pub fn text(&self) -> String {
         let mut text = format!(
@@ -227,21 +220,29 @@ impl Ask {
             self.log.join("\n"),
             self.span.join("\n")
         );
-        for tried in &self.tries {
-            let why = match &tried.unfit {
-                Unfit::Long { bytes, cut } => format!(
-                    "That line is {bytes} bytes, and a line holds at most {NODE_BYTES}. Cut at \
-                     the limit, it reads:\n<cut>\n{cut}\n</cut>"
-                ),
-                Unfit::NotALine => "That is not one line of words.".to_owned(),
-            };
-            let _ = write!(
-                text,
-                "\nAn earlier answer was:\n<answer>\n{}\n</answer>\n{why}\nSay the whole span \
-                 again in one line of at most {NODE_BYTES} bytes.\n",
-                tried.answer
-            );
-        }
+        let Some(last) = self.tries.last() else {
+            return text;
+        };
+        let sizes: Vec<String> = self
+            .tries
+            .iter()
+            .map(|unfit| match unfit {
+                Unfit::Long { bytes, .. } => format!("{bytes} bytes"),
+                Unfit::NotALine => "not one line of words".to_owned(),
+            })
+            .collect();
+        let cut = match last {
+            Unfit::Long { cut, .. } => {
+                format!(" The last, cut at the limit, read:\n<cut>\n{cut}\n</cut>\n")
+            }
+            Unfit::NotALine => "\n".to_owned(),
+        };
+        let _ = write!(
+            text,
+            "\nYour answers so far were: {}.{cut}Write one line for the whole span, of at most \
+             {NODE_BYTES} bytes.\n",
+            sizes.join("; ")
+        );
         text
     }
 
@@ -291,4 +292,20 @@ fn log(
         .map(|shown| shown.body.text(shown.part.span.len()))
         .collect();
     digest_view::fit(shown, VIEW_BYTES, Keep::Earliest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_prompts_ruler_is_a_line_s_limit_and_its_limit_is_named() {
+        let ruler = PROMPT
+            .split_once("<ruler>\n")
+            .and_then(|(_, rest)| rest.split_once("\n</ruler>"))
+            .map(|(ruler, _)| ruler)
+            .expect("a ruler");
+        assert_eq!(ruler.len(), NODE_BYTES);
+        assert!(PROMPT.contains(&format!("at most {NODE_BYTES} bytes")));
+    }
 }

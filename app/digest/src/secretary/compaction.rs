@@ -6,8 +6,10 @@
 //! Every step refuses while a store's read left anything out.
 
 use std::collections::BTreeSet;
+use std::ops::Range;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use prodrome_core::digest::Node;
 use prodrome_core::event::{Envelope, Hash};
 use prodrome_core::fpl::instant_of;
 use prodrome_core::literal::Datetime;
@@ -22,6 +24,7 @@ use crate::secretary::digest::{self, Digest};
 use crate::secretary::digest_event::{self, DigestEvent};
 use crate::secretary::digest_line::NODE_BYTES;
 use crate::secretary::digest_spent::Spent;
+use crate::secretary::digest_view::VIEW_BYTES;
 use crate::secretary::digests::{Digests, ReadDigests, compactor};
 use crate::secretary::memories::Memories;
 use suzatary_base::capability::Clock;
@@ -123,6 +126,53 @@ impl Rung for &dyn Compact {
     }
 }
 
+/// Whether a node lies under the view a reader is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Reach {
+    /// Within a part of the view that is a summary or waits for one.
+    InView,
+    Elsewhere,
+}
+
+/// The spans of the view's parts under [`VIEW_BYTES`] that a summary stands for or that wait for
+/// one: the nodes within them are those whose summaries a reader's view rests on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InView(Vec<Range<usize>>);
+
+impl InView {
+    #[must_use]
+    pub fn of(digest: &Digest) -> Self {
+        let Some(view) = digest.view(u64::try_from(VIEW_BYTES).unwrap_or(u64::MAX)) else {
+            return Self(Vec::new());
+        };
+        let waiting = view
+            .waiting
+            .iter()
+            .filter_map(|name| digest.node(name).map(Node::span));
+        Self(
+            view.parts
+                .into_iter()
+                .map(|part| part.span)
+                .filter(|span| span.len() > 1)
+                .chain(waiting)
+                .collect(),
+        )
+    }
+
+    #[must_use]
+    pub fn reach(&self, span: &Range<usize>) -> Reach {
+        if self
+            .0
+            .iter()
+            .any(|shown| shown.start <= span.start && span.end <= shown.end)
+        {
+            Reach::InView
+        } else {
+            Reach::Elsewhere
+        }
+    }
+}
+
 /// Compact with the models of `ladder`, in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Compaction<R = ModelName> {
@@ -139,26 +189,27 @@ impl<R: Rung> Compaction<R> {
             .find(|rung| !digest.found_unfit(node, rung.model()))
     }
 
-    /// Every node owed a summary, most pending first, with the model it is owed to.
-    /// The nodes labelled the owner's alone come first, since a stale one of those is the summary
-    /// a reader could take for the owner's words; each part keeps `pending`'s order.
+    /// Every node owed a summary, with the model it is owed to: first those under the view a
+    /// reader is shown (their summaries are what a reader reads, or will once written), then the
+    /// rest. Within each, the nodes labelled the owner's alone come first, since a stale one of
+    /// those is shown to no reader until it is asked again; each part keeps `pending`'s order.
     #[must_use]
     pub fn owed(&self, digest: &Digest) -> Vec<(Hash, &R)> {
-        let owners = |node: &Hash| {
-            digest
-                .node(node)
-                .is_some_and(|node| node.measure().is_owners())
-        };
-        let (mut first, rest): (Vec<_>, Vec<_>) = digest
+        let view = InView::of(digest);
+        let mut owed: Vec<(Hash, &R)> = digest
             .pending()
             .into_iter()
             .filter_map(|node| {
                 let rung = self.rung(digest, &node)?;
                 Some((node, rung))
             })
-            .partition(|(node, _)| owners(node));
-        first.extend(rest);
-        first
+            .collect();
+        owed.sort_by_cached_key(|(node, _)| {
+            digest
+                .node(node)
+                .map(|node| (view.reach(&node.span()), !node.measure().is_owners()))
+        });
+        owed
     }
 
     #[must_use]

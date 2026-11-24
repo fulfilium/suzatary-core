@@ -1297,6 +1297,14 @@ enum DigestAction {
     /// an older rule or over a child's older summary) or unsummarized, by group and level.
     /// Prints counts and no word.
     Census,
+    /// Run the compactor's prompt on generated spans with the first model of
+    /// `[secretary] compactors`, and print each rule with how many runs kept it. Sends no
+    /// conversation; its calls are not counted in the digest's budget.
+    Eval {
+        /// How many times each span is asked.
+        #[arg(long, default_value = "3")]
+        runs: std::num::NonZeroU32,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -1476,6 +1484,18 @@ fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
         Action::Digest {
             action: DigestAction::Census,
         } => census(instance, &mut std::io::stdout()),
+        Action::Digest {
+            action: DigestAction::Eval { runs },
+        } => {
+            use suzatary_digest::secretary::compact_eval;
+            let model = crate::interpreters::CompactorModel::new(
+                instance,
+                instance.secretary.compactors.first().clone(),
+            );
+            let rows = compact_eval::run(&model, compact_eval::CASES, *runs);
+            print!("{}", compact_eval::table(&rows));
+            Ok(())
+        }
         Action::Readings => readings(instance, &mut std::io::stdout()),
         Action::PruneLines { large, apply } => {
             prune_lines(instance, *large, *apply, &mut std::io::stdout())

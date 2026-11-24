@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use prodrome_core::digest::Node;
 use prodrome_core::event::Hash;
 
-use crate::secretary::compaction::{Compaction, Rung, short};
+use crate::secretary::compaction::{Compaction, InView, Reach, Rung, short};
 use crate::secretary::digest::{Digest, Standing};
 use crate::secretary::digest_label::Label;
 
@@ -50,24 +50,30 @@ pub enum State {
     Unfit,
 }
 
-/// Every inner node, counted by group, level (a node over lines alone is level 1) and state.
+/// Every inner node, counted by group, level (a node over lines alone is level 1) and state, and
+/// those under the view a reader is shown by state, the part the compactor asks again first.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Census {
     counts: BTreeMap<(Group, usize, State), usize>,
+    in_view: BTreeMap<State, usize>,
     unfit: Vec<Hash>,
 }
 
 impl Census {
     #[must_use]
     pub fn of<R: Rung>(digest: &Digest, rule: &Compaction<R>) -> Self {
-        fn walk(digest: &Digest, unfit: &[Hash], node: &Node<Label>, census: &mut Census) -> usize {
+        fn walk(
+            (digest, unfit, view): (&Digest, &[Hash], &InView),
+            node: &Node<Label>,
+            census: &mut Census,
+        ) -> usize {
             if node.is_leaf() {
                 return 0;
             }
             let level = 1 + node
                 .children()
                 .iter()
-                .map(|child| walk(digest, unfit, child, census))
+                .map(|child| walk((digest, unfit, view), child, census))
                 .max()
                 .unwrap_or(0);
             let state = match digest.standing(node.name()) {
@@ -80,6 +86,10 @@ impl Census {
                 .counts
                 .entry((Group::of(node.measure()), level, state))
                 .or_default() += 1;
+            match view.reach(&node.span()) {
+                Reach::InView => *census.in_view.entry(state).or_default() += 1,
+                Reach::Elsewhere => {}
+            }
             level
         }
         let mut census = Census {
@@ -88,7 +98,11 @@ impl Census {
         };
         if let Some(tree) = digest.tree() {
             let unfit = census.unfit.clone();
-            walk(digest, &unfit, tree.root(), &mut census);
+            walk(
+                (digest, &unfit, &InView::of(digest)),
+                tree.root(),
+                &mut census,
+            );
         }
         census
     }
@@ -119,6 +133,15 @@ impl std::fmt::Display for Census {
         };
         write!(f, "all nodes: ")?;
         line(f, &|_, _| true)?;
+        let in_view = |state| self.in_view.get(&state).copied().unwrap_or(0);
+        writeln!(
+            f,
+            "under the view: {} current, {} stale, {} unsummarized, {} unfit",
+            in_view(State::Current),
+            in_view(State::Stale),
+            in_view(State::Unsummarized),
+            in_view(State::Unfit)
+        )?;
         let mut rows: Vec<(Group, usize)> = self
             .counts
             .keys()

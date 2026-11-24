@@ -1,13 +1,15 @@
-//! The size loop: ask, and while the answer is no line of at most `NODE_BYTES`, show the
-//! compactor its answer cut at the limit and ask again, at most [`TRIES`] times.
+//! The size loop: ask, and while the answer is no line of at most `NODE_BYTES`, tell the
+//! compactor how its answers did not fit and ask again, at most [`TRIES`] times.
 //!
-//! A summary is never an answer cut short and stored as though it had been said. Each call is
-//! recorded durably before it is made, so a call that then fails was still counted.
+//! A summary is never an answer cut short and stored as though it had been said: a line cut at
+//! its end can drop what settled or corrected what came before it. Each call is recorded
+//! durably before it is made, so a call that then fails was still counted.
 
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::{Ask, Unfit};
 use crate::secretary::digest_line::{Line, NODE_BYTES, NotALine};
 use suzatary_base::refusal::Refusal;
+use suzatary_conversations::secretary::model::ModelError;
 
 /// The most calls one attempt makes.
 pub const TRIES: u32 = 5;
@@ -17,34 +19,64 @@ pub enum Outcome {
     /// A line that fits.
     Fits { line: Line },
     Unfit {
-        /// The shortest answer's length, its spaces joined.
+        /// The shortest answer's length, its spaces joined; 0 when the model answered nothing.
         shortest: u32,
     },
 }
 
+/// What a failed call says about its node.
+enum Failed {
+    /// The question is longer than the model reads: every try of it fails the same way.
+    TheQuestion,
+    /// Anything else (an outage, a limit, a timeout, a credential, a stop): the node waits, and
+    /// nothing is written of it.
+    Delays(ModelError),
+}
+
+impl From<ModelError> for Failed {
+    fn from(error: ModelError) -> Self {
+        match error {
+            ModelError::TooLong(_) => Failed::TheQuestion,
+            ModelError::Unreachable(_)
+            | ModelError::Failed(_)
+            | ModelError::Refused(_)
+            | ModelError::TimedOut(_)
+            | ModelError::Limited(_)
+            | ModelError::Overloaded(_)
+            | ModelError::Lost(_)
+            | ModelError::Halted => Failed::Delays(error),
+        }
+    }
+}
+
 /// One attempt at `ask`, each call of [`Ask::bytes`] first handed to `before`. An answer's runs
-/// of space, line breaks included, are joined into one space before it is read as a line.
+/// of space, line breaks included, are joined into one space before it is read as a line. A
+/// question longer than the model reads is unfit for that model, so the ladder's next is asked.
 ///
 /// # Errors
-/// `before`'s refusal, which makes no call; [`Refusal::unprocessable`] for a call that failed,
-/// which `before` has already counted.
+/// `before`'s refusal, which makes no call; [`Refusal::unprocessable`] for a call that failed
+/// for any other cause, which `before` has already counted and which writes nothing.
 pub fn compact(
     compactor: &dyn Compact,
     ask: Ask,
     before: &mut dyn FnMut(u64) -> Result<(), Refusal>,
 ) -> Result<Outcome, Refusal> {
     let mut ask = ask;
-    let mut shortest = usize::MAX;
+    let mut shortest = None::<usize>;
+    let unfit = |shortest: Option<usize>| Outcome::Unfit {
+        shortest: u32::try_from(shortest.unwrap_or(0)).unwrap_or(u32::MAX),
+    };
     for _ in 0..TRIES {
         before(ask.bytes())?;
-        let words = compactor
-            .compact(&ask)
-            .map_err(|failed| Refusal::unprocessable(format!("the compactor: {failed}")))?
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        shortest = shortest.min(words.len());
-        let unfit = match Line::new(&words) {
+        let words = match compactor.compact(&ask).map_err(Failed::from) {
+            Ok(words) => words.split_whitespace().collect::<Vec<_>>().join(" "),
+            Err(Failed::TheQuestion) => return Ok(unfit(shortest)),
+            Err(Failed::Delays(failed)) => {
+                return Err(Refusal::unprocessable(format!("the compactor: {failed}")));
+            }
+        };
+        shortest = Some(shortest.map_or(words.len(), |was| was.min(words.len())));
+        let why = match Line::new(&words) {
             Ok(line) => return Ok(Outcome::Fits { line }),
             Err(NotALine::TooLong(_)) => Unfit::Long {
                 bytes: words.len(),
@@ -54,11 +86,9 @@ pub fn compact(
                 Unfit::NotALine
             }
         };
-        ask = ask.tried(words, unfit);
+        ask = ask.tried(why);
     }
-    Ok(Outcome::Unfit {
-        shortest: u32::try_from(shortest).unwrap_or(u32::MAX),
-    })
+    Ok(unfit(shortest))
 }
 
 #[cfg(test)]
@@ -67,7 +97,6 @@ mod tests {
 
     use super::*;
     use crate::model_name::ModelName;
-    use suzatary_conversations::secretary::model::ModelError;
 
     /// Answers of the given lengths in turn, and keeps every question.
     struct Lengths {
@@ -126,13 +155,19 @@ mod tests {
         assert_eq!(line.as_str().len(), 300);
         assert_eq!(sent.len(), 3);
         let asked = compactor.asked.lock().expect("held");
-        assert_eq!(asked[2].tries().len(), 2);
+        assert_eq!(asked[0].last(), None);
         assert_eq!(
-            asked[1].tries()[0].unfit,
-            Unfit::Long {
-                bytes: 600,
+            asked[2].last(),
+            Some(&Unfit::Long {
+                bytes: 900,
                 cut: "w".repeat(NODE_BYTES)
-            }
+            }),
+            "a retry shows the last answer cut"
+        );
+        assert_eq!(
+            asked[2].text().len() - asked[1].text().len(),
+            "; 900 bytes".len(),
+            "and grows by the size of each earlier one alone"
         );
         let asked: Vec<u64> = asked.iter().map(Ask::bytes).collect();
         assert_eq!(
@@ -164,5 +199,41 @@ mod tests {
             Err(Refusal::conflict("held".to_owned()))
         });
         assert!(refused.is_err(), "a refused call is not made");
+    }
+
+    /// Fails every call with the error it is made with.
+    struct Failing(ModelName, fn() -> ModelError);
+
+    impl Compact for Failing {
+        fn model(&self) -> &ModelName {
+            &self.0
+        }
+
+        fn compact(&self, _: &Ask) -> Result<String, ModelError> {
+            Err((self.1)())
+        }
+    }
+
+    #[test]
+    fn a_question_too_long_for_the_model_is_unfit_and_an_outage_only_delays() {
+        let name = || ModelName::parse("failing").expect("a model");
+        let mut calls = 0;
+        let too_long = Failing(name(), || ModelError::TooLong("over".to_owned()));
+        let outcome = compact(&too_long, ask(), &mut |_| {
+            calls += 1;
+            Ok(())
+        });
+        assert_eq!(outcome, Ok(Outcome::Unfit { shortest: 0 }));
+        assert_eq!(calls, 1, "the same question is not asked again");
+        let outages: [fn() -> ModelError; 4] = [
+            || ModelError::Unreachable("down".to_owned()),
+            || ModelError::Overloaded("busy".to_owned()),
+            || ModelError::TimedOut(std::time::Duration::from_secs(1)),
+            || ModelError::Failed("exit 1".to_owned()),
+        ];
+        for outage in outages {
+            let outcome = compact(&Failing(name(), outage), ask(), &mut |_| Ok(()));
+            assert!(outcome.is_err(), "{outcome:?} writes nothing");
+        }
     }
 }

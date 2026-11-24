@@ -135,13 +135,23 @@ impl Box {
     /// Summarise every pending node, round after round, each in words no line holds; answers
     /// the words written.
     fn summarise_all(&self) -> Vec<String> {
+        let written = self.summarise_rounds(64);
+        assert!(
+            self.read().pending().is_empty(),
+            "the pending nodes never settled: a summary written was not read back"
+        );
+        written
+    }
+
+    /// Summarise the nodes pending at each of `rounds` rounds, stopping when none is.
+    fn summarise_rounds(&self, rounds: usize) -> Vec<String> {
         let mut written = Vec::new();
-        for _ in 0..64 {
-            let pending = self.read().pending();
-            if pending.is_empty() {
-                return written;
-            }
+        for _ in 0..rounds {
             let read = self.read();
+            let pending = read.pending();
+            if pending.is_empty() {
+                break;
+            }
             let held = self.memories().hold().expect("held");
             for node in pending {
                 let over = read.over(&node).expect("children read");
@@ -157,7 +167,7 @@ impl Box {
                 written.push(words);
             }
         }
-        panic!("the pending nodes never settled: a summary written was not read back");
+        written
     }
 
     /// `act` done to the stores; `said` counts the conversations said so far.
@@ -1191,6 +1201,47 @@ proptest! {
                 prop_assert!(!text.contains("INJECTED"), "a clean question read a tainted word");
             }
         }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 16, ..ProptestConfig::default() })]
+
+    /// The compactor's order: every node owed under the view a reader is shown comes before every
+    /// node owed elsewhere, the owner's alone first within each, and the nodes owed are the
+    /// pending ones, each once. The long lines put the log over the view's budget, so the view
+    /// coarsens and both kinds of node are drawn.
+    #[test]
+    fn the_nodes_under_the_view_are_owed_first(
+        kinds in proptest::collection::vec(any::<u8>(), 20..90),
+        long in 0usize..80,
+        rounds in 0usize..4,
+    ) {
+        use suzatary_digest::secretary::compaction::{Compaction, InView};
+        let the = Box::default();
+        the.write_lines("a", conversation(&kinds, false));
+        the.write(
+            "b",
+            (0..long).map(|k| Turn::Person {
+                text: format!("b {k} {}", "word ".repeat(800)),
+                references: Vec::new(),
+                attachments: Vec::new(),
+            }),
+        );
+        the.summarise_rounds(rounds);
+        let read = the.read();
+        let rule = Compaction { ladder: named(model()) };
+        let owed: Vec<Hash> = rule.owed(&read).into_iter().map(|(node, _)| node).collect();
+        let view = InView::of(&read);
+        let key = |name: &Hash| {
+            let node = read.node(name).expect("a node of the tree");
+            (view.reach(&node.span()), !node.measure().is_owners())
+        };
+        prop_assert!(owed.windows(2).all(|pair| key(&pair[0]) <= key(&pair[1])));
+        let (mut sorted, mut pending) = (owed.clone(), read.pending());
+        sorted.sort();
+        pending.sort();
+        prop_assert_eq!(sorted, pending);
     }
 }
 
@@ -2834,8 +2885,8 @@ mod recompacting {
         }
     }
 
-    const PINNED_OWNERS: &str = "773eaab228f5f5b1c3dc163194f9d5865a3c2cc6bbfb4790dfc4ff7d3184c03a";
-    const PINNED_CLEAN: &str = "b8a7a013284e8568d344cc6b6dce8bcaf28ce7161dd65b8627f4628d0b960d01";
+    const PINNED_OWNERS: &str = "515b48a26debd7ab049fa88676fa8181709c5861719ac6f2b79873cd35da40b5";
+    const PINNED_CLEAN: &str = "ef0f009c928fa65f35a9739a34d5b69c7484c4208e29e505ad72e482195273a1";
     const PINNED_QUESTIONS: &str =
         "f93873a4fef96c096732f2341b017246131420ee667472d445c4eb86be7c40d0";
 }
