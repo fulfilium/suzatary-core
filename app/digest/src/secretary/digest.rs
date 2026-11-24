@@ -31,6 +31,7 @@ use suzatary_conversations::secretary::store::Entry;
 use suzatary_conversations::secretary::taint::Taint;
 use suzatary_lines::secretary::held_lines::Gathered;
 use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::sequence::Stamp;
 use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::salted_text::TextName;
 use suzatary_memory::secretary::texts::{Liveness, Naming};
@@ -147,7 +148,8 @@ impl Shape {
         })
     }
 
-    /// The tree over `lines`, each conversation's in its causal order.
+    /// The tree over `lines`: each line after the lines it rests on, and lines that rest on
+    /// nothing of each other by their [`Stamp`].
     pub fn of(lines: &[Placed<'_>], opened: &BTreeMap<Hash, Entry>) -> Result<Self, Cycle> {
         let taints = taints(lines, opened);
         let (carries, leaf_of) = leaves_of(lines);
@@ -532,7 +534,10 @@ fn taints<'l>(
         .collect()
 }
 
-/// The lines in the crate's one causal order ([`topo::linear`]) over the lines they carry.
+/// The lines in [`topo::linear`]'s order over their [`Stamp`]s: each after every line it rests
+/// on, and lines that rest on nothing of each other by when they were written, then by the name
+/// they carry. A line written over the heads of its conversation, at or after every line it does
+/// not rest on, lands last.
 fn line_order<'l>(
     lines: &[Placed<'l>],
     carries: &BTreeMap<&'l Hash, &'l Hash>,
@@ -543,10 +548,23 @@ fn line_order<'l>(
         .filter(|(_, line, _)| resealing(line))
         .map(|&(name, _, parents)| (name, parents))
         .collect();
-    let parents: BTreeMap<&Hash, Vec<&Hash>> = lines
+    let stamps: BTreeMap<&Hash, Stamp<Datetime, &Hash>> = lines
         .iter()
-        .filter_map(|&(name, _, parents)| Some((carries.get(name).copied()?, parents)))
-        .map(|(carried, parents)| {
+        .filter_map(|&(name, line, _)| {
+            let identity = carries.get(name)?;
+            Some((
+                name,
+                Stamp {
+                    at: line.at(),
+                    name: *identity,
+                },
+            ))
+        })
+        .collect();
+    let parents: BTreeMap<&Stamp<Datetime, &Hash>, Vec<&Stamp<Datetime, &Hash>>> = lines
+        .iter()
+        .filter_map(|&(name, _, parents)| Some((stamps.get(name)?, parents)))
+        .map(|(stamp, parents)| {
             let mut pending = parents.to_vec();
             let mut seen = BTreeSet::new();
             let mut found = Vec::new();
@@ -554,25 +572,23 @@ fn line_order<'l>(
                 if !seen.insert(parent.clone()) {
                     continue;
                 }
-                match (carries.get(&parent), reseals.get(&parent)) {
-                    (Some(line), _) => found.push(*line),
+                match (stamps.get(&parent), reseals.get(&parent)) {
+                    (Some(line), _) => found.push(line),
                     (None, Some(beneath)) => pending.extend(beneath.iter().cloned()),
                     (None, None) => {}
                 }
             }
             found.sort();
             found.dedup();
-            (carried, found)
+            (stamp, found)
         })
         .collect();
-    let line: BTreeMap<&Hash, &Hash> = carries
-        .iter()
-        .map(|(&name, &carried)| (carried, name))
-        .collect();
-    let order = topo::linear(&parents).map_err(|stuck| Cycle(stuck.clone()))?;
+    let line: BTreeMap<&Stamp<Datetime, &Hash>, &Hash> =
+        stamps.iter().map(|(&name, stamp)| (stamp, name)).collect();
+    let order = topo::linear(&parents).map_err(|stuck| Cycle(stuck.name.clone()))?;
     Ok(order
         .into_iter()
-        .filter_map(|carried| line.get(carried).copied())
+        .filter_map(|stamp| line.get(stamp).copied())
         .collect())
 }
 
@@ -681,6 +697,18 @@ impl Digest {
             return None;
         };
         Some((words.as_ref()?, *self.standings.get(node)?))
+    }
+
+    /// How many summaries name a node the tree does not hold: written over an order or lines
+    /// since moved, read as nothing.
+    #[must_use]
+    pub fn orphaned(&self) -> usize {
+        self.said
+            .iter()
+            .filter(|(node, _)| self.node(node).is_none())
+            .flat_map(|(_, candidates)| candidates)
+            .filter(|candidate| matches!(candidate.said, Written::Summary(_)))
+            .count()
     }
 
     /// What a summary of `node` is written over now, in the log's order. `None` for a node the

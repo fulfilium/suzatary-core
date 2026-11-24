@@ -79,7 +79,7 @@ impl<S: Shows> ShownRecord<S> {
         told::zoom(&self.reading, handle, S::shows)
     }
 
-    /// The view within `budget` bytes, one line per part, oldest first, before it is fitted.
+    /// The view within `budget` bytes, one line per part in the log's order, before it is fitted.
     #[must_use]
     pub fn lines(&self, budget: usize) -> Vec<String> {
         told::record_lines(&self.reading, budget, None)

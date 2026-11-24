@@ -18,7 +18,7 @@ pub struct Node<'a, N, T, W> {
 /// nodes it rests on, ascending.
 pub type Order = Vec<(usize, Vec<usize>)>;
 
-/// The nodes in causal order, ties among the nodes ready broken by the instant and then the name.
+/// The nodes in causal order, ties among the nodes ready broken by their [`Stamp`].
 /// A function of the set, whatever order it is given in.
 #[must_use]
 pub fn causal<N: Ord, T: Ord + Copy, W>(nodes: &[Node<'_, N, T, W>]) -> Order {
@@ -91,7 +91,26 @@ fn parents<N: Ord, T, W>(nodes: &[Node<'_, N, T, W>]) -> Vec<Vec<usize>> {
         .collect()
 }
 
-/// The positions in causal order, the least ready node by `(at, name)` next.
+/// The key the order breaks ties by among nodes that rest on nothing of each other: the writer's
+/// instant, then the name. Every replica computes it from the node alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Stamp<T, N> {
+    pub at: T,
+    pub name: N,
+}
+
+impl<'a, T: Copy, N> Stamp<T, &'a N> {
+    #[must_use]
+    pub fn of<W>(node: &Node<'a, N, T, W>) -> Self {
+        Stamp {
+            at: node.at,
+            name: node.name,
+        }
+    }
+}
+
+/// The positions in causal order, the least ready node by its [`Stamp`] next (then its
+/// position, for two nodes of one name).
 fn kahn<N: Ord, T: Ord + Copy, W>(
     nodes: &[Node<'_, N, T, W>],
     parents: &[Vec<usize>],
@@ -103,13 +122,13 @@ fn kahn<N: Ord, T: Ord + Copy, W>(
             children[one].push(later);
         }
     }
-    let key = |at: usize| Reverse((nodes[at].at, nodes[at].name, at));
+    let key = |at: usize| Reverse((Stamp::of(&nodes[at]), at));
     let mut ready: BinaryHeap<_> = (0..nodes.len())
         .filter(|&at| waiting[at] == 0)
         .map(key)
         .collect();
     let mut order = Vec::with_capacity(nodes.len());
-    while let Some(Reverse((_, _, at))) = ready.pop() {
+    while let Some(Reverse((_, at))) = ready.pop() {
         for &next in &children[at] {
             waiting[next] -= 1;
             if waiting[next] == 0 {

@@ -52,8 +52,8 @@ impl Default for Owners {
 
 /// The box's stores, in memory.
 #[derive(Default)]
-struct Box {
-    lines: suzatary_stores::stores::conversations::InMemory,
+pub(crate) struct Box {
+    pub(crate) lines: suzatary_stores::stores::conversations::InMemory,
     owners: Owners,
     history: InMemory<DigestEvent>,
     texts: InMemoryDoc<TextName, Text<Line>>,
@@ -64,7 +64,7 @@ struct Box {
 }
 
 impl Box {
-    fn digests(&self) -> Digests<'_> {
+    pub(crate) fn digests(&self) -> Digests<'_> {
         Digests {
             history: &self.history,
             texts: &self.texts,
@@ -74,7 +74,7 @@ impl Box {
         }
     }
 
-    fn memories(&self) -> Memories<'_> {
+    pub(crate) fn memories(&self) -> Memories<'_> {
         Memories {
             history: &self.facts,
             texts: &self.fact_texts,
@@ -84,7 +84,7 @@ impl Box {
         }
     }
 
-    fn read(&self) -> Digest {
+    pub(crate) fn read(&self) -> Digest {
         self.digests().reads().read().expect("the digest reads")
     }
 
@@ -134,7 +134,7 @@ impl Box {
 
     /// Summarise every pending node, round after round, each in words no line holds; answers
     /// the words written.
-    fn summarise_all(&self) -> Vec<String> {
+    pub(crate) fn summarise_all(&self) -> Vec<String> {
         let written = self.summarise_rounds(64);
         assert!(
             self.read().pending().is_empty(),
@@ -301,7 +301,7 @@ impl suzatary_base::capability::Clock for At {
     }
 }
 
-fn at(minute: usize) -> Datetime {
+pub(crate) fn at(minute: usize) -> Datetime {
     let minute = u32::try_from(minute).expect("few minutes");
     Datetime::new(2026, 10, 6, 9 + minute / 60, minute % 60, 0, 0).expect("an instant")
 }
@@ -310,7 +310,7 @@ fn ada() -> Actor {
     Actor::new("ada").expect("an actor")
 }
 
-fn model() -> ModelName {
+pub(crate) fn model() -> ModelName {
     ModelName::parse("a-model").expect("a model")
 }
 
@@ -342,8 +342,10 @@ proptest! {
     #![proptest_config(ProptestConfig { cases: 24, ..ProptestConfig::default() })]
 
     /// Law: a shape is a function of the set of lines, whatever order they are handed over in,
-    /// so the box's fold, which hands each conversation's lines over by name, and the store's
-    /// order build one tree with one taint per line.
+    /// so the box's fold, which hands each conversation's lines over by name, the store's order
+    /// and two shuffles of it build one tree with one taint per line. The tie between lines that
+    /// rest on nothing of each other is their instant and name, both in the objects, so two
+    /// replicas holding the same objects order them alike.
     #[test]
     fn the_shape_is_a_function_of_the_set_of_lines(
         acts in proptest::collection::vec(prop_oneof![
@@ -377,11 +379,13 @@ proptest! {
         };
         let stored = shape(&placed);
         let mut seed = order;
-        for at in (1..placed.len()).rev() {
-            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
-            placed.swap(at, usize::try_from(seed >> 33).expect("a word") % (at + 1));
+        for _ in 0..2 {
+            for at in (1..placed.len()).rev() {
+                seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+                placed.swap(at, usize::try_from(seed >> 33).expect("a word") % (at + 1));
+            }
+            prop_assert_eq!(&shape(&placed), &stored);
         }
-        prop_assert_eq!(shape(&placed), stored);
     }
 }
 
@@ -1039,7 +1043,7 @@ fn ladder<'c>(
 }
 
 /// One model alone, by name.
-fn named(model: ModelName) -> nonempty::NonEmpty<ModelName> {
+pub(crate) fn named(model: ModelName) -> nonempty::NonEmpty<ModelName> {
     nonempty::NonEmpty::new(model, Vec::new())
 }
 
@@ -2390,7 +2394,7 @@ fn fixture_rules() -> suzatary_memory::secretary::scrubbed_under::ScrubbedUnder 
 }
 
 /// `entry` as line `held` of `conversation`, written as `ada` with its words locked.
-fn write_line(
+pub(crate) fn write_line(
     lines: &suzatary_stores::stores::conversations::InMemory,
     conversation: ConversationId,
     held: u32,

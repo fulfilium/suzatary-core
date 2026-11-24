@@ -16,6 +16,8 @@ mod chain_set;
 mod conversational_rules;
 #[path = "digest.rs"]
 mod digest;
+#[path = "digest_order.rs"]
+mod digest_order;
 #[path = "held_lines_fold.rs"]
 mod held_lines_fold;
 #[path = "holder.rs"]

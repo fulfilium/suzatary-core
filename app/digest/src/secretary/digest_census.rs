@@ -57,6 +57,8 @@ pub struct Census {
     counts: BTreeMap<(Group, usize, State), usize>,
     in_view: BTreeMap<State, usize>,
     unfit: Vec<Hash>,
+    /// Summaries of nodes the tree no longer holds, counted in no other line.
+    orphaned: usize,
 }
 
 impl Census {
@@ -94,6 +96,7 @@ impl Census {
         }
         let mut census = Census {
             unfit: rule.unfit(digest),
+            orphaned: digest.orphaned(),
             ..Census::default()
         };
         if let Some(tree) = digest.tree() {
@@ -117,7 +120,7 @@ impl Census {
     }
 }
 
-/// A total line, then a line per group and level.
+/// A total line, the view's, the orphaned summaries', then a line per group and level.
 impl std::fmt::Display for Census {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let line = |f: &mut std::fmt::Formatter<'_>, keep: &dyn Fn(Group, usize) -> bool| {
@@ -141,6 +144,11 @@ impl std::fmt::Display for Census {
             in_view(State::Stale),
             in_view(State::Unsummarized),
             in_view(State::Unfit)
+        )?;
+        writeln!(
+            f,
+            "summaries of spans no longer in the tree: {}",
+            self.orphaned
         )?;
         let mut rows: Vec<(Group, usize)> = self
             .counts
