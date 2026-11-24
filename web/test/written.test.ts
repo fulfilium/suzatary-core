@@ -9,6 +9,8 @@ import written from "../src/prodrome/written"
 import http from "../src/wire/http"
 import storereads from "../src/wire/storereads"
 import ownlines from "../src/prodrome/ownlines"
+import signer from "../src/prodrome/signer"
+import { fakeIndexedDB } from "./fakeidb"
 
 type Fake = { readonly store: Written; readonly calls: string[] }
 
@@ -173,4 +175,87 @@ test("a line dated ahead is due again when the box's clock reaches its instant, 
     assert.deepEqual(due, { type: "At", ms: Date.parse("2026-11-20T10:10:00Z") + (ahead ?? 0) * 1000, exact: true }, `${ahead}`)
   }
   assert.deepEqual(written.due([line("2026-11-20T09:00:00Z")], 0, now), { type: "Never" })
+})
+
+// A store of objects on a device: each event appends a change named by its index, a frame written is kept whole, a change
+// is unsigned until a kept `Signed(<name>)` names it, and each signature the hand-over makes is recorded. A core prints a
+// signature as `Signed(<name>)`.
+const objects = (): { readonly store: Written & written.Appends; readonly kept: string[]; readonly signedLater: string[] } => {
+  const kept: string[] = []
+  const signedLater: string[] = []
+  const names = (literals: readonly string[]): string[] => literals.filter(l => !l.startsWith("Signed(")).map(l => l.slice(0, 64))
+  const store = {
+    append: (events: string) => JSON.stringify((JSON.parse(events) as string[]).map((e, k) => ({ hash: String(k + 1).repeat(64), literal: String(k + 1).repeat(64) + e }))),
+    writing: (literals: string) => new TextEncoder().encode(literals),
+    unsigned: () => JSON.stringify(names(kept).filter(n => !kept.includes(`Signed(${n})`) && !signedLater.includes(`Signed(${n})`))),
+    signed: (literal: string) => (signedLater.push(literal), { delta: new Uint8Array(), moved: "[]", free: () => {} }),
+    unsent: () => "[]",
+    since: () => "",
+    refusals: () => "[]",
+    waiting: () => "[]",
+  } as unknown as Written & written.Appends
+  return { store, kept, signedLater }
+}
+const printing = { signed: (object: string) => JSON.stringify({ hash: "9".repeat(64), text: `Signed(${object})` }) } as unknown as Core
+const entryOf = (store: Written) => (): written.Entry => ({ noun: "topic", store, exclusive: f => f(), stepped: async () => {}, post: storereads.post.bind(null, "topics"), signs: () => "Signs" })
+// The device's key signs its first `ok` signatures and refuses every one after.
+const signingOnly = (ok: number): (() => void) => {
+  const real = crypto.subtle.sign.bind(crypto.subtle)
+  let n = 0
+  Object.defineProperty(crypto.subtle, "sign", {
+    configurable: true,
+    value: (...a: Parameters<SubtleCrypto["sign"]>) => (n++ < ok ? real(...a) : Promise.reject(new Error("the key is gone"))),
+  })
+  return () => void Reflect.deleteProperty(crypto.subtle, "sign")
+}
+
+test("an own write keeps its changes with every signature made before a failing one, in one frame, and the hand-over signs the rest", async () => {
+  fakeIndexedDB()
+  assert.equal((await signer.renew()).type, "Held")
+  for (const ok of [0, 1, 2]) {
+    const { store, kept, signedLater } = objects()
+    const said: string[] = []
+    const writes = written.of(printing, entryOf(store), why => void said.push(why))
+    const restore = signingOnly(ok)
+    const signed = await writes.own("topics", store, ["Added(a)", "Added(b)"], async frame => void kept.push(...(JSON.parse(new TextDecoder().decode(frame)) as string[])))
+    restore()
+    const changes = ["1".repeat(64), "2".repeat(64)]
+    assert.equal(signed.type, ok < 2 ? "Partly" : "Signed", `${ok} signed`)
+    assert.deepEqual(kept, [...changes.map(c => c + (c[0] === "1" ? "Added(a)" : "Added(b)")), ...changes.slice(0, ok).map(c => `Signed(${c})`)], `${ok}: both changes and the signatures made, in one frame`)
+    await writes.handOver("topics")
+    assert.deepEqual(signedLater, changes.slice(ok).map(c => `Signed(${c})`), `${ok}: the hand-over signs what the write could not`)
+  }
+})
+
+test("an own write whose frame the device does not keep throws, and holds nothing", async () => {
+  fakeIndexedDB()
+  await signer.renew()
+  const { store } = objects()
+  const writes = written.of(printing, entryOf(store), () => {})
+  await assert.rejects(writes.own("topics", store, ["Added(a)"], async () => Promise.reject(new Error("the disk is full"))), /the disk is full/)
+})
+
+test("signing what the core holds never throws: a store or a key that throws at any step answers what was made before it", async () => {
+  fakeIndexedDB()
+  await signer.renew()
+  for (const at of ["unsigned", "signed", "sign"] as const) {
+    let made = 0
+    const store = {
+      unsigned: () => {
+        if (at === "unsigned") throw new Error("unreadable")
+        return JSON.stringify(["1".repeat(64), "2".repeat(64)])
+      },
+      signed: () => {
+        if (at === "signed" && made === 1) throw new Error("not a signature")
+        made++
+        return { delta: new Uint8Array(), moved: "[]", free: () => {} }
+      },
+    } as unknown as Written
+    const writes = written.of(printing, entryOf(store), () => {})
+    const restore = signingOnly(at === "sign" ? 1 : 2)
+    const signed = await writes.signatures("topics")
+    restore()
+    assert.equal(signed.type, "Partly", at)
+    assert.equal(signed.made.length, at === "unsigned" ? 0 : 1, `${at}: what was made before the throw`)
+  }
 })

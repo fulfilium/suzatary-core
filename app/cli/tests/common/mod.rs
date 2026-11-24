@@ -2352,35 +2352,28 @@ fn served_heads(base: &str, id: &str) -> (Vec<prodrome_core::event::Hash>, u32) 
 }
 
 /// The question whose line is `question` edited to `text` as a tab edits it: an edit's `Again`
-/// over the heads the box serves, and the new question resting on it alone at its instant, both
-/// handed to the lines: the new question's name.
+/// over the heads the box serves, and the new question, an `Edited` line resting on it alone,
+/// both handed to the lines: the new question's name.
 pub fn edited(
     base: &str,
     id: &str,
     question: &prodrome_core::event::Hash,
     text: &str,
 ) -> prodrome_core::event::Hash {
-    use suzatary_conversations::secretary::store::Entry;
     use suzatary_lines::secretary::line_event::LineEvent;
     let edit = again_line(
         base,
         question,
         suzatary_conversations::secretary::store::Rewind::Edit,
     );
-    let Entry::Again { at, .. } = edit else {
-        unreachable!("an again line")
-    };
     let again = line_written(base, id, &edit);
-    let Entry::Said { turn, by, .. } = self::question(base, text, Vec::new(), Vec::new()) else {
-        unreachable!("a person's turn")
-    };
     let (_, count) = served_heads(base, id);
     let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
-    let (line, keys) = LineEvent::write(
+    let (line, keys) = LineEvent::edited(
         conversation,
         poster(base),
         count,
-        &Entry::Said { at, turn, by },
+        &self::question(base, text, Vec::new(), Vec::new()),
         &Drawing,
     )
     .expect("a line");

@@ -203,8 +203,17 @@ mod tests {
     fn act(chain: &mut Chain, todo: &str, note: &str) {
         let event =
             lifecycle("Completed", todo, "2026-11-20T09:00:00", "owner", note).expect("an event");
-        let frame = chain.append(&event).expect("sealed").expect("no twin");
-        chain.apply(&frame).expect("kept");
+        let changes: Vec<serde_json::Value> = serde_json::from_str(
+            &chain
+                .append(&serde_json::json!([event]).to_string())
+                .expect("sealed"),
+        )
+        .expect("json");
+        assert_eq!(changes.len(), 1, "no twin");
+        let literals = serde_json::json!([changes[0]["literal"]]).to_string();
+        chain
+            .apply(&chain.writing(&literals).expect("a frame"))
+            .expect("kept");
     }
 
     fn reading(chain: &Chain) -> serde_json::Value {

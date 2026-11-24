@@ -86,6 +86,20 @@ fn begun<E: Schema<Vocabulary: Default>>(label: &str) -> Store<E> {
     s
 }
 
+/// `event` appended to `s` as the tab's own and kept.
+fn appended<E: Schema<Vocabulary: Default>>(s: &mut Store<E>, event: &str) {
+    let changes: Vec<serde_json::Value> = serde_json::from_str(
+        &s.append(&serde_json::json!([event]).to_string())
+            .expect("appended"),
+    )
+    .expect("JSON");
+    let literals: Vec<&serde_json::Value> = changes.iter().map(|c| &c["literal"]).collect();
+    let frame = s
+        .writing(&serde_json::json!(literals).to_string())
+        .expect("a frame");
+    s.apply(&frame).expect("kept");
+}
+
 /// Every unsigned change of `s` signed by `key`.
 fn sign<E: Schema<Vocabulary: Default>>(s: &mut Store<E>, key: &Secret) {
     let schema = E::Vocabulary::default();
@@ -173,18 +187,12 @@ fn a_signature_changes_no_reading() {
             match r.int(4) {
                 0 => {
                     if let Some(e) = membership.first() {
-                        let f = members.append(e).expect("appended");
-                        if let Some(f) = f {
-                            members.apply(&f).expect("kept");
-                        }
+                        appended(&mut members, e);
                     }
                 }
                 1 => {
                     if let Some(e) = alias.first() {
-                        let f = aliases.append(e).expect("appended");
-                        if let Some(f) = f {
-                            aliases.apply(&f).expect("kept");
-                        }
+                        appended(&mut aliases, e);
                     }
                 }
                 2 => {

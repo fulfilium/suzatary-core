@@ -163,7 +163,7 @@ export namespace chainsync {
       const p = carried(
         c.name,
         Row,
-        literals => (literals.length === 0 ? Promise.resolve() : c.sync.exclusive(() => c.sync.kept(c.store.carry(JSON.stringify(literals))))),
+        literals => (literals.length === 0 ? Promise.resolve() : c.sync.exclusive(() => c.sync.kept(c.store.writing(JSON.stringify(literals))))),
         why => fx.told(carryRow(c.name), copies.unread(copies.chain(c.name), `the acts an earlier build kept unsent: ${why}`)),
       )
       // A carry that failed is tried again by the next question of the chain.
@@ -217,8 +217,8 @@ export namespace chainsync {
       if (after === "untrusted") throw new Error(UNTRUSTED)
     }
 
-    // Sealed and kept in the chain's turn; once kept the act stands, and a signature that fails is said, never thrown: the
-    // next hand-over signs it.
+    // Sealed, signed and kept in the chain's turn, in one move; once kept the act stands, and a signature that fails is
+    // said, never thrown: the next hand-over signs it.
     const act = async (name: string, event: string, actor: string): Promise<Chain> => {
       if (!idb.available()) throw new Error("this browser keeps nothing (no IndexedDB), so an act here would be forgotten — nothing was recorded")
       const c = await ready(name)
@@ -228,22 +228,22 @@ export namespace chainsync {
       if (!c.sync.sync.landed()) await exchange(name)
       if (!c.sync.sync.landed()) throw new Error(UNLANDED)
       await trusted(name, actor)
-      await c.sync.exclusive(async () => {
+      const signed = await c.sync.exclusive(async () => {
         // Read again in the act's own turn, so the plan is made over what the device holds now.
         await c.sync.read()
         if (!c.sync.sync.landed()) throw new Error(UNLANDED)
         const before = unsentNames(c.store)
-        const frame = c.store.append(event)
-        if (frame === undefined) return
-        try {
-          await c.sync.kept(frame)
-        } catch (e: unknown) {
-          throw new Error(`this browser could not keep the act (${e instanceof Error ? e.message : String(e)}) — nothing was recorded`)
-        }
+        // The core's refusal of the act passes in its own words; only a keep that failed is the browser's.
+        const kept = (frame: Uint8Array): Promise<void> =>
+          c.sync.kept(frame).catch((e: unknown) => {
+            throw new Error(`this browser could not keep the act (${e instanceof Error ? e.message : String(e)}) — nothing was recorded`)
+          })
+        const signed = await writes.own(name, c.store, [event], kept)
+        // The change and its signature, kept in the one frame.
         for (const n of unsentNames(c.store)) if (!before.has(n)) c.made.add(n)
+        return signed
       })
-      await writes.sign(name).catch((e: unknown) => fx.refused(`The act was kept unsigned (${e instanceof Error ? e.message : String(e)}); the next sync signs it.`))
-      signaturesMade(c)
+      if (signed.type === "Partly") fx.refused(`The act was kept unsigned (${signed.why}); the next sync signs it.`)
       void exchange(name)
       return c
     }

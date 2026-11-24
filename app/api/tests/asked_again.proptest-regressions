@@ -5,3 +5,5 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 6776b5b84522d8073a981f0c6daae9591659148c8ae7532c085515b4e21d9d09 # shrinks to steps = [Say(0), Post(0), Claim, Answer(0), Land(0), Land(1), Land(2), Say(0), Say(2), Post(2), Again(2, Edit, 0), Stop(0), PostOne(2), Claim]
+cc 384298644200a4f5ce80339e83a0112ee0218bbcde78ed6d11cc97245f84a664 # shrinks to steps = [Say(0), Post(0), Claim, Answer(0), Land(0), Land(1), Again(0, EditRefused, 0), Post(0), Reuse(Question)]
+cc e8974962517efe672ff3b63f575d23e3283939274424a3d089f6ddf6901300be # shrinks to steps = [Say(0), Post(0), Claim, Answer(0), Land(0), Land(1), Again(0, Edit, 0), PostOne(0), Reuse(EditedByOther)]

@@ -134,6 +134,19 @@ impl Writer<'_> {
         self.own(line, &keys, deps)
     }
 
+    /// `entry` as an edit's own question, line `held` of `conversation`, resting on its `Again`.
+    fn edited(
+        &self,
+        conversation: ConversationId,
+        held: u32,
+        entry: &Entry,
+        again: &OwnLine,
+    ) -> Result<OwnLine, NotSealed> {
+        let (line, keys) =
+            LineEvent::edited(conversation, self.actor.clone(), held, entry, self.entropy)?;
+        self.own(line, &keys, vec![again.name().clone()])
+    }
+
     /// `entry` opening a conversation of its own: its id, and the line.
     fn opening(&self, entry: &Entry) -> Result<(ConversationId, OwnLine), NotSealed> {
         let (line, keys) = LineEvent::begin(self.actor.clone(), entry, self.entropy)?;
@@ -376,7 +389,7 @@ impl HeldReplica {
     }
 
     /// The question an own line edits, where it is an edit's own question: it rests on that edit's
-    /// `Again` alone and was sealed at its instant; the `Again` held as the device's or in its rows.
+    /// `Again` alone, held as the device's or in its rows.
     fn edit_of(&self, own: &OwnLine) -> Option<Hash> {
         let header = |name: &Hash| {
             self.own
@@ -402,7 +415,6 @@ impl HeldReplica {
                         question,
                         how: suzatary_conversations::secretary::store::Rewind::Edit,
                     },
-                at,
                 ..
             },
         ] = lines.as_slice()
@@ -423,7 +435,7 @@ impl HeldReplica {
                     .any(|round| round.turns.iter().any(|(_, line)| line == question))
             });
         let gone = self.holds(question) && !in_a_round;
-        (own.at() == Some(at.as_str()) && !gone).then(|| question.clone())
+        (own.edits() && !gone).then(|| question.clone())
     }
 
     /// The topics this device began that the box refused: each conversation whose opening is one
@@ -627,12 +639,11 @@ impl HeldReplica {
         Ok(match how {
             AskedAgain::Regenerate => vec![again],
             AskedAgain::Edit(asked) => {
-                let rests_on = vec![again.name().clone()];
-                let said = writer.line(
+                let said = writer.edited(
                     conversation,
                     held + 1,
                     &asked.said(at, writer.actor),
-                    rests_on,
+                    &again,
                 )?;
                 vec![again, said]
             }

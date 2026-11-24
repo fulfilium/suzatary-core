@@ -44,6 +44,7 @@ use suzatary_store::admission::{Admission, Beside, Inadmissible, Post};
 use crate::secretary::claim::Standing;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
+use crate::secretary::saying::Saying;
 use crate::secretary::skew::Skew;
 use crate::secretary::transcript::{Transcript, Write};
 use suzatary_conversations::secretary::model::Turn;
@@ -55,7 +56,7 @@ use suzatary_memory::secretary::line_words::LineWords;
 pub const MAX_ATTACHMENTS_PER_TURN: usize = 4;
 
 /// The most bytes of words one person's turn holds.
-pub const MAX_SAID_BYTES: usize = 32_768;
+pub(crate) const MAX_SAID_BYTES: usize = 32_768;
 
 #[derive(Debug, Clone, Copy)]
 pub enum LinesRule {}
@@ -657,9 +658,10 @@ fn stops(change: &Change<LineEvent>, held: &Held<'_>) -> Result<(), Inadmissible
 }
 
 /// Whether a line that asks again does so of a conversation as the tab read it: a regenerate's
-/// `Again`, an edit's, and the person's turn that takes up an edit's `Again` (only that turn sets
-/// anything aside, so it is judged by its `Again`'s checks as it arrives).
+/// `Again`, an edit's, and the edit's own question, which takes up an edit's `Again` (only that
+/// line sets anything aside, so it is judged by its `Again`'s checks as it arrives).
 fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(), Inadmissible> {
+    use prodrome_core::schema::Schema as _;
     let refused = |why: &str| Err(Inadmissible::finally(why));
     let id = change.event.conversation();
     let Some(read) = post.held.transcript(id) else {
@@ -676,20 +678,27 @@ fn again(change: &Change<LineEvent>, post: &Post<'_, '_, LinesRule>) -> Result<(
     ) = if let LineShape::Again { question, how, .. } = change.event.shape() {
         (question, *how, change.deps.clone())
     } else {
-        // Only a person's turn may take up an edit's `Again` that read as nothing.
-        let Some((edit, question)) = taken_up(&read, change, post) else {
-            return Ok(());
-        };
-        if !matches!(
+        let edits = matches!(
             change.event.shape(),
             LineShape::Said {
-                turn: TurnShape::Person { .. },
+                saying: Saying::Edit,
                 ..
             }
-        ) {
+        );
+        let Some((edit, question)) = taken_up(&read, change, post) else {
+            return if edits {
+                refused(
+                    "an edit's question takes up the edit it rests on alone, and this one takes up none",
+                )
+            } else {
+                Ok(())
+            };
+        };
+        // An edit is one person's act: another actor's question would set the first's aside on
+        // its own word.
+        if lines[edit].line.actor() != change.event.actor() {
             return refused(
-                "it would take up an edit in its question's place; only the edit's own question \
-                 does",
+                "an edit's question is its edit's writer's, and this edit is someone else's",
             );
         }
         let deps = lines[edit]

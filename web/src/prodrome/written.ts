@@ -31,13 +31,15 @@ export namespace written {
 
   export type Signing = "Signs" | "Unsigned" | "Unknown"
 
+  // A store of objects: the changes events make, unkept, and the frame writing literals as the tab's own.
+  export type Appends = { readonly append: (events: string) => string; readonly writing: (literals: string) => Uint8Array }
+
   export type T<N extends string> = {
-    // Every unsigned change of `name` signed, so a write made keyless is signed later.
-    readonly sign: (name: N) => Promise<void>
-    // The same signatures as moves the caller keeps, with whatever else it keeps in the same write: none where the
-    // device keeps no key. A signature that fails stops it: the moves made before are answered with why, for the caller
-    // to keep, since the core holds them already.
-    readonly signatures: (name: N) => Promise<Signed>
+    // The signatures of every unsigned change of `name` the core holds, as moves the caller keeps in its own write.
+    readonly signatures: (name: N) => Promise<Signed<LineStep>>
+    // `events` written into `name` as this tab's own and kept in one frame with their signatures, so no reading holds
+    // them unsigned; throws, nothing held, where the frame was not kept.
+    readonly own: (name: N, store: Appends, events: readonly string[], kept: (frame: Uint8Array) => Promise<void>) => Promise<Signed<string>>
     // What `name` holds unsent, signed and posted; an answer kept, a refusal said.
     readonly handOver: (name: N) => Promise<void>
     // A move of `name` the caller made, kept; each newly refused write said once, in the box's words.
@@ -46,13 +48,15 @@ export namespace written {
     readonly said: (name: N) => Promise<void>
   }
 
-  export type Signed = { readonly type: "Signed"; readonly steps: readonly LineStep[] } | { readonly type: "Partly"; readonly steps: readonly LineStep[]; readonly why: string }
+  // A signature that failed stops the signing: those `made` before are kept, and the hand-over signs the rest.
+  export type Signed<A> = { readonly type: "Signed"; readonly made: readonly A[] } | { readonly type: "Partly"; readonly made: readonly A[]; readonly why: string }
 
   // In posts the box takes whole, each change beside its signatures, and each line beside its slots' keys, which
   // travel beside the objects and never in one.
   type Posted = { hash: string; literal: string; keys: readonly string[] }
   const Unsent = d.json(d.arr(d.arr(d.obj<Posted>({ hash: d.str, literal: d.str, keys: d.arr(d.str) }))))
   const Names = d.json(d.arr(d.str))
+  const Changes = d.json(d.arr(d.obj<{ hash: string; literal: string }>({ hash: d.str, literal: d.str })))
   // `signature`: a signature of a write, refused or waiting with it; it tells nothing of its own.
   type Refused = { hash: string; reason: string; literal: string | null; words: string | null; signature: boolean }
   const Refusals = d.json(
@@ -163,28 +167,38 @@ export namespace written {
       retried(name)
     }
 
-    const signatures = async (name: N): Promise<Signed> => {
-      const e = entry(name)
-      const steps: LineStep[] = []
-      if (e.signs() !== "Signs") return { type: "Signed", steps }
+    // Each signature of `changes` made into what the caller keeps: none where the store's writes are unsigned or the
+    // device keeps no key. TOTAL: a throw at any step (reading what to sign, signing, making) answers what was made
+    // before it, so a caller's keep always follows.
+    const signing = async <A>(name: N, changes: () => readonly string[], made: (literal: string) => A): Promise<Signed<A>> => {
+      const done: A[] = []
+      if (entry(name).signs() !== "Signs") return { type: "Signed", made: done }
       try {
-        const unsigned = read("unsigned", Names(e.store.unsigned()))
-        if (unsigned.length === 0) return { type: "Signed", steps }
-        const key = await signer.existing()
-        if (key === null) return { type: "Signed", steps }
-        for (const hash of unsigned) steps.push(e.store.signed(signedObject(core, hash, key.public, await signer.sign(key, hash)).literal))
-        return { type: "Signed", steps }
+        const hashes = changes()
+        const key = hashes.length === 0 ? null : await signer.existing()
+        if (key !== null) for (const hash of hashes) done.push(made(signedObject(core, hash, key.public, await signer.sign(key, hash)).literal))
+        return { type: "Signed", made: done }
       } catch (x: unknown) {
-        return { type: "Partly", steps, why: lo.reason(x) }
+        return { type: "Partly", made: done, why: lo.reason(x) }
       }
+    }
+    const signatures = (name: N): Promise<Signed<LineStep>> => {
+      const e = entry(name)
+      return signing(name, () => read("unsigned", Names(e.store.unsigned())), literal => e.store.signed(literal))
     }
     // Every move made is kept, a signature that failed after them too; the failure is then thrown.
     const signIn = async (name: N): Promise<void> => {
       const signed = await signatures(name)
-      for (const step of signed.steps) await entry(name).stepped(step)
+      for (const step of signed.made) await entry(name).stepped(step)
       if (signed.type === "Partly") throw new Error(signed.why)
     }
-    const sign = (name: N): Promise<void> => entry(name).exclusive(() => signIn(name))
+    const own = async (name: N, store: Appends, events: readonly string[], kept: (frame: Uint8Array) => Promise<void>): Promise<Signed<string>> => {
+      const changes = read("changes", Changes(store.append(JSON.stringify(events))))
+      if (changes.length === 0) return { type: "Signed", made: [] }
+      const signed = await signing(name, () => changes.map(c => c.hash), literal => literal)
+      await kept(store.writing(JSON.stringify([...changes.map(c => c.literal), ...signed.made])))
+      return signed
+    }
 
     // Each piece posted in turn, its receipt kept. An answer that is no receipt is read by `failed`: one for later stops
     // the hand-over, said once per tab; a refusal of the post refuses its lines for good, said with their words as a
@@ -238,7 +252,7 @@ export namespace written {
       }
     }
 
-    return { sign, signatures, handOver, settled: (name, step) => entry(name).exclusive(() => settled(entry(name), step)), said }
+    return { signatures, own, handOver, settled: (name, step) => entry(name).exclusive(() => settled(entry(name), step)), said }
   }
 }
 export default written

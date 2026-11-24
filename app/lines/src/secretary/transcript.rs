@@ -737,10 +737,7 @@ fn edit(line: &LineEvent) -> bool {
 /// Whether `later`, resting on the lines at `rests_on` (positions among the conversation's lines,
 /// the genesis left out), takes up the edit `again` at `at`.
 fn takes_up(later: &LineEvent, rests_on: &[usize], at: usize, again: &LineEvent) -> bool {
-    rests_on == [at]
-        && edit(again)
-        && crate::secretary::step::Step::of(later.shape()).takes_up(LineWriter::of(later.actor()))
-        && later.at() == again.at()
+    rests_on == [at] && edit(again) && crate::secretary::step::Step::of(later.shape()).takes_up()
 }
 
 /// What a line is to the edits: an edit's `Again` nothing takes up, one the line at a position
@@ -896,7 +893,7 @@ pub fn superseded<'l>(
 }
 
 /// The keys of [`superseded`] that `asked` admits; no other key opens a reseal.
-pub fn superseded_among<'l>(
+pub(crate) fn superseded_among<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
     asked: &dyn Fn(&KeyName) -> bool,
     slots: &impl Slots,
@@ -1182,7 +1179,7 @@ pub fn dead<'l>(
 }
 
 /// The slots of [`dead`] whose key `asked` admits; no other key opens a reseal.
-pub fn dead_among<'l>(
+pub(crate) fn dead_among<'l>(
     lines: impl IntoIterator<Item = (&'l Hash, &'l LineEvent)>,
     asked: &dyn Fn(&KeyName) -> bool,
     slots: &impl Slots,

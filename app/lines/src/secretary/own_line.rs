@@ -175,6 +175,15 @@ impl OwnLine {
         )
     }
 
+    /// Whether it is an edit's own question.
+    pub(crate) fn edits(&self) -> bool {
+        matches!(
+            self,
+            OwnLine::Line { node, .. }
+                if matches!(&node.given().header, crate::wire::lines::NodeHeader::Line { step: crate::secretary::step::Step::Edits, .. })
+        )
+    }
+
     /// The line its ruling is drawn on: an `Again`'s question, which it makes owed; else itself.
     #[must_use]
     pub fn drawn_on(&self) -> &Hash {

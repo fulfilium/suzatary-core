@@ -496,6 +496,7 @@ fn retired<'n>(
             Step::Resealed { of, from } => seen.reseals.push((of, from, &line.keys)),
             Step::Opened
             | Step::Asks
+            | Step::Edits
             | Step::Noted
             | Step::Answers
             | Step::Rewound { .. }

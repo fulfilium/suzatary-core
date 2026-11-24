@@ -594,7 +594,15 @@ fn an_edit_s_again_is_a_leaf_only_once_its_own_question_takes_it_up() {
         },
         by: Some("ada".into()),
     };
-    write_line_as(&the_box.lines, id, ada(), 2, &edited);
+    let (line, keys) = suzatary_lines::secretary::line_event::LineEvent::edited(
+        id,
+        ada(),
+        2,
+        &edited,
+        &the_box.lines.entropy,
+    )
+    .expect("a line");
+    keep_line(&the_box.lines, line, keys);
     assert_eq!(
         leaves(&the_box.read()).len(),
         3,
@@ -610,7 +618,6 @@ fn write_line_as(
     held: u32,
     entry: &Entry,
 ) {
-    use suzatary_store::store::Doc as _;
     let (line, keys) = suzatary_lines::secretary::line_event::LineEvent::written_under(
         &fixture_rules(),
         conversation,
@@ -620,6 +627,16 @@ fn write_line_as(
         &lines.entropy,
     )
     .expect("a line");
+    keep_line(lines, line, keys);
+}
+
+/// `line` appended over the store's heads, its keys kept.
+fn keep_line(
+    lines: &suzatary_stores::stores::conversations::InMemory,
+    line: suzatary_lines::secretary::line_event::LineEvent,
+    keys: Vec<suzatary_memory::secretary::locked_text::TextKey>,
+) {
+    use suzatary_store::store::Doc as _;
     for key in keys {
         lines.keys.set(&key.name(), &key).expect("kept");
     }
@@ -2328,7 +2345,6 @@ fn write_line(
     held: u32,
     entry: &Entry,
 ) {
-    use suzatary_store::store::Doc as _;
     let (line, keys) = suzatary_lines::secretary::line_event::LineEvent::written_under(
         &fixture_rules(),
         conversation,
@@ -2338,10 +2354,7 @@ fn write_line(
         &lines.entropy,
     )
     .expect("a line");
-    for key in keys {
-        lines.keys.set(&key.name(), &key).expect("kept");
-    }
-    lines.lines.append(line).expect("said");
+    keep_line(lines, line, keys);
 }
 
 /// A summary asked under an older rule is redone: stage 6 of the digest, the asking versioned.

@@ -30,6 +30,11 @@ const datetime = (n: number): string => {
   return `datetime(${d.getUTCFullYear()}, ${d.getUTCMonth() + 1}, ${d.getUTCDate()}, ${d.getUTCHours()}, ${d.getUTCMinutes()}, ${d.getUTCSeconds()})`
 }
 const unsentOf = (s: ObjectStore): StoredObject[] => (JSON.parse(s.unsent()) as StoredObject[][]).flat()
+// The changes `e` makes in `s`, made and not taken.
+const changesOf = (s: ObjectStore, e: string): StoredObject[] => JSON.parse(s.append(JSON.stringify([e]))) as StoredObject[]
+// The frame writing `literals` and `signatures` in `s` as one move; none for a twin.
+const frameOf = (s: ObjectStore, changes: readonly StoredObject[], signatures: readonly string[] = []): Uint8Array | undefined =>
+  changes.length === 0 ? undefined : s.writing(JSON.stringify([...changes.map(c => c.literal), ...signatures]))
 
 // What every reading of a store reads, as one string: what its reading leaves out, and its registers where its schema
 // has a JSON view.
@@ -80,7 +85,7 @@ const written = (label: string, make: () => ObjectStore, event: (s: ObjectStore,
   const s = storeOf(make(), [g])
   for (let n = 0; n < r.int(6); n++) {
     const e = event(s, r, 1000 + n)
-    const f = e === undefined ? undefined : s.append(e)
+    const f = e === undefined ? undefined : frameOf(s, changesOf(s, e))
     if (f !== undefined) s.apply(f)
   }
   const objects = [g, ...unsentOf(s)]
@@ -116,14 +121,20 @@ test("law: for every store of objects, an append extends the kept reading to the
           const e = kind.event(s, r, n)
           if (e === undefined) continue
           const fresh = afresh(s, kind.make)
-          const [f, g] = [fresh.append(e), s.append(e)]
+          const [f, own] = [frameOf(fresh, changesOf(fresh, e)), changesOf(s, e)]
+          // Half the writes are signed as the tab writes them, in the one move that keeps them.
+          const signatures = r.bool() ? await Promise.all(own.map(async c => (JSON.parse(core.signed(c.hash, publicKey, await signature(c.hash))) as { text: string }).text)) : []
+          const g = frameOf(s, own, signatures)
           if (f !== undefined) fresh.apply(f)
           if (g !== undefined) s.apply(g)
-          assert.equal(s.unsent(), fresh.unsent(), `${kind.name} seed ${seed}: an append to the kept reading writes what one to a fresh reading writes`)
+          const changes = (o: StoredObject[]): StoredObject[] => o.filter(x => !x.literal.startsWith("Signed("))
+          assert.deepEqual(changes(unsentOf(s)), changes(unsentOf(fresh)), `${kind.name} seed ${seed}: an append to the kept reading writes what one to a fresh reading writes`)
+          const unsigned = new Set(JSON.parse(s.unsigned()) as string[])
+          if (signatures.length > 0) assert.ok(own.every(c => !unsigned.has(c.hash)), `${kind.name} seed ${seed}: a change kept with its signatures is kept signed`)
           fresh.free()
         } else if (move === 1) {
           // An event its schema refuses: the append throws, and the reading it took is made again.
-          assert.throws(() => s.append("Unheard(of='nothing')"))
+          assert.throws(() => s.append(JSON.stringify(["Unheard(of='nothing')"])))
         } else if (move === 2) {
           for (const name of JSON.parse(s.unsigned()) as string[]) {
             const signed = JSON.parse(core.signed(name, publicKey, await signature(name))) as { text: string }

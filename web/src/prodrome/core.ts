@@ -118,9 +118,11 @@ export interface Replicated extends Posted {
   start_over: () => LineStep;
   /** Whether the landed row holds all it says it holds. */
   closed: () => boolean;
-  /** The frame of `event` sealed as a `Change` and written as the tab's, unsent, which the store takes once it is kept
-   * (`apply`); none for a twin. */
-  append: (event: string) => Uint8Array | undefined;
+  /** `[{hash, literal}]`: `events` (JSON prints) each sealed as a `Change` over the kept reading and the changes before
+   * it, made and not taken; none for a twin. */
+  append: (events: string) => string;
+  /** The frame of `literals` (JSON) written as the tab's own, taken once kept (`apply`). */
+  writing: (literals: string) => Uint8Array;
   apply: (frame: Uint8Array) => string;
   load: (bytes: Uint8Array | undefined, frames: Uint8Array) => string;
   snapshot: () => Uint8Array;
@@ -139,8 +141,6 @@ export interface ChainStore extends Replicated, Written {
   policy: () => string;
   /** The frame of letting `names` and what rests on them go, taken once kept. */
   let_go: (names: string) => Uint8Array;
-  /** The frame of `literals` (JSON) written as the tab's own, taken once kept. */
-  carry: (literals: string) => Uint8Array;
   /** Whether the box holds all of it, and it all the box said it holds. */
   settled: () => boolean;
   /** The heads the box last said, JSON, or `null` before it spoke. */

@@ -28,6 +28,7 @@ pub mod secretary {
     pub mod prune;
     pub mod rescrub;
     pub mod run;
+    pub mod saying;
     pub mod sequence;
     pub mod skew;
     pub mod step;

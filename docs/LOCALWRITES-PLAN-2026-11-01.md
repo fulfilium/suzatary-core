@@ -859,7 +859,8 @@ reload. `web/e2e/writewait.bench.ts` loses a row each time a route goes.
      second tab is 273, 1,930 ms and 261, 1,807 ms; the first two Sends of each run take 1.1 to
      1.9 s, the rest 213 to 289 ms. The scene "a question sent in one tab is drawn in a second tab
      before the box holds it" pins it.
-4. **Taps as inbox objects, claimed per proposal.** `Tapped`, `Dismissed`,
+4. **Taps as inbox objects, claimed per proposal.** `docs/LOCALTAPS-PLAN-2026-11-23.md` is
+   this stage's design, with stages 5 and 6, and revises §4.5 where they disagree. `Tapped`, `Dismissed`,
    `Checked`, `Dropped`; the performer's claim (§4.5); the sending rule at
    admission; secret values sealed to the card's key (§4.6). The four
    proposal routes are deleted. *Laws:* `app/core/tests/inbox.rs` extended:

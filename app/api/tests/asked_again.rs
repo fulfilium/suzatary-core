@@ -58,14 +58,18 @@ enum How {
     EditRefused,
 }
 
-/// What a line reusing a dangling edit's instant is. A stop and an act are refused alike, but by
-/// different checks: a stop by the refusal of a line that takes up an edit and is no person's turn,
-/// an act before it, since the box alone writes a `Said` line other than a person's.
+/// What another writer seals over a dangling edit's `Again` alone, at its instant: a plain
+/// question (a second device whose clock repeats the edit's instant), a stop, an act (which the
+/// box alone writes, so it is refused), an edit's own question by the `Again`'s writer (another
+/// device of the same person), which takes the edit up by its kind, and one by another actor,
+/// which the rule refuses: it would set the first actor's question aside on another's word.
 #[derive(Debug, Clone, Copy)]
 enum Craft {
     Question,
     Stop,
     Act,
+    Edited,
+    EditedByOther,
 }
 
 /// One step of the tabs or of the box.
@@ -116,8 +120,14 @@ fn steps() -> impl proptest::strategy::Strategy<Value = Vec<Step>> {
                 .prop_map(|(t, how, pick)| Step::Again(t, how, pick)),
             4 => tab.clone().prop_map(Step::Post),
             2 => tab.clone().prop_map(Step::PostOne),
-            1 => prop_oneof![Just(Craft::Question), Just(Craft::Stop), Just(Craft::Act)]
-                .prop_map(Step::Reuse),
+            2 => prop_oneof![
+                3 => Just(Craft::Question),
+                1 => Just(Craft::Stop),
+                1 => Just(Craft::Act),
+                1 => Just(Craft::Edited),
+                1 => Just(Craft::EditedByOther),
+            ]
+            .prop_map(Step::Reuse),
             2 => tab.prop_map(Step::Land),
             3 => Just(Step::Claim),
             1 => (0usize..3).prop_map(Step::Join),
@@ -354,7 +364,7 @@ pub(crate) fn handed(lines: &InMemory, posted: &[OwnLine], ada: &Actor) -> Vec<(
     let history = lines.lines.objects().expect("held").into_iter().collect();
     let trusting = suzatary_signatures::signatures::Trusting::held(
         &suzatary_signatures::signatures::Keeping::stores(&[
-            &suzatary_stores::stores::phone_trusted(&["ada"]),
+            &suzatary_stores::stores::phone_trusted(&["ada", "bob"]),
         ]),
         &suzatary_connect::cast::keys::root(),
     )
@@ -408,8 +418,8 @@ pub(crate) fn handed(lines: &InMemory, posted: &[OwnLine], ada: &Actor) -> Vec<(
         .collect()
 }
 
-/// Whether the `Again` at `at` sets anything aside: a regenerate, or an edit its own question took
-/// up, sealed with it (resting on it alone, at its instant).
+/// Whether the `Again` at `at` sets anything aside, as production reads it: a regenerate, or an
+/// edit that `transcript::inert_edits` does not name.
 fn active(read: &Transcript, at: usize) -> bool {
     use suzatary_conversations::secretary::store::Rewind;
     let lines = read.lines();
@@ -420,19 +430,41 @@ fn active(read: &Transcript, at: usize) -> bool {
         } => true,
         Entry::Again {
             how: Rewind::Edit, ..
-        } => lines.iter().any(|later| {
-            later.rests_on == [at]
-                && later.line.at() == lines[at].line.at()
-                && matches!(
-                    later.entry,
-                    Entry::Said {
-                        turn: Turn::Person { .. },
-                        ..
-                    }
-                )
-        }),
+        } => {
+            let parents: Vec<Vec<Hash>> = lines
+                .iter()
+                .map(|line| {
+                    line.rests_on
+                        .iter()
+                        .map(|&p| lines[p].name.clone())
+                        .collect()
+                })
+                .collect();
+            let held: Vec<(&Hash, &LineEvent, &[Hash])> = lines
+                .iter()
+                .zip(&parents)
+                .map(|(line, parents)| (&line.name, &line.line, parents.as_slice()))
+                .collect();
+            !transcript::inert_edits(&held).contains(&lines[at].name)
+        }
         _ => false,
     }
+}
+
+/// Whether the question the `Again` named `again` asks again is a live turn of the box's fold.
+fn question_live(read: &Transcript, again: &Hash) -> bool {
+    let Some(Entry::Again { question, .. }) = read
+        .lines()
+        .iter()
+        .find(|line| line.name == *again)
+        .map(|line| &line.entry)
+    else {
+        return false;
+    };
+    read.turn_lines()
+        .iter()
+        .position(|turn| *turn == question)
+        .is_some_and(|turn| read.stored().is_live(turn))
 }
 
 /// The box holds no half of an edit, and no edit completed by a question not sent as one: every
@@ -477,15 +509,6 @@ fn never_neither(
             live(question) || replaced,
             "an edit set its question aside with nothing asked in its place"
         );
-        for later in lines.iter().filter(|later| later.rests_on.contains(&at)) {
-            proptest::prop_assert!(
-                !active(read, at)
-                    || edits.contains(&later.name)
-                    || later.rests_on != [at]
-                    || later.line.at() != lines[at].line.at(),
-                "a question not sent as an edit completed one"
-            );
-        }
     }
     Ok(())
 }
@@ -514,7 +537,7 @@ fn a_question(tab: &mut HeldReplica, k: usize) -> Option<(Hash, Vec<Hash>)> {
 
 /// A line `craft` over the box's latest edit `Again` that nothing takes up, resting on it alone
 /// at its instant, sealed by the poster as no tab seals it; none where no such `Again` stands.
-fn reusing(the_box: &Boxed, craft: Craft, n: u32) -> Option<OwnLine> {
+fn reusing(the_box: &Boxed, craft: Craft, n: u32) -> Option<(OwnLine, Actor)> {
     use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
     let read = the_box.read();
     let lines = read.lines();
@@ -528,12 +551,16 @@ fn reusing(the_box: &Boxed, craft: Craft, n: u32) -> Option<OwnLine> {
         ) && !active(&read, at)
     })?;
     let instant = lines[at].line.at();
+    let poster = match craft {
+        Craft::EditedByOther => "bob",
+        Craft::Question | Craft::Stop | Craft::Act | Craft::Edited => "ada",
+    };
     let by = Some(Stamp::Actor(Speaker::at(
-        "ada",
+        poster,
         suzatary_signatures::signatures::Seat::Device,
     )));
     let entry = match craft {
-        Craft::Question => Entry::Said {
+        Craft::Question | Craft::Edited | Craft::EditedByOther => Entry::Said {
             at: instant,
             turn: Turn::Person {
                 text: format!("crafted {n}"),
@@ -562,19 +589,24 @@ fn reusing(the_box: &Boxed, craft: Craft, n: u32) -> Option<OwnLine> {
         .expect("held")
         .into_iter()
         .find_map(|(name, object)| matches!(object, Envelope::Genesis(_)).then_some(name))?;
-    let (line, keys) = LineEvent::write(
-        DEFAULT.clone(),
-        Actor::new("ada").expect("an actor"),
+    let (actor, held) = (
+        Actor::new(poster).expect("an actor"),
         u32::try_from(lines.len()).expect("few lines"),
-        &entry,
-        &Counting(AtomicU8::new(
-            200u8.wrapping_add(u8::try_from(n % 50).expect("small")),
-        )),
-    )
-    .ok()?;
+    );
+    let entropy = Counting(AtomicU8::new(
+        200u8.wrapping_add(u8::try_from(n % 50).expect("small")),
+    ));
+    let write = match craft {
+        Craft::Edited | Craft::EditedByOther => LineEvent::edited,
+        Craft::Question | Craft::Stop | Craft::Act => LineEvent::write,
+    };
+    let (line, keys) = write(DEFAULT.clone(), actor.clone(), held, &entry, &entropy).ok()?;
     let change =
         prodrome_core::change::mk_change(genesis, vec![lines[at].name.clone()], line).ok()?;
-    OwnLine::sealed(&Envelope::Change(change), &keys).ok()
+    Some((
+        OwnLine::sealed(&Envelope::Change(change), &keys).ok()?,
+        actor,
+    ))
 }
 
 /// What one case did: how many `Again` lines the box took, the box's answer to each crafted line,
@@ -654,7 +686,8 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
     let post_lines = |the_box: &mut Boxed,
                       posted: Vec<OwnLine>,
                       took: &mut Took,
-                      (edits, regenerates): (&BTreeSet<Hash>, &BTreeSet<Hash>)|
+                      (edits, regenerates): (&BTreeSet<Hash>, &BTreeSet<Hash>),
+                      poster: &Actor|
      -> Result<Vec<(Hash, Answer)>, proptest::test_runner::TestCaseError> {
         if posted.is_empty() {
             return Ok(Vec::new());
@@ -693,7 +726,7 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
             .collect();
         // The edits' `Again` lines the box took in an earlier post: their questions arrive split.
         let split = took.edits.clone();
-        let answers = handed(&the_box.lines, &posted, &ada);
+        let answers = handed(&the_box.lines, &posted, poster);
         for (own, (_, answer)) in posted.iter().zip(&answers) {
             // An `Again` is drawn on the question it names; any other line on itself.
             let again = own.drawn_on() != own.name();
@@ -821,7 +854,7 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
                 .take(1)
                 .collect()
         };
-        let answers = post_lines(the_box, posted, took, sets)?;
+        let answers = post_lines(the_box, posted, took, sets, &ada)?;
         let _ = tab.answered(answers);
         Ok(())
     };
@@ -903,23 +936,36 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
                 (&edits, &regenerates),
             )?,
             Step::Reuse(craft) => {
-                let Some(crafted) = reusing(&the_box, craft, second) else {
+                let Some((crafted, poster)) = reusing(&the_box, craft, second) else {
                     continue;
                 };
-                let person = matches!(craft, Craft::Question);
-                if person {
-                    // By the mark it is the edit's own question, whoever wrote it.
+                let own_edit = matches!(craft, Craft::Edited);
+                if own_edit {
+                    // By its kind it is the edit's own question, sent by the edit's writer.
                     edits.insert(crafted.name().clone());
                 }
+                let edit = crafted.rests_on()[0].clone();
+                let live_before = question_live(&the_box.read(), &edit);
                 let answers = post_lines(
                     &mut the_box,
                     vec![crafted],
                     &mut took,
                     (&edits, &regenerates),
+                    &poster,
                 )?;
                 took.crafted
                     .extend(answers.iter().map(|(_, answer)| (craft, answer.clone())));
-                if !person {
+                let taken = answers.iter().all(|(_, answer)| *answer == Answer::Taken);
+                // As the box's fold reads it: the edit's question leaves the live turns exactly
+                // when its writer's own `Edited` is taken.
+                proptest::prop_assert_eq!(
+                    question_live(&the_box.read(), &edit),
+                    live_before && !(own_edit && taken),
+                    "a {:?} at a dangling edit's instant, answered {:?}",
+                    craft,
+                    answers
+                );
+                if matches!(craft, Craft::Act | Craft::EditedByOther) {
                     proptest::prop_assert!(
                         answers.iter().all(|(_, answer)| matches!(
                             answer,
@@ -928,7 +974,7 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
                                 ..
                             }
                         )),
-                        "a {craft:?} at a dangling edit's instant took it up: {answers:?}"
+                        "a {craft:?} was answered {answers:?}"
                     );
                 }
             }
@@ -1086,13 +1132,20 @@ fn the_same_tab_s_next_question_over_its_refused_edit_is_plain() {
 
 /// The review's order: a question queued, an edit of it whose question the box refused, then lines
 /// another writer seals over the dangling `Again` alone, at its instant. Each is posted, and the
-/// test names what answered it: a stop is refused as a line that takes up an edit and is no
-/// person's turn, an act is refused before that check, and a question takes the edit up.
+/// test names what answered it: a stop and a plain question (a second device whose clock repeats
+/// the instant) are taken as what they are and take nothing up, an act is refused, since the box
+/// alone writes a `Said` line other than a person's, and an edit's own question takes the edit up.
 #[test]
-fn a_line_at_a_dangling_edit_s_instant_is_judged_as_the_fold_reads_it() {
+fn a_line_at_a_dangling_edit_s_instant_is_judged_by_its_kind() {
     use Step::{Again, Land, Post, Reuse, Say};
     // The question still queued, so a stop over it has something to stop.
-    for craft in [Craft::Stop, Craft::Act, Craft::Question] {
+    for craft in [
+        Craft::Stop,
+        Craft::Act,
+        Craft::Question,
+        Craft::Edited,
+        Craft::EditedByOther,
+    ] {
         let took = asked(&[
             Say(1),
             Post(1),
@@ -1102,17 +1155,37 @@ fn a_line_at_a_dangling_edit_s_instant_is_judged_as_the_fold_reads_it() {
             Reuse(craft),
         ])
         .expect("the laws hold");
-        // The craft was posted, and what answered it is named: a stop meets the refusal of a line
-        // that takes up an edit and is no person's turn; an act never reaches it, since the box
-        // alone writes a `Said` line other than a person's; the question takes the edit up.
         let [(posted, answer)] = &took.crafted[..] else {
             panic!("one crafted line posted for {craft:?}: {:?}", took.crafted);
         };
         let refused = |why: &str| matches!(answer, suzatary_store::replica::writes::Answer::Refused { kind: Refusal::Final, reason } if reason.contains(why));
+        let read = took.read.as_ref().expect("the box's reading");
+        let edit = &read
+            .lines()
+            .iter()
+            .find(|written| matches!(written.entry, Entry::Again { .. }))
+            .expect("the edit's Again")
+            .name;
         match posted {
-            Craft::Stop => assert!(refused("it would take up an edit"), "{answer:?}"),
             Craft::Act => assert!(refused("the box alone writes a Said line"), "{answer:?}"),
-            Craft::Question => assert_eq!(*answer, Answer::Taken),
+            Craft::EditedByOther => {
+                assert!(refused("this edit is someone else's"), "{answer:?}");
+                assert!(
+                    question_live(read, edit),
+                    "another actor's question took the edit up"
+                );
+            }
+            Craft::Stop | Craft::Question => {
+                assert_eq!(*answer, Answer::Taken);
+                assert!(question_live(read, edit), "a {posted:?} took the edit up");
+            }
+            Craft::Edited => {
+                assert_eq!(*answer, Answer::Taken);
+                assert!(
+                    !question_live(read, edit),
+                    "the edit's own question took it up"
+                );
+            }
         }
     }
 }

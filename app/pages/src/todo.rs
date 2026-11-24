@@ -93,6 +93,15 @@ pub enum Ask {
     Thirty,
 }
 
+/// Whether the box's page is owed a fetch: a write to this todo, this tab's answered or one the
+/// replica shows unsent, that the page drawn may not hold. Settled by a fetch once the replica
+/// holds no unsent act of the todo, which is when the box holds the write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Owed {
+    Nothing,
+    Write,
+}
+
 /// Whether a part of the page that opens is open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Fold {
@@ -173,6 +182,7 @@ pub struct Model {
     defer: Deferring,
     provenance: Fold,
     history: Fold,
+    owed: Owed,
 }
 
 #[derive(Debug, Clone)]
@@ -237,6 +247,7 @@ impl Model {
             defer: Deferring::Shut,
             provenance: Fold::Shut,
             history: Fold::Shut,
+            owed: Owed::Nothing,
         };
         let effects = vec![
             Effect::Hold {
@@ -557,15 +568,11 @@ impl Model {
                 reading,
                 ..
             } => {
-                let was = self.unsent_here();
                 self.unsent = read(reading);
                 // A commit to the replica moves the thirty days.
                 self.sampled = None;
                 let mut out = self.resample();
-                // What this tab wrote of it reached the box: the box's page now says it.
-                if was && !self.unsent_here() {
-                    out.push(Effect::Again { path: self.path() });
-                }
+                out.extend(self.caught_up(Owed::Nothing));
                 out
             }
             Input::Held {
@@ -665,8 +672,35 @@ impl Model {
         }
     }
 
+    /// The box's page asked again where a write is owed it and the replica holds no unsent act
+    /// of this todo; owed `after` the ask. One rule for every order of a write's answer, the
+    /// box's taking it and the readings of the replica, which may coalesce: a reading that shows
+    /// an unsent act owes a fetch, and the write's own answer fetches at once where the reading
+    /// already shows none, still owing one in case that reading was from before its keep.
+    fn caught_up(&mut self, after: Owed) -> Vec<Fx> {
+        match &self.unsent {
+            Reading::Val { .. } if self.unsent_here() => {
+                self.owed = Owed::Write;
+                Vec::new()
+            }
+            Reading::Val { .. } if self.owed == Owed::Write => {
+                self.owed = after;
+                vec![Effect::Again { path: self.path() }]
+            }
+            Reading::Val { .. } | Reading::Loading | Reading::Error { .. } => Vec::new(),
+        }
+    }
+
     fn done(&mut self, write: Write) -> Vec<Fx> {
         self.running.remove(&write);
+        self.owed = Owed::Write;
+        let mut out = self.caught_up(Owed::Write);
+        out.extend(self.told(write));
+        out
+    }
+
+    /// What a write the tab kept says.
+    fn told(&mut self, write: Write) -> Vec<Fx> {
         match write {
             Write::Act { acting } => {
                 self.note.clear();
@@ -1476,6 +1510,107 @@ impl Program for Todo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A writer's page on `renewcard`, the box's page drawn.
+    fn opened() -> Model {
+        let context = crate::runtime::Context {
+            gate: Gate::Writes,
+            reach: crate::runtime::Reach::Writes,
+            offsets: Vec::new(),
+            keys: crate::runtime::Keys::Physical,
+            opens: crate::runtime::Opens::Over,
+            categories: Vec::new(),
+            clock: None,
+        };
+        Model::open(Flags {
+            context,
+            chain: "life".to_owned(),
+            id: "renewcard".to_owned(),
+            now: 1_788_000_000_000,
+        })
+        .0
+    }
+
+    /// One thing the page hears about a write: its answer, or a reading of the replica's unsent
+    /// acts, with or without one of this todo.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Heard {
+        Answer,
+        Unsent,
+        Taken,
+    }
+
+    fn hear(m: &mut Model, heard: Heard) -> bool {
+        use crate::runtime::{Answer, Text};
+        let unsent = |todos: serde_json::Value| {
+            Msg::Host(Box::new(Input::Held {
+                ask: Hold::Unsent,
+                reading: Reading::Val {
+                    v: Answer::Done {
+                        body: Text::printed(
+                            &serde_json::json!({"todos": todos, "acts": [], "refused": [],
+                        "blocked": 0, "stranded": 0, "losses": [], "waiting": 0}),
+                        ),
+                    },
+                },
+                behind: None,
+            }))
+        };
+        let msg = match heard {
+            Heard::Answer => Msg::Host(Box::new(Input::Answered {
+                ask: Ask::Sealed {
+                    write: Write::Save,
+                    seal: Seal::Event,
+                },
+                answer: Answer::Done {
+                    body: Text::printed(
+                        &serde_json::json!({"type": "Answered", "answer": {"type": "Taken"}, "held": false}),
+                    ),
+                },
+            })),
+            Heard::Unsent => unsent(serde_json::json!({"renewcard": "Sending"})),
+            Heard::Taken => unsent(serde_json::json!({})),
+        };
+        m.update(msg)
+            .iter()
+            .any(|e| matches!(e, Effect::Again { .. }))
+    }
+
+    /// Every order of a write's answer (at its keep), the box taking it (a reading with nothing
+    /// unsent), and the reading that shows it unsent, which comes before the box takes it or is
+    /// coalesced away: the page asks the box for its page at or after the box holds the write.
+    #[test]
+    fn the_page_asks_the_box_again_once_it_holds_the_write_in_every_order() {
+        let orders: [&[Heard]; 6] = [
+            &[Heard::Answer, Heard::Unsent, Heard::Taken],
+            &[Heard::Unsent, Heard::Answer, Heard::Taken],
+            &[Heard::Unsent, Heard::Taken, Heard::Answer],
+            &[Heard::Answer, Heard::Taken],
+            &[Heard::Taken, Heard::Answer],
+            &[Heard::Taken, Heard::Answer, Heard::Taken],
+        ];
+        for order in orders {
+            let mut m = opened();
+            // The reading before the write: nothing of it unsent.
+            assert!(
+                !hear(&mut m, Heard::Taken),
+                "{order:?}: nothing is owed before a write"
+            );
+            let asked: Vec<bool> = order.iter().map(|h| hear(&mut m, *h)).collect();
+            // The box holds it at the first reading of nothing unsent after the write was seen
+            // unsent or answered; a reading before both may be from before the keep, so where
+            // there is none, only the answer can say it is held.
+            let held = (0..order.len())
+                .find(|&i| {
+                    order[i] == Heard::Taken && order[..i].iter().any(|h| *h != Heard::Taken)
+                })
+                .unwrap_or_else(|| order.iter().rposition(|h| *h == Heard::Answer).unwrap_or(0));
+            assert!(
+                asked[held..].iter().any(|a| *a),
+                "{order:?}: asked {asked:?}, never at or after the box held it"
+            );
+        }
+    }
 
     #[test]
     fn a_recurring_term_opens_with_its_cycle() {

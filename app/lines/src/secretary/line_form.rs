@@ -131,6 +131,7 @@ enum StepForm {
     Still,
     Began { covers: Vec<Name>, run: String },
     Again { question: Name, how: String },
+    Edits,
 }
 
 impl snapshot::Held for LineReplica {
@@ -293,6 +294,7 @@ fn step_form(step: &Step) -> StepForm {
     match step {
         Step::Opened => StepForm::Opened,
         Step::Asks => StepForm::Asks,
+        Step::Edits => StepForm::Edits,
         Step::Noted => StepForm::Noted,
         Step::Answers => StepForm::Answers,
         Step::Rewound { to } => StepForm::Rewound { to: *to },
@@ -325,6 +327,7 @@ fn step_of(form: StepForm) -> Result<Step, String> {
     Ok(match form {
         StepForm::Opened => Step::Opened,
         StepForm::Asks => Step::Asks,
+        StepForm::Edits => Step::Edits,
         StepForm::Noted => Step::Noted,
         StepForm::Answers => Step::Answers,
         StepForm::Rewound { to } => Step::Rewound { to },
@@ -359,7 +362,7 @@ fn key_name(bytes: &Name) -> Result<KeyName, String> {
 
 /// A line's header, what a fold reads of it without its words: its husk's is its own.
 #[must_use]
-pub fn line_header(line: &crate::secretary::line_event::LineEvent) -> NodeHeader {
+pub(crate) fn line_header(line: &crate::secretary::line_event::LineEvent) -> NodeHeader {
     NodeHeader::Line {
         conversation: line.conversation().as_str().to_owned(),
         at: prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(line.at())),

@@ -119,13 +119,13 @@ impl<E: Schema<Vocabulary: Default>, const SIGNATURES: bool> Store<E, SIGNATURES
         framed(&self.replica.letting_go(&names))
     }
 
-    /// The frame of `literals`, a JSON array, written as the tab's own: what an earlier build kept
-    /// unsent, made and not taken, as [`Store::let_go`]'s is.
-    pub fn carry(&self, literals: &str) -> Result<Vec<u8>, JsError> {
+    /// The frame of `literals`, a JSON array, written as the tab's own, made and not taken, as
+    /// [`Store::let_go`]'s is: what an earlier build kept unsent, or what [`Store::append`] made
+    /// beside its signatures. What this replica already wrote is written once: its answer stands.
+    pub fn writing(&self, literals: &str) -> Result<Vec<u8>, JsError> {
         let literals: Vec<String> =
             serde_json::from_str(literals).map_err(|e| refused(format!("literals: {e}")))?;
         let schema = E::Vocabulary::default();
-        // What this replica already wrote is carried once: its own answer stands.
         let own: std::collections::BTreeSet<&Hash> =
             self.replica.own().map(|o| o.node.name()).collect();
         let objects = literals
@@ -184,31 +184,37 @@ impl<E: Schema<Vocabulary: Default>, const SIGNATURES: bool> Store<E, SIGNATURES
         self.step(Objects::start_over)
     }
 
-    /// `event` sealed as a `Change` over the kept reading, and kept unsent; none for a twin. A
-    /// failed append leaves no reading kept, so the next question makes one afresh.
-    pub fn append(&mut self, event: &str) -> Result<Option<Vec<u8>>, JsError> {
+    /// `[{hash, literal}]`: `events`, a JSON array of prints, each sealed as a `Change` over the
+    /// kept reading and the changes before it, made and not taken; none for a twin. The replica
+    /// takes them only through [`Store::writing`] and [`Store::apply`], once the caller kept the
+    /// frame, so a move the device could not keep is not held either. A failed append leaves no
+    /// reading kept, so the next question makes one afresh.
+    pub fn append(&mut self, events: &str) -> Result<String, JsError> {
+        let events: Vec<String> =
+            serde_json::from_str(events).map_err(|e| refused(format!("events: {e}")))?;
         let mut read = match self.read.take() {
             Some(read) => read.map_err(refused)?,
             None => self.fresh().map_err(refused)?,
         };
-        // The reading now holds the event, which the replica does not until its frame is kept: the
-        // next reading is made afresh.
-        let appended = prodrome_wasm_exports::append(&mut read, event, None).map_err(refused)?;
-        let appended: Appended =
-            serde_json::from_str(&appended).map_err(|e| refused(format!("append: {e}")))?;
-        if appended.objects.is_empty() {
-            self.read = OnceCell::from(Ok(read));
-            return Ok(None);
+        let mut changes = Vec::new();
+        for event in &events {
+            let appended =
+                prodrome_wasm_exports::append(&mut read, event, None).map_err(refused)?;
+            let appended: Appended =
+                serde_json::from_str(&appended).map_err(|e| refused(format!("append: {e}")))?;
+            changes.extend(appended.objects);
         }
-        let schema = E::Vocabulary::default();
-        let objects = appended
-            .objects
-            .into_iter()
-            .map(|o| Object::read::<E>(&schema, o.text))
-            .collect();
-        // Made and not taken: the replica takes it only through [`Store::apply`], once the caller
-        // kept the frame, so a move the device could not keep is not held either.
-        framed(&Objects::writing(objects)).map(Some)
+        // The reading holds the changes, which the replica does not until their frame is kept:
+        // the next reading is made afresh.
+        if changes.is_empty() {
+            self.read = OnceCell::from(Ok(read));
+        }
+        json(
+            &changes
+                .iter()
+                .map(|o| serde_json::json!({ "hash": o.hash, "literal": o.text }))
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// `[[{hash, literal, keys}]]`: the unsent, in posts the box takes whole; an object of a store
@@ -430,6 +436,7 @@ struct Appended {
 
 #[derive(serde::Deserialize)]
 struct Text {
+    hash: String,
     text: String,
 }
 
@@ -457,9 +464,6 @@ macro_rules! objects_store {
             }
             pub fn let_go(&self, names: &str) -> Result<Vec<u8>, wasm_bindgen::JsError> {
                 self.0.let_go(names)
-            }
-            pub fn carry(&self, literals: &str) -> Result<Vec<u8>, wasm_bindgen::JsError> {
-                self.0.carry(literals)
             }
             #[must_use]
             pub fn settled(&self) -> bool {
@@ -567,11 +571,11 @@ macro_rules! objects_store {
             pub fn start_over(&mut self) -> Result<$crate::line_rows::Step, wasm_bindgen::JsError> {
                 self.0.start_over()
             }
-            pub fn append(
-                &mut self,
-                event: &str,
-            ) -> Result<Option<Vec<u8>>, wasm_bindgen::JsError> {
-                self.0.append(event)
+            pub fn append(&mut self, events: &str) -> Result<String, wasm_bindgen::JsError> {
+                self.0.append(events)
+            }
+            pub fn writing(&self, literals: &str) -> Result<Vec<u8>, wasm_bindgen::JsError> {
+                self.0.writing(literals)
             }
             #[must_use]
             pub fn closed(&self) -> bool {

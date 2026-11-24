@@ -150,6 +150,9 @@ task = "localwrites"
 file = "docs/EFFECTS-PLAN-2026-10-25.md"
 task = "localwrites"
 [[in_force]]
+file = "docs/LOCALTAPS-PLAN-2026-11-23.md"
+task = "localwrites"
+[[in_force]]
 file = "docs/ONEOWNER-PLAN-2026-11-02.md"
 task = "coreskeleton"
 [[in_force]]

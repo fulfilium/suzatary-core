@@ -224,7 +224,8 @@ export namespace storeset {
       )
     const readies: { readonly [S in Scope]: once.T<void> } = { Inbox: readyOf(SCOPES.Inbox, inboxOnly), All: readyOf(SCOPES.All, all) }
 
-    // Each event planned for `w`, sealed, signed and kept; handed over behind the answer, so no round trip is waited on.
+    // Each event planned for `w`, sealed, signed and kept in one move; handed over behind the answer, so no round trip is
+    // waited on.
     const write = async (w: topics.Write, at: string, actor: string): Promise<void> => {
       const name = topics.store(w)
       const measured = async <A>(step: string, f: () => A | Promise<A>): Promise<A> => {
@@ -235,15 +236,12 @@ export namespace storeset {
       }
       await measured("ready", () => readies.All.get())
       const { store, sync } = topicStores[name]
-      // Planned, sealed and kept in the store's turn, so the reading planned from is the one written over.
-      await sync.exclusive(async () => {
+      // Planned, sealed, signed and kept in the store's turn, so the reading planned from is the one written over.
+      const signed = await sync.exclusive(async () => {
         const events = await measured("plan", () => topics.plan(topicsNow().reading, w, at, actor))
-        for (const event of events) {
-          const frame = await measured("append", () => store.append(event))
-          if (frame !== undefined) await measured("keep", () => sync.kept(frame))
-        }
+        return measured("keep", () => writes.own(name, store, events, frame => sync.kept(frame)))
       })
-      await measured("sign", () => writes.sign(name))
+      if (signed.type === "Partly") say({ type: "Refused", why: `This tab's ${NOUNS[name]} was kept unsigned (${signed.why}); the next sync signs it.` })
       void writes.handOver(name).catch(failed(name))
     }
 
@@ -296,7 +294,7 @@ export namespace storeset {
               const kept = { name: sealed.name, conversation: sealed.conversation }
               const signed = await part("sign", () => writes.signatures("lines"))
               if (signed.type === "Partly") say({ type: "Refused", why: `This tab's ${LINE} was kept unsigned (${signed.why}); the next sync signs it.` })
-              await part("keep", () => lines.ownKeep([sealed, ...signed.steps]))
+              await part("keep", () => lines.ownKeep([sealed, ...signed.made]))
               return { type: "Sealed", sealed: kept }
             }
           }

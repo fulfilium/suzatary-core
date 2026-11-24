@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::secretary::line_shape::LineShape;
+use crate::secretary::saying::Saying;
 use prodrome_core::event::Hash;
 use suzatary_conversations::secretary::store::RunId;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
@@ -22,6 +23,8 @@ pub enum Step {
     Opened,
     /// A turn that opens a round: a person's, an act's, or the act a stop reads as.
     Asks,
+    /// An edit's own question: `Asks`, and takes up the `Again` it rests on.
+    Edits,
     /// The box's own note, an act it composed from its own state: it opens a round as an act
     /// does, and a round of nothing but such notes is no round of the owner's.
     Noted,
@@ -74,11 +77,10 @@ pub enum Step {
 }
 
 impl Step {
-    /// Whether a line of this step by `writer` takes up the edit of an `Again` it rests on: a
-    /// round-opening turn not the box's.
+    /// Whether a line of this step takes up the edit of an `Again` it rests on alone.
     #[must_use]
-    pub(crate) fn takes_up(&self, writer: crate::wire::lines::LineWriter) -> bool {
-        *self == Step::Asks && writer == crate::wire::lines::LineWriter::Other
+    pub(crate) fn takes_up(&self) -> bool {
+        *self == Step::Edits
     }
 
     /// The step of a line shaped `shape`, as `Stored::fold` folds the line.
@@ -86,9 +88,12 @@ impl Step {
     pub fn of(shape: &LineShape) -> Self {
         match shape {
             LineShape::Opened { .. } | LineShape::SetUp { .. } => Step::Opened,
-            LineShape::Said { turn, by } => match turn {
+            LineShape::Said { turn, by, saying } => match turn {
                 TurnShape::Act { .. } if *by == Some(Stamp::Box) => Step::Noted,
-                TurnShape::Person { .. } | TurnShape::Act { .. } => Step::Asks,
+                TurnShape::Person { .. } | TurnShape::Act { .. } => match saying {
+                    Saying::Plain => Step::Asks,
+                    Saying::Edit => Step::Edits,
+                },
                 TurnShape::Model { .. } | TurnShape::Tool { .. } => Step::Answers,
             },
             LineShape::Stopped { .. } => Step::Asks,

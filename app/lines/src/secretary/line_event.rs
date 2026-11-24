@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::secretary::line_shape::{self, LineShape};
+use crate::secretary::saying::Saying;
 use prodrome_core::fold::sole::{One, Only, Whole};
 use prodrome_core::literal::codec::{Constructor, Fields, Literal, no_arm, record};
 use suzatary_base::capability::Entropy;
@@ -109,6 +110,8 @@ pub enum NotALine {
     Unscrubbable(String),
     #[error("no key for its words: {0}")]
     NoKey(String),
+    #[error("an edit's question is a turn said, and this entry is none")]
+    Unsaid,
 }
 
 /// The domain of a conversation's id.
@@ -126,6 +129,22 @@ impl LineEvent {
         entropy: &dyn Entropy,
     ) -> Result<(Self, Vec<TextKey>), NotALine> {
         let (line, words) = Self::unsealed(conversation, actor, held, entry)?;
+        line.sealed(&words, entropy)
+    }
+
+    /// [`LineEvent::write`] of a `Said` entry as an edit's own question ([`Saying::Edit`]).
+    pub fn edited(
+        conversation: ConversationId,
+        actor: Actor,
+        held: u32,
+        entry: &Entry,
+        entropy: &dyn Entropy,
+    ) -> Result<(Self, Vec<TextKey>), NotALine> {
+        let (mut line, words) = Self::unsealed(conversation, actor, held, entry)?;
+        let LineShape::Said { saying, .. } = &mut line.shape else {
+            return Err(NotALine::Unsaid);
+        };
+        *saying = Saying::Edit;
         line.sealed(&words, entropy)
     }
 
@@ -532,7 +551,7 @@ fn shape_fields(shape: &LineShape) -> Vec<Value> {
         LineShape::Opened { model, kind } => vec![model.to_value(), kind.to_value()],
         LineShape::SetUp { template } => vec![template.to_value()],
         LineShape::Titled { by } => vec![json(by)],
-        LineShape::Said { turn, by } => vec![json(turn), by.to_value()],
+        LineShape::Said { turn, by, .. } => vec![json(turn), by.to_value()],
         LineShape::Proposed { object, revises } => vec![object.to_value(), revises.to_value()],
         LineShape::Reviewed {
             chain,
@@ -600,6 +619,12 @@ fn shape_of(fields: Fields<'_>) -> Result<LineShape, ProdromeError> {
         "Said" => LineShape::Said {
             turn: parsed(fields, "turn")?,
             by: fields.get("by")?,
+            saying: Saying::Plain,
+        },
+        "Edited" => LineShape::Said {
+            turn: parsed(fields, "turn")?,
+            by: fields.get("by")?,
+            saying: Saying::Edit,
         },
         "Proposed" => LineShape::Proposed {
             object: fields.get("object")?,
@@ -677,7 +702,14 @@ fn signature(shape: &LineShape) -> Constructor {
         LineShape::Opened { .. } => OPENED,
         LineShape::SetUp { .. } => SET_UP,
         LineShape::Titled { .. } => TITLED,
-        LineShape::Said { .. } => SAID,
+        LineShape::Said {
+            saying: Saying::Plain,
+            ..
+        } => SAID,
+        LineShape::Said {
+            saying: Saying::Edit,
+            ..
+        } => EDITED,
         LineShape::Proposed { .. } => PROPOSED,
         LineShape::Reviewed { .. } => REVIEWED,
         LineShape::ReviewFailed { .. } => REVIEW_FAILED,
@@ -804,6 +836,8 @@ const SAID: Constructor = (
         "words",
     ],
 );
+/// An edit's own question: a `Said` by another name ([`Saying::Edit`]).
+const EDITED: Constructor = ("Edited", SAID.1);
 const PROPOSED: Constructor = (
     "Proposed",
     &[
@@ -988,6 +1022,7 @@ const LINES: &[Constructor] = &[
     SET_UP,
     BEGAN,
     AGAIN,
+    EDITED,
 ];
 
 /// The lines' whitelist: their constructors, `Scrubbed`, `Locked` and a claim's `Covered`,

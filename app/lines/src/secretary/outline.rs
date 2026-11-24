@@ -1,5 +1,5 @@
 //! A conversation's rounds without their words: the turn that opens each and when, what the stream
-//! counts and chooses by, and the lines that hold each round's words. [`of_steps`] (from the
+//! counts and chooses by, and the lines that hold each round's words. `of_steps` (from the
 //! skeleton) and [`of_stored`] (from the whole conversation) agree for every conversation
 //! (`tests/transcript.rs`), so the stream chooses its rounds before it reads one.
 
@@ -77,6 +77,7 @@ impl Voices {
             Step::Noted => Voices::BoxAlone,
             Step::Opened
             | Step::Asks
+            | Step::Edits
             | Step::Answers
             | Step::Rewound { .. }
             | Step::Again { .. }
@@ -162,10 +163,7 @@ fn again_aside(
     };
     crate::secretary::again::aside(
         |at| &order[at].1,
-        |at, again| {
-            let (line, edit) = (&lines[order[at].0], &lines[order[again].0]);
-            line.step.takes_up(*line.writer) && line.at == edit.at
-        },
+        |at, _| lines[order[at].0].step.takes_up(),
         order.len(),
         question,
         place,
@@ -175,7 +173,7 @@ fn again_aside(
 
 /// The outline of conversation `id` from its lines, in any order: put in the order the
 /// conversation's own reading puts them, then folded as `Stored::fold` folds their turns and title.
-pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
+pub(crate) fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
     let order = crate::secretary::transcript::sequenced(
         &lines
             .iter()
@@ -200,7 +198,7 @@ pub fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
     let mut erasures: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();
     for (place, line) in ordered {
         match line.step {
-            Step::Asks | Step::Noted | Step::Answers => {
+            Step::Asks | Step::Edits | Step::Noted | Step::Answers => {
                 turn_at[place] = Some(turns.len());
                 turns.push((line.at, line.step, line.name));
             }

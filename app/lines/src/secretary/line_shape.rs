@@ -40,7 +40,11 @@ pub enum LineShape {
     /// Named. Words: the name.
     Titled { by: Namer },
     /// Something said. Words: the turn's slots.
-    Said { turn: TurnShape, by: Option<Stamp> },
+    Said {
+        turn: TurnShape,
+        by: Option<Stamp>,
+        saying: crate::secretary::saying::Saying,
+    },
     Proposed {
         object: ProposalId,
         /// The proposal it replaces.
@@ -184,7 +188,14 @@ impl LineShape {
             LineShape::Opened { .. } => "Opened",
             LineShape::SetUp { .. } => "SetUp",
             LineShape::Titled { .. } => "Titled",
-            LineShape::Said { .. } => "Said",
+            LineShape::Said {
+                saying: crate::secretary::saying::Saying::Plain,
+                ..
+            } => "Said",
+            LineShape::Said {
+                saying: crate::secretary::saying::Saying::Edit,
+                ..
+            } => "Edited",
             LineShape::Proposed { .. } => "Proposed",
             LineShape::Reviewed { .. } => "Reviewed",
             LineShape::ReviewFailed { .. } => "ReviewFailed",
@@ -244,6 +255,7 @@ pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
                 LineShape::Said {
                     turn,
                     by: by.clone(),
+                    saying: crate::secretary::saying::Saying::Plain,
                 },
                 words,
             )
@@ -478,7 +490,7 @@ pub fn join(
             ),
             by,
         },
-        LineShape::Said { turn, by } => Entry::Said {
+        LineShape::Said { turn, by, .. } => Entry::Said {
             at,
             turn: turn_shape::join(turn, slot.collect()),
             by,

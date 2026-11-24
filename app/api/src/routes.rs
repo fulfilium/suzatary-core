@@ -1031,6 +1031,7 @@ fn weight(node: &SkeletonNode) -> usize {
                     }
                     Step::Opened
                     | Step::Asks
+                    | Step::Edits
                     | Step::Noted
                     | Step::Answers
                     | Step::Rewound { .. }
@@ -1244,8 +1245,9 @@ pub fn receive_objects(
     let heard = act_lines::heard_from_objects(&taken, actor, &chain.name, &|posted| {
         suzatary_todo::todos::current(&shown, posted.at, posted.todo.as_str())
     });
-    part("take", || store.accept(&outcome.taken))?;
-    // Render what landed before answering; `renders` keeps untrusted records uncompiled.
+    // Rendered before it is taken: a reader that sees a record finds its rendering, since nothing
+    // tells a page to ask again when a rendering lands after the record; `renders` keeps
+    // untrusted records uncompiled.
     let fresh: Vec<Escaped> = taken
         .iter()
         .filter_map(|event| match event {
@@ -1263,6 +1265,7 @@ pub fn receive_objects(
     if !fresh.is_empty() {
         render.warm(&fresh);
     }
+    part("take", || store.accept(&outcome.taken))?;
     let key = format!("chain/{}", chain.name.as_str());
     Ok((
         receipt(
