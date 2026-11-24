@@ -149,7 +149,7 @@ there is no login page and no public endpoint, by design.
 
 | | |
 |---|---|
-| `app/` | The Rust workspace: `core` (meaning, no I/O), `io` (the interpreters), `cli` (the one binary), `wasm` (the same core for the browser), `plugin` (WebAssembly plugins) |
+| `app/` | The Rust workspace: `core` (meaning, no I/O), `os` and `io-*` (the interpreters), `cli` (the one binary), `wasm` (the same core for the browser), `plugin` (WebAssembly plugins) |
 | `web/` | The TypeScript app: no framework, no npm, one esbuild bundle |
 | `android/` | The portal: a WebView onto your box, holding nothing |
 | `nix/` | The NixOS module and the service derivations |

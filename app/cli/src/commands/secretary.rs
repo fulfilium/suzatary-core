@@ -17,8 +17,6 @@ use suzatary_conversations::secretary::store::{Entry, Kind, Line, Lines};
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
 use suzatary_held::held_value::{Filled, HeldFile};
-use suzatary_io::drive::ReadOnly;
-use suzatary_io::repos::{Author, Mirrors, Stopped};
 use suzatary_io_chains::conversations::ConversationStores;
 use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::blobs::Blobs;
@@ -26,6 +24,8 @@ use suzatary_io_local::clock::SystemClock;
 use suzatary_io_local::state::Ledger;
 use suzatary_io_mail::google::{Grants, Inserted};
 use suzatary_io_mail::oauth::{Pending, TokenStore};
+use suzatary_io_sources::drive::ReadOnly;
+use suzatary_io_sources::repos::{Author, Mirrors, Stopped};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::{Consent, Protocol};
 use suzatary_secretary::secretary;
@@ -138,7 +138,7 @@ pub struct ActingStores {
 pub fn fixture_mirrors(instance: &Instance) -> Arc<Mirrors> {
     Arc::new(Mirrors::new(
         instance.data().join("fixture-mirrors"),
-        suzatary_io::repos::Source::Local {
+        suzatary_io_sources::repos::Source::Local {
             base: instance.data().join("fixture-repos"),
         },
         instance.repos.clone(),
@@ -453,7 +453,7 @@ impl suzatary_server::secretary::routes::Perform for Acting {
                 }),
                 Acting::Real { conversations, .. } => {
                     let fetcher =
-                        suzatary_io::web::Fetcher::new(std::time::Duration::from_secs(10));
+                        suzatary_io_sources::web::Fetcher::new(std::time::Duration::from_secs(10));
                     web_turn(conversations, id, request, fetcher.perform(request))
                 }
                 #[cfg(feature = "fixture")]

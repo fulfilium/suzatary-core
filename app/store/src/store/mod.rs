@@ -1,5 +1,5 @@
 //! A store in one of three shapes: [`Prodrome`] (objects, appended), [`Log`] (lines, pushed) and
-//! [`Doc`] (one value, got and set). `suzatary-io` interprets them over files.
+//! [`Doc`] (one value, got and set). `suzatary-io-local` interprets them over files.
 
 #[cfg(any(test, feature = "nothing"))]
 #[path = "../../tests/support/counted.rs"]

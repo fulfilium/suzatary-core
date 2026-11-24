@@ -1,6 +1,6 @@
 [package]
-name = "suzatary-io"
-description = "Suzatary's interpreters: the capabilities of its model crates, against the world"
+name = "suzatary-io-sources"
+description = "Suzatary's interpreters of Drive, the GitHub mirrors, the web, the weather and push"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 autotests = false
 
 [lib]
-name = "suzatary_io"
+name = "suzatary_io_sources"
 path = "src/lib.rs"
 
 [dependencies]

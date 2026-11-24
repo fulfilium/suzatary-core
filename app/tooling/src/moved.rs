@@ -196,14 +196,14 @@ mod tests {
         // Bytes the published tree does not hold admitted: long deleted, or a line its file belied.
         assert_eq!(moved(&[], &[("n.png", "A")], &[("n.png", "A")]), none);
         // Among a top-level directory's test trees, a move; out of them, or to another directory, none.
-        let fixture = [("app/io/tests/fixtures/k.pem", "K")];
+        let fixture = [("app/io-mail/tests/fixtures/k.pem", "K")];
         assert_eq!(
             moved(
                 &fixture,
                 &[("app/server/tests/k.pem", "K")],
                 &[("app/server/tests/k.pem", "K")]
             ),
-            ["app/io/tests/fixtures/k.pem -> app/server/tests/k.pem"]
+            ["app/io-mail/tests/fixtures/k.pem -> app/server/tests/k.pem"]
         );
         assert_eq!(
             moved(

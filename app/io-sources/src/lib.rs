@@ -1,4 +1,4 @@
-//! The interpreters: the ports' capabilities, run against the world.
+//! The interpreters of Drive, the GitHub mirrors, the web, the weather and push.
 //!
 //! No policy (decisions arrive as values) and no logging (a refusal is a
 //! returned value).

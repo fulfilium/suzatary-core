@@ -450,7 +450,7 @@ fn the_connection_edits_and_the_mail_delete_are_called_from_the_tap_alone() {
         "io-chains",
         "io-model",
         "io-mail",
-        "io",
+        "io-sources",
         "cli",
         "plugin",
         "wasm",

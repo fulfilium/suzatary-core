@@ -1,5 +1,5 @@
 //! `instance.toml`, parsed: the one place this binary learns about a box, so
-//! the model crates and `suzatary-io` never see a path. It holds nothing secret.
+//! the model crates and the `suzatary-io-*` crates never see a path. It holds nothing secret.
 
 use suzatary_base::persona::Persona;
 use suzatary_io_access::secrets::Declarations;

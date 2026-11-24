@@ -16,7 +16,7 @@ const core = (): Core => {
   return createRequire(import.meta.url)(`${built}/nodejs/prodrome.js`) as Core
 }
 const wasm = core()
-const store = "app/io/tests/fixtures/inbox-proposals"
+const store = "app/io-chains/tests/fixtures/inbox-proposals"
 const objects: Named[] = readdirSync(`${store}/objects`)
   .sort()
   .map(f => ({ hash: f.replace(/\.py$/, ""), literal: readFileSync(`${store}/objects/${f}`, "utf8") }))

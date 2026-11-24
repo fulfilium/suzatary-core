@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use suzatary_io::repos::Mirrors;
+use suzatary_io_sources::repos::Mirrors;
 
 use super::State;
 

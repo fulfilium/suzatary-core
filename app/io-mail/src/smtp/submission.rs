@@ -337,10 +337,10 @@ mod tests {
     use std::thread::JoinHandle;
 
     /// Self-signed, `CA:TRUE`, CN and IP SAN 127.0.0.1: the Bridge's certificate's shape.
-    const BRIDGE_CERT: &[u8] = include_bytes!("../../../io/tests/fixtures/bridge-cert.pem");
-    const BRIDGE_KEY: &[u8] = include_bytes!("../../../io/tests/fixtures/bridge-key.pem");
+    const BRIDGE_CERT: &[u8] = include_bytes!("../../tests/fixtures/bridge-cert.pem");
+    const BRIDGE_KEY: &[u8] = include_bytes!("../../tests/fixtures/bridge-key.pem");
     /// Another certificate of the same shape, whose key was thrown away.
-    const OTHER_CERT: &[u8] = include_bytes!("../../../io/tests/fixtures/other-cert.pem");
+    const OTHER_CERT: &[u8] = include_bytes!("../../tests/fixtures/other-cert.pem");
 
     const PASSWORD: &str = "hunter2-bridge-password";
     const TIMEOUT: Duration = Duration::from_secs(10);

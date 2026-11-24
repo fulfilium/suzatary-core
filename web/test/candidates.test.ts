@@ -1,5 +1,5 @@
 // A register in conflict, folded by the core in this process: every candidate reaches the page,
-// priced as its most urgent world, the numbers `app/io/tests/fixtures/legacy/readings.txt` pins.
+// priced as its most urgent world, the numbers `app/io-chains/tests/fixtures/legacy/readings.txt` pins.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -18,7 +18,7 @@ const core = (): Core => {
 }
 const wasm = core()
 
-const dir = "app/io/tests/fixtures/legacy/conflicted/objects"
+const dir = "app/io-chains/tests/fixtures/legacy/conflicted/objects"
 const links = readdirSync(dir).map(f => ({ hash: f.slice(0, -".py".length), literal: readFileSync(`${dir}/${f}`, "utf8") }))
 const NOW = "2026-09-08T10:00:00"
 const rows = entriesOf(wasm, links, NOW, ["triage"], "life", new wasm.Chains()).entries

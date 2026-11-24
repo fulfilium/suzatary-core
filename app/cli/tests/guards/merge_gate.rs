@@ -330,7 +330,7 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
     ("app/base/src/repo_ids.rs", "docs"),
     ("app/inbox/tests/act_literal.rs", "docs"),
     ("app/server/tests/web_vectors.rs", "docs"),
-    ("app/io/src/repos.rs", "docs"),
+    ("app/io-sources/src/repos.rs", "docs"),
     // `memory` is also the data tree's store of the secretary's memory and its route's segment.
     ("app/cli/tests/support/fixture.rs", "memory"),
     ("app/server/src/serve/table.rs", "memory"),
@@ -352,7 +352,10 @@ const NAMED_AS_DATA: &[(&str, &str)] = &[
         "app/script-guards/tests/guards/gate_runs.rs",
         "app/api/proptest-regressions",
     ),
-    ("app/script-guards/tests/guards/gate_runs.rs", "app/io/src"),
+    (
+        "app/script-guards/tests/guards/gate_runs.rs",
+        "app/io-sources/src",
+    ),
     (
         "app/script-guards/tests/guards/gate_runs.rs",
         "app/pages/src",

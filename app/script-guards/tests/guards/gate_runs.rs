@@ -1025,13 +1025,13 @@ fn merge_gate_keys_the_ignored_counterexamples_and_the_time_zone() {
 }
 
 /// A throwaway workspace of five members (`suzatary-stores`, `suzatary-secretary` on it,
-/// `suzatary-io` on that, `suzatary` on `io`, `suzatary-wasm` on the stores) and test files over
-/// two modules, written into `gate`.
+/// `suzatary-io-sources` on that, `suzatary` on `io-sources`, `suzatary-wasm` on the stores)
+/// and test files over two modules, written into `gate`.
 /// As in a fresh checkout, the generated wire that `b.test.ts` and the app import is not on disk.
 fn units_fixture(gate: &Gate) {
     gate.write(
         "app/Cargo.toml",
-        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io-local\", \"io-typeset\", \"io-chains\", \"io-model\", \"io-mail\", \"io\", \"cli\", \"wasm\"]\n",
+        "[workspace]\nresolver = \"3\"\nmembers = [\"stores\", \"secretary\", \"io-local\", \"io-typeset\", \"io-sources\", \"cli\", \"wasm\"]\n",
     );
     for (dir, name, dep) in [
         ("stores", "suzatary-stores", ""),
@@ -1042,15 +1042,16 @@ fn units_fixture(gate: &Gate) {
         ),
         ("io-local", "suzatary-io-local", ""),
         ("io-typeset", "suzatary-io-typeset", ""),
-        ("io-chains", "suzatary-io-chains", ""),
-        ("io-model", "suzatary-io-model", ""),
-        ("io-mail", "suzatary-io-mail", ""),
         (
-            "io",
-            "suzatary-io",
+            "io-sources",
+            "suzatary-io-sources",
             "suzatary-secretary = { path = \"../secretary\" }\n",
         ),
-        ("cli", "suzatary", "suzatary-io = { path = \"../io\" }\n"),
+        (
+            "cli",
+            "suzatary",
+            "suzatary-io-sources = { path = \"../io-sources\" }\n",
+        ),
         (
             "wasm",
             "suzatary-wasm",
@@ -1119,21 +1120,13 @@ fn merge_gate_runs_only_the_units_whose_inputs_moved() {
         "a first gate runs every unit"
     );
 
-    gate.write("app/io/src/lib.rs", "a changed line\n");
+    gate.write("app/io-sources/src/lib.rs", "a changed line\n");
     gate.commit();
     assert!(gate.run(&[]).0);
     assert_eq!(
         gate.units_ran()["test"],
-        set(&[
-            "suzatary-io",
-            "suzatary-io-chains",
-            "suzatary-io-model",
-            "suzatary-io-mail",
-            "suzatary"
-        ]),
-        "the member, the member that depends on it and the members whose declared reads are \
-         inside it (io-chains, io-model and io-mail read io's fixtures), never the stores, the \
-         secretary or the wasm module"
+        set(&["suzatary-io-sources", "suzatary"]),
+        "the member and the member that depends on it, never the stores, the secretary or the wasm module"
     );
     assert!(!gate.units_ran().contains_key("web-test"));
 

@@ -349,7 +349,7 @@ fn a_session_is_reported_then_merged() {
     let root = common::scratch("coding-life-repos");
     let mirrors = common::local_repos(&root);
     let repo: suzatary_base::repo_ids::RepoName = "bmabsout/cv".parse().expect("a name");
-    let poll = |mirrors: &suzatary_io::repos::Mirrors| {
+    let poll = |mirrors: &suzatary_io_sources::repos::Mirrors| {
         suzatary_cli::commands::coding::poll(&fakes.conversations, mirrors, &repo).expect("polls")
     };
     assert!(poll(&mirrors).is_empty(), "no branch speaks for it yet");
@@ -425,7 +425,7 @@ fn a_poll_that_fails_leaves_the_server_answering() {
         .expect("a runtime");
     let conversations: &'static _ = Box::leak(Box::new(fakes.conversations.reopened()));
     let workers = suzatary_server::serve::Workers::new();
-    let tick = |mirrors: suzatary_io::repos::Mirrors, repo: &str| {
+    let tick = |mirrors: suzatary_io_sources::repos::Mirrors, repo: &str| {
         let repo: suzatary_base::repo_ids::RepoName = repo.parse().expect("a name");
         runtime.block_on(suzatary_cli::commands::coding::poll_once(
             conversations,

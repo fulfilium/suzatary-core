@@ -1,6 +1,6 @@
 //! Stores written before change identity, read by this build.
 //!
-//! `app/io/tests/fixtures/legacy/` was written by the core that sealed every append on the tips
+//! `app/io-chains/tests/fixtures/legacy/` was written by the core that sealed every append on the tips
 //! and is never regenerated: every line of `legacy/readings.txt` that is not a conflict must read
 //! the same forever.
 
@@ -20,7 +20,7 @@ use suzatary_store::store::Reads as _;
 const CHAINS: [&str; 4] = ["events", "events-suzatary", "events-triage", "conflicted"];
 
 fn legacy() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/fixtures/legacy")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/legacy")
 }
 
 fn policy() -> Untrusted {

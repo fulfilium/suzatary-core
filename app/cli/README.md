@@ -2,7 +2,8 @@
 
 The one binary, `suzatary`, organised by verb: `src/commands/<verb>.rs`. `src/verb.rs` is the
 argument tree and the one `match` that runs a verb. It connects the core's decisions to the
-interpreters of `suzatary-io` and runs the web app's server, `suzatary-server` (`suzatary serve`).
+interpreters of the `suzatary-io-*` crates and runs the web app's server, `suzatary-server`
+(`suzatary serve`).
 
 ## Use
 
@@ -15,7 +16,8 @@ interpreters of `suzatary-io` and runs the web app's server, `suzatary-server` (
 
 ## Depends on
 
-The model crates, `suzatary-io`, `suzatary-server`, `suzatary-plugin` and the Prodrome.
+The model crates, `suzatary-os` and the `suzatary-io-*` crates, `suzatary-server`,
+`suzatary-plugin` and the Prodrome.
 
 ## Develop
 

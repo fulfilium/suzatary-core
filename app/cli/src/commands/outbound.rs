@@ -127,8 +127,8 @@ fn destinations() -> Vec<Destination> {
             to: format!(
                 "Notifications: Firebase Cloud Messaging (`{}`) to each registered phone, \
                  and ntfy (`{}`) on your topic.",
-                suzatary_io::notify::FCM,
-                suzatary_io::notify::NTFY
+                suzatary_io_sources::notify::FCM,
+                suzatary_io_sources::notify::NTFY
             ),
             receives: "A heading, a line and a link into the app at your box's address, \
                        and nothing else; each push is one of: "
@@ -143,7 +143,7 @@ fn destinations() -> Vec<Destination> {
             off: "Declare no `[[plugins]]`.".to_owned(),
         },
         Destination {
-            to: format!("The weather: `{}`.", suzatary_io::weather::FEED),
+            to: format!("The weather: `{}`.", suzatary_io_sources::weather::FEED),
             receives: "Your `[persona] city`, by name, when a brief asks for the forecast."
                 .to_owned(),
             off: "Leave `city` empty.".to_owned(),

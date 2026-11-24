@@ -2,13 +2,15 @@
 
 The plan for the roadmap task `iosplit`. It follows the core split's method
 (`CORESPLIT-PLAN-2026-11-06.md`): measure, cut along the graph the code already has, move files whole,
-one crate per pull request, bottom first. Delete this file once `suzatary-io` is gone.
+one crate per pull request, bottom first. **It is closed**: stage 8 emptied `suzatary-io` and
+deleted it, and §7 is the record of what the split made.
 
 ## What was measured, and how
 
 - **The tool** is `train context order <unit> [<cut>]` (`app/tooling/src/context/order.rs`,
-  through `scripts/context.sh order io docs/IOSPLIT-CUT.toml`). A top module is `src/<m>.rs` with
-  the files under `src/<m>/`. Its **source** is its production code (each file up to
+  through `scripts/context.sh order io docs/IOSPLIT-CUT.toml`; the cut left the tree with `io`
+  at stage 8, and `git show 49050c1:docs/IOSPLIT-CUT.toml` is its last state). A top module is
+  `src/<m>.rs` with the files under `src/<m>/`. Its **source** is its production code (each file up to
   `#[cfg(test)]`) and its **face** is `interface::rust` of each file, the measure's own rule; both
   in tokens by `context.toml`'s ratios. Its **names** are the first segments of its `crate::` paths
   (through `{...}` groups, comments left out), its **units** the units whose `suzatary_<unit>::`
@@ -196,7 +198,7 @@ deletes its layer from the cut.
 | 5 | `io-chains` | 12, and io's eight store tests, which reach the fixture trees they read in `app/io/tests`; none becomes `pub` | stage 3 (the changes in flight to `objects.rs`, `plugin_store.rs`, `ignores.rs` and the calendar landed by 2.1.232) |
 | 6 | `io-mail` | 21, and `tests/puller_port.rs`; `smtp::submission`'s tests reach their fixtures in `app/io/tests`; `mailbox::read_of` (`drive`) becomes `pub` | stage 5, and the change in flight to `google.rs` (both landed by 2.1.234) |
 | 7 | `io-model` | 11, and `tests/model_port.rs`; `model::stream`'s test reaches its fixture in `app/io/tests`; none becomes `pub` | stage 3 |
-| 8 | `io-sources` | 8 | stages 6 and 7; it empties `io`, which this pull request deletes |
+| 8 | `io-sources` | the crate whole (11 Rust files, its manifest and README, FCM's two test keys) as `app/io-sources`; none becomes `pub`; the 203 fixture files of `app/io/tests` the other crates' tests read move to the lowest crate that reads each, and `secrets`' proptest seeds to io-access | stages 6 and 7, and the rule that an admission follows its bytes (2.1.238); it empties `io`, which this pull request deletes |
 
 Stages 2, 3 and 4 go together in one pull request, and so do stages 5 and 7. Stages 6 and 8 each
 follow the changes they wait for.
@@ -296,6 +298,42 @@ and target directory, took 728 s before and 749 s after; `cargo test --workspace
 --features suzatary/fixture` on top of it took 289 s and 290 s, linking 81 and 83 executables in
 `target/debug/deps`. The two new ones are `io-mail`'s unit tests and its `all` target.
 
+**Stage 8, measured** (one pull request, at its head against the merge base, 2.1.238; the cut
+still held there: `io` was the six modules of `io-sources` and nothing else, so the crate moved
+whole and `app/io` is gone):
+
+| | before | after |
+|---|---|---|
+| `io` USE / DEVELOP / tests | 3,947 / 305.3k / 18.0k | — |
+| `io-sources` USE / DEVELOP / tests | — | 3,900 / 305.0k / 18.0k |
+| `cli` USE / DEVELOP / tests | 49,682 / 953.8k / 817.0k | 49,711 / 953.8k / 817.1k |
+| `server` USE / DEVELOP / tests | 13,780 / 761.9k / 70.1k | 13,783 / 761.9k / 70.1k |
+| `plugin` USE / DEVELOP / tests | 3,038 / 259.5k / 6.9k | 3,040 / 259.5k / 6.9k |
+
+`cli` and `server` read `io-sources` where they read `io`, a crate of the same files; its README
+is shorter, and the longer crate name in each path is the rest. `plugin` reads neither. No item
+crossed a cut, and none became `pub`.
+
+The fixture trees left `app/io/tests` by one rule: each goes to the lowest crate whose tests read
+it, the one every other reader depends on. `stores`, `stores-changes`, `stores-unkinded`,
+`fixtures/inbox-proposals` and `fixtures/legacy` went to `app/io-chains/tests` (the web tests
+that read two of them name the new paths); the Bridge's certificates and key went to
+`app/io-mail/tests/fixtures` (the server's TLS test reads two of them and depends on io-mail);
+the stream fixture went to `app/io-model/tests/fixtures`; FCM's keys stayed with `notify` in
+`app/io-sources/tests/fixtures`. Each admitted file moved with its line in
+`scripts/public-admitted.sha256` and, for the two keys, its fingerprint in `.gitleaksignore`, and
+the train reads each as `moved:`. The gate's `crate_reads` lost its three reads of `app/io/tests`,
+so no crate's tests read another crate's directory, and its `suzatary-io=CLAUDE.md`, which
+nothing in io had read since `manuals` moved to io-local. The seeds of `secrets`' laws, left in
+`app/io/proptest-regressions` when `secrets` moved at stage 2, went to io-access.
+
+A clean workspace build, one run each in the `.#triage` shell on 4 cores with a fresh worktree
+and target directory, took 842 s before and 738 s after; `cargo test --workspace
+--no-run --features suzatary/fixture` on top of it took 290 s and 283 s,
+linking 83 executables each in `target/debug/deps`. The crate count did not change, and the
+before run shared the machine with a measurement for part of its time, so the gap is not the
+split's.
+
 ## 6. What argues against it
 
 - **Its users gain almost nothing.** `cli` and `server` name seven or eight of the eight layers;
@@ -319,3 +357,36 @@ new crate adds more than 1k to the reading set beyond its manifest and root (eac
 cost the same); or no edit lands in `os` before stage 2 is due, since the reading it saves is paid
 only when someone edits there. Of the 20 commits that touched `io` in this clone's history (since
 2026-11-20), 6 touched `os`'s four files, and `durable.rs` was the file touched most.
+
+## 7. The record
+
+`io` became eight crates, each named for what it interprets. At 2.1.238, with this pull
+request:
+
+| crate | USE | DEVELOP | tests | stage |
+|---|---|---|---|---|
+| `os` | 1,724 | 83.8k | 3.0k | 1 |
+| `io-access` | 8,699 | 249.5k | 17.9k | 2 |
+| `io-local` | 7,352 | 338.1k | 20.1k | 3 |
+| `io-typeset` | 2,122 | 255.4k | 8.3k | 4 |
+| `io-chains` | 5,658 | 432.3k | 81.6k | 5 |
+| `io-model` | 7,946 | 334.9k | 23.7k | 7 |
+| `io-mail` | 14,780 | 387.6k | 58.6k | 6 |
+| `io-sources` | 3,900 | 305.0k | 18.0k | 8 |
+
+`io` was 50,473 to use, 813.2k to develop and 220.7k of tests at 2.1.217. Its successors' USE
+sums to 52,181, the eight manifests' and roots' cost that §6 foresaw; the largest is `io-mail` at
+14.8k, and the largest DEVELOP is `io-chains` at 432k, so no successor is over either budget. An
+edit in any of them reads 84k to 432k where it read 813k.
+
+| dependent | reads | USE / DEVELOP before the split (2.1.217) | now (2.1.238) | what the split changed |
+|---|---|---|---|---|
+| `plugin` | `io-access` | 3.0k / 329.8k | 3,040 / 259.5k | −1.7k at stage 1, −40.5k at 2–4, none after: −42.2k |
+| `server` | all but `io-typeset` | 13.8k / 787.4k | 13,783 / 761.9k | −1.1k at stages 2–4, +0.2k at 5 and 7, +0.2k at 6, none at 8 |
+| `cli` | all eight | 54.4k / 981.0k | 49,711 / 953.8k | −0.1k at stage 1, +1.4k at 2–4, +0.4k at 5 and 7, +0.3k at 6, none at 8 |
+
+The columns between the two dates also hold what other changes did (the Prodrome's pin moved,
+and prodrome-core's USE fell); the last column is the sum of the stages' own deltas above. As §4
+said, the split paid `io`'s developers and the plugin; `cli` and `server` are over 500k as they
+were, and their lever is a narrower face or a split of `cli`. `train context order` stays for that:
+it measures any unit against any cut, and a cut is the plan's file, not the tool's.

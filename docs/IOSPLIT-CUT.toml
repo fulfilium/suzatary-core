@@ -1,5 +1,0 @@
-# The cut of `io` that docs/IOSPLIT-PLAN-2026-11-22.md proposes, bottom first; each layer becomes
-# the crate `suzatary-<name>`. Check a stage with `scripts/context.sh order io docs/IOSPLIT-CUT.toml`.
-[[layer]]
-name = "io-sources"
-modules = ["drive", "repos", "weather", "web", "notify", "briefings"]

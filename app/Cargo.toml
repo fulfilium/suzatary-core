@@ -1,6 +1,6 @@
 # THE APPLICATION'S WORKSPACE (docs/ARCHITECTURE.md), the repository's only one; the Prodrome
 # is a dependency by REVISION (→ `prodromedependency`). Arrows point down only: cli → plugin →
-# io → core → {todo → signatures, memory → held, services → {held, health}, {health, triage} → mail → {held, signatures}} →
+# io-* → core → {todo → signatures, memory → held, services → {held, health}, {health, triage} → mail → {held, signatures}} →
 # store, record → base → prodrome-core.
 # `wasm` is the browser's module; `plugin` the plugin host, alone because wasmtime is the largest
 # tree here; `plugin-fence` a hostile plugin the flake builds for wasm32; `testkit` what the
@@ -8,7 +8,7 @@
 # program, which depends on no member, so `-p` builds it alone.
 [workspace]
 resolver = "3"
-members = ["address", "base", "record", "release", "store", "signatures", "todo", "plan", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "os", "io-access", "io-local", "io-typeset", "io-chains", "io-model", "io-mail", "io", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages", "tooling"]
+members = ["address", "base", "record", "release", "store", "signatures", "todo", "plan", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "os", "io-access", "io-local", "io-typeset", "io-chains", "io-model", "io-mail", "io-sources", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages", "tooling"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here
@@ -62,7 +62,7 @@ suzatary-io-typeset = { path = "io-typeset" }
 suzatary-io-chains = { path = "io-chains" }
 suzatary-io-model = { path = "io-model" }
 suzatary-io-mail = { path = "io-mail" }
-suzatary-io = { path = "io" }
+suzatary-io-sources = { path = "io-sources" }
 suzatary-tooling = { path = "tooling" }
 suzatary-plugin = { path = "plugin" }
 # The evaluator's time type; "serde" for a changeset act's stored `Priority::Deadline`.
@@ -130,10 +130,10 @@ rmcp = { version = "=3.2.0", default-features = false, features = ["server", "tr
 schemars = { version = "1.2", default-features = false, features = ["derive", "std"] }
 
 # --- MAIL. ⚠️ ONE rustls, STILL: `lettre`'s is the same 0.23 with `ring`; `imap` takes NO tls
-# feature (it pins 0.22), and `suzatary_io::imap` hands it a stream our rustls built.
+# feature (it pins 0.22), and `suzatary_io_mail::imap` hands it a stream our rustls built.
 imap = { version = "3.0.0-alpha.15", default-features = false }
 # SMTP with XOAUTH2 and STARTTLS, Microsoft's path (Proton Bridge's CA-marked certificate is
-# pinned in `suzatary_io::smtp::submission`). No `builder`: the MIME is the pure core's.
+# pinned in `suzatary_io_mail::smtp::submission`). No `builder`: the MIME is the pure core's.
 lettre = { version = "0.11", default-features = false, features = [
   "smtp-transport",
   "rustls-tls",

@@ -1096,7 +1096,7 @@ pub fn watching(
     state: &State,
     first: &Chained,
     rest: Vec<Chained>,
-    mirrors: Arc<suzatary_io::repos::Mirrors>,
+    mirrors: Arc<suzatary_io_sources::repos::Mirrors>,
     tokens: Arc<suzatary_io_access::github_tokens::GithubTokens>,
 ) {
     tokio::spawn(patches::sweeping(state.clone(), mirrors));
@@ -1339,7 +1339,7 @@ mod not_built_tests {
 mod tls_tests {
     fn fixture(name: &str) -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join(format!("../io/tests/fixtures/{name}"))
+            .join(format!("../io-mail/tests/fixtures/{name}"))
     }
 
     #[test]

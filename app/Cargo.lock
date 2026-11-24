@@ -4191,12 +4191,12 @@ dependencies = [
  "suzatary-health",
  "suzatary-held",
  "suzatary-inbox",
- "suzatary-io",
  "suzatary-io-access",
  "suzatary-io-chains",
  "suzatary-io-local",
  "suzatary-io-mail",
  "suzatary-io-model",
+ "suzatary-io-sources",
  "suzatary-io-typeset",
  "suzatary-lines",
  "suzatary-mail",
@@ -4490,37 +4490,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "suzatary-io"
-version = "0.0.0"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "hex",
- "jsonwebtoken",
- "serde",
- "serde_json",
- "suzatary-base",
- "suzatary-cards",
- "suzatary-connect",
- "suzatary-google",
- "suzatary-held",
- "suzatary-inbox",
- "suzatary-io-access",
- "suzatary-io-chains",
- "suzatary-io-local",
- "suzatary-io-mail",
- "suzatary-memory",
- "suzatary-os",
- "suzatary-secretary",
- "suzatary-services",
- "suzatary-signatures",
- "suzatary-store",
- "suzatary-testkit",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
 name = "suzatary-io-access"
 version = "0.0.0"
 dependencies = [
@@ -4671,6 +4640,37 @@ dependencies = [
  "suzatary-io-local",
  "suzatary-os",
  "suzatary-services",
+ "suzatary-testkit",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "suzatary-io-sources"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "jsonwebtoken",
+ "serde",
+ "serde_json",
+ "suzatary-base",
+ "suzatary-cards",
+ "suzatary-connect",
+ "suzatary-google",
+ "suzatary-held",
+ "suzatary-inbox",
+ "suzatary-io-access",
+ "suzatary-io-chains",
+ "suzatary-io-local",
+ "suzatary-io-mail",
+ "suzatary-memory",
+ "suzatary-os",
+ "suzatary-secretary",
+ "suzatary-services",
+ "suzatary-signatures",
+ "suzatary-store",
  "suzatary-testkit",
  "tempfile",
  "thiserror",
@@ -4971,12 +4971,12 @@ dependencies = [
  "suzatary-health",
  "suzatary-held",
  "suzatary-inbox",
- "suzatary-io",
  "suzatary-io-access",
  "suzatary-io-chains",
  "suzatary-io-local",
  "suzatary-io-mail",
  "suzatary-io-model",
+ "suzatary-io-sources",
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",

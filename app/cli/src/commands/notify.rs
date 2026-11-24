@@ -8,9 +8,9 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_cards::notify::{Notify as _, Push};
 use suzatary_connect::connect::Channel;
 use suzatary_conversations::nonempty::NonEmpty;
-use suzatary_io::notify::{Channels, Configured, Waiting};
 use suzatary_io_access::secrets::Resolves;
 use suzatary_io_chains::devices::Devices;
+use suzatary_io_sources::notify::{Channels, Configured, Waiting};
 use suzatary_signatures::devices::Device;
 use suzatary_store::store::Log;
 

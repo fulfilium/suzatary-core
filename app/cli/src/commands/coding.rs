@@ -8,8 +8,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use suzatary_base::repo_ids::RepoName;
-use suzatary_io::repos::Mirrors;
 use suzatary_io_local::clock::SystemClock;
+use suzatary_io_sources::repos::Mirrors;
 use suzatary_server::serve::Workers;
 
 use suzatary_base::capability::Clock as _;

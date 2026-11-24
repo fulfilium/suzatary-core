@@ -28,9 +28,9 @@ use suzatary_held::mail_error::MailError;
 use suzatary_inbox::secretary::acts;
 use suzatary_inbox::secretary::proposer;
 use suzatary_inbox::secretary::responded;
-use suzatary_io::briefings::BriefingFiles;
 use suzatary_io_chains::conversations::ConversationStores as Conversations;
 use suzatary_io_chains::devices::Devices;
+use suzatary_io_sources::briefings::BriefingFiles;
 use suzatary_lines::secretary::transcript;
 use suzatary_mail::mail::mailbox::{Mailbox, Query};
 use suzatary_mail::mail::sync_report::SyncReport;
@@ -2552,7 +2552,7 @@ pub struct Fakes {
     pub inbox:
         suzatary_io_chains::objects::Objects<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     /// The owner's repositories, none by default.
-    pub repos: Arc<suzatary_io::repos::Mirrors>,
+    pub repos: Arc<suzatary_io_sources::repos::Mirrors>,
     /// The calendar, a cache-tier store under the root; empty unless a test learns into it.
     pub calendar: suzatary_io_chains::calendar::Clocked,
     /// The tables a Connect card is checked against; none declared.
@@ -2630,9 +2630,9 @@ impl Fakes {
             model: FakeModel::default(),
             web: FakeWeb::default(),
             inbox: suzatary_io_chains::objects::Objects::open(root.join("inbox")),
-            repos: Arc::new(suzatary_io::repos::Mirrors::new(
+            repos: Arc::new(suzatary_io_sources::repos::Mirrors::new(
                 root.join("mirrors"),
-                suzatary_io::repos::Source::Local {
+                suzatary_io_sources::repos::Source::Local {
                     base: root.join("remotes"),
                 },
                 suzatary_services::repos::Declared::default(),
@@ -2727,7 +2727,7 @@ impl Fakes {
     }
 
     #[must_use]
-    pub fn repos(mut self, repos: Arc<suzatary_io::repos::Mirrors>) -> Self {
+    pub fn repos(mut self, repos: Arc<suzatary_io_sources::repos::Mirrors>) -> Self {
         self.repos = repos;
         self
     }
@@ -2878,7 +2878,7 @@ impl suzatary_services::web::Web for FakeWeb {
 pub struct FakeDriveAccess {
     /// Drive folders read without asking.
     pub allow: Vec<suzatary_base::drive_path::DrivePath>,
-    pub drive: Option<suzatary_io::drive::ProtonDrive>,
+    pub drive: Option<suzatary_io_sources::drive::ProtonDrive>,
 }
 
 impl suzatary_services::drive::Drive for FakeDriveAccess {
@@ -3041,8 +3041,8 @@ pub struct Server {
     failures: Vec<responded::Performed>,
     performer: Performer,
     idle: Option<std::time::Duration>,
-    publishing: Option<Arc<suzatary_io::repos::Mirrors>>,
-    drive: Option<suzatary_io::drive::ProtonDrive>,
+    publishing: Option<Arc<suzatary_io_sources::repos::Mirrors>>,
+    drive: Option<suzatary_io_sources::drive::ProtonDrive>,
     firing: Option<suzatary_cli::commands::coding::Firing>,
     keys: Option<suzatary_signatures::signatures::BoxKeys>,
     models: Reaching,
@@ -3388,7 +3388,7 @@ impl Server {
     }
 
     /// With these repositories behind a tapped patch, rather than none.
-    pub fn publishing(self, mirrors: Arc<suzatary_io::repos::Mirrors>) -> Self {
+    pub fn publishing(self, mirrors: Arc<suzatary_io_sources::repos::Mirrors>) -> Self {
         Self {
             publishing: Some(mirrors),
             ..self
@@ -3546,13 +3546,13 @@ impl Server {
 /// How a test server publishes: through `mirrors`, or by default through a mirror of no repos,
 /// under a fixed author.
 fn publishing(
-    mirrors: Option<Arc<suzatary_io::repos::Mirrors>>,
+    mirrors: Option<Arc<suzatary_io_sources::repos::Mirrors>>,
 ) -> Arc<suzatary_cli::commands::secretary::Publishing> {
     Arc::new(suzatary_cli::commands::secretary::Publishing {
         mirrors: mirrors.unwrap_or_else(|| {
-            Arc::new(suzatary_io::repos::Mirrors::new(
+            Arc::new(suzatary_io_sources::repos::Mirrors::new(
                 std::env::temp_dir().join("suzatary-test-no-repos"),
-                suzatary_io::repos::Source::Local {
+                suzatary_io_sources::repos::Source::Local {
                     base: std::env::temp_dir().join("suzatary-test-no-remotes"),
                 },
                 suzatary_services::repos::Declared::default(),
@@ -3560,7 +3560,7 @@ fn publishing(
             ))
         }),
         // Fixed, so a scene never depends on who runs it having a git identity.
-        author: Some(suzatary_io::repos::Author {
+        author: Some(suzatary_io_sources::repos::Author {
             name: "Ada Test".to_owned(),
             email: "ada@example.test".to_owned(),
         }),
@@ -3608,8 +3608,8 @@ fn kept_store(root: &std::path::Path) -> suzatary_io_local::blobs::Blobs {
 
 /// A Drive CLI nothing is at: a tapped document in a scene that did not ask for a Drive fails,
 /// never reads.
-fn drive_nowhere() -> suzatary_io::drive::ProtonDrive {
-    suzatary_io::drive::ProtonDrive::new(
+fn drive_nowhere() -> suzatary_io_sources::drive::ProtonDrive {
+    suzatary_io_sources::drive::ProtonDrive::new(
         std::env::temp_dir().join("suzatary-test-no-proton-drive"),
         std::env::temp_dir().join("suzatary-test-no-drive-scratch"),
         PathBuf::from("."),
@@ -3629,7 +3629,7 @@ fn performer(
     workers: &Arc<serve::Workers>,
     (publishing, drive, signing, edits): (
         Arc<suzatary_cli::commands::secretary::Publishing>,
-        Arc<suzatary_io::drive::ReadOnly>,
+        Arc<suzatary_io_sources::drive::ReadOnly>,
         Arc<serve::sign_ins::SignIns>,
         Arc<dyn suzatary_connect::settings::Edits + Send + Sync>,
     ),
@@ -4107,8 +4107,8 @@ impl FakeDrive {
 
     /// The real interpreter over this script.
     #[must_use]
-    pub fn proton(&self) -> suzatary_io::drive::ProtonDrive {
-        suzatary_io::drive::ProtonDrive::new(
+    pub fn proton(&self) -> suzatary_io_sources::drive::ProtonDrive {
+        suzatary_io_sources::drive::ProtonDrive::new(
             self.dir.join("proton-drive"),
             self.dir.join("scratch"),
             PathBuf::from("."),
@@ -4181,7 +4181,7 @@ pub const CV_PDF: &[u8] = b"%PDF-1.7\n\0\x01\x02 Ada Quill\n%%EOF\n";
 /// A local public repository `bmabsout/cv` holding `cv.typ` and `cv.pdf`, and mirrors over
 /// it, under `root`: a scene's repositories, with no network and no token.
 #[must_use]
-pub fn local_repos(root: &Path) -> Arc<suzatary_io::repos::Mirrors> {
+pub fn local_repos(root: &Path) -> Arc<suzatary_io_sources::repos::Mirrors> {
     let run = |dir: &Path, args: &[&str]| {
         let out = std::process::Command::new("git")
             .current_dir(dir)
@@ -4219,7 +4219,7 @@ pub fn local_repos(root: &Path) -> Arc<suzatary_io::repos::Mirrors> {
 /// Mirrors over the local repositories under `root/remotes`, declaring `bmabsout/cv` alone, with
 /// `public = true`, since a local remote lists as public.
 #[must_use]
-pub fn local_mirrors(root: &Path) -> suzatary_io::repos::Mirrors {
+pub fn local_mirrors(root: &Path) -> suzatary_io_sources::repos::Mirrors {
     local_mirrors_declaring(
         root,
         suzatary_services::repos::RepoTarget {
@@ -4234,10 +4234,10 @@ pub fn local_mirrors(root: &Path) -> suzatary_io::repos::Mirrors {
 pub fn local_mirrors_declaring(
     root: &Path,
     target: suzatary_services::repos::RepoTarget,
-) -> suzatary_io::repos::Mirrors {
-    suzatary_io::repos::Mirrors::new(
+) -> suzatary_io_sources::repos::Mirrors {
+    suzatary_io_sources::repos::Mirrors::new(
         root.join("mirrors"),
-        suzatary_io::repos::Source::Local {
+        suzatary_io_sources::repos::Source::Local {
             base: root.join("remotes"),
         },
         suzatary_services::repos::Declared::new([("bmabsout/cv".parse().expect("a name"), target)])

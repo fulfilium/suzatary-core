@@ -41,7 +41,7 @@ const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
 const SCAN: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 4, 5, 6];
 
 fn golden() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/stores")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores")
 }
 
 /// The prodromes whose appends write `Change`s, pinned apart from their legacy bytes.
@@ -65,7 +65,7 @@ pub(crate) const TOPIC_ALIASES: &str = "secretary-topic-aliases";
 /// The box's refusals of what a tab posted.
 pub(crate) const ASKS: &str = "secretary-asks";
 
-/// Every store pinned in `app/io/tests/stores-changes/` only.
+/// Every store pinned in `app/io-chains/tests/stores-changes/` only.
 const CHANGED: [&str; 11] = [
     DIGESTS,
     INBOX,
@@ -125,13 +125,13 @@ pub(crate) fn lines_at(root: &Path) -> (Lines, suzatary_io_local::text_keys::Tex
     )
 }
 
-/// What the scripted writes leave: `app/io/tests/stores/`, its prodromes from
-/// `app/io/tests/stores-changes/`.
+/// What the scripted writes leave: `app/io-chains/tests/stores/`, its prodromes from
+/// `app/io-chains/tests/stores-changes/`.
 fn pinned() -> BTreeMap<String, Vec<u8>> {
     let mut files = tree(&golden());
     files.retain(|name, _| !CHANGES.iter().any(|dir| name.starts_with(dir)));
     files.extend(tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/stores-changes"),
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores-changes"),
     ));
     files
 }
@@ -790,7 +790,7 @@ fn conversations_read(store: suzatary_lines::secretary::conversations::Conversat
 /// A copy of every pinned store under `root`; answers where the changed stores' pins are.
 fn copy_pins(root: &Path) -> PathBuf {
     copy(&golden(), root);
-    let changed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/stores-changes");
+    let changed = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores-changes");
     for store in CHANGED {
         copy(&changed.join(store), &root.join(store));
     }
@@ -1210,12 +1210,12 @@ fn lines_for_a_tab() {
 fn lines_written_before_kinds_were_stored_read_whole() {
     let dir = suzatary_testkit::scratch("stores");
     copy(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/stores-unkinded"),
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/stores-unkinded"),
         dir.path(),
     );
     copy(
         &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../io/tests/stores-changes")
+            .join("tests/stores-changes")
             .join(LINE_KEYS),
         &dir.path().join(LINE_KEYS),
     );

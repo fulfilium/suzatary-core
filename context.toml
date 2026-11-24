@@ -352,7 +352,7 @@ scripts = ["scripts/wire.sh"]
 name = "server"
 path = "app/server"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "io-access", "io-chains", "io-local", "io-mail", "io-model", "lines", "mail", "memory", "os", "prodrome-core", "record", "release", "secretary", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io-access", "io-chains", "io-local", "io-mail", "io-model", "io-sources", "lines", "mail", "memory", "os", "prodrome-core", "record", "release", "secretary", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]
@@ -405,8 +405,8 @@ depends = ["base", "google", "health", "held", "io-access", "io-chains", "io-loc
 scripts = []
 
 [[unit]]
-name = "io"
-path = "app/io"
+name = "io-sources"
+path = "app/io-sources"
 shape = "crate"
 depends = ["base", "cards", "google", "held", "inbox", "io-access", "io-local", "io-mail", "memory", "os", "secretary", "services", "signatures", "store"]
 scripts = []
@@ -422,7 +422,7 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io", "io-access", "io-chains", "io-local", "io-mail", "io-model", "io-typeset", "lines", "mail", "memory", "os", "plan", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "tooling", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io-access", "io-chains", "io-local", "io-mail", "io-model", "io-sources", "io-typeset", "lines", "mail", "memory", "os", "plan", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "tooling", "topics", "triage"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]

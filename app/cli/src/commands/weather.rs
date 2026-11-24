@@ -9,7 +9,7 @@ pub fn run(path: &Path) -> anyhow::Result<()> {
     let instance = instance::Instance::open(path)?;
     println!(
         "{}",
-        suzatary_io::weather::line(chrono::Utc::now(), &instance.persona)?
+        suzatary_io_sources::weather::line(chrono::Utc::now(), &instance.persona)?
     );
     Ok(())
 }

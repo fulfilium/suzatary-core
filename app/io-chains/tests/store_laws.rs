@@ -1,5 +1,5 @@
 //! The laws every prodrome keeps whatever its schema, checked for every prodrome row of
-//! `suzatary_stores::stores::Kind` over the objects its pins hold (`app/io/tests/stores-changes/`):
+//! `suzatary_stores::stores::Kind` over the objects its pins hold (`app/io-chains/tests/stores-changes/`):
 //!
 //! - a store begun holds one `Genesis`, labelled as its row says;
 //! - each object reads back by its name as its canonical print, and a name it does not hold
@@ -36,7 +36,7 @@ use suzatary_topics::secretary::topics::reading::MembershipEvent;
 
 fn pins(store: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../io/tests/stores-changes")
+        .join("tests/stores-changes")
         .join(store)
 }
 

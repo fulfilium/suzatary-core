@@ -1,4 +1,4 @@
 # The secret scanner's findings a person vouched for (scripts/public-tree.sh), each by its
 # fingerprint, `<path>:<rule>:<line>`: a test's throwaway key, whose bytes the manifest lists too.
-app/io/tests/fixtures/bridge-key.pem:private-key:1
-app/io/tests/fixtures/fcm-key.pem:private-key:1
+app/io-mail/tests/fixtures/bridge-key.pem:private-key:1
+app/io-sources/tests/fixtures/fcm-key.pem:private-key:1

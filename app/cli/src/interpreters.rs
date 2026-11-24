@@ -13,9 +13,6 @@ use suzatary_digest::model_name::ModelName;
 use suzatary_health::health::Failure;
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
-use suzatary_io::drive::ProtonDrive;
-use suzatary_io::repos::Mirrors;
-use suzatary_io::web::Fetcher;
 use suzatary_io_access::http::Ureq;
 use suzatary_io_local::attachments::AttachmentStore;
 use suzatary_io_local::blobs::Blobs;
@@ -30,6 +27,9 @@ use suzatary_io_mail::older::Servers;
 use suzatary_io_model::model::ClaudeCli;
 use suzatary_io_model::model::Fence;
 use suzatary_io_model::model::TokenSource;
+use suzatary_io_sources::drive::ProtonDrive;
+use suzatary_io_sources::repos::Mirrors;
+use suzatary_io_sources::web::Fetcher;
 
 use suzatary_base::capability::{Whois, WhoisError};
 use suzatary_conversations::secretary::model::{
@@ -123,7 +123,7 @@ pub struct Forecast(pub suzatary_base::persona::Persona);
 impl Weather for Forecast {
     fn today(&self) -> Result<String, WeatherError> {
         // Wall-clock UTC, because `Clock::now()` is naive and cannot feed a zone conversion.
-        suzatary_io::weather::line(chrono::Utc::now(), &self.0)
+        suzatary_io_sources::weather::line(chrono::Utc::now(), &self.0)
     }
 }
 
@@ -402,7 +402,7 @@ impl suzatary_services::web::Web for WebAccess {
 /// ask (none while the instance file does not read).
 #[derive(Debug, Clone)]
 pub struct DriveAccess {
-    drive: suzatary_io::drive::ReadOnly,
+    drive: suzatary_io_sources::drive::ReadOnly,
     instance: std::path::PathBuf,
 }
 
@@ -684,7 +684,7 @@ impl Compact for CompactorModel {
 pub fn mirrors(instance: &Instance) -> std::sync::Arc<Mirrors> {
     std::sync::Arc::new(Mirrors::new(
         instance.paths.repos.clone(),
-        suzatary_io::repos::Source::GitHub,
+        suzatary_io_sources::repos::Source::GitHub,
         instance.repos.clone(),
         Box::new(instance.secrets()),
     ))

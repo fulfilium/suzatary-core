@@ -1,5 +1,5 @@
 //! Every proposal's reading, pinned, so a change to how the inbox is stored or folded shows here
-//! first: `app/io/tests/fixtures/inbox-proposals/` holds objects written once and never
+//! first: `app/io-chains/tests/fixtures/inbox-proposals/` holds objects written once and never
 //! regenerated.
 
 use std::path::{Path, PathBuf};
@@ -26,7 +26,7 @@ fn now() -> Datetime {
 }
 
 fn store() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../io/tests/fixtures/inbox-proposals")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/inbox-proposals")
 }
 
 /// The chains the readings are priced through: `life`, whose `reply` (which one frozen proposal

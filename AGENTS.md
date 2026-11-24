@@ -195,7 +195,7 @@ Rust or `default:` in TypeScript. When someone adds a case, the compiler then li
 place that must handle it. A `default` is correct only over a type that we do not own, such
 as a string from a user or a key name.
 
-- Rust: `web::failure` (`app/io/src/web.rs`) names every case of `HttpError`.
+- Rust: `web::failure` (`app/io-sources/src/web.rs`) names every case of `HttpError`.
   `StreamEvent::text` names every event.
 - TypeScript: the `switch` over `Event` in `app.step` has no `default`. `d.Fields<A>` makes
   the author give a decoder for every field of `A`.
@@ -235,8 +235,8 @@ Use a callable argument only when the set is open:
 ### 6. Keep a pure core, with effects at the edge
 
 Code that decides is pure. Code that reads files, calls the network or reads the clock is
-separate. The model crates are pure and never see a file path. `suzatary-io`
-contains the implementations of the effects. The binary in `app/cli` connects the two.
+separate. The model crates are pure and never see a file path. The `suzatary-io-*` crates
+contain the implementations of the effects. The binary in `app/cli` connects the two.
 
 - **Effects are values.** A function receives the effects it may use as an argument. The
   argument is a record with one trait object for each effect. `agent::Agent` has seven

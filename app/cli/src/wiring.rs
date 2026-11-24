@@ -5,7 +5,6 @@ use crate::mail_cache::MailCache;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use suzatary_io::briefings::BriefingFiles;
 use suzatary_io_access::repository::Checkout;
 use suzatary_io_chains::calendar::Clocked;
 use suzatary_io_chains::watches::Watches;
@@ -16,6 +15,7 @@ use suzatary_io_mail::corpus::Operator;
 use suzatary_io_mail::mailbox::Notmuch;
 use suzatary_io_mail::mailbox::located::Located;
 use suzatary_io_mail::sync::Syncer;
+use suzatary_io_sources::briefings::BriefingFiles;
 use suzatary_io_typeset::render::Typst;
 use suzatary_io_typeset::typeset::Closed;
 
@@ -363,7 +363,7 @@ pub struct Opened {
     >,
     pub(crate) configuration: InstanceEdits,
     pub(crate) watches: Watches,
-    pub(crate) repos: Arc<suzatary_io::repos::Mirrors>,
+    pub(crate) repos: Arc<suzatary_io_sources::repos::Mirrors>,
 }
 
 impl Opened {

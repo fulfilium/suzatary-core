@@ -767,7 +767,8 @@ fn public_tree_guard_finds_secrets_with_gitleaks() {
         ),
     )
     .expect("a wrapped token");
-    let key = std::fs::read(repo().join("app/io/tests/fixtures/bridge-key.pem")).expect("a key");
+    let key =
+        std::fs::read(repo().join("app/io-mail/tests/fixtures/bridge-key.pem")).expect("a key");
     std::fs::write(tree.join("fixtures/key.pem"), &key).expect("the admitted key");
     std::fs::write(tree.join("fixtures/unlisted.pem"), &key).expect("a key not listed");
     std::fs::write(tree.join("elsewhere/key.pem"), &key).expect("the same key elsewhere");

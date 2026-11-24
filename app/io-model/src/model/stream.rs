@@ -185,7 +185,7 @@ mod tests {
     /// Every line of a real `claude --output-format stream-json` run reads as an event.
     #[test]
     fn a_recorded_run_reads_line_by_line() {
-        let lines: Vec<&str> = include_str!("../../../io/tests/fixtures/claude-stream-json.jsonl")
+        let lines: Vec<&str> = include_str!("../../tests/fixtures/claude-stream-json.jsonl")
             .lines()
             .filter(|line| !line.trim().is_empty())
             .collect();

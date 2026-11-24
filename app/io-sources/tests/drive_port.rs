@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use suzatary_connect::conformance::drive::{Case, check};
-use suzatary_io::drive::ProtonDrive;
+use suzatary_io_sources::drive::ProtonDrive;
 
 /// The Drive CLI's grammar over `tree`: `list -j` prints the sections at `/` and the SDK's node
 /// shape elsewhere, `download` copies one file into an empty directory, `create-folder` makes
