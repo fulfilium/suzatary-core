@@ -1,7 +1,7 @@
 // A page that is a Rust program (`app/pages`): its patches painted, and every effect of the runtime's sum
 // (`app/pages/src/runtime.rs`) performed here, the same for each page. Nothing here knows a page.
 
-import type { Act, ActName, Answer, Basis as CoreBasis, BriefingAt, CalendarAt, Context, ConversationFlags, Opens, Core, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt, TodoFlags, TodosFlags, TypstFlags, Keyed } from "../wire/generated/pages"
+import type { Act, ActName, Answer, Basis as CoreBasis, BriefingAt, CalendarAt, Context, ConversationFlags, ConversationsFlags, Opens, Core, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt, TodoFlags, TodosFlags, TypstFlags, Keyed } from "../wire/generated/pages"
 import type { Draw } from "../view/page"
 import http from "../wire/http"
 import d from "../wire/decoder"
@@ -34,7 +34,7 @@ import { lifecycleEvent, loadCore } from "../prodrome/core"
 import payload from "../wire/generated/payload"
 import parts from "./parts"
 import type { KeyTarget } from "../shell/keyboard"
-import { clearKeyTarget, setKeyTarget } from "../shell/keyboard"
+import { clearKeyTarget, keysFree, setKeyTarget } from "../shell/keyboard"
 import local from "./local"
 import rehearsal from "./rehearsal"
 import { measure } from "../app/perf"
@@ -76,16 +76,19 @@ export namespace program {
   const whoOf = (a: app.App): Who => ({ me: app.actor(a), reach: app.reach(a) })
   const same = (w: Who, was: Who): boolean => w.me === was.me && app.sameReach(w.reach, was.reach)
 
-  // Where a page stands: whether what it opens is drawn beside it (told again when that moves), and where its `Go` and
-  // `Replace` go, a new entry of the history or the one the reader is at. A page in a tile opens from its tile; any other
-  // reads the address alone.
+  // Where a page stands: whether what it opens is drawn beside it and whether it is drawn at all (each told again when
+  // it moves), and where its `Go` and `Replace` go, a new entry of the history or the one the reader is at. A page in a
+  // tile opens from its tile; any other reads the address alone, and is always drawn.
+  export type Shown = "Drawn" | "Hidden"
   export type Placed = {
     readonly opens: () => Opens
+    readonly shown: () => Shown
     readonly hear: (moved: () => void) => () => void
     readonly go: (href: string, how: "Went" | "Replaced") => void
   }
   const OVER: Placed = {
     opens: () => "Over",
+    shown: () => "Drawn",
     hear: () => () => {},
     go: (href, how) => (how === "Went" ? address.went(parseAddress(href)) : address.replaced(parseAddress(href))),
   }
@@ -198,7 +201,8 @@ export namespace program {
     readonly SettingsPage: Omit<SettingsFlags, "context">
     readonly InboxPage: Omit<InboxFlags, "context" | "now">
     readonly SecretaryPage: Omit<SecretaryFlags, "context" | "now">
-    readonly ConversationPage: Omit<ConversationFlags, "context" | "now">
+    readonly ConversationPage: Omit<ConversationFlags, "context">
+    readonly ConversationsPage: Omit<ConversationsFlags, "context" | "now">
     readonly DraftPage: Omit<DraftFlags, "context">
     readonly NeedsYouPage: Omit<NeedsYouFlags, "context">
     readonly TodoPage: Omit<TodoFlags, "context" | "now">
@@ -249,15 +253,25 @@ export namespace program {
         })
         return () => ((gone = true), unheard())
       }
-      // Left with a write in flight, the program keeps running until the write answers (`drain`).
-      let life: drain.State = drain.LIVE
+      // Hidden, the program keeps running and what it asks of the screen waits; left with a write in flight, it keeps
+      // running until the write answers (`drain`).
+      let life: drain.State = placed.shown() === "Hidden" ? drain.HIDDEN : drain.DRAWN
+      // What waits for the page to be drawn, the last of each: one scroll, one focus, the keys of each ask.
+      const waiting = new Map<string, [Out, (i: In) => void]>()
+      // The keys the page holds, installed again when it is drawn again.
+      let keys: KeyTarget | null = null
       // Gone only after `Left`, which `destroy` steps once the program has started.
       const lived = (e: drain.Event): void => {
         life = drain.step(life, e)
         if (life.type === "Gone") running.destroy()
       }
       const handle: run.Handler<In, Out> = (e, send) => {
-        if (!drain.performs(life, e.type)) return
+        const verdict = drain.verdict(life, e.type)
+        if (verdict === "Drops") return
+        if (verdict === "Waits") {
+          waiting.delete(drain.slot(e))
+          return void waiting.set(drain.slot(e), [e, send])
+        }
         const write = drain.writes(e.type)
         if (write) lived("Wrote")
         const answered = (name: unknown) => (a: Answer): void => {
@@ -304,7 +318,8 @@ export namespace program {
               ...(on.has("Escape") ? { escape: () => (press({ type: "Escape" })(), true) } : {}),
             }
             setKeyTarget(target)
-            return hold(e.ask, () => clearKeyTarget(target))
+            keys = target
+            return hold(e.ask, () => ((keys = keys === target ? null : keys), clearKeyTarget(target)))
           }
           case "Sync":
             return void storesync.sync()
@@ -393,13 +408,29 @@ export namespace program {
       const program = new glue[page](flags)
       const t2 = performance.now()
       const keeps = (e: Out): boolean => e.type === "Scroll" && e.to.type === "Keep"
-      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, keeps, parts.gone, box, parts.refresh, layer)
+      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, keeps, parts.gone, box, parts.refresh, layer, () => life.type === "Drawn")
       const t3 = performance.now()
-      performance.measure("page:draw", { start: t0, end: t3, detail: { page, read: "Program", flags: Math.round(t1 - t0), made: Math.round(t2 - t1), first: Math.round(t3 - t2) } })
+      measure("page:draw", t0, { page, read: "Program", flags: Math.round(t1 - t0), made: Math.round(t2 - t1), first: Math.round(t3 - t2) })
+      // Each program hears a change of its context in a task of its own, so the tiles a tab keeps never step together.
       const told = (): void => running.send({ type: "Context", ...context(placed) })
-      const unheard = app.hear(whoOf, told, same)
-      const unclocked = http.heardClock(told)
-      const unplaced = placed.hear(told)
+      const unheard = heard(told, f => app.hear(whoOf, f, same))
+      const unclocked = heard(told, f => http.heardClock(f))
+      // Drawn again, it takes its keys back and does what waited; hidden, it lets the keys go.
+      const shown = (): void => {
+        const now = placed.shown()
+        if (now === "Hidden" && life.type === "Drawn") {
+          lived("Hid")
+          if (keys !== null) clearKeyTarget(keys)
+        } else if (now === "Drawn" && life.type === "Hidden") {
+          lived("Showed")
+          // Its keys only where no page on screen holds them.
+          if (keys !== null && keysFree()) setKeyTarget(keys)
+          const due = [...waiting.values()]
+          waiting.clear()
+          due.forEach(([e, send]) => handle(e, send))
+        }
+      }
+      const unplaced = heard(told, f => placed.hear(() => (shown(), f())))
       return {
         destroy: () => {
           unheard()
@@ -408,6 +439,7 @@ export namespace program {
           held_.forEach(stop => stop())
           timers.forEach(t => clearTimeout(t))
           frames.forEach(f => cancelAnimationFrame(f))
+          waiting.clear()
           lived("Left")
         },
       }

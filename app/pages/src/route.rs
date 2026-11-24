@@ -55,6 +55,8 @@ pub enum Route {
     },
     Memory,
     NewTopic,
+    /// The conversations, as a list.
+    Conversations,
     Conversation {
         id: String,
         refs: Vec<String>,
@@ -82,6 +84,7 @@ pub enum Kind {
     Briefings,
     Calendar,
     Secretary,
+    Conversation,
 }
 
 /// `decodeURIComponent`: `None` where a `%` escape is malformed or the bytes are not UTF-8.
@@ -189,6 +192,7 @@ impl Route {
                         .filter(|a| *a <= SAFE),
                 }),
             },
+            "conversations" if rest.is_empty() => Some(Route::Conversations),
             "about" if rest.is_empty() => Some(Route::About),
             "settings" if rest.is_empty() => Some(Route::Settings),
             "calendar" => decode(rest).map(|date| Route::Calendar { date }),
@@ -231,6 +235,7 @@ impl Route {
             ),
             Route::Memory => "#/secretary/memory".to_owned(),
             Route::NewTopic => "#/secretary/new".to_owned(),
+            Route::Conversations => "#/conversations".to_owned(),
             Route::Conversation {
                 id,
                 refs,
@@ -295,10 +300,8 @@ impl Page for Route {
             Route::Settings => Kind::Settings,
             Route::Briefings | Route::Briefing { .. } => Kind::Briefings,
             Route::Calendar { .. } => Kind::Calendar,
-            Route::Secretary { .. }
-            | Route::Memory
-            | Route::NewTopic
-            | Route::Conversation { .. } => Kind::Secretary,
+            Route::Secretary { .. } | Route::Conversations => Kind::Secretary,
+            Route::Memory | Route::NewTopic | Route::Conversation { .. } => Kind::Conversation,
         }
     }
 
@@ -312,7 +315,8 @@ impl Page for Route {
             | Route::Mail { .. }
             | Route::Briefings
             | Route::Calendar { .. }
-            | Route::Secretary { .. } => measure::LIST,
+            | Route::Secretary { .. }
+            | Route::Conversations => measure::LIST,
             Route::Todo { .. }
             | Route::Message { .. }
             | Route::Thread { .. }
@@ -338,30 +342,10 @@ impl Page for Route {
         }
     }
 
-    /// A conversation opens another from its column of conversations, a list; every other page
-    /// opens pages read as a column.
     fn opens(&self) -> Shape {
-        let least = match self {
-            Route::Conversation { .. } => measure::LIST,
-            Route::Todos
-            | Route::Add { .. }
-            | Route::Todo { .. }
-            | Route::Typst { .. }
-            | Route::Inbox { .. }
-            | Route::Mail { .. }
-            | Route::Message { .. }
-            | Route::Thread { .. }
-            | Route::About
-            | Route::Settings
-            | Route::Briefings
-            | Route::Briefing { .. }
-            | Route::Calendar { .. }
-            | Route::Secretary { .. }
-            | Route::Memory
-            | Route::NewTopic
-            | Route::Unknown { .. } => measure::COLUMN,
-        };
-        Shape::Flows { least: Px(least) }
+        Shape::Flows {
+            least: Px(measure::COLUMN),
+        }
     }
 
     fn home(&self) -> Route {
@@ -376,6 +360,7 @@ impl Page for Route {
             about,
         ] = Route::destinations();
         match self.kind() {
+            Kind::Conversation => Route::Conversations,
             Kind::Todos | Kind::Todo => todos,
             Kind::Inbox => inbox,
             Kind::Secretary => secretary,

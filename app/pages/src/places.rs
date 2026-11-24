@@ -30,6 +30,7 @@ pub(crate) enum Place<'a> {
     Secretary(&'a [String]),
     Memory,
     NewTopic,
+    Conversations,
     Inbox(&'a str),
     Settings,
     Todo(&'a str),
@@ -76,6 +77,7 @@ impl<'a> Place<'a> {
             }
             Place::Memory => "#/secretary/memory".to_owned(),
             Place::NewTopic => "#/secretary/new".to_owned(),
+            Place::Conversations => "#/conversations".to_owned(),
             Place::Inbox(open) => format!("#/inbox{}", search(&[("open", open)])),
             Place::Settings => "#/settings".to_owned(),
             Place::Todo(id) => format!("#/todo/{}", component(id)),

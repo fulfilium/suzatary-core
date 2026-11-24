@@ -10,8 +10,8 @@ fn needsyou_msg() -> impl Strategy<Value = needsyou::Msg> {
         held(
             needsyou::Hold::Route,
             prop::sample::select(vec![
-                json!({"page": "inbox", "conversation": ""}),
-                json!({"page": "todos", "conversation": ""}),
+                json!({"page": "inbox", "conversation": null}),
+                json!({"page": "todos", "conversation": null}),
                 json!({"page": "conversation", "conversation": "talk"})
             ])
         )

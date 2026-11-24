@@ -26,6 +26,7 @@ export type Route =
   | { readonly type: "memory" }
   // A topic not yet asked anything: the box holds nothing of it until its first message is sent.
   | { readonly type: "newtopic" }
+  | { readonly type: "conversations" }
   // `at` is a search hit's turn: the window opens ending at it.
   | { readonly type: "conversation"; readonly id: string; readonly refs: readonly string[]; readonly focus?: boolean; readonly at?: number }
   | { readonly type: "unknown"; readonly hash: string };
@@ -117,6 +118,8 @@ export function parseRoute(hash: string): Route {
         ? unknown
         : { type: "conversation", id, refs, ...focus, ...at };
     }
+    case "conversations":
+      return rest === "" ? { type: "conversations" } : unknown;
     case "about":
       return rest === "" ? { type: "about" } : unknown;
     case "settings":
@@ -159,6 +162,8 @@ export function hrefOf(route: Route): string {
       return "#/secretary/memory";
     case "newtopic":
       return "#/secretary/new";
+    case "conversations":
+      return "#/conversations";
     case "conversation":
       return `#/secretary/${encodeURIComponent(route.id)}${search({
         ref: route.refs.join(","),

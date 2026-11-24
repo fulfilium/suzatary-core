@@ -131,19 +131,29 @@ app.scene("rendered means confirmed: the owner's markup renders, the agent's rea
   assert.equal(await app.page.evaluate<number>(`${title(AGENTS.id)}.querySelectorAll("*").length`), 0);
 });
 
-app.scene("no page overflows sideways at 390 or 1280, and the open todo stands beside the list only at 1280", async () => {
+app.scene("no page overflows sideways at 390 or 1280; at 1280 the open todo stands beside the list as a tile of its own", async () => {
   for (const size of [PHONE, DESKTOP]) {
     await app.resize(size);
     await typst();
+    // By its address, at every width, the todo is open in its row: the list with that todo open, one page.
     await typst(`#/typst/${ID}`);
-    await app.page.waitFor(`document.querySelector(".typstframe .tpane") !== null`);
+    await app.page.waitFor(`document.querySelector(".typstframe .tinplace .tpanetitle") !== null`);
+    if (size === DESKTOP) {
+      // Opened from the list where a page opened from it stands beside it, the todo is its own page in the tile after
+      // the list's, and the list draws it nowhere.
+      await typst();
+      await app.page.click(`.typstframe [data-intent="open todo:life/${ID}"]`);
+      await app.page.waitFor(`document.querySelectorAll("#view.tiled > .tile").length === 2 && document.querySelector("#view > .tile .todoview .todobody") !== null`, { timeout: 20000 });
+      const [list, todo] = await app.page.evaluate<[number, number]>(
+        `[document.querySelector(".typstframe").closest(".tile").getBoundingClientRect().x, document.querySelector(".todoview").closest(".tile").getBoundingClientRect().x]`,
+      );
+      assert.ok(list < todo, `the list stands first (${list} px), the todo after it (${todo} px)`);
+      assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".typstframe .tinplace").length`), 0, "the list draws the open todo nowhere");
+    }
     const [scroll, client] = await app.page.evaluate<[number, number]>(
       `[document.documentElement.scrollWidth, document.documentElement.clientWidth]`,
     );
     assert.ok(scroll <= client, `${size[0]} px: scrollWidth ${scroll} > clientWidth ${client}`);
-    // At 1280 the list stands beside the open todo; at 390 one column holds both.
-    const columns = await app.page.evaluate<number>(`getComputedStyle(document.querySelector(".tview")).gridTemplateColumns.split(" ").length`);
-    assert.equal(columns, size === PHONE ? 1 : 2, `${size[0]} px: ${columns} columns`);
     await app.page.screenshot(join(OUT, `typst-list-${size[0]}.png`));
     await app.page.navigate(`${WRITE_BASE}/${size === PHONE ? "#/" : `#/todo/${ID}`}`);
     await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`);
@@ -169,7 +179,7 @@ app.scene("opening a todo on a phone moves nothing above the row that was tapped
   );
 });
 
-app.scene("scroll and focus survive a redraw, an Open intent computes only its row's spine and the pane", async () => {
+app.scene("scroll and focus survive a redraw, an Open intent computes only its row's spine", async () => {
   await app.resize([390, 480]);
   await typst();
   const opens = await app.page.evaluate<string[]>(`[...document.querySelectorAll(".typstframe .trow > .topen")].map((b) => b.getAttribute("data-intent"))`);
@@ -201,8 +211,8 @@ app.scene("scroll and focus survive a redraw, an Open intent computes only its r
   assert.equal(moved.length, 1, "one redraw moved anything");
   const computed = moved[0]?.computed ?? [];
   assert.deepEqual(computed.filter((c) => c.type === "Row").map((c) => `open ${c.key ?? ""}`), [target]);
-  assert.deepEqual(computed.filter((c) => c.type !== "Row" && c.type !== "Run").map((c) => c.type).sort(), ["InPlace", "List", "Pane", "Rows", "View"]);
-  assert.equal(moved[0]?.compiled, 2, "what the open todo shows, in place and in the pane, and nothing else");
+  assert.deepEqual(computed.filter((c) => c.type !== "Row" && c.type !== "Run").map((c) => c.type).sort(), ["InPlace", "List", "Rows", "View"]);
+  assert.equal(moved[0]?.compiled, 1, "what the open todo shows, in place, and nothing else");
   // The control pressed keeps the focus: its row stays the element it was, the open todo placed inside it.
   const other = opens[3] ?? "";
   await app.page.click(`.typstframe [data-intent="${other}"]`);

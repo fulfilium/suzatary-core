@@ -10,8 +10,7 @@ use suzatary_conversations::secretary::store::ConversationState;
 use suzatary_lines::secretary::skew::Skew;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_topics::wire::topics::{
-    ConversationPayload, ConversationsPayload, ProposalRow, Receipt, Ruling, Speaker, TurnGone,
-    TurnRow, VerbOutcome,
+    ConversationPayload, ProposalRow, Receipt, Ruling, Speaker, TurnGone, TurnRow, VerbOutcome,
 };
 use ts_rs::TS;
 use viewtree::Attr::{AriaLabel, Class, Data, Hidden, Href, Maxlength, Title, Type, Value};
@@ -20,7 +19,7 @@ use viewtree::{Key, Node, Program, view};
 
 use crate::answer::{self, Dressable, Dressed, Worn};
 use crate::card::{self, Cards, Drawn, Placed, Titles};
-use crate::chats::{self, Searching};
+use crate::chats;
 use crate::chrome::{self, Chips, Chrome, Masthead, Shape, Status, link, mark, prose};
 use crate::composer::{self, Composer};
 use crate::intents::{Intents, Shown};
@@ -28,8 +27,7 @@ use crate::part::Who;
 use crate::places::Place;
 use crate::refused;
 use crate::runtime::{
-    self, Act, Answer, Context, Local, Opens, Outcome, Reach, Said, Scroll, Secret, Window,
-    answered, read,
+    self, Act, Answer, Context, Local, Outcome, Reach, Said, Scroll, Secret, Window, answered, read,
 };
 use crate::slices::Slices;
 use crate::zone;
@@ -57,9 +55,6 @@ pub enum At {
 pub struct Flags {
     pub context: Context,
     pub at: At,
-    /// Epoch milliseconds.
-    #[ts(type = "number")]
-    pub now: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -74,8 +69,6 @@ pub enum Hold {
     Titles,
     Draft,
     Scroll,
-    Chats,
-    Found,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
@@ -97,7 +90,6 @@ pub enum Ask {
     Card(card::Asking),
     Composer(composer::Asking),
     Slice,
-    Search(chats::Asking),
 }
 
 /// A question as said, handed back to the composer, as an edit where it was one, if the seal fails.
@@ -276,9 +268,6 @@ pub struct Model {
     erasing: Option<usize>,
     renaming: Option<String>,
     sent: Option<String>,
-    now: i64,
-    chats: chats::List,
-    search: Searching,
     told: Option<bool>,
 }
 
@@ -304,8 +293,6 @@ pub enum Msg {
     Copy(String),
     /// The person let a refused own line's words go, by its name.
     Dismissed(String),
-    Chats(chats::Ev),
-    Searched(String),
 }
 
 #[derive(Debug)]
@@ -458,9 +445,6 @@ impl Program for Conversation {
             erasing: None,
             renaming: None,
             sent: None,
-            now: flags.now,
-            chats: chats::List::default(),
-            search: Searching::default(),
             told: None,
             id,
         };
@@ -499,12 +483,6 @@ impl Program for Conversation {
                 local: draft,
             },
         ];
-        if m.context.opens == Opens::Beside && matches!(m.at, At::Page { .. }) {
-            effects.push(Effect::Watch {
-                ask: Hold::Chats,
-                local: Local::Conversations,
-            });
-        }
         if focus && writes(&m) {
             effects.push(Effect::Focus {
                 field: "compose".to_owned(),
@@ -596,11 +574,6 @@ impl Program for Conversation {
             Msg::Named(Some(title)) => vec![rename(m, title)],
             Msg::Copy(text) => vec![Effect::Copy { text }],
             Msg::Dismissed(line) => vec![acted(vec![line])],
-            Msg::Chats(ev) => {
-                m.chats.update(ev);
-                Vec::new()
-            }
-            Msg::Searched(words) => m.search.typed(words, Ask::Search),
         }
     }
 
@@ -627,13 +600,7 @@ impl Program for Conversation {
                     ],
                     shape: Shape::Turns,
                 };
-                let page =
-                    chrome::page_headed(chrome, head(m), Status::Quiet, vec![transcript, compose]);
-                let class = match m.context.opens {
-                    Opens::Beside => "chatswide beside",
-                    Opens::Over => "chatswide",
-                };
-                view! { Div {Class => class} [column(m), page] }
+                chrome::page_headed(chrome, head(m), Status::Quiet, vec![transcript, compose])
             }
         }
     }
@@ -799,19 +766,8 @@ fn moved(m: &mut Model, to: Option<Scroll>) -> Vec<Effect> {
 fn host(m: &mut Model, input: Input) -> Vec<Effect> {
     match input {
         Input::Context(c) => {
-            let wide = c.opens == Opens::Beside
-                && m.context.opens == Opens::Over
-                && matches!(m.at, At::Page { .. })
-                && matches!(m.chats.rows, Reading::Loading);
             m.context = c;
-            if wide {
-                vec![Effect::Watch {
-                    ask: Hold::Chats,
-                    local: Local::Conversations,
-                }]
-            } else {
-                Vec::new()
-            }
+            Vec::new()
         }
         Input::Held {
             ask: Hold::Window,
@@ -871,22 +827,6 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             ..
         } => {
             scrolled(m, reading);
-            Vec::new()
-        }
-        Input::Held {
-            ask: Hold::Chats,
-            reading,
-            ..
-        } => {
-            m.chats.rows = read::<ConversationsPayload>(reading).map(|p| p.conversations);
-            Vec::new()
-        }
-        Input::Held {
-            ask: Hold::Found,
-            reading,
-            ..
-        } => {
-            m.search.found(reading);
             Vec::new()
         }
         Input::Heard { frame, .. } => heard(m, &frame),
@@ -1207,8 +1147,7 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
         | Ask::Erase
         | Ask::Card(_)
         | Ask::Composer(_)
-        | Ask::Slice
-        | Ask::Search(_) => refused,
+        | Ask::Slice => refused,
     };
     match ask {
         Ask::Said(spoken) => answered_said(m, *spoken, refused),
@@ -1247,8 +1186,6 @@ fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
             m.shown.more(rounds_held(m), |i| round_words(&m.held, i));
             drawn(m)
         }
-        Ask::Search(chats::Asking::Rested(n)) => m.search.rested(n, Hold::Found),
-        Ask::Search(chats::Asking::Found) => Vec::new(),
     }
 }
 
@@ -1311,18 +1248,6 @@ fn panel_header(m: &Model, about: &str) -> Node<Msg> {
         }
     };
     view! { Div "frameheader" [line] }
-}
-
-/// Shown where a page would stand beside the conversation; a phone reads no list.
-fn column(m: &Model) -> Node<Msg> {
-    let today = zone::day_ms(&m.context.offsets, m.now);
-    let body = match &m.search.search {
-        chats::Search::On { q, found, .. } => chats::hits(q, found, &m.context.offsets, today),
-        chats::Search::Off => chats::view(&m.chats, &m.id, &m.context.offsets, today, Msg::Chats),
-    };
-    view! { Aside "chatsaside" {AriaLabel => "Conversations"} [
-        (m.context.opens == Opens::Beside).then(|| vec![chats::head(&m.search, &m.context.reach, Msg::Searched), view! { Div "chatbody" [body] }]),
-    ] }
 }
 
 fn speaker(t: &TurnRow) -> String {
@@ -2364,12 +2289,7 @@ mod tests {
             focus: false,
             at: None,
         };
-        Runtime::<Conversation>::start(Flags {
-            context,
-            at,
-            now: 0,
-        })
-        .0
+        Runtime::<Conversation>::start(Flags { context, at }).0
     }
 
     /// A turn the box adds grows the held window instead of sliding the oldest out.

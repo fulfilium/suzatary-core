@@ -61,12 +61,37 @@ fn conversation_msg() -> impl Strategy<Value = conversation::Msg> {
     use conversation::{Ask, Hold, Msg};
     let host = |i: conversation::Input| Msg::Host(Box::new(i));
     prop_oneof![
-        (reading(windowed()), behind()).prop_map(move |(reading, behind)| host(Input::Held { ask: Hold::Window, reading, behind })),
-        frame().prop_map(move |frame| host(Input::Heard { ask: conversation::Stream::Conversation, frame })),
-        held(Hold::Draft, prop::sample::select(vec![json!({"text": "", "others": []}), json!({"text": "draft", "others": ["elsewhere"]})])).prop_map(host),
-        held(Hold::Scroll, prop::sample::select(vec![json!({"by": "reader", "at": "above"}), json!({"by": "reader", "at": "bottom"}), json!({"by": "page", "at": "above"})])).prop_map(host),
-        held(Hold::Block("ab".to_owned()), Just(json!({"html": "<p>Hi</p>", "key": "k"}))).prop_map(host),
-        held(Hold::Chats, Just(json!({"conversations": [{"id": "talk", "title": "", "kind": "topic", "opened": "", "turns": 2, "standing": 1, "unplaced": [], "last": "hi", "last_at": "2026-10-05T04:00:00"}]}))).prop_map(host),
+        (reading(windowed()), behind()).prop_map(move |(reading, behind)| host(Input::Held {
+            ask: Hold::Window,
+            reading,
+            behind
+        })),
+        frame().prop_map(move |frame| host(Input::Heard {
+            ask: conversation::Stream::Conversation,
+            frame
+        })),
+        held(
+            Hold::Draft,
+            prop::sample::select(vec![
+                json!({"text": "", "others": []}),
+                json!({"text": "draft", "others": ["elsewhere"]})
+            ])
+        )
+        .prop_map(host),
+        held(
+            Hold::Scroll,
+            prop::sample::select(vec![
+                json!({"by": "reader", "at": "above"}),
+                json!({"by": "reader", "at": "bottom"}),
+                json!({"by": "page", "at": "above"})
+            ])
+        )
+        .prop_map(host),
+        held(
+            Hold::Block("ab".to_owned()),
+            Just(json!({"html": "<p>Hi</p>", "key": "k"}))
+        )
+        .prop_map(host),
         composer_ev().prop_map(Msg::Composer),
         card_ev().prop_map(|(k, ev)| Msg::Card(k, ev)),
         Just(Msg::Quote("a line".to_owned())),
@@ -82,13 +107,40 @@ fn conversation_msg() -> impl Strategy<Value = conversation::Msg> {
         Just(Msg::Rename),
         Just(Msg::Renamed("A name".to_owned())),
         prop::option::of(Just("A name".to_owned())).prop_map(Msg::Named),
-        prop::sample::select(vec!["", "zephyr"]).prop_map(|t| Msg::Searched(t.to_owned())),
-        outcome().prop_map(move |answer| host(Input::Answered { ask: Ask::Said(Box::new(conversation::Spoken { text: "hello".to_owned(), references: Vec::new(), files: Vec::new(), mode: composer::Mode::Asking })), answer })),
-        (prop::sample::select(vec!["A name", "Another"]), outcome()).prop_map(move |(title, answer)| host(Input::Answered { ask: Ask::Rename { title: title.to_owned() }, answer })),
-        (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered { ask: Ask::Composer(composer::Asking::Upload(n)), answer })),
-        (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered { ask: Ask::Composer(composer::Asking::Keep(n)), answer })),
-        Just(host(Input::Answered { ask: Ask::Slice, answer: Answer::Done { body: Text::printed(&json!(1_790_000_005_000_i64)) } })),
-        Just(host(Input::Opened { ask: conversation::Stream::Conversation })),
+        outcome().prop_map(move |answer| host(Input::Answered {
+            ask: Ask::Said(Box::new(conversation::Spoken {
+                text: "hello".to_owned(),
+                references: Vec::new(),
+                files: Vec::new(),
+                mode: composer::Mode::Asking
+            })),
+            answer
+        })),
+        (prop::sample::select(vec!["A name", "Another"]), outcome()).prop_map(
+            move |(title, answer)| host(Input::Answered {
+                ask: Ask::Rename {
+                    title: title.to_owned()
+                },
+                answer
+            })
+        ),
+        (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered {
+            ask: Ask::Composer(composer::Asking::Upload(n)),
+            answer
+        })),
+        (1u32..3, uploaded()).prop_map(move |(n, answer)| host(Input::Answered {
+            ask: Ask::Composer(composer::Asking::Keep(n)),
+            answer
+        })),
+        Just(host(Input::Answered {
+            ask: Ask::Slice,
+            answer: Answer::Done {
+                body: Text::printed(&json!(1_790_000_005_000_i64))
+            }
+        })),
+        Just(host(Input::Opened {
+            ask: conversation::Stream::Conversation
+        })),
         any::<bool>().prop_map(move |w| host(Input::Context(context(w)))),
     ]
 }
@@ -103,6 +155,6 @@ proptest! {
         } else {
             conversation::At::Page { id: "talk".to_owned(), refs: vec!["todo:life/renewcard".to_owned()], focus: true, at: None }
         };
-        page_laws::<conversation::Conversation>(|| conversation::Flags { context: context(writes), at: at.clone(), now: 1_790_000_000_000 }, &msgs);
+        page_laws::<conversation::Conversation>(|| conversation::Flags { context: context(writes), at: at.clone() }, &msgs);
     }
 }

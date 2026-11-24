@@ -17,7 +17,6 @@ export namespace viewtree {
     | { readonly type: "Run" }
     | { readonly type: "Row"; readonly row: viewstate.Row }
     | { readonly type: "InPlace"; readonly open: Open }
-    | { readonly type: "Pane"; readonly open: Open }
 
   // A node and the bytes it is named by, the same bytes the kit is handed.
   export type Part = { readonly node: Node; readonly own: string }
@@ -50,7 +49,6 @@ export namespace viewtree {
     )
     return at({ type: "View" }, [
       at({ type: "List" }, [at({ type: "Count", n: s.rows.length }), at({ type: "Rows" }, rows === undefined ? [] : [rows.t])]),
-      ...(open === null ? [] : [at({ type: "Pane", open })]),
     ])
   }
 }

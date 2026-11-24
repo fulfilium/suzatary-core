@@ -17,7 +17,7 @@
 //! equal to its declared home prints as `""`. Below the root a node has two parts or more.
 
 use super::Tiles;
-use super::act::{Act, act};
+use super::act::{Act, act, homes};
 use super::escape::{escape, unescape};
 use super::form;
 use super::leaf::Leaf;
@@ -27,7 +27,7 @@ use super::page::Page;
 use super::tree::Tree;
 
 /// The bare head when `parse` reads it back as these tiles: a workspace's home, or a home with
-/// one page opened from it. The whole tree otherwise.
+/// the page's `home` chain opened from it. The whole tree otherwise.
 #[must_use]
 pub fn print<P: Page>(tiles: &Tiles<P>) -> String {
     let head = tiles.focused().page().print();
@@ -42,8 +42,8 @@ pub fn print<P: Page>(tiles: &Tiles<P>) -> String {
 /// Total, and the inverse of `print`; it answers only well-formed tiles (`Tiles::check`). A tree
 /// that is malformed, or not well formed, reads as the whole string's page if the page reads it,
 /// else as its head alone; a head the page cannot read gives the declared home. A head alone is
-/// its page's workspace focused, with the page opened from the workspace's home when it is not
-/// that home. Every id is minted fresh, after those of `tiles`: a host that keeps a live tile
+/// its page's workspace focused, at the end of the page's `home` chain, and the page opened from
+/// it (`Act::Open` opens the chain). Every id is minted fresh, after those of `tiles`: a host that keeps a live tile
 /// across an address matches the pages itself.
 #[must_use]
 pub fn parse<P: Page>(s: &str, tiles: &Tiles<P>) -> Tiles<P> {
@@ -81,7 +81,7 @@ fn bare<P: Page>(head: &str, lineage: &Tiles<P>) -> Tiles<P> {
     let Some(page) = P::parse(head) else {
         return tiles;
     };
-    let home = page.home();
+    let home = homes(&page).pop().unwrap_or_else(|| page.clone());
     let at = tiles
         .root
         .parts()

@@ -128,6 +128,14 @@
   "href": "#/secretary?ref=todo%3Alife%2Fx&topics=a%2Cb&focus=1"
  },
  {
+  "hash": "#/conversations",
+  "href": "#/conversations"
+ },
+ {
+  "hash": "#/conversations/x",
+  "href": "#/conversations/x"
+ },
+ {
   "hash": "#/secretary/memory",
   "href": "#/secretary/memory"
  },

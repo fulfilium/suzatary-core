@@ -1000,27 +1000,27 @@ app.scene("search finds what was said and a hit opens its conversation", async (
 });
 
 /**
- * AT 62rem AND UP THE LIST IS A COLUMN BESIDE THE CONVERSATION, the one on screen marked; below it there is none.
+ * THE CONVERSATIONS ARE A PAGE OF THEIR OWN: a conversation's address opens it from the list of conversations, so at a
+ * desk the list stands beside it as a tile, the one on screen marked; on a phone the conversation is drawn alone, and
+ * the crumb above it is the list.
  */
-app.scene("at 62rem the list stands beside the conversation, and not on a phone", async () => {
+app.scene("at a desk the conversations stand beside the conversation, and on a phone the crumb above it is the list", async () => {
   await app.resize(DESKTOP);
   await app.page.navigate(`${WRITE_BASE}/#/secretary/default`);
-  await app.page.waitFor(`document.querySelector(".chatsaside .chatrow.current") !== null`, { timeout: 15000 });
+  await app.page.waitFor(`document.querySelector("#view.tiled > .tile .conversations .chatrow.current") !== null`, { timeout: 15000 });
   assert.equal(
-    await app.page.evaluate<string>(`document.querySelector(".chatsaside .chatrow.current .chattitle").textContent`),
+    await app.page.evaluate<string>(`document.querySelector(".conversations .chatrow.current .chattitle").textContent`),
     "Secretary",
   );
-  assert.ok(
-    await app.page.evaluate<boolean>(`document.querySelector(".chatsaside").getBoundingClientRect().width > 0`),
-    "the column is drawn",
-  );
+  assert.equal(await app.page.evaluate<string>(`location.hash`), "#/secretary/default", "the address is the hash a person has");
+  await photographed("conversations-desk-beside");
   await app.resize(PHONE);
-  await app.page.waitFor(`document.querySelector(".pagetitle")?.textContent === "Secretary"`, { timeout: 15000 });
-  assert.equal(
-    await app.page.evaluate<number>(`document.querySelector(".chatsaside")?.getBoundingClientRect().width ?? 0`),
-    0,
-    "no column on a phone",
-  );
+  await app.page.waitFor(`document.querySelector(".pagetitle")?.textContent === "Secretary" && document.querySelector(".crumbs a, .crumbs button")?.textContent.includes("Conversations") === true`, { timeout: 15000 });
+  assert.equal(await app.page.evaluate<boolean>(`document.getElementById("view").classList.contains("tiled")`), false, "one page on a phone");
+  await photographed("conversations-phone-over");
+  await app.page.click(".crumbs .back");
+  await app.page.waitFor(`document.querySelector(".pagetitle")?.textContent === "Conversations" && document.querySelector(".conversations .chatrow") !== null`, { timeout: 15000 });
+  await photographed("conversations-phone-list");
 });
 
 /**

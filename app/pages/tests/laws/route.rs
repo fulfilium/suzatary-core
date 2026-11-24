@@ -7,6 +7,28 @@ use suzatary_pages::desk::{Area, Desk, Drawing, Scroller, share};
 use suzatary_pages::route::Route;
 use viewtree::tiles::{self, Page, Px, Viewport};
 
+/// The end of `r`'s `home` chain, followed at most `MOST` steps.
+fn end(r: &Route) -> Route {
+    let mut at = r.clone();
+    for _ in 0..tiles::MOST {
+        let home = at.home();
+        if home == at {
+            break;
+        }
+        at = home;
+    }
+    at
+}
+
+/// The leaves the desk's tree holds.
+fn leaves(desk: &Desk) -> usize {
+    desk.tiles()
+        .root()
+        .parts()
+        .map(|p| p.tree.leaves().len())
+        .sum()
+}
+
 /// A word with bytes that need escaping, and some that are malformed escapes.
 fn word() -> impl Strategy<Value = String> {
     let piece = "[a-z0-9]{0,3}|%2F|%E2%80%94|%ZZ|%|%\\+1|%-1|\\+|thread|memory|new|-|,|\\.|~|\\(|\\||!|'|\\*|/|\\?|&|=|—";
@@ -38,6 +60,7 @@ fn route() -> impl Strategy<Value = Route> {
         }),
         Just(Route::Memory),
         Just(Route::NewTopic),
+        Just(Route::Conversations),
         (
             w(),
             words(),
@@ -74,6 +97,7 @@ fn every_variant_is_drawn() {
         | Route::Secretary { .. }
         | Route::Memory
         | Route::NewTopic
+        | Route::Conversations
         | Route::Conversation { .. }
         | Route::Unknown { .. } => (),
     };
@@ -181,33 +205,75 @@ proptest! {
         prop_assert_eq!(tiles::print(desk.tiles()), r.print());
     }
 
-    /// A bare hash's layout: a page drawn alone scrolls the document, and only a todo, beside the
-    /// list it is opened from, makes two tiles, exactly where the room holds both least widths
-    /// and a divider, at any height. The todo alone stands under the Todos workspace's crumb row;
-    /// the two stand either side of one divider, named by the list.
+    /// A page opened from its workspace's home, the end of its `home` chain, the way a person
+    /// reaches it (a conversation from the stream, a todo from the list), stands where its bare
+    /// hash puts it, and the address is that bare hash.
+    #[test]
+    fn a_page_opened_from_its_workspaces_home_is_its_bare_hash(h in hash().prop_filter("bare", |h| bare(h)), at in viewport()) {
+        let r = Route::parse(&h);
+        let mut desk = Desk::new().expect("the destinations are a home");
+        desk.go(&end(&r).href());
+        let home = desk.drawing(at).tiles[0].key;
+        desk.open(u32::try_from(home).expect("a small key"), &r.href());
+        let mut cold = Desk::new().expect("the destinations are a home");
+        cold.go(&r.href());
+        prop_assert_eq!(desk.address(), r.href());
+        let pages = |d: &Desk| d.tiles().root().focus.tree.leaves().into_iter().map(|l| l.page().clone()).collect::<Vec<_>>();
+        prop_assert_eq!(pages(&desk), pages(&cold));
+    }
+
+    /// Every route's `home` chain ends at one of the bar's destinations within `MOST` steps.
+    #[test]
+    fn every_chain_ends_at_a_destination(h in hash()) {
+        let r = Route::parse(&h);
+        prop_assert!(Route::destinations().contains(&end(&r)), "{:?} ends at {:?}", r, end(&r));
+    }
+
+    /// A bare hash's layout: a page drawn alone scrolls the document, and only a todo beside the
+    /// list it is opened from, and a conversation beside the conversations, make two tiles,
+    /// exactly where the room holds both least widths and a divider, at any height. Alone, such a
+    /// page stands under its workspace's crumb row; the two stand either side of one divider,
+    /// named by the list.
     #[test]
     fn a_bare_hash_draws_its_home_and_its_page(h in hash().prop_filter("bare", |h| bare(h)), at in viewport()) {
         let r = Route::parse(&h);
         let mut desk = Desk::new().expect("the destinations are a home");
         desk.go(&h);
         let d = desk.drawing(at);
-        let todo = matches!(r, Route::Todo { .. });
+        // Every leaf of the tree is drawn or behind, once.
+        let mut keys: Vec<u64> = d.tiles.iter().map(|t| t.key).chain(d.behind.iter().map(|b| b.key)).collect();
+        let leaves = desk.tiles().root().parts().map(|p| p.tree.leaves().len()).sum::<usize>();
+        keys.sort_unstable();
+        keys.dedup();
+        prop_assert_eq!(keys.len(), leaves);
+        prop_assert_eq!(d.tiles.len() + d.behind.len(), leaves);
+        // The list a bare hash opens its page beside, and the workspace both stand in.
+        let from = if matches!(r, Route::Todo { .. }) {
+            Some(("#/", 0))
+        } else if matches!(r, Route::Conversation { .. } | Route::NewTopic | Route::Memory) {
+            Some(("#/conversations", 2))
+        } else {
+            None
+        };
         let hrefs: Vec<&str> = d.tiles.iter().map(|t| t.href.as_str()).collect();
         let href = r.href();
-        if todo && at.w.0 >= BESIDE {
-            prop_assert_eq!(hrefs, vec!["#/", href.as_str()]);
-            prop_assert_eq!(d.scroll, Scroller::Tiles);
-            prop_assert!(d.rows.is_empty());
-            prop_assert_eq!(d.dividers.len(), 1);
-            prop_assert_eq!(d.dividers[0].before, d.tiles[0].key);
-            prop_assert_eq!(&d.dividers[0].node, &vec![0]);
-            prop_assert!(d.tiles.iter().all(|t| t.rect.y == 0 && t.rect.h == at.h.0));
-        } else {
-            prop_assert_eq!(hrefs, vec![href.as_str()]);
-            prop_assert_eq!(d.scroll, Scroller::Document);
-            prop_assert!(d.dividers.is_empty());
-            let rows: Vec<Vec<usize>> = d.rows.iter().map(|r| r.node.clone()).collect();
-            prop_assert_eq!(rows, if todo { vec![vec![0]] } else { vec![] });
+        match from {
+            Some((list, ws)) if at.w.0 >= BESIDE => {
+                prop_assert_eq!(hrefs, vec![list, href.as_str()]);
+                prop_assert_eq!(d.scroll, Scroller::Tiles);
+                prop_assert!(d.rows.is_empty());
+                prop_assert_eq!(d.dividers.len(), 1);
+                prop_assert_eq!(d.dividers[0].before, d.tiles[0].key);
+                prop_assert_eq!(&d.dividers[0].node, &vec![ws]);
+                prop_assert!(d.tiles.iter().all(|t| t.rect.y == 0 && t.rect.h == at.h.0));
+            }
+            Some(_) | None => {
+                prop_assert_eq!(hrefs, vec![href.as_str()]);
+                prop_assert_eq!(d.scroll, Scroller::Document);
+                prop_assert!(d.dividers.is_empty());
+                let rows: Vec<Vec<usize>> = d.rows.iter().map(|r| r.node.clone()).collect();
+                prop_assert_eq!(rows, from.map(|(_, ws)| vec![ws]).into_iter().collect::<Vec<_>>());
+            }
         }
     }
 
@@ -229,6 +295,11 @@ proptest! {
             prop_assert_eq!(cold.address(), address.clone());
             for room in [at, other] {
                 prop_assert_eq!(placed(&cold, room), placed(&desk, room));
+                // Every leaf drawn or behind, once; and the host keeps pages by the addresses behind.
+                let d = desk.drawing(room);
+                prop_assert_eq!(d.tiles.len() + d.behind.len(), leaves(&desk));
+                let behind = |d: &Drawing| d.behind.iter().map(|b| b.href.clone()).collect::<Vec<_>>();
+                prop_assert_eq!(behind(&cold.drawing(room)), behind(&d));
             }
             let mut back = Desk::new().expect("the destinations are a home");
             back.go(&address);

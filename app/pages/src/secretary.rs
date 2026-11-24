@@ -334,7 +334,11 @@ impl Program for Secretary {
             back: None,
             legend: None,
             now: vec![
-                view! { P "legend chatsmemory" [link("", Place::Memory, "What the secretary remembers")] },
+                view! { P "legend chatsmemory" [
+                    link("", Place::Conversations, "Conversations"),
+                    " · ",
+                    link("", Place::Memory, "What the secretary remembers"),
+                ] },
                 head,
             ],
             shape: Shape::Turns,

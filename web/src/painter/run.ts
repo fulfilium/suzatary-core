@@ -5,6 +5,7 @@ import deliver from "./deliver"
 import mailbox from "./mailbox"
 import painter from "./painter"
 import scroll from "./scroll"
+import { measure } from "../app/perf"
 
 export namespace run {
   export type Module = {
@@ -38,6 +39,8 @@ export namespace run {
     box: () => Element,
     refresh?: painter.Refresh,
     layer: HTMLElement | null = null,
+    // Whether the page is in the document; out of it, nothing is measured, since every box there is empty.
+    drawn: () => boolean = () => true,
   ): T<I> => {
     let live = true
     const inputs = mailbox.of<I>(input => void step(named(input), () => deliver(page, input)))
@@ -48,11 +51,12 @@ export namespace run {
         const bytes = patches()
         if (bytes === undefined) return false
         const effects = parse<E>(page.effects())
-        const kept = effects.some(keeps) ? scroll.anchor(box()) : null
+        const measured = drawn()
+        const kept = measured && effects.some(keeps) ? scroll.anchor(box()) : null
         dom.apply(bytes)
-        scroll.settle(box())
+        if (measured) scroll.settle(box())
         if (kept !== null) scroll.keep(kept)
-        performance.measure("painter:step", { start: t0, end: performance.now(), detail: { step: name, bytes: bytes.length, effects: effects.length } })
+        measure("painter:step", t0, { step: name, bytes: bytes.length, effects: effects.length })
         for (const e of effects) handle(e, send)
         return true
       })

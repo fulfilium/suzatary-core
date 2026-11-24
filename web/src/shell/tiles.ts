@@ -7,11 +7,18 @@
 //
 // Every act on the tree goes through the desk: a link followed in a tile and its page's `Go` open from that tile, a
 // divider's drag, tap and keys resize it, and the address the host hands the history is the desk's print.
+//
+// A page keeps running while the desk's tree holds its leaf, drawn or behind (`Drawing.behind`): hidden, its element
+// is out of the document, keeping what was typed in it, its program hears its readings and paints into it (`drain`),
+// and where its scroller stood is put back when it is drawn again. The host mounts a page only to draw it, and lets one
+// go when its leaf leaves the tree, or when more than the drawing's bound are hidden, the one drawn longest ago first
+// (`keep`). A page let go and opened again is mounted again from its address, as a page navigated to.
 
 import type { Area, Crumbs, Drawing, Drawn, Line, Notch, Opens } from "../wire/generated/pages"
+import keep from "./keep"
 import type { Desk } from "../pages/views"
 import type { Mounted } from "../view/page"
-import { backButton, inert } from "../view/page"
+import { backButton } from "../view/page"
 import { el } from "../view/dom"
 import { chevronIcon } from "../view/icons"
 import pages from "../pages/table"
@@ -30,13 +37,20 @@ export namespace tiles {
     key: number
     route: Route
     opens: Opens
+    shown: program.Shown
+    // When it was last drawn, by the host's count of drawings; where its scroller stood as it was hidden, and what in
+    // it had the keyboard.
+    seen: number
+    y: number
+    focused: Element | null
     // The tile's element, which its page draws into, and its part of the window's layer, where its page draws what it
     // marks as the window's: never inside the tile, which is a query container, and older engines make such an element
     // the containing block of its fixed children.
     readonly root: HTMLElement
     readonly layer: HTMLElement
     readonly heard: Set<() => void>
-    mounted: Mounted
+    // Made and waiting for its turn to mount, or mounted; a page whose turn was overtaken is never mounted.
+    mounted: { readonly type: "Waiting" } | { readonly type: "Mounted"; readonly page: Mounted }
     // The style last written on `root`.
     placed: string
     // What the person last pressed in it: a click or a tap, which focuses nothing in every browser.
@@ -60,6 +74,8 @@ export namespace tiles {
     readonly room: () => Opens
     // The routes drawn now.
     readonly drawn: () => readonly Route[]
+    // Lets go the hidden pages of the routes `of` names: a page drawn again would show what it was made from.
+    readonly forget: (of: (r: Route) => boolean) => void
     // The focused workspace's home, which the bar lights, as the desk's tree holds it; none before the first address.
     readonly workspace: () => Route | null
     // `said` alone, until the address moves.
@@ -74,6 +90,7 @@ export namespace tiles {
     thread: "Thread",
     briefing: "Briefing",
     conversation: "Conversation",
+    conversations: "Conversations",
     newtopic: "New topic",
     memory: "Memory",
   }
@@ -134,12 +151,14 @@ export namespace tiles {
 
   export const install = (view: HTMLElement, layers: HTMLElement, desk: () => Promise<Desk>, moved: () => void): Host => {
     let live: Tile[] = []
-    let drawing: Drawing = { scroll: "Document", tiles: [], rows: [], dividers: [] }
+    let drawing: Drawing = { scroll: "Document", tiles: [], behind: [], keep: 0, rows: [], dividers: [] }
     let room = { w: 0, h: 0 }
     let shown: Shown = { type: "Waiting" }
     // The focused workspace's home, read from the desk's tree as an address moves it, before any page of it has loaded.
     let workspace: Route | null = null
     let latest = 0
+    // The host's count of drawings, which says when a tile was last drawn.
+    let drawings = 0
     const lines = el("div", { class: "tilelines" })
     const marks = new Map<string, Mark>()
     // Each divider's element's line now, which its drag, tap and keys read.
@@ -157,9 +176,15 @@ export namespace tiles {
       return { w: Math.floor(((view.getBoundingClientRect().width + bar) * 16) / root), h: Math.floor((window.innerHeight * 16) / root) }
     }
 
+    // The count of pages running, drawn and kept, on `#view`: written only when it moves, so a drawing that changes
+    // nothing writes nothing.
+    const counted = (): void => {
+      const n = String(live.length)
+      if (view.dataset["running"] !== n) view.dataset["running"] = n
+    }
     const lone = (): boolean => drawing.scroll === "Document"
     const page_ = (): Element => document.scrollingElement ?? document.documentElement
-    const box = (t: Tile) => (): Element => (lone() ? page_() : t.root)
+    const box = (t: Tile) => (): Element => (lone() && t.shown === "Drawn" ? page_() : t.root)
 
     const tell = (t: Tile, opens: Opens): void => {
       if (t.opens === opens) return
@@ -203,16 +228,43 @@ export namespace tiles {
       return top ?? t.root.firstElementChild ?? t.root
     }
 
+    // A tile drawn or hidden, and its layer with it; whether it changed. Its program is told by `heard`, once its
+    // element stands where the drawing puts it.
+    const show = (t: Tile, shown: program.Shown): boolean => {
+      if (t.shown === shown) return false
+      t.shown = shown
+      t.layer.hidden = shown === "Hidden"
+      return true
+    }
+    const heard = (t: Tile): void => t.heard.forEach(f => f())
+
     // Makes the DOM the drawing's. A kept tile whose scroller changes (alone, it scrolls the document; beside another, it
-    // scrolls itself) keeps its anchor where it stood on the screen, though the page reflows to its new width.
+    // scrolls itself) keeps its anchor where it stood on the screen, though the page reflows to its new width. A tile
+    // hidden keeps where its scroller stood, and stands there again when it is drawn again.
     const draw = (was: Drawing["scroll"]): void => {
+      drawings += 1
       const turns = was !== drawing.scroll
-      const stood = new Map(turns ? live.filter(t => t.root.isConnected).map(t => [t, { at: anchor(t), top: anchor(t).getBoundingClientRect().top }]) : [])
+      const drawn = (t: Tile): Drawn | undefined => drawing.tiles.find(x => x.key === t.key)
+      const behind = (t: Tile): boolean => drawing.behind.some(x => x.key === t.key)
+      const stood = new Map(turns ? live.filter(t => t.root.isConnected && t.shown === "Drawn" && drawn(t) !== undefined).map(t => [t, { at: anchor(t), top: anchor(t).getBoundingClientRect().top }]) : [])
+      for (const t of live)
+        if (t.shown === "Drawn" && behind(t)) {
+          t.y = (was === "Document" ? page_() : t.root).scrollTop
+          t.focused = document.activeElement !== null && t.root.contains(document.activeElement) ? document.activeElement : null
+        }
+      const back = live.filter(t => t.shown === "Hidden" && drawn(t) !== undefined)
+      const stays = new Set(live.filter(t => t.shown === "Drawn" && drawn(t) !== undefined))
       view.classList.toggle("tiled", !lone())
       for (const t of live) {
-        const d = drawing.tiles.find(x => x.key === t.key)
-        if (d === undefined) continue
+        const d = drawn(t)
+        if (d === undefined) {
+          if (behind(t) && show(t, "Hidden")) heard(t)
+          if (behind(t)) t.placed = restyle(t.root, t.placed, "")
+          continue
+        }
         t.placed = restyle(t.root, t.placed, placeOf(d))
+        t.seen = drawings
+        show(t, "Drawn")
         tell(t, d.opens)
       }
       mark([
@@ -247,12 +299,32 @@ export namespace tiles {
         if (now === undefined) dividers.delete(e)
         else dividers.set(e, now)
       }
-      // The lines' layer is last, above the tiles, so a divider's handle is taken where it reaches over a tile's edge.
-      const roots = new Set<Element>([lines, ...live.map(t => t.root)])
+      // The drawn tiles stand in the drawing's order. Together, the lines' layer stands after them, above them, so a
+      // divider's handle is taken where it reaches over a tile's edge; one tile alone flows, and its crumb row stands
+      // above it. A tile drawn before and still drawn is never moved: a tile new to the screen, or drawn again, goes
+      // before the next of those. A hidden tile's element is out of the document, so nothing that reads the document
+      // meets it; where its scroller stood and what had the keyboard are put back when it is drawn.
+      const order = drawing.tiles.flatMap(d => live.filter(t => t.key === d.key))
+      const roots = new Set<Element>([lines, ...order.map(t => t.root)])
       for (const n of [...view.children]) if (!roots.has(n)) n.remove()
-      live.forEach((t, i) => (view.children[i] === t.root ? undefined : view.insertBefore(t.root, view.children[i] ?? null)))
-      if (view.lastElementChild !== lines) view.appendChild(lines)
+      if (lone() && view.firstElementChild !== lines) view.prepend(lines)
+      if (!lone() && view.lastElementChild !== lines) view.appendChild(lines)
+      const end = lone() ? null : lines
+      order.forEach((t, i) => {
+        if (stays.has(t) && t.root.parentElement === view) return
+        const next = order.slice(i + 1).find(u => stays.has(u) && u.root.parentElement === view)?.root ?? end
+        if (t.root.nextElementSibling !== next || t.root.parentElement !== view) view.insertBefore(t.root, next)
+      })
       for (const [t, { at, top }] of stood) box(t)().scrollTop += at.getBoundingClientRect().top - top
+      for (const t of back) box(t)().scrollTop = t.y
+      // Told drawn once in the document, a program does what waited (a focus it asked for among it); then what had the
+      // keyboard is put back, only where nothing on screen holds it.
+      back.forEach(heard)
+      for (const t of back) {
+        const free = document.activeElement === null || document.activeElement === document.body
+        if (free && t.focused instanceof HTMLElement && t.root.contains(t.focused)) t.focused.focus({ preventScroll: true })
+      }
+      counted()
     }
 
     // A page opened from the tile `t`, by the desk's one rule; the address of the tree it makes is a new entry of the
@@ -270,10 +342,14 @@ export namespace tiles {
         key: d.key,
         route: parseRoute(d.href),
         opens: d.opens,
+        shown: "Drawn",
+        seen: drawings,
+        y: 0,
+        focused: null,
         root: el("div", { class: "tile" }),
         layer: el("div", { class: "tilelayer" }),
         heard: new Set(),
-        mounted: inert,
+        mounted: { type: "Waiting" },
         placed: "",
         pressed: null,
       }
@@ -296,12 +372,13 @@ export namespace tiles {
     }
 
     const leave = (t: Tile): void => {
-      t.mounted.destroy()
+      if (t.mounted.type === "Mounted") t.mounted.page.destroy()
       t.layer.remove()
     }
 
     const placedOf = (t: Tile): program.Placed => ({
       opens: () => t.opens,
+      shown: () => t.shown,
       hear: moved => (t.heard.add(moved), () => void t.heard.delete(moved)),
       go: (href, how) => void open(t, href, how),
     })
@@ -398,6 +475,7 @@ export namespace tiles {
     const unmount = (): void => {
       live.forEach(leave)
       live = []
+      counted()
       marks.clear()
       dividers.clear()
       lines.replaceChildren()
@@ -419,22 +497,18 @@ export namespace tiles {
         return []
       }
       const next = arrange(d, roomOf())
-      const taken = new Set<Tile>()
-      const kept = new Map<number, Tile>()
-      const made: Tile[] = []
-      for (const want of next.drawing.tiles) {
-        const now = parseRoute(want.href)
-        const t = fresh ? undefined : live.find(t => !taken.has(t) && (hrefOf(t.route) === want.href || pages.absorbs(t.route, now)))
-        if (t === undefined) {
-          made.push(newTile(want))
-          continue
-        }
-        taken.add(t)
-        t.key = want.key
-        t.route = now
-        kept.set(want.key, t)
+      const k = keep.kept(fresh ? [] : live, next.drawing, {
+        key: t => t.key,
+        same: (t, href) => hrefOf(t.route) === href || pages.absorbs(t.route, parseRoute(href)),
+        seen: t => t.seen,
+        mounted: t => t.mounted.type === "Mounted",
+      })
+      for (const [key, { tile, href }] of [...k.drawn, ...k.hidden]) {
+        tile.key = key
+        tile.route = parseRoute(href)
       }
-      const gone = live.filter(t => !taken.has(t))
+      const made = next.drawing.tiles.filter(w => !k.drawn.has(w.key)).map(newTile)
+      const gone = fresh ? live : k.gone
       // The pages to draw are loaded first, so a page left keeps its place until the next can draw.
       const loads = made.map(t => Promise.resolve(pages.load(t.route, { box: box(t), placed: placedOf(t), layer: t.layer })))
       const draws = await Promise.all(loads)
@@ -443,7 +517,8 @@ export namespace tiles {
         return []
       }
       gone.forEach(leave)
-      live = next.drawing.tiles.flatMap(w => kept.get(w.key) ?? made.filter(t => t.key === w.key))
+      // The tiles kept stay where their elements stand; the pages new to the screen follow.
+      live = [...live.filter(t => !gone.includes(t)), ...made]
       // Arranged again as it is drawn, for the room its tiles were chosen for: a divider moved while the pages loaded moved
       // the shares, never the tiles; a room that moved meanwhile is the observer's to draw.
       draw(commit(arrange(d, next.room)))
@@ -452,7 +527,7 @@ export namespace tiles {
         await new Promise<void>(done => soon.run(done))
         if (turn !== latest) return []
         const draw = draws[i]
-        if (draw !== undefined) t.mounted = draw(t.root)
+        if (draw !== undefined) t.mounted = { type: "Mounted", page: draw(t.root) }
       }
       // A page new to the screen, alone, starts at its top, unless the log says where it was.
       if (!again && lone() && made.length > 0) window.scrollTo(0, 0)
@@ -488,7 +563,13 @@ export namespace tiles {
     return {
       go,
       room: () => (wide.matches ? "Beside" : "Over"),
-      drawn: () => live.map(t => t.route),
+      drawn: () => live.filter(t => t.shown === "Drawn").map(t => t.route),
+      forget: of => {
+        const gone = live.filter(t => t.shown === "Hidden" && of(t.route))
+        gone.forEach(leave)
+        live = live.filter(t => !gone.includes(t))
+        counted()
+      },
       workspace: () => (shown.type === "Tiles" ? workspace : null),
       failed: said => {
         latest += 1

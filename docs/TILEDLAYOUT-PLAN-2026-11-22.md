@@ -252,6 +252,14 @@ drawn beside or over is then `arrange`'s answer for the viewport.
 5. From a pinned leaf, a free page replaces the free child right before it, or is inserted before
    it, so a link in the secretary opens beside it and the secretary stays at the end.
 
+**The chain.** A page declares the page it is opened from (`Page::home`), and that page may be
+opened from another, up to a workspace's home: a conversation is opened from the conversations,
+which stand in the Secretary workspace in the stream's place. Where the focused leaf is on the
+opened page's chain, each page of the chain after it opens first, by the rules above, then the
+page: a conversation opened from the stream replaces the stream with the conversations (rule 1)
+and stands beside them (rule 3), the tree its bare address reads as. A page shown already is
+focused before any chain opens.
+
 The focused tile's node is its parent. If the parent is the root or another `Never` node (a tab
 node), rule 3 first wraps the focused tile in a new node across. This is the
 behaviour of Miller columns (the Finder's column view). Each page opens to the right of the page
@@ -820,11 +828,6 @@ What stage b did not reach, on purpose, and the stage each goes in:
   needs the conversation's talk about the page, which only a running panel can tell. Without §6's kept-and-fed hidden
   tiles a closed panel would run nothing, so the panel stays the fixed overlay. Its rule reads the window's chrome
   (`tiles.room`, the same media query as the chrome) and nothing else, and it takes its width from the room.
-- **Hidden tiles kept and fed (§6): stage c,** with the panel, which is their first consumer. The host mounts only
-  drawn tiles; on a phone, Back mounts the list again and restores its scroll through `routelog.Kept`, as before.
-- **The conversations column as a tile: stage c,** with the open rule for links between pages, since its column is a
-  list a conversation opens from. Until then it is page content that follows the tile's `opens`.
-- **The Typst list's pane as a tile: stage c,** for the same reason; until then it follows its frame's container query.
 - **The add sheet rising inside its tile: stage c,** once a sheet belongs to its tile (§6). Until then the sheet is
   placed against the window, so its width rules stay the window's media queries at the edge.
 - **`Route` and `places::Place`** print the same hashes twice in Rust. One should become a view of the other, in
@@ -877,10 +880,51 @@ placed by the arrangement.
 
 What this half did not do, and where it goes:
 
-- **The conversations column and the Typst list's pane as tiles.** Each needs a page of its own for what it draws (the
-  conversations as a list; the Typst list's open todo is a `Todo` already), opened before or beside its page by the
-  open rule, and a bare hash that reads as that tree: `#/secretary/<id>` reads today as the conversation alone, because
-  the stream and a conversation are one kind. Splitting the kinds and giving the conversations a route is the next
-  step; until then both stay page content that follows the tile's `opens`.
 - **The second half**: hidden tiles kept and fed, the secretary's panel as the pinned leaf, the add sheet inside its
   tile.
+
+## 15. Stage c, second half: what it holds
+
+- **The conversations and a conversation are two kinds.** `#/conversations` is a page of its own, a list
+  (`app/pages/src/conversations.rs`), of the Secretary workspace's kind; a conversation, a new topic and the memory are
+  of their own kind, whose `home` is that list. `Page::home` may name a page that is itself opened from another: a bare address
+  and an open from a page on the chain (§3, "The chain") both open the rest of the chain (`tiles::parse` and
+  `Act::Open`, through one `homes`, bounded by `MOST`), so `#/secretary/<id>` reads as
+  the conversations beside the conversation and prints back bare. The conversation's own column, its search and its
+  grid went; so did the Typst list's pane: an Open in that list opens the todo's page beside it where `opens` is
+  `Beside`, and in its row otherwise.
+- **A hidden tile is kept and fed.** The desk's drawing names every leaf the tree holds that is not drawn
+  (`Drawing.behind`). The host keeps a running page while its leaf is drawn or behind, matched by the leaf it drew
+  last, else by page, across an address it reads again. Hidden, the page's element is out of the document, so nothing
+  that reads
+  the document meets it and no two pages' ids meet; its program keeps painting into it, its fields keep what was
+  typed, and where its scroller stood and what had the keyboard are put back when it is drawn again. Not §6's
+  `content-visibility: hidden` in the document: a page hidden across a change of the chrome (a desk's window narrowed
+  to a phone's) kept its old style and, drawn again, ran its transitions from it, the add sheet sliding up the window;
+  and every query over the document met the hidden pages first.
+  Its program keeps holding its readings; nothing in it is measured while it is out of the document. The host mounts a
+  page only to draw it, and lets one go when its leaf leaves the tree, when its mount was overtaken by a later address
+  (it would draw nothing), or when more than the drawing's `keep` are hidden (each workspace's page but the drawn
+  one's, and `MOST` less one behind a drawn page: ten), the one drawn longest ago first (`web/src/shell/keep.ts`). A
+  page let go and come back to is mounted again from its address, with `routelog.Kept`'s scroll, as before. A program
+  is told it is drawn again only once its element is back in the document, so a focus it asked for while hidden lands.
+- **One machine for a program undrawn** (`web/src/pages/drain.ts`): `Drawn`, `Hidden`, `Leaving`, `Gone`. Hidden, a
+  program reads and writes; a focus, a scroll and its keys wait until it is drawn, and a move of the address drops. Let
+  go, it is `Leaving` while it owes a write or an Undo, as stage b's drain was, which is now the case of a hidden program
+  that will not be drawn again. Each program hears a change of its context in a task of its own (§6).
+- **Workspaces not drawn** hold their homes after any bare address (`parse` grows the other workspaces from home), so a
+  workspace switched away from and back to keeps its home page running, and a page opened in it beside the home is let
+  go; the address carries the other workspaces' trees in stage d.
+
+What this half did not do, and where it goes:
+
+- **The secretary's panel as the pinned leaf.** It needs a page of its own (`Pin::Pinned`), at a hash no conversation id
+  spells (ids are slugs, so not `#/secretary/<word>`). The desk holds its leaf while `aside.shown` says so, an act
+  from the shell, never the width. A leaf behind on a phone now runs and is fed, so its program can still tell its
+  talk. Its `--aside` room and its 62rem rules then go.
+- **The add sheet inside its tile**, with its scrim, and the window's rules for it.
+- **Why a container query inside a conversation broke two held-question scenes** in the first half: not found. The
+  query is not in the tree to try again, and nothing here needs one: the conversation draws no column now.
+- **A kept page's clock.** Five pages read `now` once, at their start (the conversations, the inbox, the stream, a
+  todo and the list), so a page kept across midnight groups its days by the day before. The clock should come with
+  `Context` or a held reading.

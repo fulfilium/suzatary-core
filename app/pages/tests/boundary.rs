@@ -37,6 +37,8 @@ fn generates_the_pages_boundary_types() {
     d.visit::<suzatary_pages::conversation::Stream>();
     d.visit::<suzatary_pages::conversation::Windowed>();
     d.visit::<suzatary_pages::composer::Read>();
+    d.visit::<suzatary_pages::conversations::Flags>();
+    d.visit::<suzatary_pages::conversations::Hold>();
     d.visit::<suzatary_pages::draft::Flags>();
     d.visit::<suzatary_pages::draft::Hold>();
     d.visit::<suzatary_pages::draft::Ask>();

@@ -117,7 +117,7 @@ app.scene("the conversations have one field above them, and no placeholder is cu
     assert.deepEqual(await app.page.evaluate<string[]>(cutPlaceholders), [], `${size[0]} px`);
     await app.page.evaluate(`location.hash = "#/secretary/default"`);
     await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
-    if (size === WIDE) await app.page.waitFor(`document.querySelector(".chatsaside .chathead input") !== null`, { timeout: 8000 });
+    if (size === WIDE) await app.page.waitFor(`document.querySelector(".tile .conversations .chathead input") !== null`, { timeout: 8000 });
     assert.deepEqual(await app.page.evaluate<string[]>(cutPlaceholders), [], `${size[0]} px`);
   }
 });

@@ -8,6 +8,7 @@ mod calendar;
 mod cards;
 mod common;
 mod conversation;
+mod conversations;
 mod draft;
 mod inbox;
 mod mail;

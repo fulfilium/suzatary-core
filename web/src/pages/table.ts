@@ -43,6 +43,7 @@ export namespace pages {
     conversation: (s, at) =>
       program.mount("ConversationPage", { at: { type: "Page", id: s.id, refs: [...s.refs], focus: s.focus === true, at: s.at ?? null } }, at),
     newtopic: (_, at) => program.mount("DraftPage", {}, at),
+    conversations: (_, at) => program.mount("ConversationsPage", {}, at),
     unknown: s => root => frame.open(root, unknown(s.hash)),
   }
 
@@ -78,6 +79,7 @@ export namespace pages {
     secretary: "Unshown",
     conversation: "Shown",
     newtopic: "Unshown",
+    conversations: "Unshown",
     unknown: "Unshown",
   }
 

@@ -10,9 +10,9 @@ use viewtree::{Node, Program, view};
 
 use crate::chrome::{self, Chrome, Masthead, Shape, Width};
 use crate::held::Folded;
-use crate::needsyou::Route;
+use crate::needsyou::{Named, Route};
 use crate::places::Place;
-use crate::runtime::{Answer, Context, Effect, Gate, Input, Local, Never, read};
+use crate::runtime::{Answer, Context, Effect, Gate, Input, Local, Never, Opens, read};
 use crate::todoparts::{Acting, Came, Phase, begin, came, finish, said};
 use viewtree::kit::Reading;
 
@@ -147,8 +147,13 @@ impl Program for Typst {
                     reading,
                     ..
                 } => {
+                    // A todo open beside the list, as a tile of its own, is not open in it.
                     if let Reading::Val { v } = read::<Route>(reading) {
-                        m.open = v.selected;
+                        m.open = if v.page == Named::Typst {
+                            v.selected
+                        } else {
+                            String::new()
+                        };
                     }
                 }
                 Input::Answered { ask, answer } => return answered(m, ask, answer),
@@ -157,10 +162,14 @@ impl Program for Typst {
                 }
             },
             Msg::Intent(words) => match Intent::of(&words, &m.chain) {
+                // Where a page opened from the list stands beside it, the todo opens as its own
+                // tile; else it opens in its row.
                 Some(Intent::Open(id)) => {
-                    return vec![Effect::Go {
-                        href: Place::Typst(&id).href(),
-                    }];
+                    let href = match m.context.opens {
+                        Opens::Beside => Place::Todo(&id).href(),
+                        Opens::Over => Place::Typst(&id).href(),
+                    };
+                    return vec![Effect::Go { href }];
                 }
                 Some(Intent::Complete(id)) => {
                     let entry = m.fold.as_ref().and_then(|f| f.entry(&id));

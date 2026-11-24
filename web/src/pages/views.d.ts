@@ -36,6 +36,7 @@ export class SettingsPage extends Page {}
 export class InboxPage extends Page {}
 export class SecretaryPage extends Page {}
 export class ConversationPage extends Page {}
+export class ConversationsPage extends Page {}
 export class DraftPage extends Page {}
 export class NeedsYouPage extends Page {}
 /** A todo's page (`app/pages/src/todo.rs`). */

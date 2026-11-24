@@ -19,6 +19,8 @@ pub trait Page: Clone + Eq {
     /// The shape of the pages it opens, which decides its tile's `Opens`.
     fn opens(&self) -> Shape;
     /// The page a bare address of this one is opened from; a workspace's home answers itself.
+    /// Followed, it reaches a workspace's home within `MOST` steps; a bare address opens each
+    /// page on the way.
     #[must_use]
     fn home(&self) -> Self;
     /// The leaf's address: the route's hash without `#`.

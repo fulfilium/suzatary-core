@@ -58,7 +58,7 @@ fn list_host() -> impl Strategy<Value = todos::Msg> {
         },
     };
     let route = (prop::sample::select(vec!["", "a", "b"]), prop::sample::select(vec!["", "Shared words"]))
-        .prop_map(|(selected, shared)| json!({"page": "todos", "conversation": "", "selected": selected, "shared": shared}));
+        .prop_map(|(selected, shared)| json!({"page": "todos", "conversation": null, "selected": selected, "shared": shared}));
     let kept = prop_oneof![
         Just((Kept::Filter, json!({"state": "all", "query": "do"}))),
         Just((Kept::Filter, json!("{not json"))),

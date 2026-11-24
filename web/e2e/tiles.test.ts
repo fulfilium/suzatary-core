@@ -15,7 +15,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BASE, PHONE, SETTLED, WRITE_BASE, addTodo, doneFromList, reveal, row, suite } from "./harness";
+import { BASE, PHONE, SETTLED, WRITE_BASE, addTodo, doneFromList, openTodo, reveal, row, suite } from "./harness";
 import cast from "../test/cast";
 import { launch } from "./cdp";
 import tokens from "../src/view/tokens";
@@ -638,8 +638,8 @@ app.scene("at 960 by 900, a conversation opened from the inbox stands beside it 
   // The composer sticks to its tile's foot: no bar stands over a tile beside another, so it keeps no room for one.
   const [bottom, compose, tile] = await app.page.evaluate<[string, number, number]>(`(() => { const c = document.querySelector(".tile .conversation > .pagebody > .compose"); return [getComputedStyle(c).bottom, c.getBoundingClientRect().bottom, c.closest(".tile").getBoundingClientRect().bottom]; })()`);
   assert.equal(bottom, "0px", "the composer keeps no room for a bar");
-  // Beside the inbox, its own column of conversations is not drawn: the inbox is the list beside it.
-  assert.equal(await app.page.evaluate<string>(`getComputedStyle(document.querySelector(".tile .chatsaside")).display`), "none", "no column squeezes the conversation");
+  // The conversation draws no list of conversations of its own: that list is a page, opened as a tile.
+  assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".tile .conversation .chatrow") === null`), true, "no column squeezes the conversation");
   assert.ok(compose <= tile + 0.5, `the composer ends at ${compose}, inside its tile (to ${tile})`);
   stand(await seen(), "960 px, the inbox and a conversation");
   await app.page.screenshot(join(OUT, "compose-960.png"));
@@ -660,4 +660,119 @@ app.scene("on a phone, after an open in place the crumb before is a link to its 
   await app.page.click(".tilelines .crumbs > a:last-child");
   await app.page.waitFor(`location.hash === "#/todo/${todos.agents.id}" && ${source} !== null`, { timeout: 20000 });
   await app.resize(PHONE);
+});
+
+// The pages the tab runs, drawn and kept behind: the host's own count, beside the elements in the document.
+const running = `Number(document.getElementById("view").dataset.running)`;
+
+app.scene("on a phone, a half-typed note survives its todo going behind a message and coming back, and the list behind both is kept", async () => {
+  await app.resize([412, 900]);
+  await app.open(WRITE_BASE, "#/");
+  await app.page.waitFor(listed, { timeout: 20000 });
+  await app.page.evaluate(`window.__list = document.querySelector(".todospane").closest(".tile")`);
+  await openTodo(app.page, todos.agents.id);
+  await app.page.waitFor(`${source} !== null && !window.__list.isConnected && ${running} === 2`, { timeout: 20000 });
+  await app.page.evaluate(`window.__todo = document.querySelector(".todoview").closest(".tile")`);
+  const field = `.tile .todoview input.noteline`;
+  await app.page.waitFor(`document.querySelector("${field}") !== null`);
+  await app.page.type(field, "half a thought");
+  await app.page.click(`.tile .todoview .sourcelink`);
+  await app.page.waitFor(`location.hash.startsWith("#/mail/") && !window.__todo.isConnected && ${running} === 3`, { timeout: 20000 });
+  await app.page.screenshot(join(OUT, "kept-412-behind.png"));
+  // The crumb is Back to the todo: a real press.
+  await app.page.clickText(".crumbs .back", "Todo");
+  await app.page.waitFor(`location.hash === "#/todo/${todos.agents.id}" && window.__todo.isConnected && ${running} === 2`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<boolean>(`window.__todo.querySelector("input.noteline") === document.querySelector("${field}")`), true, "the note is the field it was");
+  assert.equal(await app.page.evaluate<string>(`document.querySelector("${field}").value`), "half a thought", "what was typed is there");
+  await app.page.screenshot(join(OUT, "kept-412-back.png"));
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === "#/" && window.__list.isConnected`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<number>(running), 1, "the todo Back left is let go");
+});
+
+app.scene("a list drawn again after Back takes its keys back: j moves its cursor", async () => {
+  await app.resize([412, 900]);
+  await app.open(WRITE_BASE, "#/");
+  await app.page.waitFor(listed, { timeout: 20000 });
+  await app.page.evaluate(`window.__list = document.querySelector(".todospane").closest(".tile")`);
+  // A todo opened over the list: the list is kept behind, its keys let go.
+  await openTodo(app.page, todos.agents.id);
+  await app.page.waitFor(`!window.__list.isConnected && ${running} === 2`, { timeout: 20000 });
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === "#/" && window.__list.isConnected && ${running} === 1`, { timeout: 20000 });
+  await app.page.evaluate(`document.activeElement?.blur()`);
+  await app.page.press("j");
+  await app.page.waitFor(`document.activeElement?.closest(".todospane") !== null && document.activeElement.getAttribute("data-key") !== null`, { timeout: 8000 });
+});
+
+app.scene("on a phone, a write made while the list is behind its todo lands, and the list shows it when it comes back", async () => {
+  await app.resize([412, 900]);
+  await app.open(WRITE_BASE, "#/");
+  await app.page.waitFor(listed, { timeout: 20000 });
+  const id = await addTodo(app.page, "Water the kept fern", "home");
+  await app.page.evaluate(`window.__list = document.querySelector(".todospane").closest(".tile")`);
+  await openTodo(app.page, id);
+  await app.page.waitFor(`document.querySelector(".tile .todoview .act-done") !== null && !window.__list.isConnected && ${running} === 2`, { timeout: 20000 });
+  await app.page.click(".tile .todoview .act-done");
+  // The list hears its store while hidden: the row goes from the element kept behind.
+  await app.page.waitFor(`window.__list.querySelector('${row(id)}') === null`, { timeout: 20000 });
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === "#/" && window.__list.isConnected`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<boolean>(`document.querySelector('${row(id)}') === null`), true, "the done todo is not listed");
+});
+
+app.scene("fifty opens and Backs at a desk leave no node, listener, measure or running page behind", async () => {
+  await openAgents(1440);
+  const go = async (): Promise<void> => {
+    await app.page.click(".tile .todoview .sourcelink");
+    await app.page.waitFor(`document.querySelectorAll("#view > .tile").length === 3`, { timeout: 20000 });
+    await app.page.evaluate(`history.back()`);
+    await app.page.waitFor(`location.hash === "#/todo/${todos.agents.id}" && document.querySelectorAll("#view > .tile").length === 2`, { timeout: 20000 });
+  };
+  // A first round warms the message's code and the readings it holds.
+  await go();
+  await app.page.evaluate(SETTLED);
+  const measures = `performance.getEntriesByType("measure").length`;
+  const before = { ...(await app.page.counts()), measures: await app.page.evaluate<number>(measures) };
+  for (let i = 0; i < 50; i += 1) await go();
+  await app.page.evaluate(SETTLED);
+  const after = { ...(await app.page.counts()), measures: await app.page.evaluate<number>(measures) };
+  console.log(`fifty opens and Backs: ${JSON.stringify({ before, after })}`);
+  assert.equal(await app.page.evaluate<number>(running), 2, "the list and the todo run, and nothing else");
+  assert.ok(after.listeners <= before.listeners, `listeners ${before.listeners} -> ${after.listeners}`);
+  assert.ok(after.nodes <= before.nodes * 1.05, `nodes ${before.nodes} -> ${after.nodes}`);
+  // Each name the tab measures keeps its latest `KEPT` (app/perf.ts), so the count is bounded whatever the rounds.
+  assert.ok(after.measures <= 256 * 12, `measures ${before.measures} -> ${after.measures}`);
+});
+
+app.scene("every workspace's page and a todo kept behind a message on a phone: nine pages kept, each the element left", async () => {
+  await app.resize([412, 900]);
+  // A tab that holds the About page alone.
+  await app.open(WRITE_BASE, "#/");
+  await app.page.evaluate(`location.hash = "#/about"`);
+  await app.page.reload();
+  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "About" && ${running} === 1`, { timeout: 20000 });
+  const alone = await app.page.counts();
+  // Each page drawn is held by the scene, so it can find the element again.
+  const hold = `((window.__pages ??= []).push(document.querySelector("#view > .tile")), true)`;
+  await app.page.evaluate(hold);
+  for (const hash of ["#/inbox", "#/secretary", "#/briefings", "#/mail", "#/calendar", "#/settings", "#/"]) {
+    await app.page.evaluate(`location.hash = ${JSON.stringify(hash)}`);
+    await app.page.waitFor(`location.hash === ${JSON.stringify(hash)} && document.querySelectorAll("#view > .tile").length === 1 && document.querySelector("#view .pagewaiting") === null && !window.__pages.includes(document.querySelector("#view > .tile"))`, { timeout: 20000 });
+    await app.page.evaluate(hold);
+  }
+  await app.page.waitFor(listed, { timeout: 20000 });
+  await openTodo(app.page, todos.agents.id);
+  await app.page.evaluate(hold);
+  await app.page.click(`#view > .tile .todoview .sourcelink`);
+  await app.page.waitFor(`location.hash.startsWith("#/mail/")`, { timeout: 20000 });
+  await app.page.evaluate(SETTLED);
+  const many = await app.page.counts();
+  const runs = await app.page.evaluate<number>(running);
+  console.log(`pages running: ${runs}; ${JSON.stringify({ alone, many })}`);
+  assert.equal(runs, 10, "the message, and behind it the seven other workspaces' pages, the list and the todo");
+  assert.equal(await app.page.evaluate<number>(`document.querySelectorAll("#view > .tile").length`), 1, "one page drawn on a phone");
+  // Back to the About page: the page kept is the element left, drawn again.
+  await app.page.evaluate(`location.hash = "#/about"`);
+  await app.page.waitFor(`window.__pages[0].isConnected`, { timeout: 20000 });
 });

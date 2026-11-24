@@ -242,8 +242,13 @@ fn unopened() -> ConversationRow {
     }
 }
 
-fn row<M>(r: &ConversationRow, current: &str, offsets: &[Offset], today: NaiveDate) -> Node<M> {
-    let on = r.id == current;
+fn row<M>(
+    r: &ConversationRow,
+    current: Option<&str>,
+    offsets: &[Offset],
+    today: NaiveDate,
+) -> Node<M> {
+    let on = current == Some(r.id.as_str());
     let badges = (r.standing > 0 || !r.unplaced.is_empty()).then(|| {
         let n = r.unplaced.len();
         view! { Span "chatbadges" [
@@ -261,7 +266,7 @@ fn row<M>(r: &ConversationRow, current: &str, offsets: &[Offset], today: NaiveDa
 
 pub(crate) fn view<M: Clone>(
     l: &List,
-    current: &str,
+    current: Option<&str>,
     offsets: &[Offset],
     today: NaiveDate,
     ev: fn(Ev) -> M,

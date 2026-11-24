@@ -5955,43 +5955,6 @@ body:has(> .secretarypanel) .askrow {
   font-size: var(--t-small);
 }
 
-.chatsaside {
-  display: none;
-}
-
-/* Where the arrangement has room beside the conversation, its column stands there (`Context.opens`). */
-.chatswide.beside {
-  display: grid;
-  grid-template-columns: var(--m-list) minmax(0, 1fr);
-  gap: var(--s-6);
-}
-
-/* Beside the column, the conversation starts at its edge rather than centring in what is left. */
-.chatswide.beside > .conversation {
-  margin: 0;
-}
-
-.chatswide.beside > .chatsaside {
-  display: block;
-  position: sticky;
-  top: var(--sticky-top);
-  align-self: start;
-  max-height: calc(100vh - var(--sticky-top));
-  overflow-y: auto;
-  padding: var(--s-4) var(--s-4) var(--s-4) 0;
-  border-right: 2px solid var(--line);
-}
-
-/* The column is drawn inside the conversation's own tile: beside another tile (the inbox, a todo) the conversation is
-   read alone, and the column stands only where the conversation is the one tile and the room holds both. */
-.tiled .chatswide.beside {
-  display: block;
-}
-
-.tiled .chatswide.beside > .chatsaside {
-  display: none;
-}
-
 /* --- Settings: what is connected, by group. A line is its label, one sentence of what it is and one of
    where it stands; a failing one is drawn in the problem role, legible in both themes, never by a badge. --- */
 .settingsgroup {
@@ -6151,36 +6114,11 @@ body:has(> .secretarypanel) .askrow {
   gap: var(--s-4);
 }
 
-/* On a phone the open todo opens in place inside its row, under the row's controls, so nothing
-   above the tapped row moves; the pane beside the list is the same content, shown only where there
-   is room for it, and the list makes room for the pane only while there is one. */
-.tview .tpane {
-  display: none;
-}
-
+/* The open todo opens in place inside its row, under the row's controls, so nothing above the tapped row
+   moves. Where a page opened from the list stands beside it, the todo opens as a tile of its own. */
 .tinplace {
   flex: 1 0 100%;
   padding: 0 var(--s-3) var(--s-3) 0;
-}
-
-@container (min-width: 56rem) {
-  .tview:has(> .tpane) {
-    grid-template-columns: minmax(0, 27rem) minmax(0, 1fr);
-    gap: var(--s-6);
-    align-items: start;
-  }
-
-  .tinplace {
-    display: none;
-  }
-
-  .tview .tpane {
-    display: block;
-    position: sticky;
-    top: 3.2rem;
-    border-left: 1px solid var(--rule);
-    padding-left: var(--s-6);
-  }
 }
 
 .tcount {
@@ -6297,12 +6235,6 @@ body:has(> .secretarypanel) .askrow {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-.tpane {
-  min-width: 0;
-  padding: var(--s-3) 0;
-  border-bottom: 1px solid var(--rule);
 }
 
 .tpanehead {

@@ -701,6 +701,14 @@ export class Page {
     return missed === null ? null : `it moved under the press, which met ${missed} instead`;
   }
 
+  /** The page's DOM nodes and event listeners, and its JavaScript heap in bytes, read after a collection. */
+  async counts(): Promise<{ nodes: number; listeners: number; heap: number }> {
+    await this.command("HeapProfiler.collectGarbage");
+    const dom = await this.command("Memory.getDOMCounters");
+    const heap = await this.command("Runtime.getHeapUsage");
+    return { nodes: Number(dom["nodes"]), listeners: Number(dom["jsEventListeners"]), heap: Number(heap["usedSize"]) };
+  }
+
   /** One step of a press: a mouse's left button, or a finger, going down, moving held, or let go at `at`. */
   async pointer(step: "Down" | "Move" | "Up", at: readonly [number, number], by: "Mouse" | "Finger"): Promise<void> {
     const [x, y] = at;

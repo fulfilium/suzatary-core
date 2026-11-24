@@ -73,19 +73,18 @@ test("a row's change renames exactly the path from it to the root", () =>
     assert.deepEqual(new Set(moved), new Set(path(after, xs[at]?.ref ?? "").map(n => n.name)))
   }))
 
-test("opening a todo renames its row's path, under which it reads in place, and adds its pane, and nothing else", () =>
+test("opening a todo renames its row's path, under which it reads in place, and nothing else", () =>
   forAll(100, r => {
     const xs = rows(r)
     const x = xs[r.int(xs.length)]
     if (x === undefined) return
     const before = names(viewtree.of(state(xs), named))
     const after = viewtree.of(state(xs, opening(x)), named)
-    const pane = after.kids.find(k => k.v.node.type === "Pane")
     const row = path(after, x.ref)
     const inplace = row[row.length - 1]?.kids.find(k => k.v.node.type === "InPlace")
-    assert.ok(pane !== undefined && inplace !== undefined)
+    assert.ok(inplace !== undefined)
     const moved = [...names(after)].filter(n => !before.has(n))
-    assert.deepEqual(new Set(moved), new Set([...row.map(n => n.name), inplace.name, pane.name]))
+    assert.deepEqual(new Set(moved), new Set([...row.map(n => n.name), inplace.name]))
   }))
 
 test("a row's path is logarithmic in the list's length", () =>

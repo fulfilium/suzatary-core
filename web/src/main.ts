@@ -259,7 +259,10 @@ function draw(a: app.App): void {
   } else if (moved || hrefOfAddress(app.address(was)) !== hrefOfAddress(app.address(a)))
     go(a, moved, true, !moved && a.again);
   // The served chains land after the first paint, and the list's title is drawn from them, wherever the list is drawn.
-  else if (host.drawn().some(pages.lists) && listTitle(was.chain, was.served) !== listTitle(a.chain, a.served)) go(a, true, false, true);
+  else if (listTitle(was.chain, was.served) !== listTitle(a.chain, a.served)) {
+    if (host.drawn().some(pages.lists)) go(a, true, false, true);
+    else host.forget(pages.lists);
+  }
 }
 
 // Before the rest of startup, so a failure in any of it reaches the box.

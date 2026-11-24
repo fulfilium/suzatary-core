@@ -16,6 +16,7 @@ pub mod chats;
 pub mod chrome;
 pub mod composer;
 pub mod conversation;
+pub mod conversations;
 pub mod desk;
 pub mod digest;
 pub mod draft;
@@ -75,6 +76,7 @@ hosted!(
     inbox::Inbox = "inbox.json",
     secretary::Secretary = "secretary.json",
     draft::Draft,
+    conversations::Conversations,
     needsyou::NeedsYou = "needsyou.json",
     todo::Todo,
     typstlist::Typst
@@ -158,5 +160,7 @@ viewtree::export!(SecretaryPage = secretary::Secretary);
 viewtree::export!(ConversationPage = conversation::Conversation);
 #[cfg(target_arch = "wasm32")]
 viewtree::export!(DraftPage = draft::Draft);
+#[cfg(target_arch = "wasm32")]
+viewtree::export!(ConversationsPage = conversations::Conversations);
 #[cfg(target_arch = "wasm32")]
 viewtree::export!(NeedsYouPage = needsyou::NeedsYou);

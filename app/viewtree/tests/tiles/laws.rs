@@ -337,8 +337,9 @@ fn weight(s: Share) -> u32 {
     }
 }
 
-/// An open that inserted a tile beside a free leaf, then `Close`, gives the tree back. The law
-/// reaches its assertion in at least a third of its cases.
+/// An open of one page, which inserted a tile beside a free leaf, then `Close`, gives the tree
+/// back; an open that opens a chain first (`Act::Open`) is left out. The law reaches its
+/// assertion in at least a third of its cases.
 #[test]
 fn open_then_close_is_the_identity_where_the_open_inserted() {
     let config = cases(256);
@@ -354,7 +355,10 @@ fn open_then_close_is_the_identity_where_the_open_inserted() {
     let open = (free, 0u8..4).prop_map(|(k, n)| super::page::pg(k, n));
     let result = runner.run(&(run(), open), |((home, _m, first, steps), p)| {
         for (_, _, t, _) in states(home, first, &steps) {
-            if t.focused().page().pin() == Pin::Pinned || t.focused().page().kind() == p.kind() {
+            if t.focused().page().pin() == Pin::Pinned
+                || t.focused().page().kind() == p.kind()
+                || chained(&p, t.focused().page())
+            {
                 continue;
             }
             tried.set(tried.get() + 1);
@@ -394,6 +398,25 @@ proptest! {
         prop_assert_eq!(back.check(), Ok(()));
         prop_assert_eq!(print(&parse(&print(&back), &back)), print(&back));
     }
+}
+
+/// Whether an open of `p` from `from` opens pages of `p`'s `home` chain before it: `from` is on
+/// the chain past its first page.
+fn chained(p: &super::page::Pg, from: &super::page::Pg) -> bool {
+    let mut at = p.home();
+    let mut first = true;
+    while at != *p {
+        if at == *from {
+            return !first;
+        }
+        let next = at.home();
+        if next == at {
+            return false;
+        }
+        at = next;
+        first = false;
+    }
+    false
 }
 
 /// The tree with every share One: what a resize may not change.
@@ -475,5 +498,62 @@ proptest! {
             prop_assert_eq!(Some(opened.focused().id()), first);
             prop_assert_eq!(first.map(|id| act(t.clone(), Act::Focus(id))), Some(opened));
         }
+    }
+}
+
+/// The pages `p` is opened from, nearest first, up to a workspace's home.
+fn chain(p: &Pg) -> Vec<Pg> {
+    let mut c = Vec::new();
+    let mut at = p.clone();
+    while c.len() < viewtree::tiles::MOST {
+        let home = at.home();
+        if home == at {
+            break;
+        }
+        c.push(home.clone());
+        at = home;
+    }
+    c
+}
+
+proptest! {
+    #![proptest_config(cases(256))]
+
+    /// From a workspace that is its chain's end alone, with the chain's pages down to the
+    /// focused leaf opened from it, an open of a page not shown is the tree the page's bare
+    /// address reads as; closed as many times as it inserted tiles, it gives the tree back.
+    #[test]
+    fn an_open_from_a_leaf_on_the_chain_is_its_bare_address_and_closes_back(
+        lists in 1u8..8,
+        p in page(),
+        from in 0usize..3,
+    ) {
+        // Workspaces of one list each, the chains' end among them.
+        let part = |n: u8| viewtree::tiles::Part::new(Share::One, Tree::Leaf(super::page::pg(super::page::Kind::List, n)));
+        let home = Node::new(viewtree::tiles::Axis::Across, Fit::Never, part(0), (1..lists).map(part).collect(), 0);
+        let t = Tiles::new(home).expect("a home of lists is well formed");
+        let c = chain(&p);
+        let Some(end) = c.last() else {
+            return Ok(());
+        };
+        let Some(ws) = t.root().parts().position(|q| matches!(&q.tree, Tree::Leaf(l) if l.page() == end)) else {
+            return Ok(());
+        };
+        let id = workspaces(&t)[ws][0].id();
+        let mut t = act(t, Act::Focus(id));
+        for q in c.iter().rev().skip(1).take(from) {
+            t = act(t, Act::Open(q.clone()));
+        }
+        let shown = |t: &Tiles<Pg>| workspaces(t)[ws].iter().map(|l| l.page().clone()).collect::<Vec<_>>();
+        if shown(&t).contains(&p) {
+            return Ok(());
+        }
+        let opened = act(t.clone(), Act::Open(p.clone()));
+        prop_assert_eq!(shown(&opened), shown(&parse(&p.print(), &t)));
+        let mut closed = opened.clone();
+        for _ in 0..shown(&opened).len() - shown(&t).len() {
+            closed = act(closed, Act::Close);
+        }
+        prop_assert_eq!(pages(&closed), pages(&t));
     }
 }

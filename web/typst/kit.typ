@@ -38,8 +38,7 @@
 
 #let blank(t) = t.type == "Prose" and t.text == ""
 
-// What an open todo shows, drawn twice and shown once by the frame's width: in place inside its row on a phone,
-// so nothing above the tapped row moves, and in the pane beside the list where there is room.
+// What an open todo shows, in place inside its row, so nothing above the tapped row moves.
 #let opened(o) = (
   el("p", attrs: (class: "tpanehead"), mark(o.row.value), el("span", attrs: (class: "tpct"), percent(o.row.value)), el("span", attrs: (class: "tcat"), o.row.category)),
   el("h2", attrs: (class: "tpanetitle"), shown(o.row.title)),

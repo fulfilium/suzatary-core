@@ -4,7 +4,7 @@ fn typst_msg() -> impl Strategy<Value = typstlist::Msg> {
     use typstlist::{Ask, Hold, Msg};
     let host = |i: Input<Hold, Ask>| Msg::Host(Box::new(i));
     let route = prop::sample::select(vec!["", "a"]).prop_map(
-        |selected| json!({"page": "typst", "conversation": "", "selected": selected, "shared": ""}),
+        |selected| json!({"page": "typst", "conversation": null, "selected": selected, "shared": ""}),
     );
     prop_oneof![
         held::<Hold, Ask, suzatary_pages::runtime::Never>(Hold::Fold, list_fold()).prop_map(host),

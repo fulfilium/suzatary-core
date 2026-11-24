@@ -33,6 +33,13 @@ pub struct Desk {
 pub struct Drawing {
     pub scroll: Scroller,
     pub tiles: Vec<Drawn>,
+    /// Every other leaf the tree holds, in its order: a page behind a drawn one, and each page of
+    /// the workspaces not drawn. A host keeps a page it has running while its leaf is here.
+    pub behind: Vec<Undrawn>,
+    /// How many of them a host keeps running at most: each workspace's page but the drawn one's,
+    /// and those a workspace holds behind its drawn page.
+    #[ts(type = "number")]
+    pub keep: usize,
     pub rows: Vec<Crumbs>,
     pub dividers: Vec<Line>,
 }
@@ -48,6 +55,15 @@ pub struct Drawn {
     /// Where the page stands in `rect`: all of it, for every page this app has.
     pub page: Area,
     pub opens: Opens,
+}
+
+/// A leaf the tree holds that is not drawn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct Undrawn {
+    #[ts(type = "number")]
+    pub key: u64,
+    /// The leaf's route, `#` first.
+    pub href: String,
 }
 
 /// A rectangle in pixels at the 16px root, from the room's top left corner.
@@ -290,8 +306,20 @@ impl Desk {
         } else {
             Scroller::Tiles
         };
+        let behind = shown
+            .root()
+            .parts()
+            .flat_map(|p| p.tree.leaves())
+            .filter(|l| tiles.iter().all(|t| t.id != l.id()))
+            .map(|l| Undrawn {
+                key: l.id().key(),
+                href: l.page().href(),
+            })
+            .collect();
         Drawing {
             scroll,
+            behind,
+            keep: Route::destinations().len() - 1 + tiles::MOST - 1,
             tiles: tiles
                 .into_iter()
                 .map(|t| Drawn {

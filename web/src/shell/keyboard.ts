@@ -35,6 +35,11 @@ export function clearKeyTarget(mine: KeyTarget): void {
   if (target === mine) target = NOBODY;
 }
 
+/** Whether no page holds the keys: the one a page drawn again may take them back from. */
+export function keysFree(): boolean {
+  return target === NOBODY;
+}
+
 /** What the current page answers; the palette offers exactly this. */
 export function keyTarget(): KeyTarget {
   return target;

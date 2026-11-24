@@ -15,8 +15,9 @@ pub(crate) use suzatary_pages::todoparts::{Seal, Verb};
 pub(crate) use suzatary_pages::waiting::Watched;
 pub(crate) use suzatary_pages::zone::Offset;
 pub(crate) use suzatary_pages::{
-    about, briefing, briefings, calendar, card, chats, composer, conversation, draft, inbox, mail,
-    memory, message, needsyou, reading as one, secretary, settings, thread, todo, todos, typstlist,
+    about, briefing, briefings, calendar, card, chats, composer, conversation, conversations,
+    draft, inbox, mail, memory, message, needsyou, reading as one, secretary, settings, thread,
+    todo, todos, typstlist,
 };
 pub(crate) use suzatary_release::release::{Lot, Named, Place};
 pub(crate) use suzatary_todo::wire::todo::{EntryState, Fulfillment, Neighbour};

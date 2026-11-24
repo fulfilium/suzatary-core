@@ -44,13 +44,15 @@ const CLOSED = proposed.id;
  * Open the Inbox and wait until it has drawn something — a card, or the empty
  * note.
  */
-// THE PAGE DRAWN AGAIN FROM NOTHING, IN THE SAME TAB: away and back by the hash, never a reload, so whatever a card
-// shows after it came from what the tab holds outside the drawing (a card's register), not from the old nodes.
+// THE PAGE DRAWN AGAIN FROM NOTHING, IN THE SAME TAB, never a reload, so whatever a card shows after it came from what
+// the tab holds outside the drawing (a card's register), not from the old nodes. A page left for another workspace keeps
+// running behind it (the tiled layout's §6), so the scene comes back by an address of the Inbox the tab holds no page
+// of, one naming no card to open, and finds the old page let go.
 async function drawnAgain(base: string, card: string): Promise<void> {
+  await app.page.evaluate(`window.__inbox = document.querySelector(".inboxpage")`);
   await app.page.navigate(`${base}/#/secretary`);
-  await app.page.waitFor(`document.querySelector(".inboxpage") === null`, { timeout: 8000 });
-  await app.page.navigate(`${base}/#/inbox`);
-  await app.page.waitFor(`document.querySelector(${JSON.stringify(card)}) !== null`, { timeout: 15000 });
+  await app.page.navigate(`${base}/#/inbox?open=e2e-no-card`);
+  await app.page.waitFor(`document.querySelector(${JSON.stringify(card)}) !== null && document.querySelector(".inboxpage") !== window.__inbox`, { timeout: 15000 });
 }
 
 const valueOf = (selector: string): Promise<string> =>

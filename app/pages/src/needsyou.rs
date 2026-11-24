@@ -21,12 +21,40 @@ pub struct Flags {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, TS)]
 #[ts(rename = "Where")]
 pub struct Route {
-    pub(crate) page: String,
-    pub(crate) conversation: String,
+    pub(crate) page: Named,
+    /// The conversation the address names, if it names one.
+    pub(crate) conversation: Option<String>,
     /// The todo open beside the list, or in the Typst list, `""` for none.
     pub(crate) selected: String,
     /// What the list puts in its add sheet, shared from another app, `""` for nothing.
     pub(crate) shared: String,
+}
+
+/// The kind of page the address names: `Route`'s `type` in `web/src/shell/route.ts`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(rename = "Named")]
+pub enum Named {
+    #[default]
+    Todos,
+    Add,
+    Todo,
+    Typst,
+    Inbox,
+    Mail,
+    Message,
+    Thread,
+    About,
+    Settings,
+    Briefings,
+    Briefing,
+    Calendar,
+    Secretary,
+    Memory,
+    Newtopic,
+    Conversations,
+    Conversation,
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -60,9 +88,9 @@ pub enum NeedsYou {}
 
 /// A popup over its page would cover the button it is about.
 fn on_screen(w: Waiting<'_>, route: &Route) -> bool {
-    route.page == "inbox"
-        || (route.page == "conversation"
-            && matches!(w.at(), Where::Proposal(c, _) if c == route.conversation))
+    route.page == Named::Inbox
+        || (route.page == Named::Conversation
+            && matches!(w.at(), Where::Proposal(c, _) if Some(c.as_str()) == route.conversation.as_deref()))
 }
 
 impl NeedsYou {

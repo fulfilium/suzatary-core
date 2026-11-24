@@ -58,6 +58,7 @@ export namespace nav {
       case "briefing":
         return "briefings";
       case "conversation":
+      case "conversations":
       case "memory":
       case "newtopic":
         return "secretary";

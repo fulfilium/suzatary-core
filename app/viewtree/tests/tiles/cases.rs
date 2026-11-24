@@ -258,6 +258,38 @@ fn a_bare_address_is_the_home_with_its_page_opened_from_it() {
     assert_eq!(print(&inbox), "list/3");
 }
 
+/// The leaves of the focused workspace, in order.
+fn shown(t: &Tiles<Pg>) -> Vec<Pg> {
+    t.root()
+        .focus
+        .tree
+        .leaves()
+        .into_iter()
+        .map(|l| l.page().clone())
+        .collect()
+}
+
+#[test]
+fn an_open_from_a_page_on_the_chain_opens_the_rest_of_the_chain_first() {
+    let slide = pg(Kind::Slide, 1);
+    // From the list, the slide's todo opens beside it and the slide after: the tree its bare address reads as.
+    let opened = act(home(), Act::Open(slide.clone()));
+    assert_eq!(
+        shown(&opened),
+        vec![list(), pg(Kind::Column, 1), slide.clone()]
+    );
+    assert_eq!(shown(&parse(&slide.print(), &home())), shown(&opened));
+    assert_eq!(print(&opened), slide.print());
+    // From another todo, which is on no chain of the slide's, the slide opens beside it.
+    let other = act(home(), Act::Open(pg(Kind::Column, 2)));
+    let from_todo = act(other, Act::Open(slide.clone()));
+    assert_eq!(
+        shown(&from_todo),
+        vec![list(), pg(Kind::Column, 2), slide.clone()]
+    );
+    assert_ne!(print(&from_todo), slide.print());
+}
+
 #[test]
 fn the_1440_px_tree_prints_with_its_other_workspaces_left_out() {
     let t = act(home(), Act::Open(todo()));

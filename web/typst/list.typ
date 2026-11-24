@@ -11,7 +11,6 @@
   Rows: n => el("ol", attrs: (class: "trows")),
   Row: n => row(n.row),
   InPlace: n => el("div", attrs: (class: "tinplace"), ..opened(n.open)),
-  Pane: n => el("aside", attrs: (class: "tpane", style: tint(n.open.row.value), "aria-label": "the open todo"), ..opened(n.open)),
 ).at(n.type)(n)
 
 #for n in json("/state.json") { draw(n) }

@@ -84,9 +84,11 @@ impl Page for Pg {
         self.opened().shape()
     }
 
+    /// A slide is opened from its todo, which is opened from the first list: a chain of two.
     fn home(&self) -> Pg {
         match self.kind {
             Kind::Column => pg(Kind::List, 0),
+            Kind::Slide if self.n > 0 => pg(Kind::Column, self.n),
             Kind::List | Kind::Side | Kind::Slide => self.clone(),
         }
     }

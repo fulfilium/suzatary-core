@@ -124,7 +124,7 @@ export namespace local {
       const r = app.route(app.now())
       return {
         page: r.type,
-        conversation: r.type === "conversation" ? r.id : "",
+        conversation: r.type === "conversation" ? r.id : null,
         selected: r.type === "todo" ? r.id : r.type === "typst" ? r.open : "",
         shared: r.type === "add" ? share.body(r.text, r.title) : "",
       }
