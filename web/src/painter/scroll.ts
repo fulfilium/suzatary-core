@@ -15,11 +15,18 @@ export namespace scroll {
   const READER_MS = 600
   const KEYS = new Set(["PageUp", "PageDown", "ArrowUp", "ArrowDown", "Home", "End", " "])
 
+  // The page's last move, when it was to a node's top: kept while the room is held and no reader's input came after `at`,
+  // and while the body is `resized`; `y` is where on the box the node stood when last placed.
+  type Placed = { readonly type: "Elsewhere" } | { readonly type: "Top"; readonly root: Element; readonly field: string; readonly at: number; readonly y: number }
+  const ELSEWHERE: Placed = { type: "Elsewhere" }
+
   type Box = {
     readonly box: Element
     readerAt: number
     room: number
     last: Scrolled
+    placed: Placed
+    readonly resized: ResizeObserver
     readonly ears: Set<() => void>
   }
 
@@ -29,7 +36,11 @@ export namespace scroll {
   const target = (box: Element): EventTarget => (page(box) ? window : box)
   const roomOf = (box: Element): HTMLElement | null => (page(box) ? document : box).querySelector<HTMLElement>("[data-room]")
   const top = (box: Element): number => (page(box) ? 0 : box.getBoundingClientRect().top)
-  const offsetOf = (b: Element, n: Element): number => n.getBoundingClientRect().top - top(b) + b.scrollTop
+  const shownAt = (b: Element, n: Element): number => n.getBoundingClientRect().top - top(b)
+  const offsetOf = (b: Element, n: Element): number => shownAt(b, n) + b.scrollTop
+  const nodeOf = (root: Element, field: string): Element | null => root.querySelector(`[data-field="${CSS.escape(field)}"]`)
+  // The sticky header covers the top of the page's own box, and of no other.
+  const covered = (box: Element): number => (page(box) ? (document.querySelector("body > header")?.getBoundingClientRect().bottom ?? 0) : 0)
 
   // Measured against the end of what the box shows, never the room, which goes as soon as the hold does.
   const placed = (b: Box): Place => {
@@ -43,8 +54,11 @@ export namespace scroll {
   // laid out once, by the browser's frame, and never forced by the step that made them.
   const fit = (b: Box): void => {
     const room = roomOf(b.box)
-    if (room === null) return void (b.room = 0)
+    if (room === null) return void (elsewhere(b), (b.room = 0))
     const held = room.dataset["room"] === "held"
+    // A place outlives neither its room nor its page: a root out of the document is a page left, or a tile hidden, whose
+    // box is put back where it stood when it is drawn again, not placed.
+    if (!held || (b.placed.type === "Top" && !b.placed.root.isConnected)) elsewhere(b)
     if (!held && b.room === 0) return void ((room.style.height = "0px"), (room.hidden = true))
     const height = b.box.clientHeight
     const shown = room.hidden ? 0 : offsetOf(b.box, room)
@@ -52,6 +66,25 @@ export namespace scroll {
     b.room = next
     room.style.height = `${next}px`
     room.hidden = next === 0
+    // Anchoring misses a sticky header that grows, and a node above that leaves as the anchor is drawn again.
+    const p = b.placed
+    if (held && p.type === "Top" && b.readerAt < p.at) toTop(b, p.root, p.field, p.at)
+  }
+
+  const elsewhere = (b: Box): void => {
+    if (b.placed.type === "Top") b.resized.disconnect()
+    b.placed = ELSEWHERE
+  }
+
+  // Writes only a box away from its place, so the same layout changes nothing; the box scrolls by whole pixels.
+  const toTop = (b: Box, root: Element, field: string, at: number): void => {
+    const node = nodeOf(root, field)
+    if (node === null) return
+    if (b.placed.type === "Elsewhere" && page(b.box)) b.resized.observe(document.body)
+    const shown = shownAt(b.box, node)
+    const from = b.box.scrollTop
+    if (Math.abs(shown - covered(b.box)) >= 1) b.box.scrollTop += shown - covered(b.box)
+    b.placed = { type: "Top", root, field, at, y: shown - (b.box.scrollTop - from) }
   }
 
   // One listener for every box, so none on `window` holds a box after its page is gone; a scroll key moves the box
@@ -77,7 +110,15 @@ export namespace scroll {
   const of_ = (box: Element): Box => {
     const known = boxes.get(box)
     if (known !== undefined) return known
-    const b: Box = { box, readerAt: Number.NEGATIVE_INFINITY, room: 0, last: { by: "page", at: "bottom" }, ears: new Set() }
+    const b: Box = {
+      box,
+      readerAt: Number.NEGATIVE_INFINITY,
+      room: 0,
+      last: { by: "page", at: "bottom" },
+      placed: ELSEWHERE,
+      resized: new ResizeObserver(() => fit(b)),
+      ears: new Set(),
+    }
     const read = (): void => void (b.readerAt = performance.now())
     const on = target(box)
     on.addEventListener("wheel", read, { passive: true })
@@ -87,6 +128,11 @@ export namespace scroll {
     on.addEventListener("scroll", () => {
       const by: Mover = performance.now() - b.readerAt < READER_MS ? "reader" : "page"
       if (by === "reader") read()
+      // A scroll that leaves the node where it stood on the box is the browser anchoring it; one that moves it is the
+      // reader's, a focus's or a find's, and ends the hold. What anchoring misses moves the node without a scroll.
+      const p = b.placed
+      const node = p.type === "Top" ? nodeOf(p.root, p.field) : null
+      if (p.type === "Top" && node !== null && Math.abs(shownAt(box, node) - p.y) >= 1) elsewhere(b)
       fit(b)
       b.last = { by, at: placed(b) }
       b.ears.forEach(f => f())
@@ -114,25 +160,22 @@ export namespace scroll {
   }
 
   // Next frame, and only if the reader has not moved the box since: the compositor may be scrolling for a wheel the page
-  // has not heard yet. The sticky header covers the box's top. `Keep` is `run.start`'s.
+  // has not heard yet. `Keep` is `run.start`'s.
   export const move = (box: Element, root: Element, to: Exclude<Scroll, { readonly type: "Keep" }>): void => {
     const b = of_(box)
     const asked = performance.now()
     requestAnimationFrame(() => {
       if (b.readerAt >= asked) return
       b.readerAt = Number.NEGATIVE_INFINITY
+      elsewhere(b)
       fit(b)
-      const node = to.type === "End" ? null : root.querySelector(`[data-field="${CSS.escape(to.field)}"]`)
       switch (to.type) {
         case "End":
           return void (box.scrollTop = box.scrollHeight)
-        case "Top": {
-          if (node === null) return
-          const header = page(box) ? (document.querySelector("body > header")?.getBoundingClientRect().bottom ?? 0) : 0
-          return void (box.scrollTop = offsetOf(box, node) - header)
-        }
+        case "Top":
+          return toTop(b, root, to.field, performance.now())
         case "Into":
-          return node?.scrollIntoView({ block: "center" })
+          return nodeOf(root, to.field)?.scrollIntoView({ block: "center" })
       }
     })
   }

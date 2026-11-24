@@ -487,6 +487,114 @@ app.scene("content drawn above a held question keeps it held, and the reader's s
 });
 
 /**
+ * A HELD QUESTION IS A RELATION, NOT A MOVE: its top stays the top of what the box shows when the header grows and
+ * shrinks, when the node under the header is replaced, when both happen in the frame that places it, and when a bar
+ * above leaves in the frame that draws the question's round again (the sync bar, as an answer lands), where the
+ * browser's anchor is gone. Each order is forced on every run; before the hold was kept, the phone's question ended
+ * 76 px under a header 76 px taller, and 36 px under it once a 36 px bar left.
+ */
+const heldThroughChanges = async (size: readonly [number, number]): Promise<void> => {
+  await app.resize(size);
+  const id = await freshConversation(WRITE_BASE);
+  await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+  await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+  for (const n of [1, 2]) {
+    await app.page.type(".composebox", `give me a rendered answer ${n}`);
+    await app.page.click(".composesend");
+    await app.page.waitFor(`document.querySelectorAll(".turnanswer .answerblock.rich").length === ${3 * n}`, { timeout: 20000 });
+  }
+  const taller = `document.querySelector("body > header").append(Object.assign(document.createElement("div"), { className: "heldtaller", style: "flex: 0 0 100%; height: 90px" }))`;
+  const shorter = `document.querySelector(".heldtaller").remove()`;
+  const replaced = (height: number): string =>
+    `document.querySelector(".heldneighbour").replaceWith(Object.assign(document.createElement("div"), { className: "heldneighbour", style: "height: ${height}px" }))`;
+  // The node at the foot of the second round stands under the header once the third question is held; the observer
+  // hears the hold in the step that asks the move, so its frame runs after the move's, in the same frame.
+  await app.page.evaluate<void>(`void (() => {
+    [...document.querySelectorAll(".roundwrap")].at(-1).append(Object.assign(document.createElement("div"), { className: "heldneighbour", style: "height: 600px" }));
+    new MutationObserver((_, seen) => {
+      if (document.querySelector(".answerroom").dataset.room !== "held") return;
+      seen.disconnect();
+      requestAnimationFrame(() => { ${taller}; ${replaced(900)}; window.heldChanged = true });
+    }).observe(document.querySelector(".turns"), { subtree: true, attributeFilter: ["data-room"] });
+  })()`);
+  await app.page.type(".composebox", "give me a rendered answer 3");
+  await app.page.click(".composesend");
+  await app.page.waitFor(`window.heldChanged === true && document.querySelectorAll(".turnanswer").length === 3`, { timeout: 20000 });
+  // The top of what the box shows: the header's edge over the page, or a tile's top where the tile scrolls itself.
+  const belowItsPlace = `(() => {
+    const round = [...document.querySelectorAll(".round")].findLast((r) => r.querySelector(".turn-person") !== null);
+    let box = round.parentElement;
+    while (box !== document.body && !["auto", "scroll"].includes(getComputedStyle(box).overflowY)) box = box.parentElement;
+    const top = box === document.body ? document.querySelector("body > header").getBoundingClientRect().bottom : box.getBoundingClientRect().top;
+    return Math.round(round.getBoundingClientRect().top - top);
+  })()`;
+  const below: [string, number][] = [];
+  const after = async (what: string, act: string | null): Promise<void> => {
+    if (act !== null) await app.page.evaluate<void>(`void (${act})`);
+    await app.page.scrollSettled();
+    below.push([what, await app.page.evaluate<number>(belowItsPlace)]);
+  };
+  await after("the header taller and the node above replaced in the move's frame", null);
+  await after("the header shorter", shorter);
+  await after("the header taller", taller);
+  await after("the header shorter again", shorter);
+  await after("the node above replaced by a shorter one", replaced(200));
+  await after("the node above replaced by a taller one", replaced(1500));
+  await after("a bar shown above", `document.querySelector(".transcriptcontent").prepend(Object.assign(document.createElement("div"), { className: "heldbar", style: "height: 36px" }))`);
+  await after("the bar gone in the frame the question's round is drawn again", `(() => {
+    document.querySelector(".heldbar").remove();
+    const round = [...document.querySelectorAll(".round")].findLast((r) => r.querySelector(".turn-person") !== null);
+    for (const n of [...round.querySelectorAll("*")].reverse()) n.replaceWith(n.cloneNode(true));
+  })()`);
+  assert.equal(await app.page.evaluate<string>(`document.querySelector(".answerroom").dataset.room`), "held", "the question is still held");
+  assert.deepEqual(below.filter(([, px]) => Math.abs(px) > 1), [], `px below its place at ${size.join("×")}`);
+};
+
+app.scene("a held question stays under the header as the header and the node above it change, on a phone", () => heldThroughChanges(PHONE));
+app.scene("a held question stays under the header as the header and the node above it change, at a desk", async () => {
+  try {
+    await heldThroughChanges(DESKTOP);
+  } finally {
+    await app.resize(PHONE);
+  }
+});
+
+/**
+ * A KEPT PLACE ENDS WITH ITS PAGE: a question held, then the conversation left by the bar, and nothing observes the
+ * body any more. The body is observed only while a place is kept, so its observer gone is the place gone, and with it
+ * the box's hold on the page left.
+ */
+app.scene("a question held and its conversation left by the bar keeps no place and observes nothing", async () => {
+  const unwatch = await app.page.beforeEveryDocument(`(() => {
+    const Base = window.ResizeObserver;
+    const onBody = (window.e2eOnBody = new Set());
+    window.ResizeObserver = class extends Base {
+      observe(t, o) { if (t === document.body) onBody.add(this); return super.observe(t, o); }
+      unobserve(t) { if (t === document.body) onBody.delete(this); return super.unobserve(t); }
+      disconnect() { onBody.delete(this); return super.disconnect(); }
+    };
+  })()`);
+  try {
+    await app.page.reload();
+    const id = await freshConversation(WRITE_BASE);
+    await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
+    await app.page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
+    for (const n of [1, 2]) {
+      await app.page.type(".composebox", `give me a rendered answer ${n}`);
+      await app.page.click(".composesend");
+      await app.page.waitFor(`document.querySelectorAll(".turnanswer").length === ${n}`, { timeout: 20000 });
+    }
+    await app.page.waitFor(`${QUESTION_AT_TOP} && window.e2eOnBody.size === 1`, { timeout: 20000 });
+    await app.page.click(`.tabbar .tab[href="#/"]`);
+    await app.page.waitFor(`location.hash === "#/" && document.querySelector(".answerroom") === null`, { timeout: 8000 });
+    await app.page.scrollSettled();
+    assert.equal(await app.page.evaluate<number>("window.e2eOnBody.size"), 0, "nothing observes the body once the page is left");
+  } finally {
+    await unwatch();
+  }
+});
+
+/**
  * THE READER'S PLACE IS READ WITHOUT THE ROOM: a quarter screen up is within a screen of the end without the room, so
  * the hold goes to the newest and the next answer brings no pill.
  */
