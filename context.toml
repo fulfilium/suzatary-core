@@ -21,7 +21,7 @@ allowance = 2000
 
 [ratchet]
 # The repository's reading set in tokens, as the train's build recorded it.
-reading = 3256521
+reading = 3255148
 
 # The USE of each unit over `budget.use`, as the train's build recorded it; a unit back within the
 # budget leaves the table.
