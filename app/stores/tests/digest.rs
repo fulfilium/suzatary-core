@@ -2889,8 +2889,8 @@ mod recompacting {
         }
     }
 
-    const PINNED_OWNERS: &str = "515b48a26debd7ab049fa88676fa8181709c5861719ac6f2b79873cd35da40b5";
-    const PINNED_CLEAN: &str = "ef0f009c928fa65f35a9739a34d5b69c7484c4208e29e505ad72e482195273a1";
+    const PINNED_OWNERS: &str = "fb790f91f64208ad95256c31959bce5b5c74116a4f2f78dd96e3e12b35dfd62c";
+    const PINNED_CLEAN: &str = "af480e3f58332ad7a1c2817acfc8dcf07000bf7431c16dae42b845d86bf7bfb1";
     const PINNED_QUESTIONS: &str =
         "f93873a4fef96c096732f2341b017246131420ee667472d445c4eb86be7c40d0";
 }

@@ -21,7 +21,7 @@ pub struct Case {
 }
 
 /// A content hash the span names and a line must leave out.
-const HASH: &str = "9f2c4e1a7b3d5f60c8e2a4b6d8f01357";
+pub(crate) const HASH: &str = "9f2c4e1a7b3d5f60c8e2a4b6d8f01357";
 
 /// The rules a model's words are judged by, one case each.
 pub const CASES: &[Case] = &[
@@ -128,6 +128,19 @@ pub const CASES: &[Case] = &[
         keeps: |line| !line.contains("Lind") && lower(line).contains("january"),
     },
     Case {
+        rule: "a short span gets a short line and nothing from the log",
+        log: SHORT_LOG,
+        span: SHORT_SPAN,
+        keeps: |line| {
+            let span = words(&SHORT_SPAN.join(" "));
+            let log_only = words(&SHORT_LOG.join(" "))
+                .into_iter()
+                .filter(|word| !span.contains(word))
+                .collect::<Vec<_>>();
+            line.len() < 200 && !words(line).iter().any(|word| log_only.contains(word))
+        },
+    },
+    Case {
         rule: "a long span fits one line and keeps its last decision",
         log: &[],
         span: &[
@@ -150,8 +163,28 @@ pub const CASES: &[Case] = &[
     },
 ];
 
+/// A log of several lines beside a span of two short ones. The log's lines use no small word the
+/// span lacks, so a good line has no cause to share a word with the log alone.
+const SHORT_LOG: &[&str] = &[
+    "Owner: Ada Quint takes passport photos, Elm Row shop",
+    "Secretary: Quint charges $12 per sitting",
+    "Owner: forms travel through post, never online",
+];
+const SHORT_SPAN: &[&str] = &[
+    "Owner: renew the passport before the trip",
+    "Secretary: Which month is the trip?",
+];
+
 fn lower(line: &str) -> String {
     line.to_lowercase()
+}
+
+/// A text's words: its runs of letters and digits, in lower case.
+fn words(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(lower)
+        .collect()
 }
 
 /// A case's passes over its runs.
@@ -255,7 +288,7 @@ mod tests {
     }
 
     /// Per case, by its span's first words: a line that keeps its rule, and one that breaks it.
-    const LINES: [(&str, &str, &str); 8] = [
+    const LINES: [(&str, &str, &str); 9] = [
         (
             "Owner: pay Ada",
             "owner: pay Ada Quint's $1,284.50 invoice by 3 December",
@@ -295,6 +328,11 @@ mod tests {
             "Owner: book",
             "owner: book a check-up for January; secretary asked which week",
             "owner: book a check-up with Dr. Bo Lind in January",
+        ),
+        (
+            "Owner: renew",
+            "owner: renew the passport before the trip; secretary asked which month",
+            "owner: renew the passport before the trip (context: photos from Ada Quint)",
         ),
     ];
 

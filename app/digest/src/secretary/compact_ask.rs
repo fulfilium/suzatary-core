@@ -307,5 +307,8 @@ mod tests {
             .expect("a ruler");
         assert_eq!(ruler.len(), NODE_BYTES);
         assert!(PROMPT.contains(&format!("at most {NODE_BYTES} bytes")));
+        // The prompt's example is not the evaluation's hash, so the evaluation tests the rule and
+        // not a prompt that names its one case.
+        assert!(!PROMPT.contains(&crate::secretary::compact_eval::HASH[..8]));
     }
 }
