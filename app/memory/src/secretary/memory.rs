@@ -9,9 +9,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use prodrome_core::literal::{ProdromeError, Value};
+use prodrome_data::literal::{ProdromeError, Value};
 
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, record};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::{Refusal, shown};
@@ -153,7 +153,7 @@ impl Kind {
     ts_rs::TS,
     Literal,
 )]
-#[literal(crate = prodrome_core)]
+#[literal(crate = prodrome_data)]
 pub struct FactId(
     // A fact's number stays far below the 2^53 a page's number holds exactly.
     #[ts(type = "number")] pub u64,
@@ -166,7 +166,7 @@ pub struct FactId(
     into = "std::collections::BTreeSet<FactId>"
 )]
 // A literal that reads no source is refused, as the serde form is.
-#[literal(crate = prodrome_core, new = Sources::stored)]
+#[literal(crate = prodrome_data, new = Sources::stored)]
 pub struct Sources(std::collections::BTreeSet<FactId>);
 
 impl Sources {
@@ -273,7 +273,7 @@ impl Literal for Origin {
                 conversation,
                 proposal: fields.get("proposal")?,
             },
-            other => return Err(prodrome_core::literal::codec::no_arm("Origin", other)),
+            other => return Err(prodrome_data::literal::codec::no_arm("Origin", other)),
         })
     }
 }
@@ -532,7 +532,7 @@ pub fn kind_of(word: &str) -> Result<Kind, Refusal> {
     })
 }
 
-prodrome_core::word_literal!(Kind: Kind::ALL => |kind| kind.as_str());
+prodrome_data::word_literal!(Kind: Kind::ALL => |kind| kind.as_str());
 
 #[cfg(test)]
 mod tests {

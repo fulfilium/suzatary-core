@@ -12,7 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # A plugin's schema is a declaration, admitted at load by the Prodrome's own laws.
-prodrome_core.workspace = true
+prodrome_declared.workspace = true
 suzatary-base.workspace = true
 suzatary-secretary.workspace = true
 suzatary-health.workspace = true

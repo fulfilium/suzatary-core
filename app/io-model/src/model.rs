@@ -265,7 +265,7 @@ impl ClaudeCli {
 }
 
 fn now() -> suzatary_health::health::Instant {
-    prodrome_core::fpl::instant_of(SystemClock.now())
+    prodrome_data::instant::instant_of(SystemClock.now())
 }
 
 /// The name the CLI at `model` answers as, and its calls are recorded under.

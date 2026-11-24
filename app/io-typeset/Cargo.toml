@@ -16,7 +16,8 @@ suzatary-io-access.workspace = true
 suzatary-base.workspace = true
 suzatary-todo.workspace = true
 suzatary-topics.workspace = true
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_memo.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # Authored markup compiled in the closed world (`typeset`): the Prodrome's restricted project.

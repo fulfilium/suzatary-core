@@ -2,11 +2,11 @@
 
 use std::fmt;
 
-use prodrome_core::literal::{ProdromeError, Value};
+use prodrome_data::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
 use super::{AccountKind, Group, Params, Seen, Standing, Step, Table, Template, TemplateId};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, record};
 use suzatary_health::health::Refused;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::plugin::CredentialName;

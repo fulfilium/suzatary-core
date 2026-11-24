@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use prodrome_core::memo::Finding;
+use prodrome_memo::Finding;
 use suzatary_base::answer::Renderable;
 use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Rejected, Typeset};

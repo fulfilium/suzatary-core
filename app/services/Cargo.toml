@@ -12,7 +12,8 @@ name = "suzatary_services"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_declared.workspace = true
 suzatary-base.workspace = true
 suzatary-held.workspace = true
 suzatary-health.workspace = true

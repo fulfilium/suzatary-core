@@ -4,7 +4,7 @@
 //! counted under the memory's lock.
 //! The register is inflationary, so the store refuses a remembering after a forgetting.
 
-use prodrome_core::fold::{Discrete, Inflationary, Order};
+use prodrome_data::fold::{Discrete, Inflationary, Order};
 
 use crate::secretary::memory_event::MemoryEvent;
 

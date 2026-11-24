@@ -321,7 +321,7 @@ impl TemplateId {
     }
 }
 
-prodrome_core::word_literal!(TemplateId: TemplateId::ALL => |id| id.as_str());
+prodrome_data::word_literal!(TemplateId: TemplateId::ALL => |id| id.as_str());
 
 #[must_use]
 pub fn channel_secrets(channel: crate::connect::Channel) -> Vec<&'static str> {

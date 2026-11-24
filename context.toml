@@ -232,7 +232,7 @@ scripts = []
 name = "plan"
 path = "app/plan"
 shape = "crate"
-depends = ["base", "prodrome-core", "record", "signatures", "todo"]
+depends = ["base", "prodrome-dag", "prodrome-data", "record", "signatures", "todo"]
 scripts = []
 
 [[unit]]
@@ -246,7 +246,7 @@ scripts = []
 name = "memory"
 path = "app/memory"
 shape = "crate"
-depends = ["base", "held", "prodrome-core", "store"]
+depends = ["base", "held", "prodrome-dag", "prodrome-data", "store"]
 scripts = []
 
 [[unit]]
@@ -274,21 +274,21 @@ scripts = []
 name = "services"
 path = "app/services"
 shape = "crate"
-depends = ["base", "health", "held", "prodrome-core"]
+depends = ["base", "health", "held", "prodrome-data", "prodrome-declared"]
 scripts = []
 
 [[unit]]
 name = "google"
 path = "app/google"
 shape = "crate"
-depends = ["address", "base", "mail", "prodrome-core", "services", "store", "todo"]
+depends = ["address", "base", "mail", "prodrome-dag", "prodrome-data", "prodrome-declared", "services", "store", "todo"]
 scripts = []
 
 [[unit]]
 name = "connect"
 path = "app/connect"
 shape = "crate"
-depends = ["base", "google", "health", "held", "mail", "prodrome-core", "record", "services"]
+depends = ["base", "google", "health", "held", "mail", "prodrome-dag", "prodrome-data", "record", "services"]
 scripts = []
 
 [[unit]]
@@ -337,7 +337,7 @@ scripts = []
 name = "cards"
 path = "app/cards"
 shape = "crate"
-depends = ["base", "connect", "conversations", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "prodrome-data", "record", "services", "store", "todo", "topics"]
+depends = ["base", "connect", "conversations", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-data", "record", "services", "store", "todo", "topics"]
 scripts = []
 
 [[unit]]
@@ -386,7 +386,7 @@ scripts = []
 name = "io-typeset"
 path = "app/io-typeset"
 shape = "crate"
-depends = ["base", "io-access", "os", "prodrome-core", "prodrome-typst-wasm", "todo", "topics"]
+depends = ["base", "io-access", "os", "prodrome-data", "prodrome-memo", "prodrome-typst-wasm", "todo", "topics"]
 scripts = []
 
 [[unit]]
@@ -400,7 +400,7 @@ scripts = []
 name = "io-model"
 path = "app/io-model"
 shape = "crate"
-depends = ["base", "conversations", "health", "held", "inbox", "io-access", "io-local", "os", "prodrome-core", "services"]
+depends = ["base", "conversations", "health", "held", "inbox", "io-access", "io-local", "os", "prodrome-data", "services"]
 scripts = []
 
 [[unit]]
@@ -421,7 +421,7 @@ scripts = []
 name = "plugin"
 path = "app/plugin"
 shape = "crate"
-depends = ["base", "health", "io-access", "prodrome-core", "secretary", "services"]
+depends = ["base", "health", "io-access", "prodrome-declared", "secretary", "services"]
 scripts = ["scripts/plugin-sync.sh"]
 
 [[unit]]
@@ -513,22 +513,42 @@ scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh
 
 [[library]]
 source = "https://github.com/fulfilium/prodrome"
-rev = "588e30670dcf06ccfd59da55de26e972d1240444"
+rev = "a5ecf0ccc39591ffe4a54e3b006b9e0931f64aa0"
 pinned_in = "app/Cargo.toml"
 
 [[library.external]]
 name = "prodrome-data"
 path = "data"
 shape = "crate"
-use = 21864
+use = 22507
+
+[[library.external]]
+name = "prodrome-memo"
+path = "memo"
+shape = "crate"
+use = 8422
+
+[[library.external]]
+name = "prodrome-dag"
+path = "dag"
+shape = "crate"
+# Its `fold`, `policy` and `sign` re-export the data crate's modules of those names.
+reexports = ["prodrome-data"]
+use = 14005
+
+[[library.external]]
+name = "prodrome-declared"
+path = "declared"
+shape = "crate"
+use = 3962
 
 [[library.external]]
 name = "prodrome-core"
 path = "core"
 shape = "crate"
-# Every item the data crate holds is also at its old path in the core.
-reexports = ["prodrome-data"]
-use = 88591
+# Every item of the four crates above is also at its old path in the core.
+reexports = ["prodrome-data", "prodrome-memo", "prodrome-dag", "prodrome-declared"]
+use = 64676
 
 [[library.external]]
 name = "prodrome-wasm-exports"

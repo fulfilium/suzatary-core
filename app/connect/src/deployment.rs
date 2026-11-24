@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 
 use crate::connect::{Coding, RoutineId};
 use suzatary_base::capability::Login;
@@ -130,7 +130,7 @@ mod tests {
     fn chain(name: &str) -> suzatary_base::chains::ChainPolicy {
         suzatary_base::chains::ChainPolicy {
             name: suzatary_base::chains::ChainName::new(name).expect("a slug"),
-            untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
+            untrusted: prodrome_data::policy::Untrusted::of([actor("triage")]),
             roster: [actor("ada"), actor("triage")].into_iter().collect(),
             root: crate::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,

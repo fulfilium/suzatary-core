@@ -222,10 +222,10 @@ impl Declared {
 }
 
 // The literal of each is its text, as an inbox act stores it.
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     Patch => |patch| String::from(patch.clone()),
 );
-prodrome_core::word_literal!(Visibility: Visibility::ALL => |visibility| visibility.as_str());
+prodrome_data::word_literal!(Visibility: Visibility::ALL => |visibility| visibility.as_str());
 
 #[cfg(test)]
 mod tests {

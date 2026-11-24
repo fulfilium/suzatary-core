@@ -19,19 +19,19 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::fold::sole::{One, Only};
-use prodrome_core::fold::{Order, Product as _};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Everything;
-use prodrome_core::registers::{Node, Stamp, fold};
+use prodrome_dag::registers::{Node, Stamp, fold};
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::fold::sole::{One, Only};
+use prodrome_data::fold::{Order, Product as _};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Everything;
 
 use crate::secretary::memory::{FactId, Kind, Origin};
 use crate::secretary::memory_event::{LifeRegister, MemoryEvent, Said};
 use crate::secretary::provenance::{Origins, Provenance, Wrote};
 use crate::secretary::salted_text::TextName;
 use crate::secretary::texts::{Liveness, Naming};
-use prodrome_core::schema::Schema;
+use prodrome_data::schema::Schema;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TwoPhase {
@@ -89,7 +89,7 @@ impl TwoPhase {
         let mut forgotten = BTreeMap::new();
         for (&fact, stream) in folded.entities() {
             let registers: One<'_, LifeRegister> =
-                prodrome_core::fold::read(stream, None, &Everything);
+                prodrome_dag::fold::read(stream, None, &Everything);
             if let Some(gone) = registers.reading(Only).iter().find_map(|stamp| gone(stamp)) {
                 forgotten.insert(fact, gone);
             }

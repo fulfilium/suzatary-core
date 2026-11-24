@@ -29,7 +29,7 @@ serde_json.workspace = true
 wit-bindgen.workspace = true
 
 [dev-dependencies]
-prodrome_core.workspace = true
+prodrome_declared.workspace = true
 proptest.workspace = true
 # The host's own door for an item, so the tests ask the reader that stores it.
 suzatary-stores = { workspace = true, features = ["nothing"] }

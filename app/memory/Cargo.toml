@@ -12,7 +12,8 @@ name = "suzatary_memory"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_dag.workspace = true
+prodrome_data.workspace = true
 suzatary-base.workspace = true
 suzatary-store.workspace = true
 suzatary-held.workspace = true
@@ -29,6 +30,7 @@ zeroize.workspace = true
 nothing = ["suzatary-base/nothing", "suzatary-store/nothing", "suzatary-held/nothing"]
 
 [dev-dependencies]
+prodrome_core.workspace = true
 suzatary-memory = { path = ".", features = ["nothing"] }
 suzatary-testkit = { path = "../testkit" }
 proptest.workspace = true

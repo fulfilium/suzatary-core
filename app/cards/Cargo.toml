@@ -13,8 +13,6 @@ path = "src/lib.rs"
 
 [dependencies]
 prodrome_data.workspace = true
-# The test world's `policy::Untrusted`, under `nothing` alone.
-prodrome_core = { workspace = true, optional = true }
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-store.workspace = true
@@ -39,9 +37,10 @@ chrono.workspace = true
 toml = { workspace = true, optional = true }
 
 [features]
-nothing = ["dep:prodrome_core", "dep:toml", "suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing"]
+nothing = ["dep:toml", "suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing"]
 
 [dev-dependencies]
+prodrome_core.workspace = true
 suzatary-cards = { path = ".", features = ["nothing"] }
 suzatary-stores = { workspace = true, features = ["nothing"] }
 proptest.workspace = true

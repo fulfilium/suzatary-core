@@ -1,7 +1,7 @@
 //! What one plugin run came to, as the host saw it and never as the plugin says, joined into the
 //! health register under each [`SourceKey`].
 
-use prodrome_core::fpl::Instant;
+use prodrome_data::instant::Instant;
 
 use super::Manifest;
 use suzatary_health::health::Failure;

@@ -10,13 +10,13 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::Actor;
-use prodrome_core::fold::{Climb, Discrete, RegisterType};
-use prodrome_core::literal::{Datetime, ProdromeError, Value};
+use prodrome_data::event::Actor;
+use prodrome_data::fold::{Climb, Discrete, RegisterType};
+use prodrome_data::literal::{Datetime, ProdromeError, Value};
 
-use prodrome_core::fold::sole::{One, Only, Sole};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal as _};
-use prodrome_core::schema::headed::{Body, Constructors, Event};
+use prodrome_data::fold::sole::{One, Only, Sole};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal as _};
+use prodrome_data::schema::headed::{Body, Constructors, Event};
 
 use crate::secretary::fact_life::Life;
 use crate::secretary::memory::{FactId, Kind, Origin, TAPPED, TURN};
@@ -197,7 +197,7 @@ impl Body for Said {
                 fields.get("round")?,
             ),
             other => {
-                return Err(prodrome_core::literal::codec::no_arm(Self::NAME, other));
+                return Err(prodrome_data::literal::codec::no_arm(Self::NAME, other));
             }
         }
         .map_err(|failed| ProdromeError::invalid(failed.to_string()))
@@ -237,7 +237,7 @@ mod tests {
     /// Every event reads back as itself at its widest counts.
     #[test]
     fn every_event_round_trips_at_its_widest() {
-        use prodrome_core::event::{canonical, parse_event};
+        use prodrome_data::event::{canonical, parse_event};
         let at = Datetime::new(2026, 10, 11, 9, 0, 0, 0).expect("an instant");
         let ada = Actor::new("ada").expect("an actor");
         let fact = FactId(u64::MAX - 1);

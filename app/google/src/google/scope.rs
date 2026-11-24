@@ -2,9 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::literal::{ProdromeError, Value};
+use prodrome_data::literal::{ProdromeError, Value};
 
-use prodrome_core::literal::codec::Literal;
+use prodrome_data::literal::codec::Literal;
 
 /// One part of a Google account the box reads, each the set of Google scopes it needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -128,7 +128,7 @@ impl Scopes {
     }
 }
 
-prodrome_core::word_literal!(Scope: Scope::ALL => |scope| scope.as_str());
+prodrome_data::word_literal!(Scope: Scope::ALL => |scope| scope.as_str());
 
 // By hand: it reads its scopes in any order, where a derived set refuses all but sorted.
 impl Literal for Scopes {
@@ -164,7 +164,7 @@ impl<'de> serde::Deserialize<'de> for Scopes {
 /// Where Google sends the owner back: the app's own origin and [`super::CALLBACK`], exactly,
 /// since Google compares it byte for byte with what the client lists (RFC 9700 §2.1).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Literal)]
-#[literal(crate = prodrome_core, new = RedirectUri::read)]
+#[literal(crate = prodrome_data, new = RedirectUri::read)]
 pub struct RedirectUri(String);
 
 impl RedirectUri {

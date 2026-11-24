@@ -64,7 +64,7 @@ impl World {
         let actor = |name: &str| prodrome_data::event::Actor::new(name).expect("an actor");
         let chain = suzatary_base::chains::ChainPolicy {
             name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
-            untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
+            untrusted: prodrome_data::policy::Untrusted::of([actor("triage")]),
             roster: [actor("ada"), actor("triage")].into_iter().collect(),
             root: suzatary_connect::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,

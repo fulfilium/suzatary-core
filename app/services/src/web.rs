@@ -467,18 +467,18 @@ impl TryFrom<String> for AllowRule {
 }
 
 // The literal of each is its text, as an inbox act stores it.
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     SearchQuery => |query| String::from(query.clone()),
     WebUrl => ToString::to_string,
     AllowRule => ToString::to_string,
 );
 
-pub const SEARCH: prodrome_core::literal::codec::Constructor = ("Search", &["query"]);
-pub const FETCH: prodrome_core::literal::codec::Constructor = ("Fetch", &["url"]);
+pub const SEARCH: prodrome_data::literal::codec::Constructor = ("Search", &["query"]);
+pub const FETCH: prodrome_data::literal::codec::Constructor = ("Fetch", &["url"]);
 
-impl prodrome_core::literal::codec::Literal for WebRequest {
-    fn to_value(&self) -> prodrome_core::literal::Value {
-        use prodrome_core::literal::codec::record;
+impl prodrome_data::literal::codec::Literal for WebRequest {
+    fn to_value(&self) -> prodrome_data::literal::Value {
+        use prodrome_data::literal::codec::record;
         match self {
             WebRequest::Search { query } => record(SEARCH, vec![query.to_value()]),
             WebRequest::Fetch { url } => record(FETCH, vec![url.to_value()]),
@@ -486,9 +486,9 @@ impl prodrome_core::literal::codec::Literal for WebRequest {
     }
 
     fn from_value(
-        value: &prodrome_core::literal::Value,
-    ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        use prodrome_core::literal::codec::{Fields, arm, no_arm};
+        value: &prodrome_data::literal::Value,
+    ) -> Result<Self, prodrome_data::literal::ProdromeError> {
+        use prodrome_data::literal::codec::{Fields, arm, no_arm};
         Ok(match arm(value)? {
             "Search" => WebRequest::Search {
                 query: Fields::of(value, SEARCH)?.get("query")?,

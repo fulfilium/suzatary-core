@@ -12,7 +12,8 @@ name = "suzatary_plan"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_dag.workspace = true
+prodrome_data.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-signatures.workspace = true
@@ -20,6 +21,7 @@ suzatary-todo.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+prodrome_core.workspace = true
 proptest.workspace = true
 
 [lints]

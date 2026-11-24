@@ -1,9 +1,9 @@
 //! The door an item comes through: a plugin's bytes, parsed into its declared schema, printed
 //! back, and held to speak only as the plugin that emitted it.
 
-use prodrome_core::declared::{Declaration, Declared};
-use prodrome_core::event::{canonical, parse_event};
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{canonical, parse_event};
+use prodrome_data::schema::Schema;
+use prodrome_declared::{Declaration, Declared};
 
 use suzatary_health::health::plugin::{PluginName, Said};
 
@@ -113,8 +113,8 @@ mod tests {
             let schema = schema();
             let text = format!(
                 "Said(line={}, at=datetime(2026, 10, 5, 10, 0, 0), actor='probe', words={})",
-                prodrome_core::literal::print_str(&line),
-                prodrome_core::literal::print_str(&words),
+                prodrome_data::literal::print_str(&line),
+                prodrome_data::literal::print_str(&words),
             );
             let event = admit(&schema, &probe(), text.as_bytes());
             proptest::prop_assert_eq!(event.map(|event| canonical(&event)), Ok(text));

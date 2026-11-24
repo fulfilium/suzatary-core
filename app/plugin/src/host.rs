@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
-use prodrome_core::declared::{Declaration, Refusal};
+use prodrome_declared::{Declaration, Refusal};
 use suzatary_health::health::plugin::Said;
 use suzatary_services::plugin::Manifest;
 use wasmtime::component::{Component, HasSelf, Linker, ResourceTable};

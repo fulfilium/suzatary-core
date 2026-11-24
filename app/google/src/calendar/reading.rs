@@ -3,10 +3,10 @@
 use std::collections::BTreeMap;
 
 use chrono::{NaiveDate, NaiveDateTime};
-use prodrome_core::declared::{Declared, Registers};
-use prodrome_core::fold::Product;
-use prodrome_core::policy::Everything;
-use prodrome_core::registers::{Node, Stamp, fold};
+use prodrome_dag::registers::{Node, Stamp, fold};
+use prodrome_data::fold::Product;
+use prodrome_data::policy::Everything;
+use prodrome_declared::{Declared, Registers};
 
 use super::{Content, Occurrence, OccurrenceId, When};
 
@@ -56,7 +56,7 @@ impl Calendar {
     pub fn of(nodes: &[Node<Declared>]) -> Self {
         let mut read = Self::default();
         for (_, stream) in fold(nodes).entities() {
-            let registers: Registers<'_> = prodrome_core::fold::read(stream, None, &Everything);
+            let registers: Registers<'_> = prodrome_dag::fold::read(stream, None, &Everything);
             let mut writes: Vec<&Stamp<Declared>> = registers
                 .registers()
                 .into_iter()

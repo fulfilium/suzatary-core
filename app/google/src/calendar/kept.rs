@@ -1,6 +1,6 @@
 //! A plugin's items learned as the calendar keeps them: the host's side of a plugin's door.
 
-use prodrome_core::declared::Declared;
+use prodrome_declared::Declared;
 use suzatary_store::store::{Learnt, Prodrome, StoreError, learn};
 
 use super::Occurrence;

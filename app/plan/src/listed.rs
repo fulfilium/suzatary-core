@@ -5,10 +5,11 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
-use prodrome_core::policy::{Policy, Standing};
-use prodrome_core::schema::Schema;
-use prodrome_core::{fold, registers};
+use prodrome_dag::policy::Policy;
+use prodrome_dag::{fold, registers};
+use prodrome_data::event::Hash;
+use prodrome_data::policy::Standing;
+use prodrome_data::schema::Schema;
 use serde::Serialize;
 use suzatary_base::chains::ChainName;
 use suzatary_base::escape::string_text;

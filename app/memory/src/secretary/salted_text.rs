@@ -104,7 +104,7 @@ impl<T: Words> Text<T> {
     }
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     TextName => |name| String::from(name.clone()),
 );
 

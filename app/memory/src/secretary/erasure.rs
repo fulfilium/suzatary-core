@@ -1,6 +1,6 @@
 //! Why a line's words went: the owner asked, or a forgetting took the copies it caused.
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use serde::{Deserialize, Serialize};
 
 use crate::secretary::holder::{Fate, Holder};

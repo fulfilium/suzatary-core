@@ -1,10 +1,10 @@
 //! One occurrence as the store holds it: an event of the calendar's declared schema, read into
 //! its identity and its content, and printed back from them.
 
-use prodrome_core::declared::{Datum, Declaration, Declared};
-use prodrome_core::event::Actor;
-use prodrome_core::literal::{Datetime, ProdromeError, Value};
-use prodrome_core::schema::Schema;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::{Datetime, ProdromeError, Value};
+use prodrome_data::schema::Schema;
+use prodrome_declared::{Datum, Declaration, Declared};
 
 use super::{Attendees, Content, NotAnOccurrence, OccurrenceId, Status, When};
 
@@ -128,7 +128,7 @@ impl Occurrence {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::{canonical, parse_event};
+    use prodrome_data::event::{canonical, parse_event};
 
     use super::*;
     use crate::calendar::CalendarName;

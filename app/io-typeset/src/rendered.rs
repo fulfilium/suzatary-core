@@ -2,8 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use prodrome_core::event::Hash;
-use prodrome_core::memo::{Finding, Key};
+use prodrome_data::event::Hash;
+use prodrome_memo::{Finding, Key};
 use suzatary_base::table::Table;
 use suzatary_base::tripwire::suspicious;
 
@@ -186,7 +186,7 @@ fn write(file: &Path, html: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prodrome_core::memo;
+    use prodrome_memo as memo;
 
     fn scratch(name: &str) -> PathBuf {
         let dir = suzatary_testkit::this_test().join(format!("rendered-{name}"));

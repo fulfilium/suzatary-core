@@ -1,7 +1,7 @@
 //! What a wait points at: one rule from the store it is written in, its reference and the stores
 //! held, to a blocker or nothing ([`blocker`]).
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use serde::Serialize;
 use suzatary_base::chains::ChainName;
 use suzatary_base::reference::{Found, GlobalTodo, Reference, TodoRef};

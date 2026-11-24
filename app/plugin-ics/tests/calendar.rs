@@ -19,7 +19,7 @@ const NOTHING: [Item; 0] = [];
 /// Every call to the core's plugin API: each event admitted by the host's door, learned through
 /// `learn_kept` into a store, read as the calendar reads it; an item left unread fails here.
 fn hosted(events: &[Vec<u8>]) -> Result<Calendar, String> {
-    use prodrome_core::declared::{Declaration, Declared};
+    use prodrome_declared::{Declaration, Declared};
     use suzatary_health::health::plugin::PluginName;
     use suzatary_services::plugin::admit;
     use suzatary_store::store::Reads;
@@ -632,8 +632,8 @@ fn an_event_whose_uid_no_store_keeps_is_left_out_and_said() {
 /// the rest are learned.
 #[test]
 fn the_host_learns_each_item_as_the_calendar_keeps_it() {
-    use prodrome_core::declared::{Declaration, Declared};
-    use prodrome_core::event::canonical;
+    use prodrome_data::event::canonical;
+    use prodrome_declared::{Declaration, Declared};
     use suzatary_health::health::plugin::PluginName;
     use suzatary_store::store::Reads as _;
     use suzatary_stores::stores::InMemory;
