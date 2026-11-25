@@ -157,6 +157,7 @@ pub enum Windowed {
     Read {
         #[ts(as = "Dressed<Grouped>")]
         payload: Worn<Grouped>,
+        about: About,
     },
     /// Lines of it are not on this device and could not be fetched.
     NotHere { lines: u32, why: String },
@@ -165,6 +166,24 @@ pub enum Windowed {
     /// A topic this device began that the box refused, in its words: its words stand on the page
     /// that begins topics.
     Refused { why: String },
+}
+
+/// What a window asked about a reference found in the lines held now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[ts(rename = "WindowAbout")]
+pub enum About {
+    /// The window asked: the rounds touching its reference, or every round where it names none.
+    Asked,
+    /// No round touches it, and a pull has ended whole: the whole conversation.
+    Quiet,
+    /// No round held touches it, and no pull has ended whole yet: the whole conversation so far.
+    Unheard,
+}
+
+/// Whether a window's `total` counts every turn, which only grows, and not the turns of the
+/// rounds about its reference, which a rewind can lessen.
+fn counts_every(at: &At, said: About) -> bool {
+    !matches!((said, about(at)), (About::Asked, Some(_)))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -241,6 +260,7 @@ enum Held {
     Loaded {
         grouped: Box<Grouped>,
         problem: Option<String>,
+        about: About,
     },
 }
 
@@ -250,8 +270,6 @@ pub struct Model {
     id: String,
     at: At,
     held: Held,
-    /// Monotone: once nothing about the reference is found, the whole conversation is drawn.
-    fallback: bool,
     asked: Window,
     keep: bool,
     landing: Landing,
@@ -320,11 +338,7 @@ fn window(m: &Model) -> Effect {
 
 /// The newest window holding every turn the page holds, or `older` turns further back too.
 fn asking(m: &Model, older: u32) -> Window {
-    let about = if m.fallback {
-        None
-    } else {
-        about(&m.at).map(str::to_owned)
-    };
+    let about = about(&m.at).map(str::to_owned);
     let Held::Loaded { grouped, .. } = &m.held else {
         return Window {
             limit: None,
@@ -425,7 +439,6 @@ impl Program for Conversation {
             context: flags.context,
             at: flags.at,
             held: Held::Loading,
-            fallback: false,
             asked: Window {
                 limit: None,
                 from: None,
@@ -955,14 +968,14 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
         Windowed::Refused { why } => m.held = Held::Refused(why),
         Windowed::Read {
             payload: Worn(payload),
+            about,
         } => {
-            if about(&m.at).is_some() && !m.fallback && payload.payload.turns.is_empty() {
-                m.fallback = true;
-                m.asked = asking(m, 0);
-                return vec![window(m)];
-            }
-            // Turns are only appended, so a window holding fewer was read earlier.
-            if total(m) > payload.payload.total {
+            // Turns are only appended, so a window over every turn counting fewer was read earlier.
+            if let Held::Loaded { about: was, .. } = &m.held
+                && counts_every(&m.at, *was)
+                && counts_every(&m.at, about)
+                && total(m) > payload.payload.total
+            {
                 return Vec::new();
             }
             let state = owed_by_the_box(&payload.payload);
@@ -976,6 +989,7 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
             m.held = Held::Loaded {
                 grouped: payload,
                 problem: None,
+                about,
             };
             m.shown.read(fresh, before, now);
             // From its first turn on, so a new turn grows the window instead of sliding it.
@@ -1226,20 +1240,27 @@ fn head(m: &Model) -> Node<Msg> {
 }
 
 fn panel_header(m: &Model, about: &str) -> Node<Msg> {
-    let line = match &m.held {
-        Held::Loaded { .. } if m.fallback => vec![
-            view! { Span [format!("Nothing about {about} yet · ")] },
-            view! { A {Href => "#/secretary/default"} ["whole conversation →"] },
-        ],
-        Held::Loaded { .. } => vec![
-            view! { Span [if about.is_empty() { String::new() } else { format!("About {about} · ") }] },
-            view! { A {Href => "#/secretary/default"} ["Whole conversation →"] },
-        ],
+    let (said, whole) = match &m.held {
+        Held::Loaded { about: said, .. } => match said {
+            About::Asked if about.is_empty() => (String::new(), "Whole conversation →"),
+            About::Asked => (format!("About {about} · "), "Whole conversation →"),
+            About::Quiet => (
+                format!("Nothing about {about} yet · "),
+                "whole conversation →",
+            ),
+            About::Unheard => (
+                format!("Talk about {about} may not be on this device yet · "),
+                "whole conversation →",
+            ),
+        },
         Held::Loading | Held::Failed(_) | Held::NotHere(..) | Held::Unheard | Held::Refused(_) => {
-            Vec::new()
+            return view! { Div "frameheader" [] };
         }
     };
-    view! { Div "frameheader" [line] }
+    view! { Div "frameheader" [
+        view! { Span [said] },
+        view! { A {Href => "#/secretary/default"} [whole] },
+    ] }
 }
 
 fn speaker(t: &TurnRow) -> String {
@@ -1720,7 +1741,9 @@ fn transcript(m: &Model) -> Node<Msg> {
             false,
             None,
         ),
-        Held::Loaded { grouped, problem } => {
+        Held::Loaded {
+            grouped, problem, ..
+        } => {
             let p = &grouped.payload;
             let unplaced = p
                 .unplaced
@@ -1888,7 +1911,7 @@ mod tests {
         let rounds: Vec<_> = (0..turns)
             .map(|i| json!({"key": i, "startIndex": i, "opening": i, "trace": [], "answer": null, "proposals": [], "earlier": [], "marked": false, "label": ""}))
             .collect();
-        let body = json!({"type": "Read", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
+        let body = json!({"type": "Read", "about": "Asked", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
             "lines": (0..turns).map(|i| format!("{i:064x}")).collect::<Vec<_>>(),
             "proposals": [], "unplaced": [], "waiting": waiting, "state": state, "first": 0, "total": turns, "again": again, "rounds": rounds}, "html": {}, "drawn": []}});
         Msg::Host(Box::new(Input::Held {
@@ -2182,7 +2205,7 @@ mod tests {
         let rounds: Vec<_> = (0..2)
             .map(|i| json!({"key": i, "startIndex": i, "opening": i, "trace": [], "answer": null, "proposals": [], "earlier": [], "marked": false, "label": ""}))
             .collect();
-        let body = json!({"type": "Read", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
+        let body = json!({"type": "Read", "about": "Asked", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
             "lines": drawn(2), "proposals": [], "unplaced": [], "waiting": [], "state": "idle", "first": 0, "total": 2, "again": 1, "rounds": rounds}, "html": {}, "drawn": []}});
         Msg::Host(Box::new(Input::Held {
             ask: Hold::Window,

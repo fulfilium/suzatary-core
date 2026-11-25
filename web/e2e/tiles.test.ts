@@ -10,7 +10,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BASE, PHONE, SETTLED, WRITE_BASE, addTodo, doneFromList, openInPlace, openTodo, reveal, row, suite } from "./harness";
+import { BASE, PHONE, SETTLED, WRITE_BASE, addTodo, askAtTheTerminal, doneFromList, openInPlace, openTodo, reveal, row, suite } from "./harness";
 import cast from "../test/cast";
 import { launch } from "./cdp";
 import tokens from "../src/view/tokens";
@@ -1233,3 +1233,34 @@ app.scene("a bare secretary address about a message stands in the Mail workspace
   await app.resize(PHONE);
 });
 
+// THE HEADING IS A READING OF THE LINES HELD NOW (`About` in app/pages/src/conversation.rs). Reloaded while its pull of
+// the lines is held back, a device that holds a round about something else shows that round under a heading that claims
+// nothing; once the pull ends whole it says nothing is about the todo, the question typed meanwhile still in the
+// composer. Sent, that question is about the todo (the composer names it), and the heading turns to it with no reload.
+app.scene("the secretary beside a todo says nothing is about it only once a pull has ended whole, and follows the talk", async () => {
+  await app.resize([1440, 900]);
+  await askAtTheTerminal("default", "anything new today");
+  const about = `todo:life/${todos.resolved.id}`;
+  const header = `(document.querySelector("#view > .tile .panelbody .frameheader")?.textContent ?? "")`;
+  const headed = (said: string): string => `${header}.startsWith(${JSON.stringify(said)})`;
+  const open = async (): Promise<void> => {
+    loads += 1;
+    await app.page.navigate(`${WRITE_BASE}/?scene=${loads}#/aside/${encodeURIComponent(about)}`);
+  };
+  await open();
+  await app.page.waitFor(headed(`Nothing about ${about} yet`), { timeout: 20000 });
+  const release = await app.page.holdRequests(["/api/stores/lines/skeleton"]);
+  await open();
+  await app.page.untilHeld();
+  await app.page.waitFor(
+    `${headed(`Talk about ${about} may not be on this device yet`)} && [...document.querySelectorAll("#view > .tile .panelbody .turn-person .turntext")].some((t) => t.textContent.includes("anything new today"))`,
+    { timeout: 20000 },
+  );
+  await app.page.type(composer, "is the card renewed");
+  await release();
+  await app.page.waitFor(headed(`Nothing about ${about} yet`), { timeout: 20000 });
+  assert.equal(await app.page.evaluate<string>(`document.querySelector("${composer}").value`), "is the card renewed", "the draft stays");
+  await app.page.click("#view > .tile .panelbody .composesend");
+  await app.page.waitFor(headed(`About ${about}`), { timeout: 20000 });
+  await app.resize(PHONE);
+});

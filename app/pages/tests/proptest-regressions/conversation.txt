@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 01fb8de08ae190a4c6d135cef8f85c1f0644a2ac3dbdcebaf70c5286dba47e8e # shrinks to (touches, steps) = ([false], [Lines([0]), Rewound(0), Whole])
+cc f74790952dda98c5e9eb145a8e1b99d62812ec5945f09fa329c8497ebef86be6 # shrinks to (touches, steps) = ([true, true], [Lines([0]), Lines([1]), Whole, Rewound(0)])

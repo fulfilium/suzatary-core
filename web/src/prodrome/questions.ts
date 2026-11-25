@@ -12,7 +12,7 @@ import type {
   SpecNode,
   TurnRow,
 } from "../wire/generated/wire"
-import type { Dressed, Streamed, UnsentRead, Windowed as PageWindow } from "../wire/generated/pages"
+import type { Dressed, Streamed, UnsentRead, WindowAbout, Windowed as PageWindow } from "../wire/generated/pages"
 import type { AnsweredBlock, Chains, Core, CoreEnv, CoreFold, Linker, CorePlaced, Beside, CoreSpot, Order, Standing, Todos, Window } from "./core"
 import { grow } from "./core"
 import {
@@ -481,15 +481,23 @@ export namespace questions {
           const { id, window, memory, drawn, zone } = q
           const read = (w: Window): ConversationPayload => conversationOf(held, proposals(), id, w, memory)
           const given = new Map(drawn.map(d => [d.from, d.row]))
-          return conversation(id, turn, () => sync.over(() => lines.one(id), () => grouped.of(grouped.covering(window, read), zone)))
-            .then(async (payload): Promise<Grouped> => {
-              if ("type" in payload) return payload
+          // Asked about a reference no round held touches, the window is the whole conversation, and says whether a pull
+          // has ended whole since (`WindowAbout`): a reading of the lines held now, asked again as they move.
+          const { about, ...whole } = window
+          const windowed = (): { readonly said: WindowAbout; readonly payload: grouped.Window } => {
+            const said: WindowAbout = about === undefined || talksOf(held, id, about) ? "Asked" : sync.whole() ? "Quiet" : "Unheard"
+            return { said, payload: grouped.of(grouped.covering(said === "Asked" ? window : whole, read), zone) }
+          }
+          return conversation(id, turn, () => sync.over(() => lines.one(id), windowed))
+            .then(async (w): Promise<Grouped> => {
+              if ("type" in w) return w
+              const { said, payload } = w
               const drawing = payload.proposals.filter(drawnByTheBox)
               const rows = drawing.flatMap(p => given.get(JSON.stringify(p)) ?? [])
               const dressed = await dressing(text.printed(payload), blocksOf(id, payload.turns), rows)
               return {
                 type: "Held",
-                text: text.object<PageWindow & { readonly type: "Read" }>({ type: text.printed("Read"), payload: dressed.text }),
+                text: text.object<PageWindow & { readonly type: "Read" }>({ type: text.printed("Read"), payload: dressed.text, about: text.printed(said) }),
                 missing: dressed.missing,
                 drawing: drawing.filter(p => !given.has(JSON.stringify(p))),
                 receipts: receiptsOf(payload),

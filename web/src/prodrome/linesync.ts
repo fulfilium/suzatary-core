@@ -503,6 +503,9 @@ export namespace linesync {
       }
       fx.bars({ type: "Pulled", name: NAME })
       if (ended.type === "Whole") {
+        // A reading that says whether a pull has ended whole (a window about a reference) reads differently once one
+        // has, whatever the pull moved.
+        if (!everWhole) fx.moved("All")
         everWhole = true
         // The box's own copy, taken whole from nothing, that is not closed under its parents: no start-over can close it,
         // so it is held unchanged and said once.
