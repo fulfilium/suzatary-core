@@ -18,7 +18,7 @@ import wait from "../src/wire/wait"
 import type { Recorded } from "./harness"
 import type { TraceEvent } from "./cdp"
 import { BULK, OBSERVE, placed, settle } from "./longtasks"
-import { TASKS, type Task, layoutsOf, measured, pageThread, tasksOf, threadKey, workerThread } from "./trace"
+import { TASKS, heaviestOf, layoutsOf, measured, pageThread, tasksOf, threadKey, workerThread } from "./trace"
 import { PHONE, REPLICA_ROWS, STEP_MS, WORKER_MARKS, WORKER_QUESTIONS, askAtTheTerminal, snapshotKept, suite, trustThisDevice } from "./harness"
 
 type Shape = { readonly lines: number; readonly conversations: number; readonly reseals: number; readonly proposals: number; readonly topics: number; readonly todos: number }
@@ -44,19 +44,24 @@ const RATE = Number(process.env["SUZATARY_LINES_RATE"] ?? "1")
 // The most bytes of patches one painter's step may apply: a slice's words come to at most `slices::WORDS` (8 KiB),
 // and with their markup the store's largest slice is 21 KiB.
 const STEP_BYTES = 32 * 1024
-// The most processor time one task may take on the page's thread meanwhile, whatever it runs.
+// The most processor time one task may take on the page's thread meanwhile, whatever it runs. A task's processor time is
+// read as the smaller of the trace's thread time and its time on the clock (`trace.ts`).
 const CPU_MS = 100
 const app = await suite("bigstore", PHONE)
 
 // A measure the page's own code took (`page:draw`, `painter:step`, `typst:draw`, …), as the browser kept it.
 type Held = { readonly name: string; readonly ms: number; readonly detail: unknown }
-// `ms`: until what the phase waits for was drawn. `cpuMs`: the processor time of the page thread's heaviest task, and
-// `longest`: that thread's longest task on the clock, both in ms. `tasks`: the long tasks the browser reported.
+// `ms`: until what the phase waits for was drawn. `cpuMs`: the processor time of the page thread's heaviest task, as
+// `trace.ts` judges it, and `taskMs` and `threadMs`: that same task's time on the clock and the trace's own thread time,
+// all in ms. `longest`: the longest long task the browser reported, on the clock, which may be another task. `tasks`: the
+// number of long tasks the browser reported.
 // `steps`, `slices` and `stepBytes`: the painter's steps, those that drew a slice, and the bytes of the largest step's
 // patches. `within`: the measures inside the task of `cpuMs`, so a log names the code that held the thread.
 type Phase = {
   readonly ms: number
   readonly cpuMs: number
+  readonly taskMs: number
+  readonly threadMs: number
   readonly longest: number
   readonly tasks: number
   readonly steps: number
@@ -81,7 +86,7 @@ const stepsSince = (since: number): string => `(() => {
 // A phase is judged by the work of its largest step and its heaviest task, which a busy machine does not move.
 const judge = (what: string, p: Phase): void => {
   assert.ok(p.stepBytes <= STEP_BYTES, `${what}: one painter's step applied ${p.stepBytes} bytes of patches (at most ${STEP_BYTES})`)
-  assert.ok(p.cpuMs <= CPU_MS, `${what}: one task ran ${p.cpuMs} ms on the page's thread's processor (at most ${CPU_MS}; ${p.longest} ms on the clock); inside it: ${JSON.stringify(p.within)}`)
+  assert.ok(p.cpuMs <= CPU_MS, `${what}: one task ran ${p.cpuMs} ms on the page's thread's processor (at most ${CPU_MS}; it lasted ${p.taskMs} ms on the clock and the trace's thread time for it is ${p.threadMs} ms); inside it: ${JSON.stringify(p.within)}`)
 }
 
 // The mark a phase ends on, which places the trace's tasks on the page's clock.
@@ -96,13 +101,15 @@ const phase = async (act: () => unknown, until: string, from: "now" | "document"
   const drawn = await settle(app.page, until, STEP_MS)
   await app.page.evaluate(`void performance.mark(${JSON.stringify(ENDED)})`)
   const traced = tasksOf(await stop(), ENDED).filter((t) => t.at >= since)
-  const heaviest = traced.reduce<Task | null>((a, t) => (a === null || t.cpuMs > a.cpuMs ? t : a), null)
+  const heaviest = heaviestOf(traced)
   const long = await app.page.evaluate<[number, number][]>(`window.__long.filter(([at]) => at >= ${since})`)
   const [steps, slices, stepBytes] = await app.page.evaluate<[number, number, number]>(stepsSince(since))
   const within = heaviest === null ? [] : await app.page.evaluate<Held[]>(measuresIn(heaviest.at, heaviest.ms))
   return {
     ms: Math.round(drawn - since),
     cpuMs: Math.round(heaviest?.cpuMs ?? 0),
+    taskMs: Math.round(heaviest?.ms ?? 0),
+    threadMs: Math.round(heaviest?.threadMs ?? 0),
     longest: Math.round(Math.max(0, ...long.map(([, ms]) => ms))),
     tasks: long.length,
     steps,
@@ -341,7 +348,7 @@ app.scene("a warm load of the conversations answers the page's first stream befo
     const answered = seen[to]?.[2] ?? -1
     // How many times the page asked for its stream before the first answer.
     const streams = seen.slice(0, to).filter((s) => s[0] === "asked" && s[4] === "Stream").length
-    console.log(JSON.stringify({ ...SHAPE, rate: RATE, firstDraw: draw.ms, cpuMs: draw.cpuMs, longest: draw.longest, within: draw.within, streamAsked: asked.get(stream)?.at, streamAnswered: answered, streams, answeredWhileTheStreamWasOwed: named(between), cpu: process.env["SUZATARY_E2E_BROWSER_CPU"] ?? "all", worker: phases }))
+    console.log(JSON.stringify({ ...SHAPE, rate: RATE, firstDraw: draw.ms, cpuMs: draw.cpuMs, taskMs: draw.taskMs, threadMs: draw.threadMs, longest: draw.longest, within: draw.within, streamAsked: asked.get(stream)?.at, streamAnswered: answered, streams, answeredWhileTheStreamWasOwed: named(between), cpu: process.env["SUZATARY_E2E_BROWSER_CPU"] ?? "all", worker: phases }))
     assert.deepEqual(named(between.filter((q) => q.lane === "Shell")), [], `the worker answered the shell while the page's stream was owed:\n${JSON.stringify(seen)}`)
     assert.ok(draw.ms < wait.MS / 3, `the stream drew ${draw.ms} ms after the document started (bound ${wait.MS / 3})`)
   }

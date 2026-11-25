@@ -38,14 +38,26 @@ export const pageThread = (events: readonly TraceEvent[]): { readonly main: stri
 /** The categories a trace needs for `tasksOf`: each task of every thread with its processor time, and the page's marks. */
 export const TASKS = ["disabled-by-default-devtools.timeline", "blink.user_timing"] as const;
 
-/** One task of the page's thread: when it began, on the page's clock, and how long it held the thread, on the clock
- * (`ms`) and on the processor (`cpuMs`, the time the thread itself ran, which another process running on its core does
- * not stretch). */
-export type Task = { readonly at: number; readonly ms: number; readonly cpuMs: number };
+/** One task of the page's thread: when it began, on the page's clock, and how long it held the thread: on the clock (`ms`),
+ * on the processor as the trace says (`threadMs`, the time the thread itself ran, which another process running on its
+ * core does not stretch) and as the judge reads it (`cpuMs`, the smaller of the two). A task cannot run longer on the
+ * processor than it lasted on the clock, so a `threadMs` over `ms` is the runner's (a thread clock that jumped across
+ * a descheduling of its virtual core), not the page's. */
+export type Task = { readonly at: number; readonly ms: number; readonly threadMs: number; readonly cpuMs: number };
+
+/** The task one `tdur` and `dur` (µs) of a trace event are of. A task the browser did not time on the processor (it
+ * leaves out `tdur` for the shortest) counts its time on the clock, which bounds its processor time from above. */
+export const taskOf = (at: number, dur: number, tdur: number | undefined): Task => {
+  const ms = dur / 1000;
+  const threadMs = (tdur ?? dur) / 1000;
+  return { at, ms, threadMs, cpuMs: Math.min(threadMs, ms) };
+};
+
+/** The task that held the processor longest by `cpuMs`, or null without any. */
+export const heaviestOf = (tasks: readonly Task[]): Task | null => tasks.reduce<Task | null>((a, t) => (a === null || t.cpuMs > a.cpuMs ? t : a), null);
 
 /** The top-level tasks of the thread that made the mark `mark`, placed on its document's clock by the latest such mark
- * (its `startTime` against its trace time). A task the browser did not time on the processor (it leaves out `tdur` for
- * the shortest) counts its time on the clock, which bounds its processor time from above. */
+ * (its `startTime` against its trace time). */
 export const tasksOf = (events: readonly TraceEvent[], mark: string): readonly Task[] => {
   const m = events.filter((e) => e.name === mark && e.cat.includes("user_timing")).at(-1);
   const start = m?.args?.data?.["startTime"];
@@ -58,7 +70,7 @@ export const tasksOf = (events: readonly TraceEvent[], mark: string): readonly T
     if (e.ts < end) continue;
     const dur = e.dur ?? 0;
     end = e.ts + dur;
-    tasks.push({ at: e.ts / 1000 - offset, ms: dur / 1000, cpuMs: (e.tdur ?? dur) / 1000 });
+    tasks.push(taskOf(e.ts / 1000 - offset, dur, e.tdur));
   }
   return tasks;
 };
