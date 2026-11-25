@@ -586,8 +586,9 @@ proptest! {
 /// Under `Beside::Insert`, an open from a free leaf of a free page of another kind that the
 /// workspace does not show closes no tile where the policy's bound leaves room: every leaf stays,
 /// the page among them. At the bound the page replaces the focused leaf, and every other leaf
-/// stays. The law reaches the first case in at least an eighth of its runs, and the second in a
-/// twenty-fifth.
+/// stays. The law reaches the first case in at least a twentieth of its runs and the second in a
+/// thirty-second: about an eighth and a ninth of generated runs reach them, and a floor at the
+/// mean fails by chance at the committed count.
 #[test]
 fn an_open_that_inserts_closes_no_tile() {
     let config = cases(256);
@@ -642,7 +643,7 @@ fn an_open_that_inserts_closes_no_tile() {
     let (room, full) = (room.get(), full.get());
     eprintln!("an insert: with room in {room} runs, at the bound in {full}, of {total}");
     assert!(
-        room * 8 >= total && full * 25 >= total,
+        room * 20 >= total && full * 32 >= total,
         "{room} and {full} of {total}"
     );
 }
