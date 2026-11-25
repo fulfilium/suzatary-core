@@ -1,5 +1,7 @@
 //! The agent's `context` over the disk stores at the live shape (lines of about 8.4 kB, about
-//! 9,000 digest objects), each phase timed, a measurement and not a law:
+//! 9,000 digest objects), each phase timed, a measurement and not a law. The shape is
+//! `live_shape`'s size, each conversation one block in time with no claims, verbs, acts or notes,
+//! not a box's interleaved store of that size:
 //!
 //! `cargo test --release -p suzatary --test all context_disk -- --ignored --nocapture`
 

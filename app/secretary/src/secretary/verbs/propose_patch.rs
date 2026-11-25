@@ -69,7 +69,7 @@ impl Verb for ProposePatch {
             call.caps.conversations,
             call.conversation,
         )?;
-        match (visibility, Gate::of(Asked::Publishes, &round)) {
+        match (visibility, Gate::of(Asked::Publishes, &round, call.sent)) {
             (Visibility::Public, Gate::Card) if shown > MAX_SHOWN_BYTES => {
                 return Err(Refusal::bad_request(format!(
                     "after other words, a public patch and message are at most \

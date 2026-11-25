@@ -53,7 +53,9 @@ impl Rig for Scripts {
             &at,
             "claude",
             &format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {heard}\ncat >> {heard}\ncat {}\n",
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {heard}\nwhile [ $# -gt 0 ]; do \
+                 if [ \"$1\" = --system-prompt-file ]; then cat \"$2\" >> {heard}; fi; shift; \
+                 done\ncat >> {heard}\ncat {}\n",
                 answer.display(),
                 heard = heard.display()
             ),
@@ -66,7 +68,7 @@ impl Rig for Scripts {
         ClaudeCli::new("a-model", Self::fence()).with_binary("/nonexistent/claude")
     }
 
-    /// Its arguments, the system prompt among them, then everything that went down stdin.
+    /// Its arguments, then the system text its file holds, then everything that went down stdin.
     fn heard(&self, _model: &ClaudeCli) -> String {
         let heard = self
             .made
@@ -84,6 +86,8 @@ impl Rig for Scripts {
 fn the_claude_cli_interpreter_keeps_every_law_over_a_scripted_far_end() {
     let conversation = Conversation {
         system: "You are the secretary. Propose; never send.".to_owned(),
+        context: suzatary_conversations::secretary::model::Context::default(),
+        earlier: Vec::new(),
         turns: vec![
             Turn::Person {
                 text: "When does the lease renew?".to_owned(),

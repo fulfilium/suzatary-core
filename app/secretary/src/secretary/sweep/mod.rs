@@ -175,11 +175,11 @@ fn sweep(
         .map(|(todo, _)| todo.id.as_str().to_owned())
         .collect();
 
-    let run = |request: Request<SecretaryCall>| {
+    let run = |request: Request<SecretaryCall>, sent| {
         if let SecretaryCall::ProposeChanges(Chained(args)) = &request.call {
             refuse_bad_act(&swept, args.acts())?;
         }
-        super::run(deployment, settables, chains, &id, request)
+        super::run(deployment, settables, chains, &id, request, sent)
     };
     let halt = Halt::new();
     let answered = super::held(

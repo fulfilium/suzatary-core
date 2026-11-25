@@ -108,15 +108,21 @@ conversation that happens to arrive at 07:03.
 - *The default conversation.* Secretary opens into it; the brief lands in it
   (the morning is its top, not a separate page); `start` still makes another
   for a side topic, and that is the exception. It is the same conversation
-  tomorrow, and the secretary in it has read everything it has ever read there.
-- *A session, not a re-send.* The default conversation is a long-lived Claude
-  Code session (`--resume`, or a process kept open on `stream-json` input), so
-  a turn sends only what is new, the harness compacts the context itself, and
-  the prompt cache does what it does for a long chat (this session runs at 98%
-  hits; the stateless rounds at 84%, with 61% of runs starting cold). The
-  session id is state the box holds beside the transcript; losing it costs one
-  cold re-send of the transcript, nothing else. `Model` grows a session-shaped
-  turn beside the stateless one; the stateless one stays for triage and review.
+  tomorrow. Each call holds its last rounds as they were said and the rest of
+  everything it was told by the owner's words, clean summaries and `zoom`: a
+  verb's answer older than the window is one `zoom` or one call of the verb
+  away, and an answer that repeats something from outside keeps `remember` a
+  card while it is held.
+- *A fresh call, and the cache keeps it cheap.* Each step of a turn is one
+  stateless call (`conversation::ask::Ask::Digest`): the manual and the verb
+  list as its system text; then the facts, the digest's record, the
+  conversation's earlier rounds and the round being answered, whose newest turn
+  carries the call's one cache mark; then the topics in use. The earlier rounds
+  (`queue::window`) grow to 60 turns or 64 KiB and then drop to half, so their
+  start moves in steps. A later step of a round reads everything through the
+  step before from the provider's cache, and so does the next round while the
+  facts, the record and the window's start stand. No session is kept, so none
+  is lost.
 - *A queue, not a disabled button.* Send always works. A message sent while a
   turn runs is appended as a THE OWNER line at once, shown as queued, and reaches
   the model at its next step (the harness surfaces mid-turn messages the way

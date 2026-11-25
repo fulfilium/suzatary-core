@@ -1072,18 +1072,15 @@ impl Box {
 
 /// A conversation drawn from `kinds`: the owner's turn, the secretary's answer, a clean verb's
 /// answer, or a verb's answer that holds somebody else's words. The secretary's answer restates
-/// the last such answer its model holds, as a model would: a stateless model holds the window
-/// it is sent (the last [`WINDOW`] turns, from the first round among them: a round opens at the
-/// first turn and after each answer of the secretary's, which never calls a verb here), and when
-/// `sessions` lets some answers open a session (a `Kept` line, written before the answer), that
-/// session holds every turn from the first its opening window sent. The generator keeps its own
-/// account of what its model was sent, never the code it tests.
-fn conversation(kinds: &[u8], sessions: bool) -> Vec<Entry> {
+/// the last such answer its model holds, as a model would: a call holds the window it is sent
+/// (the last [`WINDOW`] turns, from the first round among them: a round opens at the first turn
+/// and after each answer of the secretary's, which never calls a verb here). The generator keeps
+/// its own account of what its model was sent, never the code it tests.
+fn conversation(kinds: &[u8]) -> Vec<Entry> {
     const WINDOW: usize = 60;
     let mut lines = Vec::new();
     let mut turns: Vec<Turn> = Vec::new();
     let mut reads = Vec::new();
-    let mut kept: Option<usize> = None;
     let window = |turns: &[Turn]| {
         let floor = turns.len().saturating_sub(WINDOW);
         let opens = |at: &usize| *at == 0 || matches!(turns[*at - 1], Turn::Model { .. });
@@ -1100,21 +1097,7 @@ fn conversation(kinds: &[u8], sessions: bool) -> Vec<Entry> {
                 attachments: Vec::new(),
             },
             1 => {
-                if sessions && kept.is_none() && (kind / 4) % 4 == 0 {
-                    let from = window(&turns);
-                    kept = Some(from);
-                    lines.push(Entry::Kept {
-                        at: at(k),
-                        session: suzatary_conversations::secretary::model::SessionId::minted(
-                            &format!("a/{k}"),
-                        ),
-                        model: "m".to_owned(),
-                        cwd: String::new(),
-                        surface: None,
-                        from,
-                    });
-                }
-                let holds = kept.unwrap_or_else(|| window(&turns));
+                let holds = window(&turns);
                 Turn::Model {
                     text: match reads.iter().rev().find(|read| **read >= holds) {
                         Some(j) => format!("the secretary answers {k}, restating INJECTED {j}"),
@@ -1153,7 +1136,7 @@ fn conversation(kinds: &[u8], sessions: bool) -> Vec<Entry> {
 
 /// [`conversation`]'s turns, with no session.
 fn turns(kinds: &[u8]) -> Vec<Turn> {
-    conversation(kinds, false)
+    conversation(kinds)
         .into_iter()
         .filter_map(|line| match line {
             Entry::Said { turn, .. } => Some(turn),
@@ -1173,7 +1156,7 @@ proptest! {
         kinds in proptest::collection::vec(any::<u8>(), 20..90),
     ) {
         let the = Box::default();
-        the.write_lines("a", conversation(&kinds, true));
+        the.write_lines("a", conversation(&kinds));
         let compactor = Recording::joining();
         let done = the.compact_all(&compactor);
         let read = the.read();
@@ -1223,7 +1206,7 @@ proptest! {
     ) {
         use suzatary_digest::secretary::compaction::{Compaction, InView};
         let the = Box::default();
-        the.write_lines("a", conversation(&kinds, false));
+        the.write_lines("a", conversation(&kinds));
         the.write(
             "b",
             (0..long).map(|k| Turn::Person {
@@ -1848,13 +1831,30 @@ fn consecutive_questions_share_their_prefix() {
 }
 
 impl Box {
-    /// What a session opening now is told, its view within `budget` bytes.
+    /// The name of line `k` of `conversation`, in the record's order: in these stores, which
+    /// hold no opening line, its turn `k`.
+    fn turn_line(&self, conversation: &ConversationId, k: usize) -> Hash {
+        let reading = suzatary_digest::secretary::compaction::Reading::of(&self.digests().reads())
+            .expect("reads whole");
+        reading
+            .lines()
+            .filter(|(_, object)| {
+                object
+                    .event()
+                    .is_some_and(|line| line.conversation() == conversation)
+            })
+            .nth(k)
+            .map(|(name, _)| name.clone())
+            .expect("a line")
+    }
+
+    /// What a call is now told, its view within `budget` bytes.
     fn told(&self, budget: usize) -> String {
         use suzatary_digest::secretary::compaction::Reading;
-        let memory = self.memories().reads().read().expect("the memory reads");
+        let memory = self.memories().reads().read();
         let record = Reading::of(&self.digests().reads());
         suzatary_digest::secretary::told::context_of(
-            &memory,
+            memory.as_ref(),
             Ok(&suzatary_topics::secretary::topics::reading::Reading::default()),
             record.as_ref(),
             budget,
@@ -1902,12 +1902,12 @@ fn budgets() -> impl Strategy<Value = usize> {
 proptest! {
     #![proptest_config(ProptestConfig { cases: 12, ..ProptestConfig::default() })]
 
-    /// Law 9's second half: the view every session is told never prints a tainted word, though
-    /// the compactor summarised tainted spans and the secretary restated them, and it shows the
-    /// owner's words alone: every part is his turn, a summary of nothing but his turns, or a
-    /// part by its kinds.
+    /// Law 9's second half: the view every call is told never prints a tainted word, though the
+    /// compactor summarised tainted spans and the secretary restated them, and it shows lines in
+    /// the owner's words alone: every part is his turn, a summary of clean lines, or a part by its
+    /// kinds.
     #[test]
-    fn the_told_view_prints_the_owners_words_alone(
+    fn the_told_view_prints_no_word_from_outside(
         kinds in proptest::collection::vec(any::<u8>(), 20..90),
         budget in budgets(),
     ) {
@@ -1920,22 +1920,19 @@ proptest! {
             .expect("reads whole");
         let record = &told[told.find("the record of every conversation").expect("told")..];
         let mut hidden_before = false;
-        for part in record.lines().skip(1) {
+        for part in record.lines().skip(1).filter(|part| !part.is_empty()) {
             let Some((handle, said)) = part.split_once(' ') else {
                 prop_assert!(false, "{}", part);
                 unreachable!();
             };
             if !handle.contains('+') {
-                prop_assert!(part.ends_with("parts of the log are not shown here.)"), "{}", part);
+                prop_assert!(part.starts_with("(the log's first "), "{}", part);
                 continue;
             }
-            let derived = said.strip_prefix("derived: ");
-            let owners = |words: &str| {
-                words.split(" / ").all(|line| line.starts_with("Owner: "))
-            };
+            let derived = said.starts_with("derived: ");
             let hidden = said.starts_with('(') && said.contains(" lines, not shown: ");
             prop_assert!(
-                said.starts_with("Owner: ") || derived.is_some_and(owners) || hidden,
+                said.starts_with("Owner: ") || derived || hidden,
                 "{}",
                 part
             );
@@ -1981,10 +1978,10 @@ proptest! {
     }
 }
 
-/// What is told is the facts first, standing instructions leading, then the record: a clean line
-/// as said, a summary fenced as derived, a tainted part by its handle and kinds alone.
+/// What is told is the facts, standing instructions leading, then the record: a clean line as
+/// said, a summary fenced as derived, a tainted part by its handle and kinds alone.
 #[test]
-fn a_session_is_told_the_facts_then_the_record() {
+fn a_call_is_told_the_facts_then_the_record() {
     use suzatary_memory::secretary::memory::{Kind, Origin};
     let the = Box::default();
     // Turns of a length the owner writes, so a summary costs less than the lines it stands for.
@@ -2027,7 +2024,11 @@ fn a_session_is_told_the_facts_then_the_record() {
     let owner = told.find("He walks to work").expect("told");
     let record = told.find("the record of every conversation").expect("told");
     assert!(standing < owner && owner < record, "{told}");
-    let parts: Vec<&str> = told[record..].lines().skip(1).collect();
+    let parts: Vec<&str> = told[record..]
+        .lines()
+        .skip(1)
+        .filter(|part| !part.is_empty())
+        .collect();
     assert!(
         parts
             .iter()
@@ -2081,35 +2082,46 @@ fn zoomed_round(answer: &str) -> suzatary_conversations::secretary::store::Store
             args: std::collections::BTreeMap::new(),
         }],
     };
-    suzatary_conversations::secretary::store::Stored::of(
-        &id,
-        &[
-            Entry::Opened {
-                at: at(0),
-                title: suzatary_memory::secretary::words::Words::kept("z".to_owned()),
-                model: "m".to_owned(),
-                kind: suzatary_conversations::secretary::store::Kind::Topic,
+    let entries = [
+        Entry::Opened {
+            at: at(0),
+            title: suzatary_memory::secretary::words::Words::kept("z".to_owned()),
+            model: "m".to_owned(),
+            kind: suzatary_conversations::secretary::store::Kind::Topic,
+        },
+        line(
+            Turn::Person {
+                text: "what did I say".to_owned(),
+                references: Vec::new(),
+                attachments: Vec::new(),
             },
-            line(
-                Turn::Person {
-                    text: "what did I say".to_owned(),
-                    references: Vec::new(),
-                    attachments: Vec::new(),
-                },
-                Some("ada"),
-            ),
-            line(call("zoom"), None),
-            line(
-                Turn::Tool {
-                    verb: "zoom".into(),
-                    answer: answer.to_owned(),
-                    outcome: outcome::Outcome::Answered,
-                    files: Vec::new(),
-                },
-                None,
-            ),
-            line(call("remember"), None),
-        ],
+            Some("ada"),
+        ),
+        line(call("zoom"), None),
+        line(
+            Turn::Tool {
+                verb: "zoom".into(),
+                answer: answer.to_owned(),
+                outcome: outcome::Outcome::Answered,
+                files: Vec::new(),
+            },
+            None,
+        ),
+        line(call("remember"), None),
+    ];
+    // As this box writes them: the zoom's answer storing the class its words name.
+    suzatary_conversations::secretary::store::Stored::of_read(
+        &id,
+        entries
+            .iter()
+            .map(|entry| suzatary_conversations::secretary::store::Folded {
+                entry,
+                aside: Vec::new(),
+                weight: suzatary_conversations::secretary::store::Folded::bare(entry).weight,
+                carries: suzatary_conversations::secretary::store::Said::of(entry)
+                    .filter(|said| matches!(said.turn, Turn::Tool { .. }))
+                    .map(|said| suzatary_conversations::secretary::taint::written(&said)),
+            }),
     )
     .expect("a conversation")
 }
@@ -2152,7 +2164,12 @@ fn zoom_law(kinds: &[u8], budget: usize) -> Result<(), TestCaseError> {
         let said = serde_json::to_string_pretty(&answer).expect("prints");
         let tainted = nodes[0].measure().taint == Taint::Tainted;
         let round = zoomed_round(&said);
-        prop_assert_eq!(taint::tainted(&round), tainted, "{}", said);
+        prop_assert_eq!(
+            taint::held(&round) == taint::Taint::Tainted,
+            tainted,
+            "{}",
+            said
+        );
         prop_assert!(taint::opener(&round).is_some());
         if !tainted {
             prop_assert!(
@@ -2258,9 +2275,10 @@ fn the_record_leaves_out_what_the_window_sends() {
     let memory = the.memories().reads().read().expect("reads");
     let reading = Reading::of(&the.digests().reads()).expect("reads whole");
     let a = ConversationId::new("a").expect("a slug");
+    let sent: std::collections::BTreeSet<Hash> = (6..10).map(|k| the.turn_line(&a, k)).collect();
     let told = |asking| {
         context_of(
-            &memory,
+            Ok(&memory),
             Ok(&suzatary_topics::secretary::topics::reading::Reading::default()),
             Ok(&reading),
             100_000,
@@ -2269,10 +2287,7 @@ fn the_record_leaves_out_what_the_window_sends() {
         .text()
     };
     let whole = told(None);
-    let asked = told(Some(Asking {
-        conversation: &a,
-        from: 6,
-    }));
+    let asked = told(Some(Asking { sent: &sent }));
     let holds = |told: &str, k: usize| {
         told.lines()
             .any(|line| line.ends_with(&format!(" Owner: a line {k}")))
@@ -2427,6 +2442,150 @@ mod recompacting {
     use suzatary_digest::secretary::digests::compactor;
 
     use super::*;
+
+    /// D2: a node of the owner's words and the secretary's clean answers is asked as a class of
+    /// its own, and a summary is shown in words only where the taint it recorded when written is
+    /// clean too: one that recorded tainted is read by its kinds under a node labelled clean.
+    #[test]
+    fn a_summary_is_shown_in_words_only_by_the_taint_it_recorded() {
+        use suzatary_conversations::secretary::taint::Taint;
+        use suzatary_digest::secretary::shown_record::{OwnersAndAnswers, Shows as _};
+        let the = Box::default();
+        the.write_lines("a", conversation(&[0, 1].repeat(24)));
+        let read = the.read();
+        let tree = read.tree().expect("lines");
+        let owed: BTreeSet<Hash> =
+            prodrome_core::digest::pending(tree, |node| read.standing(node).map(|_| 1))
+                .into_iter()
+                .collect();
+        let nodes: Vec<(Hash, Label)> = inner(tree)
+            .into_iter()
+            .filter(|(node, label)| {
+                owed.contains(node) && Beside::of(label) == Beside::OwnersAndAnswers
+            })
+            .collect();
+        assert!(
+            nodes.len() >= 2,
+            "nodes of the owner's and the secretary's: {nodes:?}"
+        );
+        for ((node, label), recorded) in nodes.iter().zip([Taint::Tainted, Taint::Clean]) {
+            assert!(!label.is_owners() && OwnersAndAnswers::shows(label));
+            let text = Text::new(Line::new("a summary").expect("a line"), [7; 16]);
+            the.texts.set(&text.name(), &text).expect("kept");
+            let event = digest_event::summarized(
+                node.clone(),
+                at(0),
+                compactor(),
+                &text,
+                suzatary_digest::secretary::digest_event::Attempt {
+                    over: read.over(node).expect("children read"),
+                    model: model(),
+                    taint: recorded,
+                    beside: Beside::of(label),
+                },
+            )
+            .expect("an event");
+            the.history.append(event).expect("stored");
+        }
+        let read = the.read();
+        for ((node, _), recorded) in nodes.iter().zip([Taint::Tainted, Taint::Clean]) {
+            let shown = read.node(node).expect("in the tree");
+            assert_eq!(read.standing(node), Some(Standing::Current));
+            assert_eq!(read.label(shown).taint, recorded);
+            assert_eq!(
+                OwnersAndAnswers::shows(&read.label(shown)),
+                recorded == Taint::Clean
+            );
+        }
+
+        // Stale, asked beside more than its own kind: shown to no reader, as an owner's is.
+        let older = Box::default();
+        older.write_lines("a", conversation(&[0, 1].repeat(24)));
+        older.summarise_unversioned();
+        let read = older.read();
+        let stale: Vec<Hash> = inner(read.tree().expect("lines"))
+            .into_iter()
+            .filter(|(node, label)| {
+                Beside::of(label) == Beside::OwnersAndAnswers && read.standing(node).is_some()
+            })
+            .map(|(node, _)| node)
+            .collect();
+        assert!(!stale.is_empty());
+        for node in &stale {
+            assert_eq!(read.standing(node), Some(Standing::Stale));
+            assert_eq!(
+                read.summary(node),
+                None,
+                "a stale summary of its own kind is shown"
+            );
+        }
+    }
+
+    /// F5: a summary records the join of what its asking showed in words, its children's
+    /// recorded taints among them: a child whose summary recorded tainted under a clean label
+    /// makes its parent's summary record tainted, though the parent's label is clean.
+    #[test]
+    fn a_parent_records_what_its_childrens_summaries_carried() {
+        use suzatary_conversations::secretary::taint::Taint;
+        let the = Box::default();
+        the.say("a", 24);
+        let read = the.read();
+        let first = read.pending();
+        let child = first.first().expect("a node to summarise").clone();
+        let label = *read.node(&child).expect("in the tree").measure();
+        assert_eq!(label.taint, Taint::Clean, "the owner's words alone");
+        let text = Text::new(
+            Line::new("a summary that read more").expect("a line"),
+            [7; 16],
+        );
+        the.texts.set(&text.name(), &text).expect("kept");
+        let event = digest_event::summarized(
+            child.clone(),
+            at(0),
+            compactor(),
+            &text,
+            suzatary_digest::secretary::digest_event::Attempt {
+                over: read.over(&child).expect("children read"),
+                model: model(),
+                taint: Taint::Tainted,
+                beside: Beside::of(&label),
+            },
+        )
+        .expect("an event");
+        the.history.append(event).expect("stored");
+        let held = the.memories().hold().expect("held");
+        for node in first.iter().filter(|node| **node != child) {
+            held.summarize(
+                node,
+                &Line::new("a summary").expect("a line"),
+                read.over(node).expect("children read"),
+                model(),
+                at(0),
+            )
+            .expect("summarised");
+        }
+        drop(held);
+        the.summarise_all();
+        let read = the.read();
+        let tree = read.tree().expect("lines");
+        let parent = inner(tree)
+            .into_iter()
+            .find(|(node, _)| {
+                read.node(node)
+                    .is_some_and(|node| node.children().iter().any(|c| *c.name() == child))
+            })
+            .expect("the child has a parent");
+        assert_eq!(
+            parent.1.taint,
+            Taint::Clean,
+            "the parent's own lines are clean"
+        );
+        let recorded = match &read.candidates(&parent.0).first().expect("summarised").said {
+            Written::Summary(summary) => summary.taint,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(recorded, Taint::Tainted, "what its asking showed");
+    }
 
     /// What an older compactor wrote of a node of the owner's words alone, asked beside the clean
     /// log: the secretary's answer restated as the owner's.
@@ -2657,7 +2816,7 @@ mod recompacting {
             kinds in proptest::collection::vec(any::<u8>(), 20..90),
         ) {
             let the = Box::default();
-            the.write_lines("a", conversation(&kinds, true));
+            the.write_lines("a", conversation(&kinds));
             the.summarise_unversioned();
             let (census, store) = the.census_and_store();
             prop_assert_eq!(the.census(), store);
@@ -2696,7 +2855,7 @@ mod recompacting {
             stop in 0usize..40,
         ) {
             let the = Box::default();
-            the.write_lines("a", conversation(&kinds, true));
+            the.write_lines("a", conversation(&kinds));
             the.summarise_unversioned();
             let joining = Recording::joining();
             let rule = ladder(&[&joining]);
@@ -2819,7 +2978,7 @@ mod recompacting {
         owners_then_answer(&the);
         the.write_lines(
             "b",
-            conversation(&[0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 2, 1, 0, 1], false),
+            conversation(&[0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 2, 1, 0, 1]),
         );
         let compactor = Recording::joining();
         the.compact_all(&compactor);
@@ -2862,7 +3021,7 @@ mod recompacting {
     }
 
     /// The asking's versions move whenever the questions move ([`Versioned::pinned`]). Each
-    /// class's version is a hash of what the rule does on a fixed probe; this pins both beside a
+    /// class's version is a hash of what the rule does on a fixed probe; this pins each beside a
     /// hash of every question a whole compaction of a fixed record asks.
     #[test]
     fn the_asking_moves_when_the_questions_move() {
@@ -2874,12 +3033,13 @@ mod recompacting {
         kinds.extend([0; 12]);
         kinds.extend([2, 3, 1, 0, 0, 0, 0, 0, 1, 2, 0, 1]);
         let the = Box::default();
-        the.write_lines("a", conversation(&kinds, true));
+        the.write_lines("a", conversation(&kinds));
         let compactor = Recording::joining();
         the.compact_all(&compactor);
         let questions: Vec<String> = compactor.asked().iter().map(Ask::text).collect();
         for (beside, version) in [
             (Beside::OwnersWords, PINNED_OWNERS),
+            (Beside::OwnersAndAnswers, PINNED_ANSWERS),
             (Beside::CleanWords, PINNED_CLEAN),
         ] {
             if let Err(moved) = Asking::pinned(beside, questions.clone(), version, PINNED_QUESTIONS)
@@ -2890,9 +3050,10 @@ mod recompacting {
     }
 
     const PINNED_OWNERS: &str = "fb790f91f64208ad95256c31959bce5b5c74116a4f2f78dd96e3e12b35dfd62c";
+    const PINNED_ANSWERS: &str = "c1dd4190b396f70284a2df4e81fa60b858d15c5315fab07d0972fdc1d063faea";
     const PINNED_CLEAN: &str = "af480e3f58332ad7a1c2817acfc8dcf07000bf7431c16dae42b845d86bf7bfb1";
     const PINNED_QUESTIONS: &str =
-        "f93873a4fef96c096732f2341b017246131420ee667472d445c4eb86be7c40d0";
+        "bf6da759ff0276c7c05f5fd66598861ec642c92f6394e7e2a2c4532a8cfb0c49";
 }
 
 /// Law (a privacy boundary): the box's kept reading of the history holds a summary's words only
@@ -2976,4 +3137,123 @@ fn held_node(reading: &Digest, prefix: &str) -> bool {
         stack.extend(node.children());
     }
     false
+}
+
+impl Box {
+    /// Summarise at most `most` of the nodes owed, smallest first, as a compactor that lags
+    /// leaves the rest owed.
+    fn summarise_some(&self, most: usize) {
+        let mut written = 0;
+        while written < most {
+            let read = self.read();
+            let pending = read.pending();
+            if pending.is_empty() {
+                return;
+            }
+            let held = self.memories().hold().expect("held");
+            for node in pending.into_iter().take(most - written) {
+                let over = read.over(&node).expect("children read");
+                let words = format!("summary {written} of {}", &node.as_str()[..12]);
+                held.summarize(
+                    &node,
+                    &Line::new(&words).expect("a line"),
+                    over,
+                    model(),
+                    at(0),
+                )
+                .expect("summarised");
+                written += 1;
+            }
+        }
+    }
+}
+
+/// The span a record line names by its handle, `first+lines` at its head, or by the handle its
+/// note of what is cut gives; `None` for any other line.
+fn named_span(line: &str) -> Option<std::ops::Range<usize>> {
+    let handle = match line.split_once("zoom(") {
+        Some((_, rest)) if line.starts_with("(the log's first") => rest.split(')').next()?,
+        _ => line.split(' ').next()?,
+    };
+    let (first, lines) = handle.split_once('+')?;
+    let first: usize = first.parse().ok()?;
+    Some(first..first + lines.parse::<usize>().ok()?)
+}
+
+/// Every line `handle` opens to, its words as `zoom` shows them, down to the leaves.
+fn leaves(reading: &suzatary_digest::secretary::compaction::Reading, handle: &str) -> Vec<String> {
+    let opened = suzatary_digest::secretary::told::zoom(reading, handle, |_| true).expect("opens");
+    let mut said = Vec::new();
+    for part in opened["beneath"].as_array().expect("parts") {
+        let handle = part["handle"].as_str().expect("a handle");
+        match part["said"].as_str() {
+            Some(words) if handle.ends_with("+1") => said.push(words.to_owned()),
+            _ => said.extend(leaves(reading, handle)),
+        }
+    }
+    said
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 24, ..ProptestConfig::default() })]
+
+    /// THE CALL LOSES NO TURN, whatever the compactor's lag: the record's lines and its note of
+    /// what is cut name disjoint spans, and every line of the log is under one of them, or is a
+    /// turn of the asking conversation the call sends as itself (from `from` on). So each turn
+    /// is in the call once as itself, or under one summary, or one `zoom` away, and never as a
+    /// second event.
+    #[test]
+    fn every_turn_is_sent_summarised_or_one_zoom_away(
+        before in 0usize..40,
+        asked in 1usize..80,
+        from_share in 0u8..=255,
+        lag in 0usize..40,
+        budget in 300usize..6000,
+    ) {
+        use suzatary_digest::secretary::compaction::Reading;
+        use suzatary_digest::secretary::told::{Asking, context_of};
+        let the = Box::default();
+        the.say("b", before);
+        the.say("a", asked);
+        the.summarise_some(lag);
+        let memory = the.memories().reads().read().expect("reads");
+        let reading = Reading::of(&the.digests().reads()).expect("reads whole");
+        let a = ConversationId::new("a").expect("a slug");
+        let from = asked * usize::from(from_share) / 255;
+        // At `from == asked` no turn is sent as itself.
+        let sent: std::collections::BTreeSet<Hash> =
+            (from..asked).map(|k| the.turn_line(&a, k)).collect();
+        let told = context_of(
+            Ok(&memory),
+            Ok(&suzatary_topics::secretary::topics::reading::Reading::default()),
+            Ok(&reading),
+            budget,
+            Some(Asking { sent: &sent }),
+        )
+        .text();
+        let spans: Vec<std::ops::Range<usize>> = told.lines().filter_map(named_span).collect();
+        let mut covered = vec![0u8; before + asked];
+        for span in &spans {
+            for at in span.clone() {
+                covered[at] += 1;
+            }
+        }
+        prop_assert!(covered.iter().all(|n| *n <= 1), "a line named twice: {told}");
+        let mut at = 0;
+        while at < covered.len() {
+            if covered[at] == 1 {
+                at += 1;
+                continue;
+            }
+            let end = (at..covered.len()).find(|k| covered[*k] == 1).unwrap_or(covered.len());
+            for said in leaves(&reading, &format!("{at}+{}", end - at)) {
+                let k: usize = said
+                    .strip_prefix("Owner: a line ")
+                    .and_then(|k| k.parse().ok())
+                    .ok_or_else(|| TestCaseError::fail(format!("{said} left out of {told}")))?;
+                prop_assert!(k >= from, "a line {k} before the window is left out: {told}");
+            }
+            at = end;
+        }
+    }
 }

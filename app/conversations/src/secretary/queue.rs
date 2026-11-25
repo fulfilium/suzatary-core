@@ -3,15 +3,16 @@
 //! one writer it is the owed register (`transcript::Transcript::owed`), which a law holds equal.
 
 use crate::secretary::model::Turn;
+use std::collections::BTreeSet;
+
 use crate::secretary::store::{Said, Scope, Stored};
-use crate::secretary::tool_name::ToolName;
 use suzatary_inbox::secretary::stamp::Stamp;
 
 /// How many `say`s one conversation may hold unanswered at once; past it `say` refuses rather
 /// than grow the conversation forever.
 pub const MAX_PENDING: usize = 16;
 
-/// What the next `resume` sends: every live turn after the last one that closes a round, with its
+/// What waits to be answered: every live turn after the last one that closes a round, with its
 /// index.
 ///
 /// A round is closed exactly by a turn that [closes](Stored::closes) it, so a stopped question is
@@ -37,125 +38,194 @@ pub fn wakes(said: &Said) -> bool {
     }
 }
 
-/// What a round answers: [`delta`], never empty and holding a turn that [`wakes`].
-#[derive(Debug, Clone)]
-pub struct Pending<'a> {
-    first: &'a Said,
-    rest: Vec<&'a Said>,
+/// Whether a round is owed among `waiting`, a round's turns in order: some turn there [`wakes`].
+#[must_use]
+pub fn waits(waiting: &[(usize, &Said)]) -> bool {
+    waiting.iter().any(|(_, said)| wakes(said))
 }
 
-impl<'a> Pending<'a> {
-    /// What waits in `stored`, or `None` when nothing that [`wakes`] does.
-    #[must_use]
-    pub fn of(stored: &'a Stored) -> Option<Self> {
-        Self::of_turns(&delta(stored))
+/// How many of its own live turns before the round being answered a call is sent, at most. The
+/// conversation page keeps its own count (`readings::DEFAULT_TURN_WINDOW`), which is not this.
+pub const EARLIER_TURNS: usize = 60;
+
+/// How many bytes of its own turns before the round being answered a call is sent, at most.
+/// Beside the verbs (about 60 KB), the record (128 KiB) and the facts, under half the model's
+/// 200,000 tokens; the round being answered has the rest.
+pub const EARLIER_BYTES: usize = 65_536;
+
+/// A verb's answer in an earlier round over this many stored bytes is sent and weighed as its
+/// marker, so the round that read it stays in the window.
+pub const LONG_ANSWER: usize = 4_096;
+
+/// What a marker weighs: above the largest it prints. A long answer's is `VERB {verb}:\n[an
+/// answer of {n} bytes given in an earlier round and not sent again: calling {verb} with {args}
+/// answers it again]\n\n`: 108 bytes of its own words, two verb names of at most 24 bytes, a
+/// count of at most 20 digits, and the arguments cut at 160 bytes with 18 more saying so: 354.
+pub const MARKER_BYTES: usize = 384;
+
+/// What a call is sent of its own conversation: the round being answered, whole, after the
+/// earlier rounds [`Steps`] keeps, a function of the lines before the round's opener alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Window<'s> {
+    /// Whole rounds before the one being answered.
+    pub earlier: Vec<(usize, &'s Said)>,
+    /// The round being answered, whole, ending in the newest turn.
+    pub round: Vec<(usize, &'s Said)>,
+}
+
+impl<'s> Window<'s> {
+    /// Every turn of the window, oldest first.
+    pub fn all(&self) -> impl Iterator<Item = &(usize, &'s Said)> {
+        self.earlier.iter().chain(&self.round)
     }
 
-    /// What waits among `waiting`, a round's turns in order, or `None` when nothing that
-    /// [`wakes`] does.
+    /// The index of its first turn; none for an empty conversation.
     #[must_use]
-    pub fn of_turns(waiting: &[(usize, &'a Said)]) -> Option<Self> {
-        if !waiting.iter().any(|(_, said)| wakes(said)) {
-            return None;
+    pub fn first(&self) -> Option<usize> {
+        self.all().next().map(|(index, _)| *index)
+    }
+}
+
+/// The window's fold over the live rounds: each joins the earlier ones, and one that takes them
+/// over [`EARLIER_TURNS`] or [`EARLIER_BYTES`] drops the oldest to half of both, never the round
+/// just closed while it fits both alone, so the window's start moves in steps.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Steps {
+    earlier: std::collections::VecDeque<Weighed>,
+    turns: usize,
+    bytes: usize,
+    open: Option<Weighed>,
+}
+
+/// One round: the index of its first turn, and its turns' count and weight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Weighed {
+    from: usize,
+    turns: usize,
+    bytes: usize,
+}
+
+impl Steps {
+    /// Turn `index`, weighing `weight` in the window, which opens a round or not.
+    pub fn turn(&mut self, index: usize, opens: bool, weight: usize) {
+        if opens && let Some(done) = self.open.take() {
+            self.fold(done);
         }
-        let ((_, first), rest) = waiting.split_first()?;
-        Some(Self {
-            first,
-            rest: rest.iter().map(|(_, said)| *said).collect(),
-        })
+        let open = self.open.get_or_insert(Weighed {
+            from: index,
+            turns: 0,
+            bytes: 0,
+        });
+        open.turns += 1;
+        open.bytes += weight;
     }
 
-    /// What a resumed session is sent: the memory's heading, if anything moved, then the waiting
-    /// turns.
-    #[must_use]
-    pub fn delta(&self, heading: Option<Turn>) -> crate::secretary::model::Delta {
-        let first = self.first.turn.clone();
-        let rest = self.rest.iter().map(|said| said.turn.clone());
-        match heading {
-            Some(heading) => {
-                crate::secretary::model::Delta::new(heading, std::iter::once(first).chain(rest))
+    fn fold(&mut self, round: Weighed) {
+        self.earlier.push_back(round);
+        self.turns += round.turns;
+        self.bytes += round.bytes;
+        if self.turns > EARLIER_TURNS || self.bytes > EARLIER_BYTES {
+            while self.turns > EARLIER_TURNS / 2 || self.bytes > EARLIER_BYTES / 2 {
+                // The round just closed stays while it fits the full bounds alone: a follow-up
+                // to a long round is sent what it follows.
+                let alone = self.earlier.len() == 1;
+                if alone && self.turns <= EARLIER_TURNS && self.bytes <= EARLIER_BYTES {
+                    break;
+                }
+                let Some(oldest) = self.earlier.pop_front() else {
+                    break;
+                };
+                self.turns -= oldest.turns;
+                self.bytes -= oldest.bytes;
             }
-            None => crate::secretary::model::Delta::new(first, rest),
         }
     }
-}
 
-/// The turn heading a batch with what the model is told it remembers. Never stored: the
-/// `MemorySeen` line written after the answer is what makes it once.
-#[must_use]
-pub fn heading(told: String) -> Turn {
-    Turn::Tool {
-        verb: ToolName::Memory,
-        answer: told,
-        outcome: crate::secretary::outcome::Outcome::Answered,
-        files: Vec::new(),
+    /// The first turn of the window, and the first of the round being answered.
+    fn starts(&self) -> Option<(usize, usize)> {
+        let open = self.open?.from;
+        Some((self.earlier.front().map_or(open, |first| first.from), open))
     }
 }
 
-/// A batch: the heading, if any, then the turns.
+/// The window of `stored`, less the turns `leaving_out` names (those no round has claimed).
 #[must_use]
-pub fn headed(heading: Option<Turn>, turns: &[(usize, &Said)]) -> Vec<Turn> {
-    heading
-        .into_iter()
-        .chain(turns.iter().map(|(_, said)| said.turn.clone()))
-        .collect()
+pub fn window<'s>(stored: &'s Stored, leaving_out: &BTreeSet<usize>) -> Window<'s> {
+    let Some((from, round)) = stored.steps.starts() else {
+        return Window {
+            earlier: Vec::new(),
+            round: Vec::new(),
+        };
+    };
+    let live = |range: std::ops::Range<usize>| -> Vec<(usize, &'s Said)> {
+        range
+            .filter(|index| stored.is_live(*index) && !leaving_out.contains(index))
+            .map(|index| (index, &stored.turns[index]))
+            .collect()
+    };
+    Window {
+        earlier: live(from..round),
+        round: live(round..stored.turns.len()),
+    }
 }
 
-/// How many turns a model without a session is sent: the conversation page's own default.
-pub const MODEL_WINDOW: usize = 60;
-
-/// What a model without a session is sent: the last [`MODEL_WINDOW`] live turns, starting at the
-/// first round boundary inside them.
-///
-/// A window cut mid-round is malformed, so it starts where [`delta`] cuts; a round longer than
-/// the window is sent whole.
+/// What turn `index` of `stored` weighs in an earlier round.
 #[must_use]
-pub fn for_model(stored: &Stored) -> Vec<(usize, &Said)> {
-    window_of(stored, &stored.live(), MODEL_WINDOW).to_vec()
+pub fn weight(stored: &Stored, index: usize) -> usize {
+    if long_answer(stored, index) {
+        MARKER_BYTES
+    } else {
+        stored.carried[index].bytes
+    }
 }
 
-fn window_of<'a, 'b>(
-    stored: &Stored,
-    turns: &'a [(usize, &'b Said)],
-    limit: usize,
-) -> &'a [(usize, &'b Said)] {
-    let floor = turns.len().saturating_sub(limit);
-    let starts_a_round = |index: usize| stored.opens(turns, index);
-    let start = (floor..turns.len())
-        .find(|&index| starts_a_round(index))
-        .or_else(|| (0..floor).rev().find(|&index| starts_a_round(index)))
-        .unwrap_or(0);
-    &turns[start..]
+/// Whether turn `index` of `stored` is a verb's answer over [`LONG_ANSWER`] stored bytes, which
+/// an earlier round sends as its marker: by its shape, so one whose words are gone is one too.
+#[must_use]
+pub fn long_answer(stored: &Stored, index: usize) -> bool {
+    matches!(
+        crate::secretary::turn_shape::shape(&stored.turns[index].turn),
+        crate::secretary::turn_shape::TurnShape::Tool { .. }
+    ) && stored.carried[index].bytes > LONG_ANSWER
 }
 
-/// Every turn a model asked as `stored` records holds now.
+/// Every turn a model asked as `stored` records holds now: every stored turn, or the window with
+/// nothing left out, which holds what any ask of the round being answered was sent.
 #[must_use]
 pub fn held(stored: &Stored) -> Vec<(usize, &Said)> {
-    sent(stored, stored.scope)
+    match stored.scope {
+        Scope::Transcript => stored.turns.iter().enumerate().collect(),
+        Scope::Window => window(stored, &BTreeSet::new()).all().copied().collect(),
+    }
 }
 
-/// Every turn a model asked over `scope` holds: for a transcript, every stored turn; for a window,
-/// what [`for_model`] sends and, when a session is kept, every live turn from the first one its
-/// opening sent.
+/// What a turn with no stored line weighs: its words, and a file by its marker.
 #[must_use]
-pub fn sent(stored: &Stored, scope: Scope) -> Vec<(usize, &Said)> {
-    match scope {
-        Scope::Transcript => stored.turns.iter().enumerate().collect(),
-        Scope::Window => {
-            let window = for_model(stored);
-            let Some(kept) = &stored.session else {
-                return window;
-            };
-            let from = window
-                .first()
-                .map_or(stored.turns.len(), |(at, _)| *at)
-                .min(kept.from);
-            stored
-                .live()
-                .into_iter()
-                .filter(|(at, _)| *at >= from)
-                .collect()
+pub fn bytes(turn: &Turn) -> usize {
+    const MARKER: usize = 160;
+    match turn {
+        Turn::Person {
+            text, attachments, ..
+        } => {
+            text.len()
+                + attachments
+                    .iter()
+                    .map(|one| MARKER + one.private.as_ref().map_or(0, |copy| copy.text.len()))
+                    .sum::<usize>()
         }
+        Turn::Model { text, calls } => {
+            text.len()
+                + calls
+                    .iter()
+                    .map(|call| {
+                        call.verb.as_str().len()
+                            + serde_json::to_string(&call.args).map_or(0, |args| args.len())
+                    })
+                    .sum::<usize>()
+        }
+        Turn::Tool { answer, files, .. } => answer.len() + MARKER * files.len(),
+        Turn::Act { text, .. } => text.len(),
+        Turn::Erased { words, .. } => crate::secretary::turn_shape::prose(words).len(),
     }
 }
 
@@ -240,7 +310,7 @@ mod tests {
             noted("2026-09-13T09:01:00", "The box asks: a key."),
             noted("2026-09-13T09:02:00", "The box asks: a link."),
         ];
-        assert!(Pending::of(&stored(&lines)).is_none(), "nothing wakes");
+        assert!(!waits(&delta(&stored(&lines))), "nothing wakes");
         let mut owner = said("2026-09-13T09:03:00", person("add my Work calendar"));
         if let Entry::Said { by, .. } = &mut owner {
             *by = Some(Stamp::Actor(
@@ -249,8 +319,9 @@ mod tests {
         }
         lines.push(owner);
         let waiting = stored(&lines);
-        let pending = Pending::of(&waiting).expect("the owner's turn wakes");
-        assert_eq!(pending.delta(None).turns().len(), 3, "the notes ride along");
+        let owed = delta(&waiting);
+        assert!(waits(&owed), "the owner's turn wakes");
+        assert_eq!(owed.len(), 3, "the notes ride along");
         let dismissed = Entry::Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 4, 0, 0)
                 .expect("an instant"),
@@ -263,7 +334,7 @@ mod tests {
             )),
         };
         assert!(
-            Pending::of(&stored(&[opened(), dismissed])).is_some(),
+            waits(&delta(&stored(&[opened(), dismissed]))),
             "the owner's own act still wakes"
         );
     }
@@ -292,13 +363,98 @@ mod tests {
         let stored = stored(&lines);
         assert!(delta(&stored).is_empty());
         assert!(delta(&Stored::of(&id(), &lines[..6]).expect("a conversation")).is_empty());
-        let live = stored.live();
-        let window = window_of(&stored, &live, 3);
+        let window = window(&stored, &BTreeSet::new());
         assert_eq!(
-            turns(window),
+            turns(&window.round),
             vec![&person("p3"), &finished_model("three")],
-            "the empty end belongs to its stop, so the window starts after it"
+            "the empty end belongs to its stop, so the last round starts after it"
         );
+        assert_eq!(window.earlier.len(), 5, "two whole rounds before it");
+    }
+
+    /// A round too long for any model ends in the box's words, and the next round is sent
+    /// without it: the window keeps only whole rounds within its bytes.
+    #[test]
+    fn a_round_too_long_alone_is_not_sent_with_the_next() {
+        let huge = Turn::Person {
+            text: "x".repeat(EARLIER_BYTES * 4),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        };
+        let mut lines = vec![
+            opened(),
+            said("t1", person("p1")),
+            said("t2", finished_model("one")),
+            said("t3", huge.clone()),
+        ];
+        let asked = stored(&lines);
+        assert_eq!(
+            turns(&window(&asked, &BTreeSet::new()).round),
+            vec![&huge],
+            "the round being answered is sent whole"
+        );
+        lines.extend([
+            said(
+                "t4",
+                finished_model("I could not finish: this message is too long."),
+            ),
+            said("t5", person("p2")),
+        ]);
+        let next = stored(&lines);
+        let window = window(&next, &BTreeSet::new());
+        assert_eq!(turns(&window.round), vec![&person("p2")]);
+        assert!(
+            window.earlier.is_empty(),
+            "the long round, and every round before it, is left to the record"
+        );
+    }
+
+    /// The window's start moves in steps: it stays while the earlier rounds grow, and a round
+    /// that takes them over their bounds drops the oldest to half of them.
+    #[test]
+    fn the_windows_start_moves_in_steps() {
+        let mut lines = vec![opened()];
+        let mut starts = Vec::new();
+        for k in 0..80 {
+            lines.push(said(&format!("t{}", 2 * k), person(&format!("q{k}"))));
+            starts.push(window(&stored(&lines), &BTreeSet::new()).first());
+            lines.push(said(&format!("t{}", 2 * k + 1), finished_model("a")));
+        }
+        // Two turns a round: the start moves once in every half window, sixteen rounds.
+        let moves = starts.windows(2).filter(|pair| pair[0] != pair[1]).count();
+        assert_eq!(moves, 4, "{starts:?}");
+        let all = stored(&lines);
+        assert!(window(&all, &BTreeSet::new()).earlier.len() <= EARLIER_TURNS);
+    }
+
+    /// A round that read a long mail stays in the window with the secretary's answer to it: the
+    /// long answer weighs a marker's bytes.
+    #[test]
+    fn a_long_answer_weighs_its_marker() {
+        let lines = vec![
+            opened(),
+            said("t1", person("read me the mail")),
+            said("t2", calling_model("", "show")),
+            said(
+                "t3",
+                Turn::Tool {
+                    verb: "show".into(),
+                    answer: "m".repeat(EARLIER_BYTES * 2),
+                    outcome: crate::secretary::outcome::Outcome::Answered,
+                    files: Vec::new(),
+                },
+            ),
+            said("t4", finished_model("she asks whether we agree")),
+            said("t5", person("reply yes to her")),
+        ];
+        let stored = stored(&lines);
+        let window = window(&stored, &BTreeSet::new());
+        assert_eq!(
+            window.earlier.len(),
+            4,
+            "the round that read the mail stays"
+        );
+        assert!(long_answer(&stored, 2));
     }
 
     /// One step of a simulated conversation; a stop comes in one line, or as stored conversations

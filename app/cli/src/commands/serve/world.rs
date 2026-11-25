@@ -74,7 +74,7 @@ impl World {
             notify: &self.push,
             answers: &*self.opened.answers,
             devices: &self.devices,
-            sessions: &self.brain,
+            models: &self.brain,
         }
     }
 }

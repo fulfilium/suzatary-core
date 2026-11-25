@@ -3,8 +3,7 @@
 /// Which turns an ask sends its model: a window of the last live turns, or every stored turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Scope {
-    /// [`queue::for_model`](crate::secretary::queue::for_model)'s window, and every turn sent to a
-    /// session kept since.
+    /// [`queue::window`](crate::secretary::queue::window).
     #[default]
     Window,
     /// Every stored turn, set aside or not.

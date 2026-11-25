@@ -49,9 +49,9 @@ pub fn question(stored: &Stored) -> Option<Conversation> {
         _ => None,
     })?;
     let clip = |text: &str| text.chars().take(EXCERPT).collect::<String>();
-    Some(Conversation {
-        system: SYSTEM.to_owned(),
-        turns: vec![Turn::Person {
+    Some(Conversation::bare(
+        SYSTEM,
+        vec![Turn::Person {
             text: format!(
                 "{ASK}.\n\nThe question:\n{}\n\nThe answer:\n{}",
                 clip(asked),
@@ -60,7 +60,7 @@ pub fn question(stored: &Stored) -> Option<Conversation> {
             references: Vec::new(),
             attachments: Vec::new(),
         }],
-    })
+    ))
 }
 
 /// Read a title off the job's answer: its first line, unquoted, cut before `JOB_MAX`.

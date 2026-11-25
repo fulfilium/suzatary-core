@@ -95,7 +95,7 @@ fn cases() -> impl Strategy<Value = Vec<Case>> {
             answer(),
         )
             .prop_map(|(system, turns, answer)| Case {
-                conversation: Conversation { system, turns },
+                conversation: Conversation::bare(system, turns),
                 answer,
             }),
         1..4,
@@ -135,10 +135,12 @@ impl Model for Eager {
         self.0.name()
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &Conversation,
         tools: &serde_json::Value,
+        _on_delta: &dyn Fn(&str),
+        _halt: &suzatary_conversations::secretary::model::Halt,
     ) -> Result<Reply, ModelError> {
         self.0.turn(conversation, tools).map(|mut reply| {
             reply.calls.push(ToolCall {
@@ -155,6 +157,8 @@ fn a_model_that_adds_a_call_is_not_faithful() {
     let case = Case {
         conversation: Conversation {
             system: "Be brief.".to_owned(),
+            context: suzatary_conversations::secretary::model::Context::default(),
+            earlier: Vec::new(),
             turns: vec![Turn::Person {
                 text: "hello".to_owned(),
                 references: Vec::new(),

@@ -42,11 +42,11 @@ impl Verb for ProposeCodingSession {
     const DESCRIPTION: &'static str = "PROPOSE A CODING SESSION for a change to this app too big for \
         `propose_patch`: one that needs a shell, a build and the gates. `task` \
         is plain text, at most 4 KB, saying what to change and why; it is the \
-        WHOLE of what the session is told beside its fixed brief, so name the \
+        WHOLE of what the coding session is told beside its fixed brief, so name the \
         todo, the files and what done looks like. The owner's tap starts it in \
         the cloud, spending their account's usage; it pushes a claude/ branch with \
         a report, which comes back here as a card, and nothing is merged \
-        without their main session. Never put anyone's personal details, \
+        without their main assistant's review. Never put anyone's personal details, \
         identity documents, money, health or legal matters into a task. `why` \
         and `sources` are required as for every proposal; `serves` and \
         `revises` as for `propose_email`.\n\n\
@@ -60,7 +60,7 @@ impl Verb for ProposeCodingSession {
         // A session takes the task as its whole instruction and spends the account, so a task an
         // email could have worded is never put on a card at all, however clearly it reads.
         let stored = secretary::read(call.caps.conversations, call.conversation)?;
-        if taint::tainted(&stored) {
+        if call.sent == taint::Taint::Tainted {
             return Err(afresh(call, &stored));
         }
         let reasons = args.filing.reasons()?;

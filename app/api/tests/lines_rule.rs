@@ -137,7 +137,7 @@ impl Door {
             Envelope::Genesis(mk_genesis("lines", &"0".repeat(32)).expect("a genesis"));
         let genesis = seal_hash(&begun);
         let entropy = Counting(AtomicU8::new(1));
-        let (default, _) = LineEvent::write(
+        let (default, _) = LineEvent::older(
             ConversationId::new("default").expect("a slug"),
             Actor::new("assistant").expect("an actor"),
             0,
@@ -186,7 +186,7 @@ impl Door {
     /// A line of `conversation` as a tab seals it, resting on `deps`.
     fn line_on(&self, conversation: &str, entry: &Entry, deps: &[&Hash]) -> Posted {
         let id = ConversationId::new(conversation).expect("a slug");
-        let (line, keys) = LineEvent::write(id, ada(), 0, entry, &self.entropy).expect("a line");
+        let (line, keys) = LineEvent::older(id, ada(), 0, entry, &self.entropy).expect("a line");
         let deps = deps.iter().map(|dep| (*dep).clone()).collect();
         let change = mk_change(self.genesis.clone(), deps, line).expect("a change");
         Posted {
@@ -197,7 +197,7 @@ impl Door {
 
     /// A line the box wrote to `default`, resting on `deps`: its name.
     fn box_wrote(&mut self, entry: &Entry, deps: &[&Hash]) -> Hash {
-        let (line, _) = LineEvent::write(
+        let (line, _) = LineEvent::older(
             ConversationId::new("default").expect("a slug"),
             Actor::new("assistant").expect("an actor"),
             0,
@@ -219,7 +219,7 @@ impl Door {
     /// A line of `default` as a tab seals it, under the shared key `key` (one of four; the first
     /// is a held line's), resting on `on`.
     fn sealed_under(&self, entry: &Entry, key: u8, on: Hash) -> Posted {
-        let (line, keys) = LineEvent::write(
+        let (line, keys) = LineEvent::older(
             ConversationId::new("default").expect("a slug"),
             ada(),
             0,
@@ -256,7 +256,7 @@ impl Door {
     /// A line of `conversation` as a tab seals it.
     fn line(&self, conversation: &str, entry: &Entry) -> Posted {
         let id = ConversationId::new(conversation).expect("a slug");
-        let (line, keys) = LineEvent::write(id, ada(), 0, entry, &self.entropy).expect("a line");
+        let (line, keys) = LineEvent::older(id, ada(), 0, entry, &self.entropy).expect("a line");
         self.change(line, keys)
     }
 
@@ -638,7 +638,7 @@ fn a_key_a_held_line_names_is_never_taken_again() {
     let key = [7u8; 32];
     let default = || ConversationId::new("default").expect("a slug");
     let mut door = Door::new();
-    let (held, _) = LineEvent::write(
+    let (held, _) = LineEvent::older(
         default(),
         Actor::new("assistant").expect("an actor"),
         1,
@@ -649,7 +649,7 @@ fn a_key_a_held_line_names_is_never_taken_again() {
     let held = stored(&door.genesis, held, Vec::new());
     door.history.extend([held.clone()]);
     door.lines.push(held);
-    let (line, keys) = LineEvent::write(
+    let (line, keys) = LineEvent::older(
         default(),
         ada(),
         2,
@@ -671,7 +671,7 @@ fn no_two_slots_of_one_post_share_a_key() {
     let (opening, keys) = LineEvent::begin(ada(), &opened(40), &Given([9; 32])).expect("a line");
     let id = opening.conversation().clone();
     let opening = door.change(opening, keys);
-    let (first, keys) = LineEvent::write(
+    let (first, keys) = LineEvent::older(
         id,
         ada(),
         1,
@@ -689,7 +689,7 @@ fn no_two_slots_of_one_post_share_a_key() {
     assert_eq!(said(&received, &opening), Ok(()));
     assert!(refused_finally(&received, &first).contains("already names"));
 
-    let (called, keys) = LineEvent::write(
+    let (called, keys) = LineEvent::older(
         ConversationId::new("default").expect("a slug"),
         ada(),
         0,
@@ -698,7 +698,7 @@ fn no_two_slots_of_one_post_share_a_key() {
             turn: Turn::Model {
                 text: "Looking.".to_owned(),
                 calls: vec![suzatary_conversations::secretary::model::ToolCall {
-                    verb: suzatary_conversations::secretary::tool_name::ToolName::Memory,
+                    verb: "your_memory".into(),
                     args: BTreeMap::new(),
                 }],
             },
@@ -724,7 +724,7 @@ proptest::proptest! {
             .iter()
             .zip(0u32..)
             .map(|(byte, n)| {
-                let (line, keys) = LineEvent::write(
+                let (line, keys) = LineEvent::older(
                     ConversationId::new("default").expect("a slug"),
                     ada(),
                     0,
@@ -775,7 +775,7 @@ fn a_tab_s_line_carried_from_elsewhere_is_refused() {
     let elsewhere = Hash::new("a".repeat(64)).expect("a name");
     let carried = |entry: &Entry, conversation: Option<&str>| {
         let (line, keys) = match conversation {
-            Some(id) => LineEvent::write(
+            Some(id) => LineEvent::older(
                 ConversationId::new(id).expect("a slug"),
                 ada(),
                 0,
@@ -1622,7 +1622,7 @@ fn written_beside(owed: u32, script: &[Wrote]) -> (Door, Vec<Posted>) {
 fn law_store(owed: u32) -> (Door, Hash, Hash) {
     let (mut door, _) = written_in_a_row(owed, &[]);
     let opening = door.default_opening();
-    let (asked, _) = LineEvent::write(
+    let (asked, _) = LineEvent::older(
         ConversationId::new("default").expect("a slug"),
         Actor::new("assistant").expect("an actor"),
         0,
@@ -1849,7 +1849,7 @@ proptest::proptest! {
 /// A rename of `conversation` by the device, under keys of its own drawn from `seed`, resting on
 /// `deps` under the genesis `genesis`.
 fn renamed(conversation: &ConversationId, n: u8, genesis: &Hash, deps: Vec<Hash>) -> Posted {
-    let (line, keys) = LineEvent::write(
+    let (line, keys) = LineEvent::older(
         conversation.clone(),
         ada(),
         0,
@@ -1903,7 +1903,7 @@ fn the_door_refuses_each_finding_of_one_change_in_the_check_s_words() {
         Envelope::Genesis(mk_genesis("lines", &"1".repeat(32)).expect("a genesis"));
     let elsewhere_name = seal_hash(&elsewhere);
     door.history.extend([(elsewhere_name.clone(), elsewhere)]);
-    let (line, _) = LineEvent::write(
+    let (line, _) = LineEvent::older(
         default.clone(),
         Actor::new("assistant").expect("an actor"),
         0,

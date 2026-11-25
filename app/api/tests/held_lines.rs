@@ -260,7 +260,7 @@ fn other(turn: Other, n: u32) -> (Turn, Option<stamp::Stamp>) {
 /// Step `step`, the `n`th, written into `store` through the box's own writes.
 fn act(store: Conversations<'_>, step: &Step, n: u32) {
     let id = id(step.conversation());
-    let push = |entry: Entry| transcript::push(store, &id, &entry).expect("pushed");
+    let push = |entry: Entry| transcript::push_older(store, &id, &entry).expect("pushed");
     match step {
         Step::Said { model, .. } => {
             let turn = if *model {
@@ -675,7 +675,7 @@ fn a_new_line_costs_its_leaf_its_conversation_and_the_store() {
         .expect("read")
         .lines()
         .len();
-    transcript::push(
+    transcript::push_older(
         held.conversations(),
         &id(0),
         &Entry::Said {
@@ -1168,7 +1168,7 @@ fn the_box_s_notes_are_left_out_and_the_owner_s_reason_is_drawn() {
         noted(6),
     ];
     for line in &lines {
-        transcript::push(store, &setup, line).expect("written");
+        transcript::push_older(store, &setup, line).expect("written");
     }
     let objects = held.lines.objects().expect("objects");
     let opened = transcript::opened(

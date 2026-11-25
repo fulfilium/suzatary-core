@@ -2803,7 +2803,7 @@ mod sign_in_completion {
                 by: None,
             },
         ] {
-            transcript::push(conversations.conversations(), &DEFAULT, &line).expect("said");
+            transcript::push_older(conversations.conversations(), &DEFAULT, &line).expect("said");
         }
         suzatary_lines::secretary::conversations::read(conversations.conversations(), &DEFAULT)
             .expect("reads")
@@ -2823,8 +2823,12 @@ mod sign_in_completion {
             )),
             "the line was written"
         );
-        assert!(taint::tainted(&failed), "the provider's words");
-        assert!(!taint::tainted(&after::<&str>(Ok(Ok(())))));
-        assert!(!taint::tainted(&after::<&str>(Err(()))));
+        assert_eq!(
+            taint::held(&failed),
+            taint::Taint::Tainted,
+            "the provider's words"
+        );
+        assert_eq!(taint::held(&after::<&str>(Ok(Ok(())))), taint::Taint::Clean);
+        assert_eq!(taint::held(&after::<&str>(Err(()))), taint::Taint::Clean);
     }
 }

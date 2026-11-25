@@ -1,13 +1,15 @@
 //! A whole conversation as a reader gets one: the fold of its lines.
 
 use super::{
-    Aside, Asking, Entry, Kept, Kind, Line, Lines, Review, ReviewFailure, Rewind, Said, Scope,
-    Standing, Unheld, Unplaced,
+    Aside, Asking, Entry, Kind, Line, Lines, Review, ReviewFailure, Rewind, Said, Scope, Standing,
+    Unheld, Unplaced,
 };
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_inbox::secretary::proposal::Proposal;
 
 use crate::secretary::model::Turn;
+use crate::secretary::queue;
+use crate::secretary::taint::{self, Taint};
 use crate::secretary::turn_shape::TurnShape;
 use suzatary_base::capability::Datetime;
 use suzatary_memory::secretary::words::Words;
@@ -20,23 +22,20 @@ pub struct Stored {
     /// untitled topic.
     pub title: Words<String>,
     pub kind: Kind,
-    /// The model behind it: the one its opening named, else the first that opened a session in
-    /// it; empty until one does.
+    /// The model its opening named; empty for a conversation a template set up.
     pub model: String,
     /// Every turn, oldest first.
     pub turns: Vec<Said>,
+    /// What each turn carries into a call, by the same index as `turns`.
+    pub carried: Vec<Carried>,
+    /// The window's fold over the live rounds ([`queue::window`]).
+    pub steps: queue::Steps,
     /// Every proposal, in the order made; the index is the tap's.
     pub proposals: Vec<Asking>,
     pub reviews: Vec<Review>,
     pub failures: Vec<ReviewFailure>,
-    /// The session a [`SessionModel`](crate::secretary::model::SessionModel) caller should
-    /// `resume`, or `None` when none was opened or a stop, a rewind or an
-    /// [`Entry::Unheard`](super::Entry::Unheard) line since ended it.
-    pub session: Option<Kept>,
     /// The last [`Entry::Scoped`](super::Entry::Scoped) line, a window when there is none.
     pub scope: Scope,
-    /// The memory's version this conversation was last told; `None` for one never told.
-    pub memory_seen: Option<u64>,
     /// Every span of turns a rewind set aside; `turns` keeps them, so every index stays the one
     /// the page and a render URL name.
     pub aside: Vec<Aside>,
@@ -46,6 +45,45 @@ pub struct Stored {
     /// Each coding session a tap started, by the proposal's index: the last
     /// [`Entry::Coding`](super::Entry::Coding) line for it.
     pub coding: std::collections::BTreeMap<usize, suzatary_inbox::coding::Session>,
+}
+
+/// One line as a conversation's fold takes it: its entry, the turns an `Again` sets aside, what
+/// its turn weighs (its stored line's sealed bytes), and what its line stores that it carries.
+#[derive(Debug, Clone)]
+pub struct Folded<'e> {
+    pub entry: &'e Entry,
+    pub aside: Vec<usize>,
+    pub weight: usize,
+    /// What the box's own line stores that its turn carries (a model's turn, what its call was
+    /// sent; a verb's answer, its class), as the line's one reader of a carry gives it, with the
+    /// writer's check; `None` for any other line, another writer's, and an older box's.
+    pub carries: Option<Taint>,
+}
+
+impl<'e> Folded<'e> {
+    /// A line with no stored print: it sets nothing aside, weighs its words, and stores no carry,
+    /// since only a line, with its writer, says one.
+    #[must_use]
+    pub fn bare(entry: &'e Entry) -> Self {
+        let weight = Said::of(entry).map_or(0, |said| queue::bytes(&said.turn));
+        Self {
+            entry,
+            aside: Vec::new(),
+            weight,
+            carries: None,
+        }
+    }
+}
+
+/// What one turn carries into a call, read when it is folded in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Carried {
+    /// A model's turn carries what its line stores its call was sent, and one whose line stores
+    /// nothing every turn before it; a verb's answer the class its line stores, and an older
+    /// one its reader's class ([`taint::turn`]); a person's or an act's turn its own class.
+    pub taint: Taint,
+    /// Its stored line's sealed bytes.
+    pub bytes: usize,
 }
 
 /// The name a list draws for a conversation titled `title`: the title, "New topic" while the title
@@ -97,42 +135,47 @@ impl Stored {
         id: &ConversationId,
         entries: impl IntoIterator<Item = &'e Entry>,
     ) -> Result<Self, NotAConversation> {
-        Self::of_read(id, entries.into_iter().map(|entry| (entry, Vec::new())))
+        Self::of_read(id, entries.into_iter().map(Folded::bare))
     }
 
-    /// [`Stored::of`] over lines in order, each beside the turns it sets aside when it is an
-    /// [`Entry::Again`](super::Entry::Again), which only a reader holding the lines' descent can
-    /// say; empty for every other line.
+    /// [`Stored::of`] over lines as the transcript's fold takes them ([`Folded`]).
     pub fn of_read<'e>(
         id: &ConversationId,
-        lines: impl IntoIterator<Item = (&'e Entry, Vec<usize>)>,
+        lines: impl IntoIterator<Item = Folded<'e>>,
     ) -> Result<Self, NotAConversation> {
         let mut lines = lines.into_iter();
-        let mut stored = Self::opened(id, lines.next().map(|(entry, _)| entry))?;
-        for (entry, aside) in lines {
-            stored.fold_read(entry, aside)?;
+        let mut stored = Self::opened(id, lines.next().map(|folded| folded.entry))?;
+        for folded in lines {
+            stored.fold_read(folded)?;
         }
         Ok(stored)
     }
 
-    /// Fold one more line in; an [`Entry::Again`](super::Entry::Again) folded here sets nothing
-    /// aside.
+    /// Fold one more line in, as a line with no stored print.
     pub fn fold(&mut self, entry: &Entry) -> Result<(), NotAConversation> {
-        self.fold_read(entry, Vec::new())
+        self.fold_read(Folded::bare(entry))
     }
 
-    fn fold_read(&mut self, entry: &Entry, aside: Vec<usize>) -> Result<(), NotAConversation> {
+    /// Fold one more line in, as [`Stored::of_read`] does.
+    pub fn fold_read(&mut self, folded: Folded<'_>) -> Result<(), NotAConversation> {
+        let Folded {
+            entry,
+            aside,
+            weight,
+            carries,
+        } = folded;
         match entry {
             // A second opening line is ignored, not refused, so one stray line does not cost a
             // whole transcript; an erasure's slots were read as gone where they stood, a reseal's
-            // words where its slot stands, and a claim is never a turn.
+            // words where its slot stands, a claim is never a turn, and a retired line is read as nothing.
             Entry::Opened { .. }
             | Entry::SetUp { .. }
             | Entry::Erased { .. }
             | Entry::Resealed { .. }
+            | Entry::Retired { .. }
             | Entry::Began { .. } => {}
             Entry::Titled { title, .. } => self.title = super::entry::named(title),
-            Entry::Said { .. } => self.turns.extend(Said::of(entry)),
+            Entry::Said { .. } => self.said(Said::of(entry), weight, carries),
             Entry::Proposed {
                 at,
                 object,
@@ -160,7 +203,6 @@ impl Stored {
                 reason: reason.clone(),
                 standing: *standing,
             }),
-            Entry::MemorySeen { version, .. } => self.memory_seen = Some(*version),
             Entry::Coding {
                 proposal, session, ..
             } => {
@@ -169,54 +211,61 @@ impl Stored {
             }
             Entry::Stopped { .. } => {
                 self.stops.push(self.turns.len());
-                self.turns.extend(Said::of(entry));
-                self.session = None;
+                self.said(Said::of(entry), weight, None);
             }
-            Entry::Rewound { to, at, by } => rewound(self, *to, *at, by)?,
+            Entry::Rewound { to, at, by } => {
+                rewound(self, *to, *at, by)?;
+                self.restep();
+            }
             Entry::Again { at, by, .. } => {
                 self.aside.push(Aside {
                     turns: aside.into_iter().collect(),
                     at: *at,
                     by: by.clone(),
                 });
-                self.session = None;
-            }
-            // The last session line wins: one writer, so overwriting is the register's reading.
-            Entry::Session {
-                at,
-                session,
-                model,
-                cwd,
-                surface,
-            } => {
-                // What a session line was sent is not known, so it is read as holding every turn.
-                self.session = Some(Kept::of(session, model, cwd, *at, surface.clone(), 0));
-                self.named(model);
-            }
-            Entry::Kept {
-                at,
-                session,
-                model,
-                cwd,
-                surface,
-                from,
-            } => {
-                self.session = Some(Kept::of(session, model, cwd, *at, surface.clone(), *from));
-                self.named(model);
+                self.restep();
             }
             Entry::Scoped { scope, .. } => self.scope = *scope,
-            // Only the session that did not hear ends: a later one heard the turn.
-            Entry::Unheard { session, .. } => {
-                if self
-                    .session
-                    .as_ref()
-                    .is_some_and(|kept| kept.session.id == *session)
-                {
-                    self.session = None;
-                }
-            }
         }
         Ok(())
+    }
+
+    fn said(&mut self, said: Option<Said>, weight: usize, stored: Option<Taint>) {
+        let Some(said) = said else { return };
+        let carried = Carried {
+            // By its shape, so a model's turn whose words are gone carries what it carried whole.
+            taint: match crate::secretary::turn_shape::shape(&said.turn) {
+                // A stored fact; with none stored, what a session could have held: every turn
+                // before it, set aside since or not, since a later edit cannot take back what
+                // the session was sent.
+                TurnShape::Model { .. } => stored.unwrap_or_else(|| {
+                    self.carried
+                        .iter()
+                        .fold(Taint::Clean, |held, earlier| held.join(earlier.taint))
+                }),
+                TurnShape::Tool { .. } => stored.unwrap_or_else(|| taint::turn(&said)),
+                TurnShape::Person { .. } | TurnShape::Act { .. } => taint::turn(&said),
+            },
+            bytes: weight,
+        };
+        let index = self.turns.len();
+        let before = (0..index).rev().find(|earlier| self.is_live(*earlier));
+        let opens = self.opens_after(before, &said);
+        self.turns.push(said);
+        self.carried.push(carried);
+        self.steps.turn(index, opens, queue::weight(self, index));
+    }
+
+    /// The window's fold again from the first turn, after a rewind or an edit set turns aside.
+    fn restep(&mut self) {
+        let mut steps = queue::Steps::default();
+        let mut before = None;
+        for index in (0..self.turns.len()).filter(|index| self.is_live(*index)) {
+            let opens = self.opens_after(before, &self.turns[index]);
+            steps.turn(index, opens, queue::weight(self, index));
+            before = Some(index);
+        }
+        self.steps = steps;
     }
 
     #[must_use]
@@ -228,12 +277,12 @@ impl Stored {
             kind,
             model: String::new(),
             turns: Vec::new(),
+            carried: Vec::new(),
+            steps: queue::Steps::default(),
             proposals: Vec::new(),
             reviews: Vec::new(),
             failures: Vec::new(),
-            session: None,
             scope: Scope::Window,
-            memory_seen: None,
             aside: Vec::new(),
             stops: Vec::new(),
             coding: std::collections::BTreeMap::new(),
@@ -256,13 +305,6 @@ impl Stored {
         })
     }
 
-    /// `model` as the model behind it, where nothing named one before.
-    fn named(&mut self, model: &str) {
-        if self.model.is_empty() {
-            model.clone_into(&mut self.model);
-        }
-    }
-
     /// Whether turn `index` is on the live path: no rewind set it aside.
     #[must_use]
     pub fn is_live(&self, index: usize) -> bool {
@@ -278,26 +320,28 @@ impl Stored {
             .get(index)
             .map(|said| crate::secretary::turn_shape::shape(&said.turn))
         {
-            Some(TurnShape::Model { calls }) => calls.is_empty(),
+            Some(TurnShape::Model { calls, .. }) => calls.is_empty(),
             Some(TurnShape::Act { .. }) => self.stops.contains(&index),
             Some(TurnShape::Person { .. } | TurnShape::Tool { .. }) | None => false,
         }
     }
 
-    /// Whether position `at` of `live` (this conversation's [`Stored::live`]) opens a round: the
-    /// first turn, or the turn after one that [closes](Stored::closes), unless it is the empty
-    /// answer a round wrote after its stop.
+    /// Whether position `at` of `live` (this conversation's [`Stored::live`]) opens a round.
     #[must_use]
     pub fn opens(&self, live: &[(usize, &Said)], at: usize) -> bool {
-        at == 0 || (self.closes(live[at - 1].0) && !self.ends_its_stop(live, at))
+        self.opens_after(at.checked_sub(1).map(|before| live[before].0), live[at].1)
     }
 
-    /// Whether position `at` of `live` is the empty answer a round wrote after its stop, which
-    /// belongs to its stop: it closes nothing more and opens no round of its own.
-    fn ends_its_stop(&self, live: &[(usize, &Said)], at: usize) -> bool {
-        at.checked_sub(1)
-            .is_some_and(|before| self.stops.contains(&live[before].0))
-            && matches!(&live[at].1.turn, Turn::Model { text, calls } if text.is_empty() && calls.is_empty())
+    /// Whether `said` opens a round when the live turn before it is `before`: the first turn, or
+    /// the turn after one that [closes](Stored::closes), unless it is the empty answer a round
+    /// wrote after its stop, which belongs to its stop.
+    #[must_use]
+    pub fn opens_after(&self, before: Option<usize>, said: &Said) -> bool {
+        before.is_none_or(|before| {
+            self.closes(before)
+                && !(self.stops.contains(&before)
+                    && matches!(&said.turn, Turn::Model { text, calls } if text.is_empty() && calls.is_empty()))
+        })
     }
 
     /// The live path: every turn no rewind set aside, with its index.
@@ -332,7 +376,7 @@ impl Stored {
             ));
         }
         let end = live.len() - 1;
-        let closing = if self.ends_its_stop(&live, end) {
+        let closing = if end > 0 && !self.opens(&live, end) && self.closes(live[end - 1].0) {
             end - 1
         } else {
             end
@@ -499,7 +543,7 @@ fn proposed(
     });
 }
 
-/// The turns from `to` go aside, and the session with them.
+/// The turns from `to` go aside.
 fn rewound(stored: &mut Stored, to: usize, at: Datetime, by: &str) -> Result<(), NotAConversation> {
     if to > stored.turns.len() {
         return Err(NotAConversation::Unsaid {
@@ -512,7 +556,6 @@ fn rewound(stored: &mut Stored, to: usize, at: Datetime, by: &str) -> Result<(),
         at,
         by: by.to_owned(),
     });
-    stored.session = None;
     Ok(())
 }
 

@@ -43,7 +43,6 @@ impl From<ModelError> for Failed {
             | ModelError::TimedOut(_)
             | ModelError::Limited(_)
             | ModelError::Overloaded(_)
-            | ModelError::Lost(_)
             | ModelError::Halted => Failed::Delays(error),
         }
     }

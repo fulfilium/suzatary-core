@@ -14,8 +14,8 @@ use prodrome_digest::Measure as _;
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Kinds, Label};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
-use crate::secretary::digest_view::{self, Body, Keep, LINE_BYTES, VIEW_BYTES, rendered};
-use crate::secretary::shown_record::{CleanWords, OwnersWords, Shows as _};
+use crate::secretary::digest_view::{self, Body, LINE_BYTES, VIEW_BYTES, rendered};
+use crate::secretary::shown_record::{CleanWords, OwnersAndAnswers, OwnersWords, Shows as _};
 use suzatary_base::rule_version::{Version, Versioned};
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_conversations::secretary::taint::Taint;
@@ -28,6 +28,8 @@ pub struct Asking;
 
 static OWNERS_WORDS: LazyLock<Version<Asking>> =
     LazyLock::new(|| Version::of_parts(Beside::OwnersWords));
+static OWNERS_AND_ANSWERS: LazyLock<Version<Asking>> =
+    LazyLock::new(|| Version::of_parts(Beside::OwnersAndAnswers));
 static CLEAN_WORDS: LazyLock<Version<Asking>> =
     LazyLock::new(|| Version::of_parts(Beside::CleanWords));
 
@@ -55,7 +57,7 @@ impl Versioned for Asking {
             })
             .map(|body| body.text(2))
             .collect();
-        let cut = digest_view::fit(log.clone(), PROBE_CUT, Keep::Earliest);
+        let cut = digest_view::fit_earliest(log.clone(), PROBE_CUT);
         [PROMPT.to_owned(), question().text()]
             .into_iter()
             .chain([too_long, Unfit::NotALine].map(|unfit| question().tried(unfit).text()))
@@ -68,6 +70,7 @@ impl Versioned for Asking {
     fn current(beside: Beside) -> &'static Version<Self> {
         match beside {
             Beside::OwnersWords => &OWNERS_WORDS,
+            Beside::OwnersAndAnswers => &OWNERS_AND_ANSWERS,
             Beside::CleanWords => &CLEAN_WORDS,
         }
     }
@@ -143,6 +146,11 @@ pub enum Beside {
     /// The owner's words alone, so a summary labelled as nothing but theirs is written from
     /// nothing but theirs.
     OwnersWords,
+    /// The parts the secretary's call reads in words ([`OwnersAndAnswers`]), so a summary every
+    /// call is shown in words is written from nothing a box's note or a clean verb's answer
+    /// (a connector's or a weather server's words) said.
+    OwnersAndAnswers,
+    /// Every clean part, for a node that holds any other clean kind.
     CleanWords,
 }
 
@@ -151,6 +159,8 @@ impl Beside {
     pub fn of(label: &Label) -> Self {
         if label.is_owners() {
             Beside::OwnersWords
+        } else if OwnersAndAnswers::shows(label) {
+            Beside::OwnersAndAnswers
         } else {
             Beside::CleanWords
         }
@@ -159,6 +169,7 @@ impl Beside {
     fn reads(self) -> fn(&Label) -> bool {
         match self {
             Beside::OwnersWords => OwnersWords::shows,
+            Beside::OwnersAndAnswers => OwnersAndAnswers::shows,
             Beside::CleanWords => CleanWords::shows,
         }
     }
@@ -291,7 +302,7 @@ fn log(
         .into_iter()
         .map(|shown| shown.body.text(shown.part.span.len()))
         .collect();
-    digest_view::fit(shown, VIEW_BYTES, Keep::Earliest)
+    digest_view::fit_earliest(shown, VIEW_BYTES)
 }
 
 #[cfg(test)]

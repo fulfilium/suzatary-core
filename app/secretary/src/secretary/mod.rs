@@ -46,6 +46,7 @@ use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
 use suzatary_conversations::secretary::model::{Halt, Turn};
 use suzatary_conversations::secretary::store::{Entry, Stored};
+use suzatary_conversations::secretary::taint::Taint;
 use suzatary_conversations::secretary::tool_name;
 use suzatary_digest::secretary::memories;
 use suzatary_inbox::secretary::proposal;
@@ -135,7 +136,7 @@ pub fn converse(
     )?;
     answer(
         caps,
-        || Pick::Turn(Box::new(caps.model)),
+        || -> Pick<'_> { Box::new(caps.model) },
         deployment,
         settables,
         chains,
@@ -180,21 +181,13 @@ pub fn answer<'p>(
     let pick = pick();
     let load = || load_references(caps, deployment, settables, chains, id);
     let confirms = confirming(chains, caps.clock);
-    let run =
-        |request: Request<SecretaryCall>| self::run(deployment, settables, chains, id, request);
-    // A lost session is asked statelessly of the same model, never of a second pick.
-    let ask = match &pick {
-        Pick::Held(model) => Ask::Session {
-            model: *model,
-            fallback: *model,
-            memories: caps.memories,
-            topics: caps.topics,
-        },
-        Pick::Turn(model) => Ask::Window {
-            model: model.as_ref(),
-            memories: caps.memories,
-            topics: caps.topics,
-        },
+    let run = |request: Request<SecretaryCall>, sent| {
+        self::run(deployment, settables, chains, id, request, sent)
+    };
+    let ask = Ask::Digest {
+        model: pick.as_ref(),
+        memories: &caps.memories,
+        topics: &caps.topics,
     };
     let rounds = match holder {
         Holder::Task => rounded,
@@ -336,6 +329,21 @@ fn load_references(
     Ok(())
 }
 
+/// The call that reads what `reference` names again, as a round's load reads it: a marker's
+/// "calling … answers again" for an answer the owner's pointing loaded; `None` for one no verb
+/// reads.
+#[must_use]
+pub(crate) fn again(
+    reference: &Reference,
+) -> Option<suzatary_conversations::secretary::model::ToolCall> {
+    call_for(reference).map(
+        |(verb, args)| suzatary_conversations::secretary::model::ToolCall {
+            verb: verb.into(),
+            args: args.into_iter().collect(),
+        },
+    )
+}
+
 /// The call a reference is; `None` for one no verb answers.
 fn call_for(reference: &Reference) -> Option<(&'static str, Map<String, Value>)> {
     let mut args = Map::new();
@@ -356,8 +364,11 @@ fn call_for(reference: &Reference) -> Option<(&'static str, Map<String, Value>)>
             );
             Some(("search", args))
         }
+        Reference::Briefing { date } => {
+            args.insert("day".to_owned(), Value::from(date.to_string()));
+            Some(("briefing", args))
+        }
         Reference::Global(_)
-        | Reference::Briefing { .. }
         | Reference::Proposal(_)
         | Reference::Batch { .. }
         | Reference::Target(_) => None,
@@ -383,11 +394,6 @@ fn load(
         return call(deployment, settables, chains, here, verb, &args).map(|answer| answer.value);
     }
     match reference {
-        Reference::Briefing { date } => {
-            let mut args = Map::new();
-            args.insert("day".to_owned(), Value::from(date.to_string()));
-            call(deployment, settables, chains, here, "briefing", &args).map(|answer| answer.value)
-        }
         Reference::Proposal(ProposalRef {
             conversation,
             index,
@@ -478,9 +484,12 @@ fn load(
             &caps.topics.reading()?,
             target,
         )),
-        Reference::Todo(_) | Reference::Mail { .. } | Reference::Thread { .. } => Err(
-            Refusal::internal("a reference with a verb reached the store"),
-        ),
+        Reference::Todo(_)
+        | Reference::Mail { .. }
+        | Reference::Thread { .. }
+        | Reference::Briefing { .. } => Err(Refusal::internal(
+            "a reference with a verb reached the store",
+        )),
     }
 }
 
@@ -533,7 +542,14 @@ pub fn call(
     args: &Map<String, Value>,
 ) -> Result<VerbAnswer, Refusal> {
     let request = Subset::ALL.find(&verb.into())?.request(args)?;
-    run(deployment, settables, chains, id, request)
+    // Outside a round nothing was sent: the gate reads what an ask of the conversation now
+    // would carry, and the worst where there is no conversation to read.
+    let bound = bound_of(chains, request.chain.as_deref())?;
+    let sent = suzatary_lines::secretary::conversations::read(bound.caps.conversations, id)
+        .map_or(Taint::Tainted, |stored| {
+            suzatary_conversations::secretary::taint::held(&stored)
+        });
+    run(deployment, settables, chains, id, request, sent)
 }
 
 pub fn run(
@@ -542,6 +558,7 @@ pub fn run(
     chains: &[Bound<'_>],
     id: &ConversationId,
     request: Request<SecretaryCall>,
+    sent: suzatary_conversations::secretary::taint::Taint,
 ) -> Result<VerbAnswer, Refusal> {
     let bound = bound_of(chains, request.chain.as_deref())?;
     // Whatever a verb read, no identity number reaches the model: mail's are placeholders the
@@ -555,6 +572,7 @@ pub fn run(
             chain: bound.policy,
             chains,
             conversation: id,
+            sent,
         })
         .map(|answer| VerbAnswer {
             value: suzatary_held::held_value::withheld_value(answer.value),

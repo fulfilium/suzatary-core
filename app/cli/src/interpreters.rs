@@ -8,7 +8,6 @@ use suzatary_base::capability::Peer;
 use suzatary_base::drive_path::DriveFailure;
 use suzatary_base::drive_path::DrivePath;
 use suzatary_conversations::secretary::model::Halt;
-use suzatary_conversations::secretary::model::Sessioned;
 use suzatary_digest::model_name::ModelName;
 use suzatary_health::health::Failure;
 use suzatary_health::health::Limited;
@@ -33,7 +32,7 @@ use suzatary_io_sources::web::Fetcher;
 
 use suzatary_base::capability::{Whois, WhoisError};
 use suzatary_conversations::secretary::model::{
-    Conversation, Model, ModelError, Pick, Reply, SessionModel, Sessions,
+    Conversation, Model, ModelError, Pick, Picker, Reply,
 };
 use suzatary_digest::secretary::compact::Compact;
 use suzatary_io_access::secrets::Secretspec;
@@ -86,15 +85,17 @@ impl Model for Brain {
         }
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &Conversation,
         tools: &serde_json::Value,
+        on_delta: &dyn Fn(&str),
+        halt: &Halt,
     ) -> Result<Reply, ModelError> {
         match self {
-            Brain::Cli(cli) => cli.turn(conversation, tools),
+            Brain::Cli(cli) => cli.streamed(conversation, tools, on_delta, halt),
             #[cfg(feature = "fixture")]
-            Brain::Scripted(scripted) => scripted.turn(conversation, tools),
+            Brain::Scripted(scripted) => scripted.streamed(conversation, tools, on_delta, halt),
         }
     }
 
@@ -107,13 +108,9 @@ impl Model for Brain {
     }
 }
 
-impl Sessions for Brain {
+impl Picker for Brain {
     fn pick(&self) -> Pick<'_> {
-        match self {
-            Brain::Cli(cli) => Pick::Held(&**cli),
-            #[cfg(feature = "fixture")]
-            Brain::Scripted(_) => Pick::Turn(Box::new(self)),
-        }
+        Box::new(self)
     }
 }
 
@@ -198,6 +195,8 @@ pub enum Verifying {
 fn probe(cli: &ClaudeCli) -> Result<(), ModelError> {
     let asked = Conversation {
         system: "This is a test that the model answers. Answer with the one word: ok.".to_owned(),
+        context: suzatary_conversations::secretary::model::Context::default(),
+        earlier: Vec::new(),
         turns: vec![suzatary_conversations::secretary::model::Turn::Person {
             text: "ok?".to_owned(),
             references: Vec::new(),
@@ -226,7 +225,6 @@ pub fn answered_by(answered: &Answered, model: &str, failed: Option<&ModelError>
             | ModelError::Overloaded(_)
             | ModelError::TimedOut(_)
             | ModelError::TooLong(_)
-            | ModelError::Lost(_)
             | ModelError::Halted,
         ) => return,
     };
@@ -555,44 +553,19 @@ impl Model for Recorded {
         self.cli.name()
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &Conversation,
         tools: &serde_json::Value,
+        on_delta: &dyn Fn(&str),
+        halt: &Halt,
     ) -> Result<Reply, ModelError> {
-        self.door.ask(|| self.cli.turn(conversation, tools))
+        self.door
+            .ask(|| self.cli.streamed(conversation, tools, on_delta, halt))
     }
 
     fn limited(&self) -> Option<Limited> {
         self.door.limited()
-    }
-}
-
-impl SessionModel for Recorded {
-    fn open(
-        &self,
-        id: &suzatary_conversations::secretary::model::SessionId,
-        conversation: &Conversation,
-        tools: &serde_json::Value,
-        halt: &Halt,
-    ) -> Result<Sessioned, ModelError> {
-        self.door
-            .ask(|| self.cli.open(id, conversation, tools, halt))
-    }
-
-    fn resume(
-        &self,
-        system: &str,
-        session: &suzatary_conversations::secretary::model::Session,
-        delta: &suzatary_conversations::secretary::model::Delta,
-        tools: &serde_json::Value,
-        on_delta: &dyn Fn(&str),
-        halt: &Halt,
-    ) -> Result<Sessioned, ModelError> {
-        self.door.ask(|| {
-            self.cli
-                .resume(system, session, delta, tools, on_delta, halt)
-        })
     }
 }
 

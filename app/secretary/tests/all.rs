@@ -2,6 +2,8 @@
 //! module here, or a target of its own in `Cargo.toml`, does not run, and `suites.rs` in the
 //! cli's tests fails when one is missing.
 
+#[path = "cache.rs"]
+mod cache;
 #[path = "calls.rs"]
 mod calls;
 #[path = "context_cost.rs"]
@@ -12,6 +14,8 @@ mod filed;
 mod held_values;
 #[path = "model_port.rs"]
 mod model_port;
+#[path = "sent.rs"]
+mod sent;
 #[path = "surface.rs"]
 mod surface;
 #[path = "triage_cards.rs"]

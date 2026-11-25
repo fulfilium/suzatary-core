@@ -53,7 +53,7 @@ impl ReadHolders {
                         read.files.push(file);
                     }
                 }
-                ToolName::Verb(_) | ToolName::Memory | ToolName::Unlisted(_) => {}
+                ToolName::Verb(_) | ToolName::Unlisted(_) => {}
             }
         }
         read

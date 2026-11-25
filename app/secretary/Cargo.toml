@@ -55,6 +55,8 @@ fixture = ["suzatary-conversations/fixture", "suzatary-lines/fixture"]
 [dev-dependencies]
 suzatary-secretary = { path = ".", features = ["nothing"] }
 suzatary-testkit = { path = "../testkit" }
+# The call a turn sends, as the provider reads it, for the cache law.
+suzatary-io-model.workspace = true
 # The laws are properties over arbitrary strings.
 proptest.workspace = true
 

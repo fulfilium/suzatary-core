@@ -1,5 +1,8 @@
 //! A synthetic memory of the live shape, for the tests and benches that measure reading it:
 //! lines over conversations, one in four of the owner's notes alone, and the digest summarised.
+//! Its shape is its size, not a box's order: each conversation is one block in time, with no
+//! claims, verbs, verbs' answers, acts or notes, and nothing tainted, where a box interleaves
+//! conversations and writes all of those. Every figure measured over it is of that shape.
 
 use std::collections::BTreeSet;
 
@@ -9,7 +12,8 @@ use prodrome_core::literal::Datetime;
 use suzatary_base::capability::Entropy as _;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
-use suzatary_conversations::secretary::store::{Entry, Kind};
+use suzatary_conversations::secretary::store::{Entry, Kind, Said};
+use suzatary_conversations::secretary::taint::{self, Taint};
 use suzatary_digest::model_name::ModelName;
 use suzatary_digest::secretary::compact_ask::Beside;
 use suzatary_digest::secretary::compacting::Compacting;
@@ -19,6 +23,7 @@ use suzatary_digest::secretary::digests::{Digests, compactor};
 use suzatary_digest::secretary::memories::ReadMemories;
 use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_lines::nothing::Counting;
+use suzatary_lines::secretary::answer::BoxLine;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
@@ -57,6 +62,9 @@ pub struct Stores {
     pub summaries: InMemoryDoc<TextName, Text<Line>>,
     pub facts: InMemory<MemoryEvent>,
     pub words: InMemoryDoc<TextName, Text<Fact>>,
+    /// What each conversation's turns so far carry, joined: what a model's turn appended next
+    /// carries, every turn before it, as the round's join is at its widest.
+    pub held: std::sync::Mutex<std::collections::BTreeMap<ConversationId, Taint>>,
 }
 
 impl Stores {
@@ -90,7 +98,8 @@ fn ada() -> Actor {
 }
 
 /// The `second`th second of the store's year.
-fn at(second: usize) -> Datetime {
+#[must_use]
+pub fn at(second: usize) -> Datetime {
     let start = prodrome_core::fpl::instant_of(
         Datetime::new(2026, 1, 1, 0, 0, 0, 0).expect("a constant instant"),
     );
@@ -146,47 +155,96 @@ impl Shape {
             let id = ConversationId::new(format!("c-{conversation}")).expect("a slug");
             for held in 0..self.lines / self.conversations {
                 second += 1;
-                let (line, keys) = LineEvent::write(
-                    id.clone(),
-                    ada(),
-                    u32::try_from(held).expect("few lines"),
-                    &self.entry(held, second, conversation % 4 != 0),
-                    &stores.lines.entropy,
-                )
-                .expect("a line");
-                for key in keys {
-                    stores.lines.keys.set(&key.name(), &key).expect("kept");
-                }
-                stores.lines.lines.append(line).expect("said");
+                stores.append(&id, held, &self.entry(held, second, conversation % 4 != 0));
             }
         }
-        let salts = Counting::default();
-        let mut left = match self.summaries {
-            Summaries::Every => usize::MAX,
-            Summaries::First(most) => most,
+        stores.summarise(
+            match self.summaries {
+                Summaries::Every => usize::MAX,
+                Summaries::First(most) => most,
+            },
+            second + 1,
+        );
+        stores
+    }
+}
+
+impl Stores {
+    /// `entry` as line `held` of conversation `id`, written as the box writes it: under its own
+    /// actor, so the owner's stamp stands with no claim to judge it (a tab's line no claim judged
+    /// reads unconfirmed, and so tainted).
+    /// A model's turn carries every turn before it in its conversation.
+    pub fn append(&self, id: &ConversationId, held: usize, entry: &Entry) {
+        let carries = {
+            let mut joined = self.held.lock().expect("not poisoned");
+            let before = joined.get(id).copied().unwrap_or_default();
+            let own = Said::of(entry).map_or(Taint::Clean, |said| match said.turn {
+                Turn::Model { .. } => before,
+                _ => taint::written(&said),
+            });
+            joined.insert(id.clone(), before.join(own));
+            before
         };
+        let (writer, held) = (
+            suzatary_lines::secretary::transcript::writer(),
+            u32::try_from(held).expect("few lines"),
+        );
+        let (line, keys) = match BoxLine::of(entry.clone(), carries) {
+            BoxLine::Answer(answer) => {
+                LineEvent::answered(id.clone(), writer, held, &answer, &self.lines.entropy)
+            }
+            BoxLine::Entry(entry) => {
+                LineEvent::write(id.clone(), writer, held, &entry, &self.lines.entropy)
+            }
+        }
+        .expect("a line");
+        for key in keys {
+            self.lines.keys.set(&key.name(), &key).expect("kept");
+        }
+        self.lines.lines.append(line).expect("said");
+    }
+
+    /// Up to `most` of the nodes owed summarised at `second`, smallest first and level by level,
+    /// each after the call that asked for it: what a compactor running behind has written.
+    pub fn summarise(&self, most: usize, second: usize) {
+        self.summarise_saying(most, second, "The owner asked about the permit");
+    }
+
+    /// [`Stores::summarise`], each summary `words` and its node's name.
+    pub fn summarise_saying(&self, most: usize, second: usize, words: &str) {
+        self.summarise_with(most, second, &|node| format!("{words}, node {node}."));
+    }
+
+    /// [`Stores::summarise`], each summary the words `words` gives its node.
+    pub fn summarise_with(
+        &self,
+        most: usize,
+        second: usize,
+        words: &dyn Fn(&prodrome_core::event::Hash) -> String,
+    ) {
+        let salts = Counting::default();
+        let mut left = most;
         loop {
-            let read = stores.digests().reads().read().expect("the digest reads");
+            let read = self.digests().reads().read().expect("the digest reads");
             let pending = read.pending();
             if pending.is_empty() || left == 0 {
-                return stores;
+                return;
             }
             let taken = pending.len().min(left);
             left -= taken;
             for node in pending.into_iter().take(taken) {
                 let label = *read.node(&node).expect("in the tree").measure();
                 let text = Text::new(
-                    Line::new(&format!("The owner asked about the permit, node {node}."))
-                        .expect("a line"),
+                    Line::new(&words(&node)).expect("a line"),
                     salts.salt().expect("a salt"),
                 );
-                stores.summaries.set(&text.name(), &text).expect("kept");
-                let asked = digest_event::asked(node.clone(), at(second + 1), compactor(), 4_096)
+                self.summaries.set(&text.name(), &text).expect("kept");
+                let asked = digest_event::asked(node.clone(), at(second), compactor(), 4_096)
                     .expect("a call");
-                stores.digests.append(asked).expect("appended");
+                self.digests.append(asked).expect("appended");
                 let summary = digest_event::summarized(
                     node.clone(),
-                    at(second + 1),
+                    at(second),
                     compactor(),
                     &text,
                     Attempt {
@@ -197,7 +255,7 @@ impl Shape {
                     },
                 )
                 .expect("a summary");
-                stores.digests.append(summary).expect("appended");
+                self.digests.append(summary).expect("appended");
             }
         }
     }

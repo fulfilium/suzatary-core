@@ -2,6 +2,9 @@
 //! times, and a view finds each node by name, so a lookup that searches the whole tree costs the
 //! square of the store. Two laws bound the call's CPU time: it grows with the store and not with
 //! its square, and at the live shape an optimised build answers in under two seconds of one core.
+//! The live shape here is `live_shape`'s size, each conversation one block in time with no
+//! claims, verbs, acts or notes: a box's store of that size interleaves them, and is not
+//! measured here.
 
 use std::time::Duration;
 

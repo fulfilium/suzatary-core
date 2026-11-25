@@ -146,7 +146,7 @@
     "name": "list_open_todos"
   },
   {
-    "description": "A short --stat summary of uncommitted changes, for a final sanity check before ending your session. You do not commit or push yourself — that happens afterward, deterministically, only if every store verifies.",
+    "description": "A short --stat summary of uncommitted changes, for a final sanity check before your run ends. You do not commit or push yourself — that happens afterward, deterministically, only if every store verifies.",
     "inputSchema": {
       "properties": {},
       "required": [],

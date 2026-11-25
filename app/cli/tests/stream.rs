@@ -1,6 +1,6 @@
-//! The live stream, `GET /api/secretary/conversations/<id>/stream`, over a real server: only a
-//! `resume` streams deltas (`SessionModel::open` carries no `on_delta`), so the delta scenes
-//! read an established session's second round.
+//! The live stream, `GET /api/secretary/conversations/<id>/stream`, over a real server: every
+//! call streams its reply, so a scene's scripted fragments are its second call's, after a first
+//! round whose reply arrives whole as one delta.
 
 use crate::common;
 
@@ -79,6 +79,7 @@ fn first_round(base: &str, id: &str) -> mpsc::Receiver<String> {
         next(&rx),
         serde_json::json!({"kind": "state", "state": "thinking"})
     );
+    assert_eq!(next(&rx)["kind"], "delta", "the first reply, whole");
     assert_eq!(next(&rx), serde_json::json!({"kind": "turn"}));
     assert_eq!(
         next(&rx),
@@ -93,11 +94,9 @@ fn a_connected_subscriber_sees_the_round_frame_by_frame() {
     let (base, _workers) = writer(
         "stream-connected",
         FakeModel::saying(["{\"say\": \"hello\"}", "{\"say\": \"got both\"}"])
-            .streaming([vec!["Hel", "lo"]]),
+            .streaming([vec![], vec!["Hel", "lo"]]),
     );
     let id = open(&base);
-
-    // The first round opens the session, so it is the second, a resume, that streams.
     let rx = first_round(&base, &id);
 
     say(&base, &id, "second");
@@ -138,7 +137,7 @@ fn a_late_subscriber_receives_the_accumulated_partial_first() {
     let (base, _workers) = writer(
         "stream-midturn",
         FakeModel::saying(["{\"say\": \"hello\"}", "{\"say\": \"answer\"}"])
-            .streaming([vec!["Hel", "lo, ", "world"]])
+            .streaming([vec![], vec!["Hel", "lo, ", "world"]])
             .mid_stream(mid.clone()),
     );
     let id = open(&base);
@@ -180,8 +179,8 @@ fn a_late_subscriber_receives_the_accumulated_partial_first() {
     );
 }
 
-/// The model asks for `context` in its first round, because a `working` frame is no `Delta`
-/// and so `open` shows it.
+/// The model asks for `context` in its first round: its reply streams, then the verb's
+/// `working` frame lands before the verb's own turn.
 #[test]
 fn a_working_frame_broadcasts_before_a_verbs_own_turn() {
     let (base, _workers) = writer(
@@ -206,6 +205,7 @@ fn a_working_frame_broadcasts_before_a_verbs_own_turn() {
         next(&rx),
         serde_json::json!({"kind": "state", "state": "thinking"})
     );
+    assert_eq!(next(&rx)["kind"], "delta", "the calling reply, whole");
     assert_eq!(
         next(&rx),
         serde_json::json!({"kind": "working", "verb": "context"}),
@@ -242,7 +242,7 @@ fn a_closed_block_streams_by_its_sha_and_renders_by_it_alone() {
     let (base, _workers) = writer(
         "stream-blocks",
         FakeModel::saying(["{\"say\": \"hello\"}", "{\"say\": \"= Plan\\n\\nFirst.\"}"])
-            .streaming([vec!["= Pl", "an\n\nFir", "st."]])
+            .streaming([vec![], vec!["= Pl", "an\n\nFir", "st."]])
             .mid_stream(mid.clone()),
     );
     let id = open(&base);
@@ -294,7 +294,7 @@ fn a_streaming_block_renders_by_its_sha() {
             "{\"say\": \"hello\"}",
             "{\"say\": \"*Due* Friday.\\n\\nMore\"}",
         ])
-        .streaming([vec!["*Due* Friday.\n\nMo", "re"]])
+        .streaming([vec![], vec!["*Due* Friday.\n\nMo", "re"]])
         .mid_stream(mid.clone()),
     );
     let id = open(&base);
@@ -339,7 +339,7 @@ fn a_question_said_while_the_answer_streams_gets_a_turn_of_its_own() {
             "{\"say\": \"first\"}",
             "{\"say\": \"second\"}",
         ])
-        .streaming([vec!["fir", "st"], vec!["sec", "ond"]])
+        .streaming([vec![], vec!["fir", "st"], vec!["sec", "ond"]])
         .mid_stream(mid.clone()),
     );
     let id = open(&base);

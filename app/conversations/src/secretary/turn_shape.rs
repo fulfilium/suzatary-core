@@ -25,11 +25,23 @@ pub enum TurnShape {
     Model {
         /// The calls' verbs.
         calls: Vec<ToolName>,
+        /// What its call was sent carried, joined ([`Taint`](crate::secretary::taint::Taint)),
+        /// stored with the turn so no later rule, bound, weight or erasure moves it; `None` on a
+        /// turn written before it was stored, and on a turn not split from a line (a whole
+        /// [`Turn::Model`] holds none).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        carries: Option<crate::secretary::taint::Taint>,
     },
     Tool {
         verb: ToolName,
         outcome: Outcome,
         files: Vec<FileShape>,
+        /// The answer's class, stored when the box writes it, as a model turn's carry is: a label
+        /// is recorded when its line is written, so no later rule or erasure moves it (a `zoom`
+        /// answer's class is in its words). `None` on an older box's answer, which a reader
+        /// classes by its verb ([`crate::secretary::taint::turn`]).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        carries: Option<crate::secretary::taint::Taint>,
     },
     Act {
         /// What it was about.
@@ -58,7 +70,7 @@ impl TurnShape {
     #[must_use]
     pub fn slots(&self) -> usize {
         match self {
-            TurnShape::Model { calls } => 1 + calls.len(),
+            TurnShape::Model { calls, .. } => 1 + calls.len(),
             TurnShape::Person { .. } | TurnShape::Tool { .. } | TurnShape::Act { .. } => 1,
         }
     }
@@ -98,6 +110,7 @@ pub fn split(turn: &Turn) -> (TurnShape, Option<Vec<LineWords>>) {
         Turn::Model { text, calls } => (
             TurnShape::Model {
                 calls: calls.iter().map(|call| call.verb.clone()).collect(),
+                carries: None,
             },
             std::iter::once(LineWords::Model { text: text.clone() })
                 .chain(calls.iter().map(|call| LineWords::Args {
@@ -122,6 +135,7 @@ pub fn split(turn: &Turn) -> (TurnShape, Option<Vec<LineWords>>) {
                         size: file.size,
                     })
                     .collect(),
+                carries: None,
             },
             vec![LineWords::Tool {
                 answer: answer.clone().into(),
@@ -211,7 +225,7 @@ fn whole(shape: &TurnShape, words: &[Words<LineWords>]) -> Option<Turn> {
                 })
                 .collect(),
         },
-        (TurnShape::Model { calls }, [LineWords::Model { text }, args @ ..]) => Turn::Model {
+        (TurnShape::Model { calls, .. }, [LineWords::Model { text }, args @ ..]) => Turn::Model {
             text: text.clone(),
             calls: calls
                 .iter()
@@ -230,6 +244,7 @@ fn whole(shape: &TurnShape, words: &[Words<LineWords>]) -> Option<Turn> {
                 verb,
                 outcome,
                 files,
+                ..
             },
             [
                 LineWords::Tool {

@@ -381,23 +381,31 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
             kind: suzatary_conversations::secretary::store::Kind::Review,
         },
     )?;
-    for turn in [
-        suzatary_conversations::secretary::model::Turn::Person {
-            text: sweep_prompt()?,
-            references: Vec::new(),
-            attachments: Vec::new(),
+    transcript::push(
+        store.conversations(),
+        &id,
+        &Entry::Said {
+            at,
+            turn: suzatary_conversations::secretary::model::Turn::Person {
+                text: sweep_prompt()?,
+                references: Vec::new(),
+                attachments: Vec::new(),
+            },
+            by: None,
         },
-        suzatary_conversations::secretary::model::Turn::Model {
-            text: SWEEP_ANSWER.to_owned(),
-            calls: Vec::new(),
-        },
-    ] {
-        transcript::push(
-            store.conversations(),
-            &id,
-            &Entry::Said { at, turn, by: None },
-        )?;
-    }
+    )?;
+    // The sweep's call was sent its prompt, which quotes the garden company's mail: its answer
+    // carries what that mail could say.
+    transcript::answer(
+        store.conversations(),
+        &id,
+        &suzatary_lines::secretary::answer::Answer::after(
+            at,
+            SWEEP_ANSWER.to_owned(),
+            Vec::new(),
+            suzatary_conversations::secretary::taint::Taint::Tainted,
+        ),
+    )?;
     crate::commands::secretary::scripted_review(
         &read,
         Scripted::answering(&[("", serde_json::json!({ "say": HELD_WHY }).to_string())]),
@@ -1442,7 +1450,7 @@ fn bulk_lines(
             }
             if share > 0 {
                 let words = suzatary_lines::secretary::line_shape::split(&entry)
-                    .1
+                    .and_then(|(_, words)| words)
                     .unwrap_or_default();
                 let before = slots.len();
                 slots.extend(keys.into_iter().zip(words).take(share));
@@ -1748,9 +1756,10 @@ pub const LINKS_ACCOUNT: &str = "ada-work@example.test";
 /// Which rules a fixture's generated lines are sealed under.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Sealed {
-    /// The current rules, scrubbed, as the box writes every line.
+    /// The current rules, scrubbed, as the box writes every line: a model's turn with its carry.
     Current,
-    /// No recorded rules and not scrubbed, as a line written before lines recorded them.
+    /// No recorded rules and not scrubbed, as a line written before lines recorded them, and
+    /// before a model's turn stored its carry.
     Unversioned,
 }
 
@@ -1770,9 +1779,19 @@ impl Sealed {
         ),
         suzatary_lines::secretary::line_event::NotALine,
     > {
+        use suzatary_lines::secretary::answer::BoxLine;
         use suzatary_lines::secretary::line_event::LineEvent;
         match self {
-            Sealed::Current => LineEvent::write(id, writer, held, entry, entropy),
+            // A bulk conversation holds the owner's stamped questions and the box's answers to
+            // them, and nothing from outside: each answer's call was sent only those, so it
+            // carries clean.
+            Sealed::Current => match BoxLine::of(
+                entry.clone(),
+                suzatary_conversations::secretary::taint::Taint::Clean,
+            ) {
+                BoxLine::Answer(answer) => LineEvent::answered(id, writer, held, &answer, entropy),
+                BoxLine::Entry(entry) => LineEvent::write(id, writer, held, &entry, entropy),
+            },
             Sealed::Unversioned => LineEvent::written_under(
                 &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
                 id,
@@ -1931,10 +1950,12 @@ impl suzatary_conversations::secretary::model::Model for Scripted {
         self.name.clone()
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &suzatary_conversations::secretary::model::Conversation,
         _tools: &serde_json::Value,
+        _on_delta: &dyn Fn(&str),
+        _halt: &suzatary_conversations::secretary::model::Halt,
     ) -> Result<
         suzatary_conversations::secretary::model::Reply,
         suzatary_conversations::secretary::model::ModelError,
@@ -1996,6 +2017,8 @@ mod tests {
             let _asking = pulled::Asking::of(&asking);
             let asked = suzatary_conversations::secretary::model::Conversation {
                 system: String::new(),
+                context: suzatary_conversations::secretary::model::Context::default(),
+                earlier: Vec::new(),
                 turns: Vec::new(),
             };
             let _sent = answered.send(script.turn(&asked, &serde_json::json!([])).is_ok());

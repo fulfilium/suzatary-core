@@ -26,7 +26,7 @@ pub struct Stores {
 
 /// One request's blocks, oldest first.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct Blocks(Vec<Value>);
+pub struct Blocks(Vec<(usize, Value)>);
 
 enum Named<'a> {
     Upload(&'a Attachment),
@@ -56,8 +56,8 @@ impl Blocks {
     /// budget, in the order they were said. A turn naming something no store holds fails.
     pub fn of(stores: &Stores, turns: &[Turn]) -> Result<Self, ModelError> {
         let (mut photos, mut files, mut bytes) = (0, 0, 0u64);
-        let mut named: Vec<Named<'_>> = Vec::new();
-        for turn in turns.iter().rev() {
+        let mut named: Vec<(usize, Named<'_>)> = Vec::new();
+        for (at, turn) in turns.iter().enumerate().rev() {
             let on_turn: Vec<Named<'_>> = match turn {
                 // A private file is never a block: its redacted text is in the transcript.
                 Turn::Person { attachments, .. } => attachments
@@ -83,16 +83,37 @@ impl Blocks {
                         files += 1;
                     }
                     bytes += size;
-                    named.push(one);
+                    named.push((at, one));
                 }
             }
         }
         named
             .into_iter()
             .rev()
-            .map(|one| block(stores, &one))
+            .map(|(at, one)| block(stores, &one).map(|block| (at, block)))
             .collect::<Result<Vec<_>, _>>()
             .map(Self)
+    }
+
+    /// The blocks of turn `at` and every later one, oldest first.
+    #[must_use]
+    pub fn from_turn(&self, at: usize) -> Vec<Value> {
+        self.0
+            .iter()
+            .filter(|(turn, _)| *turn >= at)
+            .map(|(_, block)| block.clone())
+            .collect()
+    }
+
+    /// The blocks of turn `at` of the turns they were made for, oldest first: a turn's files
+    /// stand just before its own block, so a file handed at one step moves no block before it.
+    #[must_use]
+    pub fn of_turn(&self, at: usize) -> Vec<Value> {
+        self.0
+            .iter()
+            .filter(|(turn, _)| *turn == at)
+            .map(|(_, block)| block.clone())
+            .collect()
     }
 
     #[must_use]
@@ -103,9 +124,15 @@ impl Blocks {
     /// The content array: every block, then the text.
     #[must_use]
     pub fn content(self, text: &str) -> Vec<Value> {
-        let mut content = self.0;
+        let mut content = self.into_values();
         content.push(json!({ "type": "text", "text": text }));
         content
+    }
+
+    /// Every block, oldest first.
+    #[must_use]
+    pub fn into_values(self) -> Vec<Value> {
+        self.0.into_iter().map(|(_, block)| block).collect()
     }
 }
 

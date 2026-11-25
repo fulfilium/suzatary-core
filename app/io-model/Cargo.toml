@@ -27,6 +27,8 @@ thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 base64.workspace = true
+# The file a call's system text goes in, too long for one argument.
+tempfile = "3"
 # A pseudo-terminal for `claude setup-token` (`setup_token`), safely: the one rustix already
 # linked.
 rustix = { version = "1", features = ["pty", "termios"] }
@@ -39,8 +41,6 @@ suzatary-digest.workspace = true
 proptest.workspace = true
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
-# A test's private scratch directory.
-tempfile = "3"
 
 # ONE TEST BINARY (`autotests = false` above): every file under `tests/` is a
 # module of `tests/all.rs`, so the suite links the application once, not per file.

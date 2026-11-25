@@ -31,10 +31,12 @@ where
         self.name.clone()
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &Conversation,
         _tools: &serde_json::Value,
+        _on_delta: &dyn Fn(&str),
+        _halt: &suzatary_conversations::secretary::model::Halt,
     ) -> Result<Reply, ModelError> {
         (self.answer)(conversation).map(|text| Reply::parse(&text))
     }

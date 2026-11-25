@@ -20,8 +20,7 @@ use suzatary_cards::notify::{Delivered, Notify, NotifyError, Push};
 pub use suzatary_connect::cast::{self, CAST};
 use suzatary_connect::deployment::Deployment;
 use suzatary_conversations::secretary::model::{
-    Conversation, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel, Sessioned,
-    Sessions, Turn,
+    Conversation, Halt, Model, ModelError, Picker, Reply,
 };
 use suzatary_held::file_read::FileRead;
 use suzatary_held::mail_error::MailError;
@@ -221,7 +220,7 @@ pub fn scene(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) 
         .map(|line| line.clone() + "\n")
         .collect();
     format!(
-        "# lines\n{lines}# shown\n{}\n# asked\n{:#?}\n# opened\n{}\n# resumed with\n{:#?}\n",
+        "# lines\n{lines}# shown\n{}\n# asked\n{:#?}\n",
         caps.model
             .shown()
             .iter()
@@ -229,8 +228,6 @@ pub fn scene(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) 
             .collect::<Vec<_>>()
             .join("\n"),
         caps.model.asked(),
-        caps.model.opened().len(),
-        caps.model.resumed_with(),
     )
 }
 
@@ -945,18 +942,14 @@ pub struct FakeModel {
     /// Each ask's reply in order, or the failure it meets instead.
     replies: Mutex<std::collections::VecDeque<Result<String, ModelError>>>,
     asked: Mutex<Vec<Conversation>>,
-    opened: Mutex<Vec<SessionId>>,
-    resumed_with: Mutex<Vec<Vec<Turn>>>,
-    /// Reset the moment it fires, so a script loses exactly one resume.
-    lose_next_resume: Mutex<bool>,
-    /// Blocks the first call, whichever of `open`, `resume` or `turn` it is.
+    /// Blocks the first call.
     gate: Mutex<Option<Gate>>,
-    /// Fragments per `resume` call; when exhausted, the whole reply is one delta.
+    /// Fragments per `streamed` call; when exhausted, the whole reply is one delta.
     deltas: Mutex<std::collections::VecDeque<Vec<String>>>,
-    /// Blocks `resume` after its first fragment, so a late subscriber's partial is
+    /// Blocks `streamed` after its first fragment, so a late subscriber's partial is
     /// nonempty while the round is in flight.
     mid: Mutex<Option<Gate>>,
-    /// Held by the next `open` or `resume` until its `Halt` is pulled.
+    /// Held by the next `streamed` call until its `Halt` is pulled.
     holding: Mutex<Option<Gate>>,
     /// The verb names each ask was shown, in order.
     shown: Mutex<Vec<Vec<String>>>,
@@ -978,9 +971,6 @@ impl FakeModel {
                     .collect(),
             ),
             asked: Mutex::new(Vec::new()),
-            opened: Mutex::new(Vec::new()),
-            resumed_with: Mutex::new(Vec::new()),
-            lose_next_resume: Mutex::new(false),
             gate: Mutex::new(None),
             deltas: Mutex::new(std::collections::VecDeque::new()),
             mid: Mutex::new(None),
@@ -997,9 +987,6 @@ impl FakeModel {
         Self {
             replies: Mutex::new(replies.into_iter().map(Ok).collect()),
             asked: Mutex::new(Vec::new()),
-            opened: Mutex::new(Vec::new()),
-            resumed_with: Mutex::new(Vec::new()),
-            lose_next_resume: Mutex::new(false),
             gate: Mutex::new(None),
             deltas: Mutex::new(std::collections::VecDeque::new()),
             mid: Mutex::new(None),
@@ -1101,19 +1088,7 @@ impl FakeModel {
         self.asked.lock().expect("not poisoned").clone()
     }
 
-    /// Every session id `open` was asked to mint under, in order.
-    #[must_use]
-    pub fn opened(&self) -> Vec<SessionId> {
-        self.opened.lock().expect("not poisoned").clone()
-    }
-
-    /// Every delta `resume` was asked to send, in order.
-    #[must_use]
-    pub fn resumed_with(&self) -> Vec<Vec<Turn>> {
-        self.resumed_with.lock().expect("not poisoned").clone()
-    }
-
-    /// The verb names each ask was shown, in order, whichever of `turn`, `open` or `resume`.
+    /// The verb names each ask was shown, in order.
     #[must_use]
     pub fn shown(&self) -> Vec<Vec<String>> {
         self.shown.lock().expect("not poisoned").clone()
@@ -1137,13 +1112,6 @@ impl FakeModel {
             ..self
         }
     }
-
-    /// The next `resume` fails once with `ModelError::Lost`.
-    #[must_use]
-    pub fn losing_next_resume(self) -> Self {
-        *self.lose_next_resume.lock().expect("not poisoned") = true;
-        self
-    }
 }
 
 impl Model for FakeModel {
@@ -1151,93 +1119,20 @@ impl Model for FakeModel {
         "a scripted model".to_owned()
     }
 
-    fn turn(
+    /// Pops the scripted queue, holding until its halt when asked to, and streams the scripted
+    /// fragments.
+    fn streamed(
         &self,
         conversation: &Conversation,
         tools: &serde_json::Value,
+        on_delta: &dyn Fn(&str),
+        halt: &Halt,
     ) -> Result<Reply, ModelError> {
         self.show(tools);
         self.asked
             .lock()
             .expect("not poisoned")
             .push(conversation.clone());
-        self.wait_for_gate();
-        let next = self.replies.lock().expect("not poisoned").pop_front();
-        match next {
-            Some(Ok(text)) => Ok(Reply::parse(&text)),
-            Some(Err(failed)) => Err(failed),
-            // A script that ran out is a test bug; a fake that improvised would
-            // make a green run mean nothing.
-            None => Err(ModelError::Failed("the script ran out".to_owned())),
-        }
-    }
-
-    fn limited(&self) -> Option<suzatary_health::health::Limited> {
-        self.limited
-    }
-}
-
-/// `open` and `resume` pop the same scripted queue `turn` reads, and always hold a session.
-impl Sessions for FakeModel {
-    fn pick(&self) -> suzatary_conversations::secretary::model::Pick<'_> {
-        suzatary_conversations::secretary::model::Pick::Held(self)
-    }
-}
-
-impl SessionModel for FakeModel {
-    fn open(
-        &self,
-        id: &SessionId,
-        conversation: &Conversation,
-        tools: &serde_json::Value,
-        halt: &Halt,
-    ) -> Result<Sessioned, ModelError> {
-        self.show(tools);
-        self.asked
-            .lock()
-            .expect("not poisoned")
-            .push(conversation.clone());
-        self.opened.lock().expect("not poisoned").push(id.clone());
-        self.hold(halt)?;
-        self.wait_for_gate();
-        let next = self.replies.lock().expect("not poisoned").pop_front();
-        match next {
-            Some(Err(failed)) => Err(failed),
-            Some(Ok(text)) => Ok(Sessioned {
-                reply: Reply::parse(&text),
-                session: Session {
-                    id: id.clone(),
-                    model: self.name(),
-                    cwd: String::new(),
-                    created: "now".to_owned(),
-                    last: "now".to_owned(),
-                    surface: None,
-                },
-            }),
-            None => Err(ModelError::Failed("the script ran out".to_owned())),
-        }
-    }
-
-    fn resume(
-        &self,
-        _system: &str,
-        session: &Session,
-        delta: &suzatary_conversations::secretary::model::Delta,
-        tools: &serde_json::Value,
-        on_delta: &dyn Fn(&str),
-        halt: &Halt,
-    ) -> Result<Sessioned, ModelError> {
-        self.show(tools);
-        self.resumed_with
-            .lock()
-            .expect("not poisoned")
-            .push(delta.turns().to_vec());
-        let mut lose = self.lose_next_resume.lock().expect("not poisoned");
-        if *lose {
-            *lose = false;
-            return Err(ModelError::Lost("the session is gone".to_owned()));
-        }
-        drop(lose);
         self.hold(halt)?;
         self.wait_for_gate();
         let next = self.replies.lock().expect("not poisoned").pop_front();
@@ -1260,13 +1155,20 @@ impl SessionModel for FakeModel {
                     }
                     _ => on_delta(&text),
                 }
-                Ok(Sessioned {
-                    reply: Reply::parse(&text),
-                    session: session.clone(),
-                })
+                Ok(Reply::parse(&text))
             }
             None => Err(ModelError::Failed("the script ran out".to_owned())),
         }
+    }
+
+    fn limited(&self) -> Option<suzatary_health::health::Limited> {
+        self.limited
+    }
+}
+
+impl Picker for FakeModel {
+    fn pick(&self) -> suzatary_conversations::secretary::model::Pick<'_> {
+        Box::new(self)
     }
 }
 
@@ -2820,7 +2722,7 @@ impl Fakes {
             notify: &self.notify,
             answers: &self.answers,
             devices: &self.devices,
-            sessions: &self.model,
+            models: &self.model,
         }
     }
 }

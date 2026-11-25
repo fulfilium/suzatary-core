@@ -417,7 +417,7 @@ impl<H: Health> Bundle<H> {
     fn seed(&self, id: &ConversationId, entries: &[ConversationEntry]) {
         transcript::start(self.conversations.conversations(), id, &entries[0]).expect("opens");
         for entry in &entries[1..] {
-            transcript::push(self.conversations.conversations(), id, entry).expect("pushes");
+            transcript::push_older(self.conversations.conversations(), id, entry).expect("pushes");
         }
     }
 }
@@ -517,10 +517,12 @@ impl<H: Health> Model for Bundle<H> {
         "vectors-fixture".to_owned()
     }
 
-    fn turn(
+    fn streamed(
         &self,
         _conversation: &suzatary_conversations::secretary::model::Conversation,
         _tools: &serde_json::Value,
+        _on_delta: &dyn Fn(&str),
+        _halt: &suzatary_conversations::secretary::model::Halt,
     ) -> Result<suzatary_conversations::secretary::model::Reply, ModelError> {
         Err(ModelError::Unreachable(
             "the vectors fixture scripts every turn; nothing asks the model".to_owned(),
@@ -3117,7 +3119,7 @@ fn reseal_again(lines: &suzatary_stores::stores::conversations::InMemory) {
         .filter(|written| !matches!(written.line.shape(), LineShape::Resealed { .. }))
         .flat_map(|written| {
             let words = suzatary_lines::secretary::line_shape::split(&written.entry)
-                .1
+                .and_then(|(_, words)| words)
                 .expect("words");
             written.line.keys().cloned().zip(words).collect::<Vec<_>>()
         })

@@ -8,9 +8,9 @@ use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
 use suzatary_base::topic_target::Target;
+use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::{Said, Stored};
 use suzatary_conversations::secretary::turn_shape::{TurnShape, shape};
-use suzatary_conversations::secretary::{queue, taint};
 use suzatary_inbox::secretary::stamp::Stamp;
 use suzatary_lines::secretary::targets::{MAX_TOPICS, notes_in};
 use suzatary_topics::secretary::topics::revision::{Revision, held, listing, plan};
@@ -41,8 +41,8 @@ impl Verb for AddTopics {
     const NAME: &'static str = "add_topics";
     const DESCRIPTION: &'static str = "Give the round you are answering 1 to 3 topics, so the owner can find it \
         again by subject. A topic is 1 to 3 lowercase words joined by hyphens, at most 24 \
-        characters (`garden`, `tax-return`). USE A TOPIC THAT EXISTS: the session opening lists \
-        them, and this answer lists them again. Make a new one only for a subject that will come \
+        characters (`garden`, `tax-return`). USE A TOPIC THAT EXISTS: the TOPICS IN USE before the \
+        conversation list them, and this answer lists them again. Make a new one only for a subject that will come \
         back, never one per conversation or per email; a round that has read anything but the \
         owner's own words may only use topics that exist. `on: \"note\"` puts them on the note \
         you drafted last in this round instead. A round holds at most 3 topics. Yours are \
@@ -88,7 +88,7 @@ pub(super) fn revise(call: &Call<'_>, aim: Aim, revision: &Revision) -> Result<V
         &reading,
         &target,
         revision,
-        taint::held(&stored),
+        call.sent,
         call.caps.clock.now(),
     )?;
     for event in planned.events {

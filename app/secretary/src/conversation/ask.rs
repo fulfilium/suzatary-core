@@ -1,38 +1,31 @@
+//! How a round asks its model: one fresh call per step, a function of the objects it reads.
+
 use serde_json::Value;
 use suzatary_digest::secretary::memories::Memories;
 
 use crate::conversation::round::Sink;
-use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::{
-    Conversation, Delta, Model, ModelError, Reply, SessionId, SessionModel, Turn,
+    Conversation, Earlier, Model, ModelError, Reply, ToolCall, Turn,
 };
 use suzatary_conversations::secretary::queue;
-use suzatary_conversations::secretary::store::{Kept, Scope, Stored};
+use suzatary_conversations::secretary::store::{Said, Scope, Stored};
+use suzatary_conversations::secretary::taint::{self, Taint};
 use suzatary_digest::secretary::compaction::Reading;
 use suzatary_digest::secretary::digest_view::VIEW_BYTES;
 use suzatary_digest::secretary::told::{Asking, context_of};
-use suzatary_memory::secretary::memory;
+use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_topics::secretary::topics::stores::TopicStores;
 
 /// How a round asks its model.
 #[derive(Clone, Copy)]
 pub enum Ask<'a> {
-    /// A model with no session, sent this conversation's window of live turns under what it
-    /// remembers ([`suzatary_digest::secretary::told::context_of`]) each time.
-    Window {
+    /// What the model remembers ([`context_of`]: the facts, the record less this conversation's
+    /// window, the topics in use), then the window of this conversation's own live turns
+    /// ([`queue::window`]), which ends in the round being answered.
+    Digest {
         model: &'a dyn Model,
-        memories: Memories<'a>,
-        topics: TopicStores<'a>,
-    },
-    /// A session resumed with the turns it has not read, opened when there is none; an open that
-    /// fails asks `fallback` once, as [`Ask::Window`] would.
-    Session {
-        model: &'a dyn SessionModel,
-        /// Asked when a session will not open.
-        fallback: &'a dyn Model,
-        memories: Memories<'a>,
-        /// The topics it is told are in use when it opens.
-        topics: TopicStores<'a>,
+        memories: &'a Memories<'a>,
+        topics: &'a TopicStores<'a>,
     },
     /// Every stored turn and nothing else, for a job told no memory.
     Transcript {
@@ -41,307 +34,297 @@ pub enum Ask<'a> {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Sent {
-    /// The window under what the model remembers, to a model with no session or one opened now.
-    Whole(Conversation),
-    /// Only the turns a resumed session has not read.
-    Delta(Delta),
-}
-
-/// Who answered an ask, and what it was sent: each the fact the round records.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Answered {
-    /// The kept session, resumed with the turns it had not read.
-    Resumed(Delta),
-    /// A session opened now over the whole window: what was sent, and the session as it was
-    /// sent, whose line is owed.
-    Opened(Conversation, Kept),
-    /// A model holding no session, sent the whole window.
-    Stateless {
-        /// What it was sent.
-        sent: Conversation,
-        by: String,
-    },
-}
-
-impl Answered {
-    #[must_use]
-    pub fn sent(self) -> Sent {
-        match self {
-            Answered::Resumed(delta) => Sent::Delta(delta),
-            Answered::Opened(whole, _) | Answered::Stateless { sent: whole, .. } => {
-                Sent::Whole(whole)
-            }
-        }
-    }
-}
-
+/// What one ask was sent, and what came back.
 pub struct Asked {
     pub reply: Reply,
-    pub answered: Answered,
-    /// The memory's version this ask told the model; `None` when it told none or could not read it.
-    pub seen: Option<u64>,
+    pub sent: Conversation,
+}
+
+/// One call, and what it carries.
+pub struct Call {
+    pub call: Conversation,
+    /// The join of the carries of every turn the call holds ([`taint::sent`]), the earlier
+    /// rounds' long answers sent as their markers among them.
+    pub carries: Taint,
 }
 
 impl Ask<'_> {
-    /// Ask once, over what `stored` holds and `waiting` names; a lost session opens a fresh one.
-    pub fn ask(
+    /// Send `call`, built by [`Ask::carrying`]: the reply streams to `sink`, and its halt ends
+    /// the call. What it carries is the caller's to join before it sends, so a call that fails
+    /// still carried it.
+    pub fn send(
         &self,
-        id: &ConversationId,
-        system: &str,
+        call: Conversation,
         tools: &Value,
-        stored: &Stored,
-        waiting: &queue::Pending<'_>,
         sink: &Sink<'_>,
     ) -> Result<Asked, ModelError> {
+        let reply = self
+            .model()
+            .streamed(&call, tools, sink.on_delta, sink.halt)?;
+        Ok(Asked { reply, sent: call })
+    }
+
+    /// What one ask over `read` sends: a function of the objects it reads, so two replicas
+    /// holding the same objects send the same call. A turn no round has claimed yet is not
+    /// sent: the round that claims it answers it.
+    #[must_use]
+    pub fn call(&self, system: &str, read: &Transcript) -> Conversation {
+        self.carrying(system, read).call
+    }
+
+    /// [`Ask::call`] and what it carries, from the one choice of turns.
+    #[must_use]
+    pub fn carrying(&self, system: &str, read: &Transcript) -> Call {
         match *self {
-            Ask::Window {
-                model,
-                memories,
-                topics,
-            } => {
-                let (whole, seen, _) = opening(system, memories, topics, stored);
-                let reply = model.turn(&whole, tools)?;
-                Ok(Asked {
-                    reply,
-                    answered: Answered::Stateless {
-                        sent: whole,
-                        by: model.name(),
-                    },
-                    seen,
-                })
-            }
-            Ask::Session {
-                model,
-                fallback,
-                memories,
-                topics,
-            } => sessioned(
-                model, fallback, memories, topics, id, system, tools, stored, waiting, sink,
-            ),
-            Ask::Transcript { model } => {
-                let whole = Conversation {
-                    system: system.to_owned(),
-                    turns: queue::sent(stored, Scope::Transcript)
-                        .into_iter()
-                        .map(|(_, said)| said.turn.clone())
-                        .collect(),
-                };
-                let reply = model.turn(&whole, tools)?;
-                Ok(Asked {
-                    reply,
-                    answered: Answered::Stateless {
-                        sent: whole,
-                        by: model.name(),
-                    },
-                    seen: None,
-                })
+            Ask::Digest {
+                memories, topics, ..
+            } => digest(system, *memories, topics, read),
+            Ask::Transcript { .. } => {
+                let stored = read.stored();
+                Call {
+                    call: Conversation::bare(
+                        system,
+                        stored.turns.iter().map(|said| said.turn.clone()).collect(),
+                    ),
+                    carries: taint::sent(stored, 0..stored.turns.len()),
+                }
             }
         }
     }
-}
 
-impl Ask<'_> {
+    fn model(&self) -> &dyn Model {
+        match *self {
+            Ask::Digest { model, .. } | Ask::Transcript { model } => model,
+        }
+    }
+
     /// Which turns this ask sends a model, the one source of it: the round records it on the
     /// conversation when it differs from the last ask's, and [`queue::held`] reads it back.
     #[must_use]
     pub fn scope(&self) -> Scope {
         match self {
-            Ask::Window { .. } | Ask::Session { .. } => Scope::Window,
+            Ask::Digest { .. } => Scope::Window,
             Ask::Transcript { .. } => Scope::Transcript,
         }
     }
 }
 
-/// What a model with no session, or a session opening, is sent: what it remembers, then this
-/// conversation's own last live turns ([`queue::for_model`]); the memory's version it told, and
-/// the first turn it sent.
-fn opening(
+/// [`Ask::Digest`]'s call: the context, then the window. A store that will not read is said in
+/// the context where its part would stand, and the other parts are told as they read.
+fn digest(
     system: &str,
     memories: Memories<'_>,
-    topics: TopicStores<'_>,
-    stored: &Stored,
-) -> (Conversation, Option<u64>, usize) {
-    let window = queue::for_model(stored);
-    let asking = window.first().map(|(from, _)| Asking {
-        conversation: &stored.id,
-        from: *from,
-    });
-    let heading = heading(memories, Telling::Opening(topics, asking));
-    let from = window.first().map_or(stored.turns.len(), |(from, _)| *from);
-    (
-        Conversation {
+    topics: &TopicStores<'_>,
+    read: &Transcript,
+) -> Call {
+    let stored = read.stored();
+    let window = queue::window(stored, &read.queued());
+    let carries = taint::sent(stored, window.all().map(|(index, _)| *index));
+    let sent: std::collections::BTreeSet<prodrome_core::event::Hash> = window
+        .first()
+        .and_then(|first| read.line_of(first))
+        .map(|line| {
+            read.lines()[line..]
+                .iter()
+                .map(|written| written.name.clone())
+                .collect()
+        })
+        .unwrap_or_default();
+    let asking = Some(Asking { sent: &sent });
+    let memory = memories.reads().read();
+    let record = Reading::of(&memories.digests.reads());
+    let topics = topics
+        .reading()
+        .map_err(suzatary_base::refusal::Refusal::from);
+    let turns = |turns: &[(usize, &Said)]| -> Vec<Turn> {
+        turns.iter().map(|(_, said)| said.turn.clone()).collect()
+    };
+    Call {
+        call: Conversation {
             system: system.to_owned(),
-            turns: queue::headed(heading.turn, &window),
-        },
-        heading.version,
-        from,
-    )
-}
-
-/// Resume the stored session, or open a fresh one when there is none, it was opened on another
-/// [`surface_of`], or it is lost; an open that fails gets one stateless turn.
-#[allow(clippy::too_many_arguments)]
-fn sessioned(
-    model: &dyn SessionModel,
-    fallback: &dyn Model,
-    memories: Memories<'_>,
-    topics: TopicStores<'_>,
-    id: &ConversationId,
-    system: &str,
-    tools: &Value,
-    stored: &Stored,
-    waiting: &queue::Pending<'_>,
-    sink: &Sink<'_>,
-) -> Result<Asked, ModelError> {
-    // A retraction the store will not say records no surface, so the next turn opens afresh.
-    let surface = memories
-        .digests
-        .reads()
-        .retractions()
-        .map(|retracted| surface_of(system, tools, &retracted));
-    let open = |tag: &str| {
-        let fresh = SessionId::minted(&format!("{}/{}{tag}", id.as_str(), stored.turns.len()));
-        let (whole, seen, from) = opening(system, memories, topics, stored);
-        model
-            .open(&fresh, &whole, tools, sink.halt)
-            .map(|mut sessioned| {
-                sessioned.session.surface = surface.clone().ok();
-                Asked {
-                    reply: sessioned.reply,
-                    // What this open sent is a fact now; a turn appended before the session's
-                    // line is written must not move it.
-                    answered: Answered::Opened(
-                        whole,
-                        Kept {
-                            session: sessioned.session,
-                            from,
-                        },
-                    ),
-                    seen,
-                }
-            })
-    };
-    // A session that will not open, whatever the reason but a halt, gets one stateless turn
-    // instead, so a round whose opens keep failing still answers every step.
-    let opened = |tag: &str| match open(tag) {
-        Err(ModelError::Halted) => Err(ModelError::Halted),
-        Err(_will_not_open) => {
-            let (whole, seen, _) = opening(system, memories, topics, stored);
-            let reply = fallback.turn(&whole, tools)?;
-            Ok(Asked {
-                reply,
-                answered: Answered::Stateless {
-                    sent: whole,
-                    by: fallback.name(),
-                },
-                seen,
-            })
-        }
-        asked => asked,
-    };
-    let session = match &stored.session {
-        Some(kept)
-            if surface
-                .as_ref()
-                .is_ok_and(|surface| kept.session.surface.as_ref() == Some(surface)) =>
-        {
-            &kept.session
-        }
-        Some(_) => return opened("/surface"),
-        None => return opened(""),
-    };
-    // A session resumed is told only what moved in the memory since it last was.
-    let told = heading(memories, Telling::Resumed(stored.memory_seen));
-    let delta = waiting.delta(told.turn);
-    match model.resume(system, session, &delta, tools, sink.on_delta, sink.halt) {
-        Ok(sessioned) => Ok(Asked {
-            reply: sessioned.reply,
-            answered: Answered::Resumed(delta),
-            seen: told.version,
-        }),
-        Err(ModelError::Lost(_)) => opened("/lost"),
-        Err(other) => Err(other),
-    }
-}
-
-/// The digest of what a session holds from its opening that no later turn corrects: the manual,
-/// the verb list, and which summaries the owner had retracted, since the record it was told may
-/// hold one he has retracted since. No retraction adds nothing.
-#[must_use]
-pub fn surface_of(
-    system: &str,
-    tools: &Value,
-    retracted: &std::collections::BTreeSet<prodrome_core::event::Hash>,
-) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(system.as_bytes());
-    hasher.update([0]);
-    hasher.update(tools.to_string().as_bytes());
-    for retraction in retracted {
-        hasher.update([0]);
-        hasher.update(retraction.as_str().as_bytes());
-    }
-    hex::encode(hasher.finalize())
-}
-
-/// What an ask tells the model it remembers: the turn heading its batch, if there is anything to
-/// tell, and the memory's version it brings the conversation to.
-struct Heading {
-    turn: Option<Turn>,
-    version: Option<u64>,
-}
-
-#[derive(Clone, Copy)]
-enum Telling<'a> {
-    /// To a model with no session, or a session opening: everything, the topics in use, and the
-    /// record less the turns it is sent as turns.
-    Opening(TopicStores<'a>, Option<Asking<'a>>),
-    /// To a session resumed, last told the memory's version `.0`: only what moved in the facts,
-    /// since the record it was told when it opened is in its context.
-    Resumed(Option<u64>),
-}
-
-/// What `telling` tells; a memory that will not read is said, never skipped.
-fn heading(memories: Memories<'_>, telling: Telling<'_>) -> Heading {
-    let memory = match memories.reads().read() {
-        Ok(memory) => memory,
-        Err(refusal) => {
-            return Heading {
-                turn: Some(Turn::Tool {
-                    verb: suzatary_conversations::secretary::tool_name::ToolName::Memory,
-                    answer: format!("your memory could not be read: {}", refusal.message()),
-                    outcome: suzatary_conversations::secretary::outcome::Outcome::Refused,
-                    files: Vec::new(),
-                }),
-                version: None,
-            };
-        }
-    };
-    let told = match telling {
-        Telling::Opening(topics, asking) => {
-            let record = Reading::of(&memories.digests.reads());
-            let topics = topics
-                .reading()
-                .map_err(suzatary_base::refusal::Refusal::from);
-            let told = context_of(
-                &memory,
+            context: context_of(
+                memory.as_ref(),
                 topics.as_ref(),
                 record.as_ref(),
                 VIEW_BYTES,
                 asking,
-            );
-            (!told.is_empty()).then(|| told.text())
+            )
+            .context(),
+            earlier: earlier(stored, &window.earlier),
+            turns: turns(&window.round),
+        },
+        carries,
+    }
+}
+
+/// The earlier rounds as a call sends them: each verb's answer beside the call that has it
+/// again, and a long one by its marker. Calls and answers pair by the turns' shapes, so an
+/// erased call or answer still takes its place: a model's turn queues its calls in the order
+/// made (an erased one by its verbs alone, whose arguments are gone), each answer of the same
+/// verb takes the first, and an answer the owner's pointing loaded (`reference`) the call its
+/// reference maps to ([`crate::secretary::again`]), in the order the round's opening named them.
+fn earlier(stored: &Stored, turns: &[(usize, &Said)]) -> Vec<Earlier> {
+    use std::collections::VecDeque;
+    use suzatary_conversations::secretary::tool_name::ToolName;
+    use suzatary_conversations::secretary::turn_shape::{TurnShape, shape};
+    let mut asked: VecDeque<(ToolName, Option<ToolCall>)> = VecDeque::new();
+    let mut pointed: VecDeque<suzatary_base::reference::Reference> = VecDeque::new();
+    turns
+        .iter()
+        .map(|&(index, said)| match shape(&said.turn) {
+            TurnShape::Model { calls, .. } => {
+                asked = match &said.turn {
+                    Turn::Model { calls, .. } => calls
+                        .iter()
+                        .map(|call| (call.verb.clone(), Some(call.clone())))
+                        .collect(),
+                    _ => calls.into_iter().map(|verb| (verb, None)).collect(),
+                };
+                Earlier::Said(said.turn.clone())
+            }
+            TurnShape::Person { references, .. } | TurnShape::Act { references } => {
+                pointed = references.into_iter().collect();
+                Earlier::Said(said.turn.clone())
+            }
+            TurnShape::Tool { verb, .. } => {
+                let call = if verb == ToolName::Reference {
+                    pointed
+                        .pop_front()
+                        .and_then(|reference| crate::secretary::again(&reference))
+                } else {
+                    match asked.front() {
+                        Some((first, _)) if *first == verb => {
+                            asked.pop_front().and_then(|(_, call)| call)
+                        }
+                        Some(_) | None => None,
+                    }
+                };
+                match &said.turn {
+                    _ if queue::long_answer(stored, index) => Earlier::Long {
+                        verb,
+                        call,
+                        bytes: match &said.turn {
+                            Turn::Tool { answer, .. } => Some(answer.len()),
+                            _ => None,
+                        },
+                    },
+                    Turn::Tool { .. } => Earlier::Answered {
+                        call,
+                        turn: said.turn.clone(),
+                    },
+                    _ => Earlier::Said(said.turn.clone()),
+                }
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use suzatary_conversations::secretary::outcome::Outcome;
+    use suzatary_conversations::secretary::store::{Entry, Kind};
+    use suzatary_conversations::secretary::turn_shape::shape;
+
+    fn at() -> suzatary_base::capability::Datetime {
+        suzatary_base::capability::Datetime::new(2026, 11, 25, 9, 0, 0, 0).expect("an instant")
+    }
+
+    fn stored(turns: Vec<Turn>) -> Stored {
+        let mut entries = vec![Entry::Opened {
+            at: at(),
+            title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
+            model: "m".to_owned(),
+            kind: Kind::Topic,
+        }];
+        entries.extend(turns.into_iter().map(|turn| Entry::Said {
+            at: at(),
+            by: matches!(turn, Turn::Person { .. }).then(|| "ada".into()),
+            turn,
+        }));
+        Stored::of(
+            &suzatary_base::conversation_id::ConversationId::new("default").expect("a slug"),
+            &entries,
+        )
+        .expect("a conversation")
+    }
+
+    fn show(id: &str) -> ToolCall {
+        ToolCall {
+            verb: "show".into(),
+            args: [("id".to_owned(), Value::from(id))].into(),
         }
-        Telling::Resumed(seen) => {
-            let change = memory::change(&memory, seen);
-            (!change.is_empty()).then(|| change.told())
+    }
+
+    fn answer(verb: &str, answer: &str) -> Turn {
+        Turn::Tool {
+            verb: verb.into(),
+            answer: answer.to_owned(),
+            outcome: Outcome::Answered,
+            files: Vec::new(),
         }
-    };
-    Heading {
-        turn: told.map(queue::heading),
-        version: Some(memory.version),
+    }
+
+    fn erased(turn: &Turn) -> Turn {
+        let shape = shape(turn);
+        let words = vec![suzatary_memory::secretary::words::Gone::Missing.into(); shape.slots()];
+        Turn::Erased { shape, words }
+    }
+
+    fn sent(stored: &Stored) -> Vec<Earlier> {
+        let all: Vec<(usize, &Said)> = stored.turns.iter().enumerate().collect();
+        earlier(stored, &all)
+    }
+
+    /// E4: an answer takes the call it answered by the turns' shapes, so an erased answer still
+    /// takes its call's place, and an erased call's answer names no call.
+    #[test]
+    fn an_answer_pairs_with_its_call_around_an_erasure() {
+        let calling = Turn::Model {
+            text: String::new(),
+            calls: vec![show("a"), show("b")],
+        };
+        let round = stored(vec![
+            calling.clone(),
+            erased(&answer("show", "{\"a\": 1}")),
+            answer("show", "{\"b\": 2}"),
+            erased(&calling),
+            answer("show", "{\"c\": 3}"),
+        ]);
+        let sent = sent(&round);
+        assert!(
+            matches!(&sent[2], Earlier::Answered { call: Some(call), .. } if *call == show("b"))
+        );
+        assert!(matches!(&sent[4], Earlier::Answered { call: None, .. }));
+    }
+
+    /// E1: a long answer the owner's pointing loaded is marked with the call its reference maps
+    /// to, and with the answer's bytes.
+    #[test]
+    fn a_pointed_long_answer_names_the_call_that_reads_it_again() {
+        let pointed: suzatary_base::reference::Reference =
+            "todo:life/rent".parse().expect("a reference");
+        let long = format!("todo:life/rent\n\n{}", "w".repeat(queue::LONG_ANSWER * 2));
+        let round = stored(vec![
+            Turn::Person {
+                text: "this one".to_owned(),
+                references: vec![pointed],
+                attachments: Vec::new(),
+            },
+            answer("reference", &long),
+        ]);
+        match &sent(&round)[1] {
+            Earlier::Long {
+                verb,
+                call: Some(call),
+                bytes,
+            } => {
+                assert_eq!(verb.as_str(), "reference");
+                assert_eq!(call.verb.as_str(), "todo_show");
+                assert_eq!(call.args.get("todo_id"), Some(&Value::from("rent")));
+                assert_eq!(*bytes, Some(long.len()));
+            }
+            other => panic!("a marker naming todo_show: {other:?}"),
+        }
     }
 }

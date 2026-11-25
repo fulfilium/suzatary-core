@@ -48,7 +48,7 @@ fn row(who: &str, text: &str, aside: bool) -> (String, String, bool) {
 }
 
 /// Regenerate, then edit: each sets the last round aside, keeps every turn
-/// and index, and the next answer comes from a fresh session.
+/// and index, and the next answer is asked afresh without the set-aside turns.
 #[test]
 fn a_regenerate_and_an_edit_ask_again_over_the_tab_s_lines() {
     let (base, fakes) = serving(
@@ -77,11 +77,6 @@ fn a_regenerate_and_an_edit_ask_again_over_the_tab_s_lines() {
             row("model", "two", false),
         ],
         "{regenerated}"
-    );
-    assert_eq!(
-        fakes.model.opened().len(),
-        2,
-        "the session was dropped and reopened"
     );
     let told = fakes.model.asked().last().cloned().expect("asked");
     assert!(

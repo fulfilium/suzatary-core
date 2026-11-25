@@ -265,6 +265,12 @@ impl<S: Shape> Locked<S> {
         S::Words::read(std::str::from_utf8(unpad(&padded)?).ok()?)
     }
 
+    /// How many bytes it holds sealed: its words padded, as written, whoever holds the key.
+    #[must_use]
+    pub fn sealed_len(&self) -> usize {
+        self.sealed.len()
+    }
+
     /// Only [`Locked::open`] checks the bytes.
     #[must_use]
     pub fn read(key: KeyName, sealed: Vec<u8>) -> Self {

@@ -123,7 +123,7 @@ fn a_start_resumes_only_what_it_cut_off() {
     ];
     for (conversation, line) in &lines {
         start(store, &id(conversation), &opened()).expect("started");
-        push(store, &id(conversation), line).expect("written");
+        push_older(store, &id(conversation), line).expect("written");
     }
     for retry in [Retry::Allowed, Retry::Held] {
         assert_eq!(
@@ -142,7 +142,7 @@ fn a_question_is_answered_once_by_the_round_that_claimed_it() {
     let store = held.conversations();
     let morning = id("2026-09-30-1");
     start(store, &morning, &opened()).expect("started");
-    push(store, &morning, &person(1, "when is the permit due")).expect("asked");
+    push_older(store, &morning, &person(1, "when is the permit due")).expect("asked");
     assert_eq!(
         resumed(store, at(2), Retry::Allowed).expect("reads"),
         std::slice::from_ref(&morning)
@@ -169,13 +169,15 @@ fn a_question_is_answered_once_by_the_round_that_claimed_it() {
         Claimed::Nothing,
         "the first run's round is running"
     );
-    let answer = |second: u32| Entry::Said {
-        at: at(second),
-        turn: Turn::Model {
-            text: "On Friday.".to_owned(),
-            calls: Vec::new(),
-        },
-        by: None,
+    let answer = |second: u32| {
+        suzatary_lines::secretary::answer::BoxLine::Answer(
+            suzatary_lines::secretary::answer::Answer::after(
+                at(second),
+                "On Friday.".to_owned(),
+                Vec::new(),
+                suzatary_conversations::secretary::taint::Taint::Clean,
+            ),
+        )
     };
     assert_eq!(
         push_open(store, &morning, &second.run, &[answer(2)]).expect("read"),
@@ -207,7 +209,7 @@ fn lines_read_back_in_the_order_written() {
         (3, "ok"),
         (3, "ok"),
     ] {
-        push(store, &morning, &person(second, text)).expect("appended");
+        push_older(store, &morning, &person(second, text)).expect("appended");
     }
     let transcript = read(store, &morning).expect("a transcript");
     let entries = transcript.entries();
@@ -226,7 +228,7 @@ fn a_conversation_starts_once_and_is_pushed_to_after() {
     let store = held.conversations();
     let morning = id("2026-09-30-1");
     assert!(matches!(
-        push(store, &morning, &person(1, "hi")),
+        push_older(store, &morning, &person(1, "hi")),
         Err(StoreError::Absent { .. })
     ));
     start(store, &morning, &opened()).expect("started");
@@ -270,8 +272,8 @@ fn an_erasure_destroys_its_keys_and_their_renders() {
     let store = held.conversations();
     let morning = id("2026-09-30-1");
     start(store, &morning, &opened()).expect("started");
-    push(store, &morning, &person(1, "the private thing")).expect("said");
-    push(store, &morning, &model(2, "First block.\n\nSecond block.")).expect("answered");
+    push_older(store, &morning, &person(1, "the private thing")).expect("said");
+    push_older(store, &morning, &model(2, "First block.\n\nSecond block.")).expect("answered");
     let lines = read(store, &morning).expect("read");
     let answer: std::collections::BTreeSet<KeyName> =
         lines.lines()[2].line.keys().cloned().collect();
@@ -307,7 +309,7 @@ fn an_erasure_of_words_elsewhere_is_refused() {
     let (morning, evening) = (id("2026-09-30-1"), id("2026-09-30-2"));
     start(store, &morning, &opened()).expect("started");
     start(store, &evening, &opened()).expect("started");
-    push(store, &evening, &person(1, "elsewhere")).expect("said");
+    push_older(store, &evening, &person(1, "elsewhere")).expect("said");
     let theirs: std::collections::BTreeSet<KeyName> = read(store, &evening).expect("read").lines()
         [1]
     .line
@@ -332,7 +334,7 @@ fn a_render_not_forgotten_keeps_its_key() {
     let held = suzatary_stores::stores::conversations::InMemory::default();
     let morning = id("2026-09-30-1");
     start(held.conversations(), &morning, &opened()).expect("started");
-    push(held.conversations(), &morning, &model(1, "An answer.")).expect("answered");
+    push_older(held.conversations(), &morning, &model(1, "An answer.")).expect("answered");
     let stuck = Conversations {
         renders: &Stuck,
         sessions: &suzatary_base::capability::Nothing,
@@ -374,7 +376,7 @@ proptest::proptest! {
         for (second, step) in (1u32..).zip(steps) {
             match step {
                 Ok(words) => {
-                    push(store, &morning, &person(second, &format!("<{words}>"))).expect("said");
+                    push_older(store, &morning, &person(second, &format!("<{words}>"))).expect("said");
                     said.push(format!("<{words}>"));
                 }
                 Err(lines) => {

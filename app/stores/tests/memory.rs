@@ -13,7 +13,7 @@ use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_digest::secretary::memories::Memories;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
-use suzatary_memory::secretary::memory::{self, Fact, FactId, Kind, MAX_LIVE, Origin};
+use suzatary_memory::secretary::memory::{Fact, FactId, Kind, MAX_LIVE, Origin};
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
 use suzatary_store::store::Reads as _;
@@ -336,99 +336,6 @@ proptest! {
             if let Some(pick) = forgets.get(round) {
                 let id = read.facts[pick % read.facts.len()].id;
                 memories.forget(id, now(), &ada()).expect("forgets");
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum Moment {
-    Remember(usize),
-    Forget(usize),
-    /// Consolidate the standing facts the picks name into new words.
-    Consolidate(usize, usize, usize),
-    /// A round in conversation `.0`; `.1` says its session is fresh.
-    Round(usize, bool),
-}
-
-fn moments() -> impl Strategy<Value = Vec<Moment>> {
-    proptest::collection::vec(
-        prop_oneof![
-            (0usize..20).prop_map(Moment::Remember),
-            (0usize..20).prop_map(Moment::Forget),
-            (0usize..20, 0usize..20, 20usize..40)
-                .prop_map(|(a, b, n)| Moment::Consolidate(a, b, n)),
-            (0usize..3, proptest::bool::weighted(0.2)).prop_map(|(c, f)| Moment::Round(c, f)),
-        ],
-        0..80,
-    )
-}
-
-proptest! {
-    /// Across three conversations, each round's heading tells the model exactly the memory as it
-    /// stood, no fact twice and no forgotten fact it was never told.
-    #[test]
-    fn one_memory_every_conversation(script in moments()) {
-        let held = Held::default();
-        let memories = held.memories();
-        let opened = || vec![suzatary_conversations::secretary::store::Entry::Opened {
-            at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
-            title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
-            model: "m".to_owned(),
-            kind: suzatary_conversations::secretary::store::Kind::Topic,
-        }];
-        let mut files: Vec<Vec<suzatary_conversations::secretary::store::Entry>> = vec![opened(), opened(), opened()];
-        let mut knows: Vec<std::collections::BTreeSet<FactId>> = vec![std::collections::BTreeSet::default(); 3];
-        for moment in script {
-            match moment {
-                Moment::Remember(n) => {
-                    let _ = memories.remember(&Fact::new(text(n)).expect("a fact"), Kind::Owner, &said(), now());
-                }
-                Moment::Forget(pick) => {
-                    let standing = memories.reads().read().expect("reads").facts;
-                    if let Some(one) = standing.get(pick % standing.len().max(1)) {
-                        memories.forget(one.id, now(), &ada()).expect("forgets");
-                    }
-                }
-                Moment::Consolidate(a, b, n) => {
-                    let standing = memories.reads().read().expect("reads").facts;
-                    let from: BTreeSet<FactId> = [a, b]
-                        .iter()
-                        .filter_map(|pick| standing.get(pick % standing.len().max(1)).map(|one| one.id))
-                        .collect();
-                    let _ = memories.consolidate(&from, &Fact::new(text(n)).expect("a fact"), Kind::Owner, &said(), now());
-                }
-                Moment::Round(c, fresh) => {
-                    let id = ConversationId::new(format!("c{c}")).expect("a slug");
-                    let stored = suzatary_conversations::secretary::store::Stored::of(&id, &files[c]).expect("folds");
-                    let now = memories.reads().read().expect("reads");
-                    let change = memory::change(&now, if fresh { None } else { stored.memory_seen });
-                    match &change {
-                        memory::Change::Whole { facts, .. } => {
-                            knows[c] = facts.iter().map(|r| r.id).collect();
-                        }
-                        memory::Change::Since { added, forgotten, merged, .. } => {
-                            for gone in forgotten {
-                                prop_assert!(knows[c].remove(gone), "told to forget {gone}, never told of it");
-                            }
-                            for merge in merged {
-                                prop_assert!(knows[c].remove(&merge.fact), "told {} is merged, never told of it", merge.fact);
-                                prop_assert!(now.get(merge.into).is_some(), "told to rely on fact {}, which does not stand", merge.into);
-                            }
-                            for added in added {
-                                prop_assert!(knows[c].insert(added.id), "told of {} twice", added.id);
-                            }
-                        }
-                    }
-                    let expected: std::collections::BTreeSet<FactId> = now.facts.iter().map(|r| r.id).collect();
-                    prop_assert_eq!(&knows[c], &expected);
-                    if stored.memory_seen != Some(change.version()) {
-                        files[c].push(suzatary_conversations::secretary::store::Entry::MemorySeen {
-                            at: suzatary_base::capability::Datetime::new(2026, 10, 2, 9, 0, 0, 0).expect("an instant"),
-                            version: change.version(),
-                        });
-                    }
-                }
             }
         }
     }

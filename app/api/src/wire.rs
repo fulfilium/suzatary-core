@@ -653,7 +653,7 @@ pub enum Uploaded {
     Sensitive { why: String, folder: String },
 }
 
-/// `GET /api/secretary/record`: the summaries a session opening is told.
+/// `GET /api/secretary/record`: the summaries a call is told.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct RecordPayload {
     /// Oldest first.

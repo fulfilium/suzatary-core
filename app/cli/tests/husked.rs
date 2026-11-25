@@ -85,7 +85,7 @@ fn written(root: &Path) -> BTreeSet<Hash> {
         };
         transcript::start(conversations, &id(n), &opened).expect("started");
         for k in 1..6 {
-            transcript::push(conversations, &id(n), &said(k)).expect("said");
+            transcript::push_older(conversations, &id(n), &said(k)).expect("said");
         }
     }
     // Lines past the bound one content answer carries, so the readings ask as a device does.
@@ -98,7 +98,7 @@ fn written(root: &Path) -> BTreeSet<Hash> {
             },
             by: None,
         };
-        transcript::push(conversations, &id(2), &large).expect("said");
+        transcript::push_older(conversations, &id(2), &large).expect("said");
     }
     for n in 0..2 {
         let answers: BTreeSet<_> = transcript::read(conversations, &id(n))
@@ -353,7 +353,7 @@ fn chains_written(
             },
             by: Some("ada".into()),
         };
-        transcript::push(conversations, &id, &entry).expect("said");
+        transcript::push_older(conversations, &id, &entry).expect("said");
         let read = transcript::read(conversations, &id).expect("reads");
         let mut count = u32::try_from(read.lines().len()).expect("a count");
         let first: Vec<KeyName> = read
@@ -364,7 +364,7 @@ fn chains_written(
             .keys()
             .cloned()
             .collect();
-        let words = split(&entry).1.expect("words");
+        let words = split(&entry).and_then(|(_, words)| words).expect("words");
         for (of, words) in first.into_iter().zip(&words) {
             let mut from = of.clone();
             for _ in 0..*depth {
@@ -404,7 +404,7 @@ fn a_pruned_store_takes_back_no_dropped_whole() {
     held.lines.husk(&dead).expect("pruned");
     let husks: Vec<_> = dead.iter().map(|name| file(&at_box, name)).collect();
 
-    transcript::push(device.conversations(), &id(1), &said(7)).expect("said");
+    transcript::push_older(device.conversations(), &id(1), &said(7)).expect("said");
     let offered: Vec<(Hash, String)> = device
         .lines
         .objects()
@@ -417,7 +417,7 @@ fn a_pruned_store_takes_back_no_dropped_whole() {
     let again: Vec<_> = dead.iter().map(|name| file(&at_box, name)).collect();
     assert_eq!(again, husks, "each husk is kept");
 
-    transcript::push(held.conversations(), &id(1), &said(9)).expect("written over the husks");
+    transcript::push_older(held.conversations(), &id(1), &said(9)).expect("written over the husks");
     assert_eq!(held.lines.verify(), Vec::<String>::new());
 }
 

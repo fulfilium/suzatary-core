@@ -264,7 +264,12 @@ fn a_noted_act_in_the_default_conversation_leaves_his_round_clean() {
             said(person("remember I moved"), Some("ada")),
             said(calling("remember"), None),
         ] {
-            conversations::append(store.lines.conversations(), &DEFAULT, &line).expect("said");
+            suzatary_lines::secretary::transcript::push_older(
+                store.lines.conversations(),
+                &DEFAULT,
+                &line,
+            )
+            .expect("said");
         }
     };
     let clean = InMemory::default();
@@ -276,18 +281,18 @@ fn a_noted_act_in_the_default_conversation_leaves_his_round_clean() {
         &stored.turns[0].by,
         Some(Stamp::Actor(speaker)) if speaker.actor == "ada"
     ));
-    assert!(!taint::tainted(&stored));
+    assert_eq!(taint::held(&stored), taint::Taint::Clean);
     assert!(taint::opener(&stored).is_some());
 
     let read = InMemory::default();
     opened(&read, &DEFAULT);
-    conversations::append(
+    suzatary_lines::secretary::transcript::push_older(
         read.lines.conversations(),
         &DEFAULT,
         &said(calling("search"), None),
     )
     .expect("said");
-    conversations::append(
+    suzatary_lines::secretary::transcript::push_older(
         read.lines.conversations(),
         &DEFAULT,
         &said(
@@ -304,7 +309,11 @@ fn a_noted_act_in_the_default_conversation_leaves_his_round_clean() {
     note(&read);
     ask(&read);
     let stored = conversations::read(read.lines.conversations(), &DEFAULT).expect("reads");
-    assert!(taint::tainted(&stored), "a read in the window");
+    assert_eq!(
+        taint::held(&stored),
+        taint::Taint::Tainted,
+        "a read in the window"
+    );
 }
 
 /// Only the poster's own lifecycle acts with a note are heard: an empty note, an event naming a

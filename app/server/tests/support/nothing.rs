@@ -13,7 +13,7 @@ impl Server<'static> {
             notify: &Nothing,
             answers: &Nothing,
             devices: &Nothing,
-            sessions: &Nothing,
+            models: &Nothing,
         }
     }
 }

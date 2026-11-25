@@ -84,7 +84,7 @@ pub fn briefs(stored: &Stored) -> Vec<Brief> {
 /// verb this build no longer names reads, since what it did is unknown.
 fn reads(turn: &Turn) -> bool {
     match turn_shape::shape(turn) {
-        turn_shape::TurnShape::Model { calls } => calls.iter().any(|verb| {
+        turn_shape::TurnShape::Model { calls, .. } => calls.iter().any(|verb| {
             verb.verb()
                 .is_none_or(|verb| verb.powers().effect == Effect::Reads)
         }),

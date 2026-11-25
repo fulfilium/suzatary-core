@@ -17,7 +17,7 @@ use prodrome_core::store::EventStore;
 
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::cast::CAST;
-use suzatary_conversations::secretary::model::{SessionId, ToolCall, Turn};
+use suzatary_conversations::secretary::model::{ToolCall, Turn};
 use suzatary_conversations::secretary::outcome;
 use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::{
@@ -90,7 +90,7 @@ impl Scratch {
 /// Line `entry` of conversation `id` as the store keeps it: each slot of its words through the
 /// redaction door, as `LineEvent::write` sends them.
 fn scrubbed(id: &ConversationId, entry: &Entry) -> Entry {
-    let (shape, words) = line_shape::split(entry);
+    let (shape, words) = line_shape::split(entry).expect("a written kind");
     let words = words
         .expect("a line with its words")
         .iter()
@@ -102,7 +102,7 @@ fn scrubbed(id: &ConversationId, entry: &Entry) -> Entry {
 /// How many bytes the words of `entry` print to, which is most of what a line weighs.
 fn weight(entry: &Entry) -> usize {
     line_shape::split(entry)
-        .1
+        .and_then(|(_, words)| words)
         .expect("a line with its words")
         .iter()
         .map(|words| suzatary_memory::secretary::salted_text::Words::print(words).len())
@@ -133,7 +133,7 @@ fn event(held: usize, entry: &Entry) -> LineEvent {
 
 fn line_of(id: &ConversationId, held: usize, entry: &Entry) -> LineEvent {
     use suzatary_store::store::Doc as _;
-    let (line, keys) = LineEvent::write(
+    let (line, keys) = LineEvent::older(
         id.clone(),
         by(),
         u32::try_from(held).expect("a count"),
@@ -166,9 +166,7 @@ enum Step {
     Propose { revise: bool },
     Stop { stored_shape: bool },
     Rewind(bool),
-    Session,
-    Unheard,
-    MemorySeen,
+    Scoped,
     Title,
     Review,
     ReviewFailed,
@@ -185,9 +183,7 @@ fn step() -> impl Strategy<Value = Step> {
         1 => any::<bool>().prop_map(|revise| Step::Propose { revise }),
         1 => any::<bool>().prop_map(|stored_shape| Step::Stop { stored_shape }),
         3 => any::<bool>().prop_map(Step::Rewind),
-        1 => Just(Step::Session),
-        1 => Just(Step::Unheard),
-        1 => Just(Step::MemorySeen),
+        1 => Just(Step::Scoped),
         1 => Just(Step::Title),
         1 => Just(Step::Review),
         1 => Just(Step::ReviewFailed),
@@ -217,7 +213,7 @@ fn person(n: u8) -> Turn {
 fn conversation(script: &[(Step, u32)]) -> Vec<Entry> {
     let mut lines = vec![opened()];
     let mut proposals = 0usize;
-    let mut sessions = 0u32;
+    let mut scopes = 0u32;
     let now =
         |lines: &[Entry]| Stored::of(&id(), lines).expect("the builder writes a conversation");
     for (step, second) in script {
@@ -289,13 +285,9 @@ fn conversation(script: &[(Step, u32)]) -> Vec<Entry> {
                     by: CAST.owner.actor.to_owned(),
                 }
             }
-            Step::Session | Step::MemorySeen | Step::Title | Step::Review | Step::ReviewFailed => {
-                bookkeeping(step, *second, &mut sessions)
+            Step::Scoped | Step::Title | Step::Review | Step::ReviewFailed => {
+                bookkeeping(step, *second, &mut scopes)
             }
-            Step::Unheard => match unheard(&now(&lines), at) {
-                Some(line) => line,
-                None => continue,
-            },
             Step::Coding => {
                 if proposals == 0 {
                     continue;
@@ -314,15 +306,6 @@ fn conversation(script: &[(Step, u32)]) -> Vec<Entry> {
         lines.push(line);
     }
     lines
-}
-
-/// The line ending the session `stored` keeps, at `at`; the box writes it for no other.
-fn unheard(stored: &Stored, at: Datetime) -> Option<Entry> {
-    stored.session.as_ref().map(|kept| Entry::Unheard {
-        at,
-        session: kept.session.id.clone(),
-        model: "openai-compatible/deepseek-v4-flash".to_owned(),
-    })
 }
 
 /// A stop's line, or, as stored before a stop closed its question by itself, the stop pushed
@@ -347,47 +330,20 @@ fn stopped(lines: &mut Vec<Entry>, second: u32, stored_shape: bool) -> Entry {
 }
 
 /// The lines the box writes about a conversation rather than in it, which read no other line.
-fn bookkeeping(step: &Step, second: u32, sessions: &mut u32) -> Entry {
+fn bookkeeping(step: &Step, second: u32, scopes: &mut u32) -> Entry {
     let at = at(second);
     match step {
-        Step::Session => {
-            *sessions += 1;
-            let session =
-                SessionId::new(format!("96f709a3-43d7-4453-bf59-{sessions:012}")).expect("a uuid");
-            // The box writes `Kept`, and `Scoped` when an ask's scope moves; a `Session` line from
-            // before `Kept` is still read.
-            if sessions.is_multiple_of(3) {
-                Entry::Scoped {
-                    at,
-                    scope: if sessions.is_multiple_of(2) {
-                        suzatary_conversations::secretary::store::Scope::Window
-                    } else {
-                        suzatary_conversations::secretary::store::Scope::Transcript
-                    },
-                }
-            } else if sessions.is_multiple_of(2) {
-                Entry::Kept {
-                    at,
-                    session,
-                    model: "a-cli/small".to_owned(),
-                    cwd: "/srv/secretary".to_owned(),
-                    surface: None,
-                    from: *sessions as usize,
-                }
-            } else {
-                Entry::Session {
-                    at,
-                    session,
-                    model: "a-cli/small".to_owned(),
-                    cwd: "/srv/secretary".to_owned(),
-                    surface: None,
-                }
+        Step::Scoped => {
+            *scopes += 1;
+            Entry::Scoped {
+                at,
+                scope: if scopes.is_multiple_of(2) {
+                    suzatary_conversations::secretary::store::Scope::Window
+                } else {
+                    suzatary_conversations::secretary::store::Scope::Transcript
+                },
             }
         }
-        Step::MemorySeen => Entry::MemorySeen {
-            at,
-            version: u64::from(second),
-        },
         Step::Title => Entry::Titled {
             at,
             title: suzatary_memory::secretary::words::Words::kept(
@@ -488,7 +444,7 @@ fn written(lines: &[Entry]) -> (Memory, std::sync::Arc<Transcript>) {
     let memory = Memory::default();
     transcript::start(memory.conversations(), &id(), &lines[0]).expect("started");
     for line in &lines[1..] {
-        transcript::push(memory.conversations(), &id(), line).expect("pushed");
+        transcript::push_older(memory.conversations(), &id(), line).expect("pushed");
     }
     let read = transcript::read(memory.conversations(), &id()).expect("read");
     (memory, read)
@@ -657,12 +613,12 @@ fn answered_by_rounds(script: &[RoundStep]) -> (std::sync::Arc<Transcript>, Roun
         let second = u32::try_from(n).expect("a count");
         match step {
             RoundStep::Ask => {
-                transcript::push(store, &id(), &said(second, person(0))).expect("pushed");
+                transcript::push_older(store, &id(), &said(second, person(0))).expect("pushed");
                 model.queued.push((turns, true));
                 turns += 1;
             }
             RoundStep::Act { owners } => {
-                transcript::push(store, &id(), &act(second, *owners)).expect("pushed");
+                transcript::push_older(store, &id(), &act(second, *owners)).expect("pushed");
                 model.queued.push((turns, *owners));
                 turns += 1;
             }
@@ -708,9 +664,16 @@ fn answered_by_rounds(script: &[RoundStep]) -> (std::sync::Arc<Transcript>, Roun
                     continue;
                 };
                 let calling = matches!(step, RoundStep::Call);
-                let written =
-                    transcript::push_open(store, &id(), running, &[answer(second, calling)])
-                        .expect("pushed");
+                let written = transcript::push_open(
+                    store,
+                    &id(),
+                    running,
+                    &[suzatary_lines::secretary::answer::BoxLine::of(
+                        answer(second, calling),
+                        suzatary_conversations::secretary::taint::Taint::Clean,
+                    )],
+                )
+                .expect("pushed");
                 assert_eq!(written, transcript::Answering::Written, "the round is open");
                 if matches!(step, RoundStep::Answer) {
                     model.open = None;
@@ -725,7 +688,7 @@ fn answered_by_rounds(script: &[RoundStep]) -> (std::sync::Arc<Transcript>, Roun
                     at: at(second),
                     by: CAST.owner.actor.to_owned(),
                 };
-                transcript::push(store, &id(), &stop).expect("pushed");
+                transcript::push_older(store, &id(), &stop).expect("pushed");
                 model = Rounds::default();
                 run = None;
                 turns += 1;
@@ -743,7 +706,7 @@ proptest! {
         use suzatary_lines::secretary::line_shape::{join, split};
         use suzatary_memory::secretary::words::{Gone, Words};
         for entry in through_the_door(&conversation(&script)) {
-            let (shape, words) = split(&entry);
+            let (shape, words) = split(&entry).expect("a written kind");
             let words = words.expect("a line the box writes holds its words");
             prop_assert_eq!(words.len(), shape.slots());
             let kept: Vec<_> = words.iter().cloned().map(Words::kept).collect();
@@ -754,20 +717,57 @@ proptest! {
                 lost[at] = Gone::Missing.into();
                 let read = join(&id(), shape.clone(), entry.at(), lost);
                 prop_assert_ne!(&read, &entry);
-                prop_assert_eq!(split(&read).0, shape);
+                prop_assert_eq!(split(&read).map(|(shape, _)| shape), Some(shape.clone()));
             }
         }
     }
 
     /// The transcript register is the file's fold through the door: `Stored::of` over the same
-    /// lines, scrubbed.
+    /// lines, scrubbed, each turn weighing its stored line's bytes rather than its words and
+    /// carrying what its line stores.
     #[test]
     fn the_transcript_reads_as_the_file(script in steps()) {
         let lines = conversation(&script);
         let (_, read) = written(&lines);
         let door = through_the_door(&lines);
         prop_assert_eq!(read.entries(), door.clone());
-        prop_assert_eq!(read.stored(), &Stored::of(&id(), &door).expect("folds"));
+        let weights: Vec<usize> = read
+            .stored()
+            .turns
+            .iter()
+            .enumerate()
+            .map(|(turn, _)| read.line_of(turn).map_or(0, |line| read.lines()[line].line.weight()))
+            .collect();
+        let carries: Vec<Option<suzatary_conversations::secretary::taint::Taint>> = (0..read
+            .stored()
+            .turns
+            .len())
+            .map(|turn| read.line_of(turn).and_then(|line| read.lines()[line].line.carries()))
+            .collect();
+        let mut weighed = door.iter();
+        let mut folded = Stored::of(&id(), &door[..1]).expect("opens");
+        weighed.next();
+        let mut turn = 0;
+        for entry in weighed {
+            let turns = folded.turns.len();
+            let weight = suzatary_conversations::secretary::store::Folded::bare(entry).weight;
+            let said = suzatary_conversations::secretary::store::Said::of(entry).is_some();
+            let weight = if said {
+                weights.get(turn).copied().unwrap_or(weight)
+            } else {
+                weight
+            };
+            folded
+                .fold_read(suzatary_conversations::secretary::store::Folded {
+                    entry,
+                    aside: Vec::new(),
+                    weight,
+                    carries: carries.get(turn).copied().flatten().filter(|_| said),
+                })
+                .expect("folds");
+            turn += folded.turns.len() - turns;
+        }
+        prop_assert_eq!(read.stored(), &folded);
     }
 
     /// THE OUTLINE LAW: the rounds the skeleton's nodes fold to, by each line's step, are the

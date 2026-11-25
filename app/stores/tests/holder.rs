@@ -33,13 +33,6 @@ fn spoken(
             model: "a-cli/small".to_owned(),
             kind: Kind::Topic,
         },
-        Entry::Session {
-            at: at(1),
-            session: SessionId::new(SESSION).expect("a uuid"),
-            model: "a-cli/small".to_owned(),
-            cwd: "/srv/code".to_owned(),
-            surface: None,
-        },
         Entry::Said {
             at: at(2),
             turn: Turn::Person {
@@ -52,6 +45,26 @@ fn spoken(
     ];
     let mut said = None;
     for (count, entry) in entries.iter().enumerate() {
+        let count = if count == 0 { 0 } else { count + 1 };
+        if count == 2 {
+            held.lines
+                .append(
+                    LineEvent::retired(
+                        id.clone(),
+                        transcript::writer(),
+                        1,
+                        at(1),
+                        suzatary_lines::secretary::line_shape::LineShape::Session {
+                            session: SessionId::new(SESSION).expect("a uuid"),
+                            model: "a-cli/small".to_owned(),
+                            cwd: "/srv/code".to_owned(),
+                            surface: None,
+                        },
+                    )
+                    .expect("a retired shape"),
+                )
+                .expect("an older box's session line");
+        }
         let (line, keys) = LineEvent::written_under(
             &ScrubbedUnder::Unversioned,
             id.clone(),

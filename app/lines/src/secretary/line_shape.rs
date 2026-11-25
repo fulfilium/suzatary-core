@@ -12,7 +12,7 @@ use suzatary_base::repo_ids::CommitId;
 use suzatary_connect::connect::TemplateId;
 use suzatary_conversations::secretary::model::SessionId;
 use suzatary_conversations::secretary::store::{
-    Covered, Decision, Entry, Kind, Namer, RunId, Scope,
+    Covered, Decision, Entry, Kind, Namer, Retired, RunId, Scope,
 };
 use suzatary_conversations::secretary::turn_shape;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
@@ -216,12 +216,12 @@ impl LineShape {
 }
 
 /// A line's shape and its words, one per slot; no words for a line some of whose words are
-/// already gone, which is no line to write.
+/// already gone, which is no line to write; `None` for a retired line, which nothing writes.
 #[must_use]
 #[expect(clippy::too_many_lines, reason = "one arm per kind of line")]
-pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
+pub fn split(entry: &Entry) -> Option<(LineShape, Option<Vec<LineWords>>)> {
     let one = |words: Option<LineWords>| words.map(|words| vec![words]);
-    match entry {
+    Some(match entry {
         Entry::Opened {
             title, model, kind, ..
         } => (
@@ -301,49 +301,7 @@ pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
             },
             Some(Vec::new()),
         ),
-        Entry::MemorySeen { version, .. } => (
-            LineShape::MemorySeen { version: *version },
-            Some(Vec::new()),
-        ),
-        Entry::Session {
-            session,
-            model,
-            cwd,
-            surface,
-            ..
-        } => (
-            LineShape::Session {
-                session: session.clone(),
-                model: model.clone(),
-                cwd: cwd.clone(),
-                surface: surface.clone(),
-            },
-            Some(Vec::new()),
-        ),
-        Entry::Unheard { session, model, .. } => (
-            LineShape::Unheard {
-                session: session.clone(),
-                model: model.clone(),
-            },
-            Some(Vec::new()),
-        ),
-        Entry::Kept {
-            session,
-            model,
-            cwd,
-            surface,
-            from,
-            ..
-        } => (
-            LineShape::Kept {
-                session: session.clone(),
-                model: model.clone(),
-                cwd: cwd.clone(),
-                surface: surface.clone(),
-                from: *from,
-            },
-            Some(Vec::new()),
-        ),
+        Entry::Retired { .. } => return None,
         Entry::Scoped { scope, .. } => (LineShape::Scoped { scope: *scope }, Some(Vec::new())),
         Entry::Coding {
             proposal, session, ..
@@ -389,7 +347,7 @@ pub fn split(entry: &Entry) -> (LineShape, Option<Vec<LineWords>>) {
             },
             Some(Vec::new()),
         ),
-    }
+    })
 }
 
 fn coding(session: &Session) -> (CodingShape, Option<Vec<LineWords>>) {
@@ -524,33 +482,17 @@ pub fn join(
         },
         LineShape::Stopped { by } => Entry::Stopped { at, by },
         LineShape::Rewound { to, by } => Entry::Rewound { to, at, by },
-        LineShape::MemorySeen { version } => Entry::MemorySeen { at, version },
-        LineShape::Session {
-            session,
-            model,
-            cwd,
-            surface,
-        } => Entry::Session {
+        LineShape::MemorySeen { .. } => Entry::Retired {
             at,
-            session,
-            model,
-            cwd,
-            surface,
+            retired: Retired::MemorySeen,
         },
-        LineShape::Unheard { session, model } => Entry::Unheard { at, session, model },
-        LineShape::Kept {
-            session,
-            model,
-            cwd,
-            surface,
-            from,
-        } => Entry::Kept {
+        LineShape::Session { .. } | LineShape::Kept { .. } => Entry::Retired {
             at,
-            session,
-            model,
-            cwd,
-            surface,
-            from,
+            retired: Retired::Session,
+        },
+        LineShape::Unheard { model, .. } => Entry::Retired {
+            at,
+            retired: Retired::Unheard { model },
         },
         LineShape::Scoped { scope } => Entry::Scoped { at, scope },
         LineShape::Coding { proposal, session } => Entry::Coding {
@@ -637,7 +579,8 @@ mod tests {
             title: Words::kept("t".to_owned()),
             model: "m".to_owned(),
             kind: Kind::Topic,
-        });
+        })
+        .expect("a written kind");
         assert!(matches!(
             shape,
             LineShape::Opened {

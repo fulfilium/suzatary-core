@@ -244,6 +244,7 @@ mod tests {
                 chain: &policy,
                 chains: &[],
                 conversation: &ConversationId::new("default").expect("a slug"),
+                sent: suzatary_conversations::secretary::taint::Taint::Tainted,
             },
             serde_json::from_value(args).expect("arguments"),
         )

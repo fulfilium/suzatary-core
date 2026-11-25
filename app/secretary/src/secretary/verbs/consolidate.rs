@@ -61,6 +61,7 @@ impl Verb for Consolidate {
                 call.caps.conversations,
                 call.conversation,
             )?,
+            call.sent,
         ) {
             Gate::Refused(why) => return Err(Refusal::forbidden(why)),
             Gate::Binds(round) => round,

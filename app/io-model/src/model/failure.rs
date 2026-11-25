@@ -168,10 +168,7 @@ mod tests {
             ModelError::Overloaded(_) => "overloaded",
             ModelError::TooLong(_) => "too long",
             ModelError::Failed(_) => "failed",
-            ModelError::Unreachable(_)
-            | ModelError::TimedOut(_)
-            | ModelError::Lost(_)
-            | ModelError::Halted => "other",
+            ModelError::Unreachable(_) | ModelError::TimedOut(_) | ModelError::Halted => "other",
         };
         for (words, expected) in [
             (

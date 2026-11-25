@@ -112,3 +112,193 @@ fn the_snapshot_holds_no_confirm_and_no_send() {
         );
     }
 }
+
+/// No call keeps a session, so no text a model is sent names one: the manual and the verb list
+/// (its system text), the conversation's head and the box's last sentence, the record's head as
+/// the secretary and the agent read it, and every kind's word.
+#[test]
+fn what_a_model_reads_names_no_session() {
+    let manual =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../SECRETARY.md"))
+            .expect("the manual reads");
+    let call = every_marker(manual);
+    let prompt = suzatary_io_model::prompt::prompt_of(
+        &call,
+        &suzatary_secretary::secretary::surface::tools(),
+        suzatary_io_model::prompt::Reads::Files,
+    );
+    let memory = suzatary_memory::secretary::memory::Memory {
+        facts: Vec::new(),
+        forgotten: Vec::new(),
+        merged: Vec::new(),
+        version: 0,
+    };
+    let topics = suzatary_topics::secretary::topics::reading::Reading::default();
+    let secretary = suzatary_digest::secretary::told::of(
+        suzatary_digest::secretary::told::Reader::Secretary,
+        Ok(&memory),
+        Ok(&topics),
+        Ok(Vec::new()),
+    )
+    .text();
+    let agent = suzatary_digest::secretary::shown_record::told(&memory, Ok(&[]), 0).text();
+    let kinds: Vec<&str> = suzatary_digest::secretary::digest_label::Kind::ALL
+        .into_iter()
+        .map(suzatary_digest::secretary::digest_view::word)
+        .collect();
+    let forms = record_forms();
+    for (what, text) in [
+        ("the system text", prompt.system.as_str().to_owned()),
+        ("the transcript", prompt.transcript()),
+        ("the secretary's record", secretary),
+        ("the agent's record", agent),
+        ("the kinds", kinds.join(", ")),
+        ("the record's line forms", forms.join("\n")),
+    ] {
+        let text = text.to_lowercase();
+        assert!(!text.contains("your_memory"), "{what} names your_memory");
+        let rest = [
+            "coding sessions",
+            "coding session",
+            "coding_session",
+            "codingsession",
+        ]
+        .iter()
+        .fold(text, |text, coding| text.replace(coding, ""));
+        assert!(!rest.contains("session"), "{what} names a session");
+    }
+}
+
+/// A call holding every marker: an earlier long answer with a call and without, an earlier file
+/// with a call and without, an earlier upload, and the round's own file and upload.
+fn every_marker(manual: String) -> suzatary_conversations::secretary::model::Conversation {
+    use suzatary_conversations::secretary::model::{Earlier, ToolCall, Turn};
+    let file = suzatary_held::enclosed::Enclosed {
+        id: suzatary_held::attachment::AttachmentId::of(b"a file"),
+        name: "notice.pdf".to_owned(),
+        media: suzatary_held::enclosed::Enclosure::Pdf,
+        size: 3,
+        text: String::new(),
+    };
+    let handed = Turn::Tool {
+        verb: "attachments".into(),
+        answer: "{}".to_owned(),
+        outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
+        files: vec![file],
+    };
+    let show = ToolCall {
+        verb: "show".into(),
+        args: [("id".to_owned(), serde_json::json!("a"))].into(),
+    };
+    let uploaded = Turn::Person {
+        text: "this".to_owned(),
+        references: Vec::new(),
+        attachments: vec![suzatary_held::attachment::Attachment {
+            id: suzatary_held::attachment::AttachmentId::of(b"a photo"),
+            media_type: suzatary_held::enclosed::Enclosure::Image(
+                suzatary_held::attachment::MediaType::Png,
+            ),
+            name: None,
+            private: None,
+        }],
+    };
+    let mut call = suzatary_conversations::secretary::model::Conversation::bare(
+        manual,
+        vec![uploaded.clone(), handed.clone()],
+    );
+    call.earlier = vec![
+        Earlier::Said(uploaded),
+        Earlier::Long {
+            verb: "show".into(),
+            call: Some(show.clone()),
+            bytes: Some(9000),
+        },
+        Earlier::Long {
+            verb: "reference".into(),
+            call: None,
+            bytes: None,
+        },
+        Earlier::Answered {
+            call: Some(show),
+            turn: handed.clone(),
+        },
+        Earlier::Answered {
+            call: None,
+            turn: handed,
+        },
+    ];
+    call
+}
+
+/// The record's line forms of the box's own lines, and a part by its kinds, as a record and a
+/// zoom's answer show them.
+fn record_forms() -> Vec<String> {
+    use suzatary_conversations::secretary::store::{Entry, Retired, Rewind, Scope};
+    use suzatary_digest::secretary::digest_label::{Kind, Kinds, Label};
+    use suzatary_digest::secretary::digest_view::{Body, rendered};
+    let at =
+        suzatary_base::capability::Datetime::new(2026, 11, 25, 9, 0, 0, 0).expect("an instant");
+    let mut forms: Vec<String> = [
+        Entry::Stopped {
+            at,
+            by: "ada".to_owned(),
+        },
+        Entry::Rewound {
+            to: 0,
+            at,
+            by: "ada".to_owned(),
+        },
+        Entry::Again {
+            at,
+            question: prodrome_core::event::Hash::new("0".repeat(64)).expect("a name"),
+            how: Rewind::Edit,
+            by: "ada".to_owned(),
+        },
+        Entry::Retired {
+            at,
+            retired: Retired::Session,
+        },
+        Entry::Retired {
+            at,
+            retired: Retired::MemorySeen,
+        },
+        Entry::Retired {
+            at,
+            retired: Retired::Unheard {
+                model: "m".to_owned(),
+            },
+        },
+        Entry::Scoped {
+            at,
+            scope: Scope::Window,
+        },
+        Entry::Scoped {
+            at,
+            scope: Scope::Transcript,
+        },
+    ]
+    .iter()
+    .map(rendered)
+    .collect();
+    let every = Kind::ALL
+        .into_iter()
+        .fold(Kinds::one(Kind::Person), |kinds, kind| {
+            kinds.join(&Kinds::one(kind))
+        });
+    for taint in suzatary_conversations::secretary::taint::Taint::ALL {
+        for label in [
+            Label {
+                taint,
+                kinds: every,
+            },
+            Label {
+                taint,
+                kinds: Kinds::one(Kind::Model),
+            },
+        ] {
+            forms.push(Body::Hidden(label).text(3));
+            forms.push(Body::Unsummarised(label).text(3));
+        }
+    }
+    forms
+}

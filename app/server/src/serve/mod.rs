@@ -162,7 +162,7 @@ pub struct Inner {
     /// `None` refuses an upload by name.
     pub uploads: Option<Arc<Uploads>>,
     /// `None` names a topic with the record's model.
-    pub titler: Option<Arc<dyn model::Sessions + Send + Sync>>,
+    pub titler: Option<Arc<dyn model::Picker + Send + Sync>>,
     pub compactor: Option<Arc<compaction::Compactor>>,
     pub presence: Presence,
     pub reports: Arc<Mutex<Limiter>>,
@@ -631,7 +631,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn with_titler(mut self, model: Arc<dyn model::Sessions + Send + Sync>) -> Self {
+    pub fn with_titler(mut self, model: Arc<dyn model::Picker + Send + Sync>) -> Self {
         self.building().titler = Some(model);
         self
     }

@@ -1,6 +1,6 @@
 use suzatary_base::capability::Whois;
 use suzatary_cards::notify::Notify;
-use suzatary_conversations::secretary::model::Sessions;
+use suzatary_conversations::secretary::model::Picker;
 use suzatary_secretary::agent::Agent;
 use suzatary_secretary::secretary::Secretary;
 use suzatary_topics::secretary::answers::Answers;
@@ -18,8 +18,8 @@ pub struct Server<'a> {
     pub answers: &'a dyn Answers,
     /// The phones that asked to be woken.
     pub devices: &'a dyn suzatary_store::store::Log<String, suzatary_signatures::devices::Device>,
-    /// The session-holding model, when there is one.
-    pub sessions: &'a dyn Sessions,
+    /// Which model each round asks, picked as the round starts.
+    pub models: &'a dyn Picker,
 }
 
 impl<'a> Server<'a> {
@@ -88,7 +88,7 @@ mod tests {
             notify: _,
             answers: _,
             devices: _,
-            sessions: _,
+            models: _,
         } = Server::nothing();
     }
 }

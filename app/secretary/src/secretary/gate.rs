@@ -8,7 +8,7 @@ use suzatary_base::refusal::{Refusal, shown as quoted};
 use suzatary_base::writer::Writer;
 use suzatary_base::zone::{Moment, Zone};
 use suzatary_conversations::secretary::store::Stored;
-use suzatary_conversations::secretary::taint;
+use suzatary_conversations::secretary::taint::{self, Taint};
 use suzatary_conversations::secretary::verb_name::Binding;
 use suzatary_inbox::secretary::changes::{Building, Changeset, Unapplied, events_of};
 use suzatary_memory::secretary::memory::Origin;
@@ -43,11 +43,12 @@ impl From<Binding> for Asked {
 }
 
 impl Gate {
-    /// The gate of `asked` in `stored`: only a round with the owner's words alone binds.
+    /// The gate of `asked` in `stored`, in a round whose asks were `sent` what carries that: only
+    /// a round the owner opened whose model was sent the owner's words alone binds.
     #[must_use]
-    pub(crate) fn of(asked: impl Into<Asked>, stored: &Stored) -> Self {
+    pub(crate) fn of(asked: impl Into<Asked>, stored: &Stored, sent: Taint) -> Self {
         match (taint::opener(stored), asked.into()) {
-            (Some(said), _) if !taint::tainted(stored) => Gate::Binds(said),
+            (Some(said), _) if sent == Taint::Clean => Gate::Binds(said),
             (Some(_), _) | (None, Asked::Binds(Binding::Writes) | Asked::Publishes) => Gate::Card,
             (None, Asked::Binds(Binding::Remembers)) => Gate::Refused(NO_OPENER),
         }
@@ -180,20 +181,35 @@ mod tests {
     }
 
     fn stored(lines: Vec<Entry>) -> Stored {
-        let mut entries = vec![Entry::Opened {
+        let entries = vec![Entry::Opened {
             at: suzatary_base::capability::Datetime::new(2026, 9, 25, 8, 0, 0, 0)
                 .expect("an instant"),
             title: suzatary_memory::secretary::words::Words::kept("t".to_owned()),
             model: "m".to_owned(),
             kind: suzatary_conversations::secretary::store::Kind::Topic,
         }];
-        entries.extend(lines);
-        Stored::of(&ConversationId::new("default").expect("a slug"), &entries)
-            .expect("a conversation")
+        let mut stored = Stored::of(&ConversationId::new("default").expect("a slug"), &entries)
+            .expect("a conversation");
+        // As this box writes them: each verb's answer storing its class.
+        for entry in lines {
+            let carries = suzatary_conversations::secretary::store::Said::of(&entry)
+                .filter(|said| matches!(said.turn, Turn::Tool { .. }))
+                .map(|said| taint::written(&said));
+            stored
+                .fold_read(suzatary_conversations::secretary::store::Folded {
+                    entry: &entry,
+                    aside: Vec::new(),
+                    weight: suzatary_conversations::secretary::store::Folded::bare(&entry).weight,
+                    carries,
+                })
+                .expect("folds");
+        }
+        stored
     }
 
     /// A `zoom` answer is the class of the node it opened: into a tainted one, `remember`
-    /// is a card; into a clean one, it writes; a refused or unreadable one is a card.
+    /// is a card; into a clean one, it writes; a refused or unreadable one is a card. An older
+    /// box's `zoom` answer, which stores no class, is a card too (F4).
     #[test]
     fn a_zoom_is_the_class_of_the_node_it_opened() {
         let zoomed = |answer: &str, refused: bool| {
@@ -258,7 +274,7 @@ mod tests {
     }
 
     fn remembers(round: &Stored) -> Gate {
-        Gate::of(Binding::Remembers, round)
+        Gate::of(Binding::Remembers, round, taint::held(round))
     }
 
     /// A round the box opened cannot remember, tainted or clean.
@@ -314,7 +330,7 @@ mod tests {
                     if !matches!(verb.as_str(), "context" | "weather" | "remember" | "forget" | "consolidate" | "propose_act" | "add_topics" | "revise_topics")
             ));
             for asked in [Binding::Writes.into(), Binding::Remembers.into(), Asked::Publishes] {
-                let gate = Gate::of(asked, &round);
+                let gate = Gate::of(asked, &round, taint::held(&round));
                 if read_something {
                     prop_assert!(!matches!(gate, Gate::Binds(_)), "{asked:?}");
                 }

@@ -47,6 +47,7 @@ impl Verb for Remember {
         let said = match Gate::of(
             Binding::Remembers,
             &secretary::read(call.caps.conversations, call.conversation)?,
+            call.sent,
         ) {
             Gate::Refused(why) => return Err(Refusal::forbidden(why)),
             Gate::Binds(said) => said,

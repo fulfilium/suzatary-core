@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use suzatary_api::wire;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_conversations::secretary::model::{Halt, Sessions, Turn};
+use suzatary_conversations::secretary::model::{Halt, Picker, Turn};
 use suzatary_conversations::secretary::store::ConversationState;
 use suzatary_lines::secretary::transcript;
 use suzatary_secretary::conversation::round::Ending;
@@ -294,8 +294,8 @@ impl Workers {
         }
     }
 
-    /// The running round stopped, waiting (at most `STOP_WAIT`) for it to end, so its CLI writes
-    /// no more to a session an erasure then deletes.
+    /// The running round stopped, waiting (at most `STOP_WAIT`) for it to end, so its model
+    /// process is gone before an erasure deletes what the round held.
     pub(crate) fn halt_round(&self, id: &ConversationId, by: Actor) {
         self.wait_out(super::locks::held(&self.halts), id, by);
     }
@@ -423,8 +423,7 @@ async fn perform(rule: Conversational, firing: &Firing, id: &ConversationId, sta
     }
 }
 
-/// One round: the model asked and its calls run, over a session when one is held; only the
-/// session arm streams fragments.
+/// One round: the model asked, its reply streamed, and its calls run.
 async fn round(id: &ConversationId, state: &Arc<State>) {
     let caps = state.first.caps;
     let held = Arc::clone(state);
@@ -435,8 +434,7 @@ async fn round(id: &ConversationId, state: &Arc<State>) {
     stream.state(ConversationState::Thinking);
     let for_round = Arc::clone(&stream);
     let retry = state.retry();
-    // Asked per round: only the `claude` subprocess holds a session, and which model
-    // answers can change between rounds.
+    // Asked per round: which model answers can change between rounds.
     let result = tokio::task::spawn_blocking(move || {
         // The round arms its halt before it reads what waits. A stop then either finds this halt
         // or wrote its stop line before that read. The halt is armed on this blocking thread
@@ -453,7 +451,7 @@ async fn round(id: &ConversationId, state: &Arc<State>) {
         };
         secretary::answer(
             &caps.secretary,
-            || caps.sessions.pick(),
+            || caps.models.pick(),
             &held.deployment,
             &settables,
             &chains,
@@ -538,11 +536,11 @@ async fn titled(id: &ConversationId, state: &Arc<State>) -> bool {
     let ran = tokio::task::spawn_blocking(move || {
         let pick = titler
             .as_deref()
-            .map_or_else(|| caps.sessions.pick(), Sessions::pick);
+            .map_or_else(|| caps.models.pick(), Picker::pick);
         suzatary_topics::secretary::title::run(
             caps.secretary.conversations,
             caps.secretary.clock,
-            pick.model(),
+            pick.as_ref(),
             &asked,
         )
     })

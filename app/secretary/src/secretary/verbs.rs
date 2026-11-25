@@ -275,6 +275,7 @@ fn clean_round(call: &super::Call<'_>, instead: &str) -> Result<memory::Origin, 
     match Gate::of(
         Binding::Remembers,
         &conversations::read(call.caps.conversations, call.conversation)?,
+        call.sent,
     ) {
         Gate::Refused(why) => Err(Refusal::forbidden(why)),
         Gate::Card => Err(Refusal::forbidden(format!(

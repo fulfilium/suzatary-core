@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0ef2976d245576b3ed8ac956ca1cef7530f438a055b89b48b47608e7883f478b # shrinks to script = [], asked = 1, lag = 0
+cc 39445dbcbe92ec3c7df70ce73df5169d762865685746b643d9a93b55db37f185 # shrinks to script = [Elsewhere], asked = 1, lag = 0
+cc 71b7c7f68e507f6c2e55e7f6de7770cd1aa14a1d8a6d5d3e7c5ba3ad176ecad9 # shrinks to script = [Owner { photo: false }, Owner { photo: false }, Owner { photo: false }, Owner { photo: false }, Owner { photo: false }, Stop, Verb { file: false }, Verb { file: false }, Verb { file: false }, Owner { photo: false }, Owner { photo: false }, Verb { file: false }, Verb { file: false }, Owner { photo: false }, Owner { photo: false }, Answer, Owner { photo: false }, Answer, Owner { photo: true }, Verb { file: false }, Verb { file: true }, Verb { file: false }, Owner { photo: false }, Answer, Verb { file: true }, Answer, Owner { photo: true }, Answer, Verb { file: false }], erased_share = 55, lost_share = 243

@@ -62,12 +62,66 @@ pub struct ToolCall {
     pub args: BTreeMap<String, serde_json::Value>,
 }
 
-/// A whole conversation, handed to the model every time, with no session handle.
+/// What one call is sent, whole: nothing of an earlier call is kept by the model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conversation {
     pub system: String,
-    /// Every turn so far, oldest first.
+    pub context: Context,
+    /// Whole rounds before the one being answered, oldest first.
+    pub earlier: Vec<Earlier>,
+    /// The round being answered, oldest first, ending in the newest turn; a file in it is sent
+    /// as itself.
     pub turns: Vec<Turn>,
+}
+
+/// One turn of a round before the one being answered, as a call sends it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Earlier {
+    /// A turn that is no verb's answer, as itself; a file it names goes by its marker.
+    Said(Turn),
+    /// A verb's answer as itself, beside the call that has it again, so a file it handed over
+    /// is named by its marker with that call; none where no call does (its call's words are
+    /// gone, or what the owner pointed at is no verb's).
+    Answered { call: Option<ToolCall>, turn: Turn },
+    /// A verb's answer too long to send again: its marker, the call that has it again, and the
+    /// answer's bytes where its words are here.
+    Long {
+        verb: crate::secretary::tool_name::ToolName,
+        call: Option<ToolCall>,
+        bytes: Option<usize>,
+    },
+}
+
+impl Earlier {
+    /// The turn it stands for, when it is sent as itself.
+    #[must_use]
+    pub fn turn(&self) -> Option<&Turn> {
+        match self {
+            Earlier::Said(turn) | Earlier::Answered { turn, .. } => Some(turn),
+            Earlier::Long { .. } => None,
+        }
+    }
+}
+
+/// What a call is told beside its conversation: `cached` before its turns (the facts and the
+/// record), `rest` after the call's one mark (the topics in use).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Context {
+    pub cached: Vec<String>,
+    pub rest: Vec<String>,
+}
+
+impl Conversation {
+    /// `turns` under `system`, told nothing before them.
+    #[must_use]
+    pub fn bare(system: impl Into<String>, turns: Vec<Turn>) -> Self {
+        Self {
+            system: system.into(),
+            context: Context::default(),
+            earlier: Vec::new(),
+            turns,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -173,9 +227,6 @@ pub enum ModelError {
     Overloaded(String),
     #[error("what the model was sent is longer than it reads: {0}")]
     TooLong(String),
-    /// A [`SessionModel::resume`] named a session the CLI no longer knows.
-    #[error("the session is gone: {0}")]
-    Lost(String),
     /// A [`Halt`] was pulled while it ran, and the process was ended.
     #[error("the answer was stopped")]
     Halted,
@@ -267,7 +318,7 @@ prodrome_data::text_literal!(
     SessionId => |id| id.as_str().to_owned(),
 );
 
-/// A model session's id, parsed as a UUID so a bad one fails here rather than in the interpreter.
+/// A retired model session's id, as its stored line names it, parsed as a UUID.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct SessionId(String);
@@ -286,24 +337,6 @@ impl SessionId {
         } else {
             Err(NotAUuid(text))
         }
-    }
-
-    /// Mint one from `seed` by hashing, since the model crates hold no source of randomness.
-    #[must_use]
-    pub fn minted(seed: &str) -> Self {
-        use sha2::{Digest, Sha256};
-        let digest = Sha256::digest(seed.as_bytes());
-        let hex = hex::encode(&digest[..16]);
-        let minted = format!(
-            "{}-{}-{}-{}-{}",
-            &hex[0..8],
-            &hex[8..12],
-            &hex[12..16],
-            &hex[16..20],
-            &hex[20..32]
-        );
-        debug_assert!(is_uuid(&minted), "a minted id is a UUID by construction");
-        Self(minted)
     }
 
     #[must_use]
@@ -343,84 +376,35 @@ fn is_uuid(text: &str) -> bool {
         })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Session {
-    /// The id `--session-id` minted it under.
-    pub id: SessionId,
-    pub model: String,
-    pub cwd: String,
-    pub created: String,
-    pub last: String,
-    /// The digest of the manual and verb list it was opened with; a mismatch or `None` reopens it.
-    pub surface: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Sessioned {
-    pub reply: Reply,
-    /// The session it came back on, which is always the one asked for.
-    pub session: Session,
-}
-
-/// What a resumed session is sent: the turns it has not read, never none.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Delta(Vec<Turn>);
-
-impl Delta {
-    #[must_use]
-    pub fn new(first: Turn, rest: impl IntoIterator<Item = Turn>) -> Self {
-        Self(std::iter::once(first).chain(rest).collect())
-    }
-
-    /// The turns, oldest first; never empty.
-    #[must_use]
-    pub fn turns(&self) -> &[Turn] {
-        &self.0
-    }
-}
-
-/// The model as a conversation it remembers.
-pub trait SessionModel: Model {
-    /// Start a session under a caller-minted id, so the first turn is already resumable.
-    ///
-    /// # Errors
-    /// [`ModelError::Halted`] when `halt` is pulled.
-    fn open(
-        &self,
-        id: &SessionId,
-        conversation: &Conversation,
-        tools: &serde_json::Value,
-        halt: &Halt,
-    ) -> Result<Sessioned, ModelError>;
-
-    /// Continue a session with only the turns it has not read, streaming text to `on_delta`.
-    ///
-    /// # Errors
-    /// [`ModelError::Lost`] when the CLI no longer knows the session.
-    fn resume(
-        &self,
-        system: &str,
-        session: &Session,
-        delta: &Delta,
-        tools: &serde_json::Value,
-        on_delta: &dyn Fn(&str),
-        halt: &Halt,
-    ) -> Result<Sessioned, ModelError>;
-}
-
 pub trait Model: Sync {
     /// Which model this is, stored on the conversation and never matched on.
     fn name(&self) -> String;
 
-    /// Ask for one turn; `tools` is the closed verb list the prompt names.
+    /// Ask for one turn; `tools` is the closed verb list the prompt names. Each fragment of the
+    /// reply goes to `on_delta` as it arrives, and the call ends when `halt` is pulled; a model
+    /// that cannot stream answers whole, and one that cannot be stopped says so by ignoring it.
     ///
     /// # Errors
-    /// Unparseable text is not an error.
+    /// [`ModelError::Halted`] when `halt` is pulled. Unparseable text is not an error.
+    fn streamed(
+        &self,
+        conversation: &Conversation,
+        tools: &serde_json::Value,
+        on_delta: &dyn Fn(&str),
+        halt: &Halt,
+    ) -> Result<Reply, ModelError>;
+
+    /// [`Model::streamed`] for a job nobody watches or stops.
+    ///
+    /// # Errors
+    /// As [`Model::streamed`].
     fn turn(
         &self,
         conversation: &Conversation,
         tools: &serde_json::Value,
-    ) -> Result<Reply, ModelError>;
+    ) -> Result<Reply, ModelError> {
+        self.streamed(conversation, tools, &|_| {}, &Halt::new())
+    }
 
     /// The limit its account is under now, which every call refuses with while it stands; none
     /// for a model whose calls the box records nowhere.
@@ -438,35 +422,23 @@ impl<M: Model + ?Sized> Model for &M {
         (**self).limited()
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &Conversation,
         tools: &serde_json::Value,
+        on_delta: &dyn Fn(&str),
+        halt: &Halt,
     ) -> Result<Reply, ModelError> {
-        (**self).turn(conversation, tools)
+        (**self).streamed(conversation, tools, on_delta, halt)
     }
 }
 
 /// The model one round asks, picked once for that round and owned by it: nothing of one
 /// round's pick reaches another round or another conversation.
-pub enum Pick<'a> {
-    Held(&'a dyn SessionModel),
-    Turn(Box<dyn Model + 'a>),
-}
-
-impl Pick<'_> {
-    /// The model picked, asked statelessly.
-    #[must_use]
-    pub fn model(&self) -> &dyn Model {
-        match self {
-            Pick::Held(model) => *model,
-            Pick::Turn(model) => model.as_ref(),
-        }
-    }
-}
+pub type Pick<'a> = Box<dyn Model + 'a>;
 
 /// Which model a round asks.
-pub trait Sessions: Sync {
+pub trait Picker: Sync {
     /// The model this round asks, read now.
     fn pick(&self) -> Pick<'_>;
 }
@@ -481,14 +453,6 @@ mod tests {
         let reply = Reply::parse(r#"{"say": "x", "calls": [{"args": {}}]}"#);
         assert!(reply.calls.is_empty());
         assert!(reply.say.contains("calls"));
-    }
-
-    #[test]
-    fn a_minted_session_id_is_valid_and_seed_determined() {
-        let a = SessionId::minted("2026-09-09-1/0");
-        assert!(SessionId::new(a.as_str().to_owned()).is_ok());
-        assert_eq!(a, SessionId::minted("2026-09-09-1/0"));
-        assert_ne!(a, SessionId::minted("2026-09-09-1/1"));
     }
 
     #[test]

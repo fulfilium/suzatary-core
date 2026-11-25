@@ -233,7 +233,7 @@ fn a_round_that_read_mail(lines: &suzatary_stores::stores::conversations::InMemo
             None,
         ),
     ] {
-        transcript::push(lines.conversations(), &DEFAULT, &line).expect("pushed");
+        transcript::push_older(lines.conversations(), &DEFAULT, &line).expect("pushed");
     }
 }
 

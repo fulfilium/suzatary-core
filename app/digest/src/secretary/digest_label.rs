@@ -8,7 +8,7 @@
 use prodrome_digest::Measure;
 
 use suzatary_conversations::secretary::model::Turn;
-use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::store::{Entry, Retired};
 use suzatary_conversations::secretary::taint::Taint;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_inbox::secretary::stamp::Stamp;
@@ -38,7 +38,7 @@ pub enum Kind {
     Stopped,
     Rewound,
     MemorySeen,
-    /// A line about the model session.
+    /// A line of the box's bookkeeping: a round's claim, a scope, a reseal, a retired line.
     Session,
     Coding,
     /// An erasure's line, or a line whose words were erased.
@@ -87,11 +87,15 @@ impl Kind {
             Entry::ReviewFailed { .. } => Kind::ReviewFailed,
             Entry::Stopped { .. } => Kind::Stopped,
             Entry::Rewound { .. } | Entry::Again { .. } => Kind::Rewound,
-            Entry::MemorySeen { .. } => Kind::MemorySeen,
-            Entry::Session { .. }
-            | Entry::Kept { .. }
+            Entry::Retired {
+                retired: Retired::MemorySeen,
+                ..
+            } => Kind::MemorySeen,
+            Entry::Retired {
+                retired: Retired::Session | Retired::Unheard { .. },
+                ..
+            }
             | Entry::Scoped { .. }
-            | Entry::Unheard { .. }
             | Entry::Resealed { .. }
             | Entry::Began { .. } => Kind::Session,
             Entry::Coding { .. } => Kind::Coding,

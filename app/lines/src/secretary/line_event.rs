@@ -15,6 +15,7 @@ use prodrome_data::schema::Schema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::secretary::answer::Answer;
 use crate::secretary::line_shape::{self, LineShape};
 use crate::secretary::saying::Saying;
 use prodrome_data::fold::sole::{One, Only, Whole};
@@ -22,6 +23,9 @@ use prodrome_data::literal::codec::{Constructor, Fields, Literal, no_arm, record
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::store::Said;
+use suzatary_conversations::secretary::taint::{self, Taint};
+use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_held::redact::{Rules, Scrubbed};
 use suzatary_memory::secretary::carried::Carried;
 use suzatary_memory::secretary::erasure::Erasure;
@@ -112,16 +116,80 @@ pub enum NotALine {
     NoKey(String),
     #[error("an edit's question is a turn said, and this entry is none")]
     Unsaid,
+    #[error("a model's turn is written with what its call was sent, as an answer")]
+    Uncarried,
+    #[error("a retired kind of line is never written")]
+    Retired,
 }
 
 /// The domain of a conversation's id.
 const CONVERSATION: &[u8] = b"suzatary conversation v1\n";
 
 impl LineEvent {
+    /// What the line weighs in a call's window: the bytes its words were sealed in, fixed when it
+    /// was written, so no erasure, lost key or new redaction rule moves it. A husk's dropped slot,
+    /// which only a tab holds, weighs nothing; the box holds every line whole.
+    #[must_use]
+    pub fn weight(&self) -> usize {
+        self.words
+            .iter()
+            .map(|slot| match &slot.seal {
+                Seal::Locked(locked) => locked.sealed_len(),
+                Seal::Dropped(_) => 0,
+            })
+            .sum()
+    }
+
     /// Line `entry` of `conversation`, written here by `actor` holding `held` lines, each slot of
     /// its words through the redaction door and locked under a key drawn from `entropy`; the keys
-    /// that open them are the only thing to keep.
+    /// that open them are the only thing to keep. A verb's answer stores its class; a model's
+    /// turn is [`LineEvent::answered`]'s.
     pub fn write(
+        conversation: ConversationId,
+        actor: Actor,
+        held: u32,
+        entry: &Entry,
+        entropy: &dyn Entropy,
+    ) -> Result<(Self, Vec<TextKey>), NotALine> {
+        let (mut line, words) = Self::unsealed(conversation, actor, held, entry)?;
+        match &mut line.shape {
+            LineShape::Said {
+                turn: TurnShape::Model { .. },
+                ..
+            } => return Err(NotALine::Uncarried),
+            LineShape::Said {
+                turn: TurnShape::Tool { carries, .. },
+                ..
+            } => {
+                *carries = Said::of(entry).map(|said| taint::written(&said));
+            }
+            _ => {}
+        }
+        line.sealed(&words, entropy)
+    }
+
+    /// The box's model turn `answer`, storing its carry.
+    pub fn answered(
+        conversation: ConversationId,
+        actor: Actor,
+        held: u32,
+        answer: &Answer,
+        entropy: &dyn Entropy,
+    ) -> Result<(Self, Vec<TextKey>), NotALine> {
+        let (mut line, words) = Self::unsealed(conversation, actor, held, &answer.entry())?;
+        if let LineShape::Said {
+            turn: TurnShape::Model { carries, .. },
+            ..
+        } = &mut line.shape
+        {
+            *carries = Some(answer.carries);
+        }
+        line.sealed(&words, entropy)
+    }
+
+    /// `entry` as an older box wrote it, storing no carry, for tests and fixtures.
+    #[cfg(any(test, feature = "nothing", feature = "fixture"))]
+    pub fn older(
         conversation: ConversationId,
         actor: Actor,
         held: u32,
@@ -130,6 +198,18 @@ impl LineEvent {
     ) -> Result<(Self, Vec<TextKey>), NotALine> {
         let (line, words) = Self::unsealed(conversation, actor, held, entry)?;
         line.sealed(&words, entropy)
+    }
+
+    /// What the box's own line stores that its turn carries; another writer's says nothing.
+    #[must_use]
+    pub fn carries(&self) -> Option<Taint> {
+        match &self.shape {
+            LineShape::Said {
+                turn: TurnShape::Model { carries, .. } | TurnShape::Tool { carries, .. },
+                ..
+            } if crate::secretary::transcript::by_the_box(&self.actor) => *carries,
+            _ => None,
+        }
     }
 
     /// [`LineEvent::write`] of a `Said` entry as an edit's own question ([`Saying::Edit`]).
@@ -206,7 +286,7 @@ impl LineEvent {
         held: u32,
         entry: &Entry,
     ) -> Result<(Self, Vec<LineWords>), NotALine> {
-        let (shape, words) = line_shape::split(entry);
+        let (shape, words) = line_shape::split(entry).ok_or(NotALine::Retired)?;
         let words = words.ok_or(NotALine::Gone)?;
         let line = Self {
             conversation,
@@ -266,6 +346,35 @@ impl LineEvent {
         Ok((line, opens))
     }
 
+    /// A line of a retired kind with no words, as the session bookkeeping stored it, for the
+    /// tests and fixtures that read a store holding one; `None` for a shape still written.
+    #[cfg(any(test, feature = "nothing", feature = "fixture"))]
+    #[must_use]
+    pub fn retired(
+        conversation: ConversationId,
+        actor: Actor,
+        held: u32,
+        at: Datetime,
+        shape: LineShape,
+    ) -> Option<Self> {
+        matches!(
+            shape,
+            LineShape::MemorySeen { .. }
+                | LineShape::Session { .. }
+                | LineShape::Kept { .. }
+                | LineShape::Unheard { .. }
+        )
+        .then_some(Self {
+            conversation,
+            at,
+            actor,
+            held,
+            carried: Carried::Written,
+            shape,
+            words: Vec::new(),
+        })
+    }
+
     /// Line `entry` locked as scrubbed `under` rules other than the current ones, its words not
     /// scrubbed, for the tests and the fixture's stale store.
     #[cfg(any(test, feature = "nothing", feature = "fixture"))]
@@ -277,7 +386,7 @@ impl LineEvent {
         entry: &Entry,
         entropy: &dyn Entropy,
     ) -> Result<(Self, Vec<TextKey>), NotALine> {
-        let (shape, words) = line_shape::split(entry);
+        let (shape, words) = line_shape::split(entry).ok_or(NotALine::Retired)?;
         let words = words.ok_or(NotALine::Gone)?;
         let mut line = Self {
             conversation,
@@ -1257,8 +1366,10 @@ mod tests {
         }
     }
 
+    /// `entry` as an older box wrote it, with no carry stored: what these laws of the print and
+    /// the slots read.
     fn written(entry: &Entry) -> (LineEvent, Vec<TextKey>) {
-        LineEvent::write(
+        LineEvent::older(
             id(),
             Actor::new("assistant").expect("an actor"),
             3,
@@ -1342,6 +1453,79 @@ mod tests {
         assert_eq!(read.entry(&opened_by(&keys)), model());
     }
 
+    /// D1: a model's turn written now stores its carry in its unsealed shape, which reads back,
+    /// opens its words (the slot is bound to it) and is believed of the box alone; a line written
+    /// before stores none, and its print is the one an older box wrote, byte for byte, so every
+    /// store in the tree reads, and is named, as it was.
+    #[test]
+    fn a_model_turn_stores_what_it_carried_and_an_older_line_reads_as_it_was() {
+        let box_actor = Actor::new("assistant").expect("an actor");
+        let Entry::Said {
+            at,
+            turn: Turn::Model { text, calls },
+            ..
+        } = model()
+        else {
+            panic!("a model's turn");
+        };
+        let answer = crate::secretary::answer::Answer::after(at, text, calls, Taint::Tainted);
+        let (line, keys) =
+            LineEvent::answered(id(), box_actor.clone(), 3, &answer, &Counting::default())
+                .expect("a line");
+        let print = canonical(&line);
+        assert!(print.contains(r#""carries":"tainted""#), "{print}");
+        let read: LineEvent = parse_event(&LineVocabulary, &print).expect("parses");
+        assert_eq!(read, line);
+        assert_eq!(read.carries(), Some(Taint::Tainted));
+        assert_eq!(read.entry(&opened_by(&keys)), model(), "its words open");
+        let mut another = line.clone();
+        another.actor = Actor::new("ada").expect("an actor");
+        assert_eq!(
+            another.carries(),
+            None,
+            "another writer's carry is not believed"
+        );
+
+        let (older, _) = written(&model());
+        let older_print = canonical(&older);
+        assert!(!older_print.contains("carries"), "{older_print}");
+        let reread: LineEvent = parse_event(&LineVocabulary, &older_print).expect("parses");
+        assert_eq!(
+            canonical(&reread),
+            older_print,
+            "an older line prints as it was written"
+        );
+        assert_eq!(reread.carries(), None);
+    }
+
+    /// F8: a model's turn as `origin/master`'s binary wrote it, its print copied from the web
+    /// vectors that binary generated (`api/tests/web/replicas.json`, the conversation
+    /// `about-the-deed`) and not made by today's writer: it parses, prints back byte for byte,
+    /// keeps its name, and stores no carry.
+    #[test]
+    fn a_line_an_older_box_wrote_reads_and_prints_as_written() {
+        const PRINT: &str = r#"Change(genesis='7b818ef0fdd17acb5a6c38b43fa0281f189cc0854dab58dcff68c681ce13ad38', deps=('cbc23509b1201a83ddd03c815d37c00ff50a551bbeedfc4767b8174249deaf13',), event=Said(conversation='about-the-deed', at=datetime(2026, 9, 2, 12, 0, 20), actor='assistant', held=2, carried=None, turn='{"who":"model","calls":[]}', by=None, words=(Scrubbed(key='6cf6abc29c87ca5fa1dc5399205a10bed451b2ff0cbef2a2739c5ac845963890', box='P4y04x6VZ3a7qybDXD1GrBezyIBohrCbaZlM3Zwm/n/fCrt2k7cKanF41EgiJWdKC/RxUwq9NQ35MB8ytPyKyx343FAeWZxsn8a2ybxOMVPmubfYq+8m8YnGaUpGKvGXGIt/tUhDqdpZ9pjCpFrD9JfsQQvaW/sUatvs2Im+j1lunxasnA1dZ4+nkcAlrnsnabWhuw3rY71kjtT7kA/k3jPEf87nZN3Bn1hCq5ExmomDaGcqYa8UWwtMGqpzMyiz0MoRxq8oljXXMLGbWZtYj5euS9JSbjqu41M7TL6XAglIl8RB470XX1gHlHrL+UwgAa01xeKr/9wXEGTCFCEw3kahLmj395oQ3GeZ94mMPuM=', rules='f7eb6c9fe2ada434c6e1e51ec8bb69a3e10d03e227d8b731458c318793162d8a'),)))"#;
+        const NAME: &str = "2929a192f5c4488e0bc8fbdc829e771fa1f67e69cd0ce4b391ffd5b3b8eb33b5";
+        let envelope = prodrome_data::event::parse_envelope::<LineEvent>(&LineVocabulary, PRINT)
+            .expect("an older box's line parses");
+        let print = prodrome_data::event::canonical_envelope(&envelope);
+        assert_eq!(print, PRINT, "it prints back byte for byte");
+        assert_eq!(
+            Hash::of_bytes(print.as_bytes()).as_str(),
+            NAME,
+            "it keeps its name"
+        );
+        let line = envelope.event().expect("a line");
+        assert!(matches!(
+            line.shape(),
+            LineShape::Said {
+                turn: TurnShape::Model { carries: None, .. },
+                ..
+            }
+        ));
+        assert_eq!(line.carries(), None);
+    }
+
     /// A line's instant is the entry's, to the microsecond, and reads back as the same value.
     #[test]
     fn a_line_keeps_its_entrys_instant() {
@@ -1378,7 +1562,7 @@ mod tests {
     #[test]
     fn a_ciphertext_moved_does_not_open() {
         let (line, keys) = written(&model());
-        let (other, _) = LineEvent::write(
+        let (other, _) = LineEvent::older(
             id(),
             Actor::new("assistant").expect("an actor"),
             4,
@@ -1411,10 +1595,6 @@ mod tests {
                 to: usize::MAX,
                 at: at(),
                 by: "ada".to_owned(),
-            },
-            Entry::MemorySeen {
-                at: at(),
-                version: u64::MAX,
             },
             Entry::Proposed {
                 at: at(),
@@ -1451,6 +1631,82 @@ mod tests {
             .expect("a line");
             let print = canonical(&line);
             assert_eq!(parse_event(&LineVocabulary, &print), Ok(line), "{print}");
+        }
+    }
+
+    /// THE RETIRED LINES: every shape the session bookkeeping stored still prints and reads
+    /// back as itself, its widest counts included, and reads as [`Entry::Retired`]; no entry of
+    /// that kind is written.
+    #[test]
+    fn a_retired_line_reads_back_and_is_never_written() {
+        use suzatary_conversations::secretary::model::SessionId;
+        use suzatary_conversations::secretary::store::Retired;
+        let session = SessionId::new("96f709a3-43d7-4453-bf59-6fb5291b5a3c").expect("a uuid");
+        for (shape, retired) in [
+            (
+                LineShape::MemorySeen { version: u64::MAX },
+                Retired::MemorySeen,
+            ),
+            (
+                LineShape::Session {
+                    session: session.clone(),
+                    model: "a-cli/small".to_owned(),
+                    cwd: "/srv".to_owned(),
+                    surface: Some("ab".repeat(32)),
+                },
+                Retired::Session,
+            ),
+            (
+                LineShape::Kept {
+                    session: session.clone(),
+                    model: "a-cli/small".to_owned(),
+                    cwd: "/srv".to_owned(),
+                    surface: None,
+                    from: usize::MAX,
+                },
+                Retired::Session,
+            ),
+            (
+                LineShape::Unheard {
+                    session: session.clone(),
+                    model: "a-cli/small".to_owned(),
+                },
+                Retired::Unheard {
+                    model: "a-cli/small".to_owned(),
+                },
+            ),
+        ] {
+            let line = LineEvent {
+                conversation: id(),
+                at: at(),
+                actor: Actor::new("assistant").expect("an actor"),
+                held: u32::MAX,
+                carried: Carried::Written,
+                shape,
+                words: Vec::new(),
+            };
+            let print = canonical(&line);
+            let read: LineEvent =
+                parse_event(&LineVocabulary, &print).expect("a stored line reads");
+            assert_eq!(read, line, "{print}");
+            let entry = read.entry(&opened_by(&[]));
+            assert_eq!(
+                entry,
+                Entry::Retired {
+                    at: at(),
+                    retired: retired.clone()
+                }
+            );
+            assert!(matches!(
+                LineEvent::write(
+                    id(),
+                    Actor::new("assistant").expect("an actor"),
+                    0,
+                    &entry,
+                    &Counting::default(),
+                ),
+                Err(NotALine::Retired)
+            ));
         }
     }
 
@@ -1502,7 +1758,7 @@ mod tests {
                 by: None,
             };
             let (line, keys) = written(&entry);
-            let (_, words) = crate::secretary::line_shape::split(&entry);
+            let (_, words) = crate::secretary::line_shape::split(&entry).expect("a written kind");
             let words = words.expect("a whole turn has words");
             for (slot, said) in words.iter().enumerate() {
                 let opened = line.open(slot, &keys[slot]).expect("opens");
@@ -1539,7 +1795,7 @@ mod tests {
                 &Counting::default(),
             )
             .expect("a line");
-            let (_, words) = crate::secretary::line_shape::split(&entry);
+            let (_, words) = crate::secretary::line_shape::split(&entry).expect("a written kind");
             let said = words.expect("a whole turn has words").remove(0).scrubbed().expect("scrubs");
             proptest::prop_assert_eq!(line.open(0, &keys[0]), Some(said.clone()));
             let Entry::Said { turn: Turn::Model { text, .. }, .. } = line.entry(&opened_by(&keys)) else {

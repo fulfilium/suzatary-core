@@ -46,12 +46,32 @@ impl Shows for OwnersWords {
     }
 }
 
-/// Every clean part.
-pub(crate) enum CleanWords {}
+/// Every clean part: what the compactor of a clean node is shown.
+pub enum CleanWords {}
 
 impl Shows for CleanWords {
     fn shows(label: &Label) -> bool {
         label.is_clean()
+    }
+}
+
+/// The parts the secretary's call reads in words: clean, and nothing but the owner's turns, acts
+/// and erasures and the secretary's own answers. A box's note can hold a connector's own words,
+/// and a clean verb's answer an outside server's, so a part holding either is read by its kinds.
+pub enum OwnersAndAnswers {}
+
+impl Shows for OwnersAndAnswers {
+    fn shows(label: &Label) -> bool {
+        label.is_clean()
+            && label.kinds.iter().all(|kind| {
+                matches!(
+                    kind,
+                    crate::secretary::digest_label::Kind::Person
+                        | crate::secretary::digest_label::Kind::Act
+                        | crate::secretary::digest_label::Kind::Erased
+                        | crate::secretary::digest_label::Kind::Model
+                )
+            })
     }
 }
 
@@ -81,8 +101,8 @@ impl<S: Shows> ShownRecord<S> {
 
     /// The view within `budget` bytes, one line per part in the log's order, before it is fitted.
     #[must_use]
-    pub fn lines(&self, budget: usize) -> Vec<String> {
-        told::record_lines(&self.reading, budget, None)
+    pub fn lines(&self, budget: usize) -> Vec<told::Spanned> {
+        told::spanned_lines(&self.reading, budget, None, S::shows)
     }
 
     /// The summaries this reader reads in words in the view within `budget` bytes.
@@ -114,7 +134,7 @@ impl<S: Shows> ShownRecord<S> {
         let mut stack: Vec<&Node<Label>> = digest.tree().map(Tree::root).into_iter().collect();
         while let Some(node) = stack.pop() {
             stack.extend(node.children());
-            if !S::shows(node.measure()) {
+            if !S::shows(&digest.label(node)) {
                 continue;
             }
             let (kind, text) = if node.is_leaf() {
@@ -144,13 +164,15 @@ impl<S: Shows> ShownRecord<S> {
     }
 }
 
-/// What a session opening over `memory` is told, with the newest of `lines` that fit `budget`
-/// bytes and with no topic, since a topic is the secretary's own word for a conversation.
+/// What the agent is told of `memory`, with the newest of `lines` that fit `budget` bytes, the
+/// rest named by a handle `zoom` opens, and with no topic, since a topic is the secretary's own
+/// word for a conversation.
 #[must_use]
-pub fn told(memory: &Memory, lines: Result<&[String], &Refusal>, budget: usize) -> Told {
+pub fn told(memory: &Memory, lines: Result<&[told::Spanned], &Refusal>, budget: usize) -> Told {
     told::of(
-        memory,
+        told::Reader::Agent,
+        Ok(memory),
         Ok(&Topics::default()),
-        lines.map(|lines| digest_view::fit(lines.to_vec(), budget, digest_view::Keep::Latest)),
+        lines.map(|lines| told::fit_latest(lines.to_vec(), budget)),
     )
 }

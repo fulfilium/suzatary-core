@@ -38,10 +38,7 @@ impl Said {
             | Entry::Reviewed { .. }
             | Entry::ReviewFailed { .. }
             | Entry::Rewound { .. }
-            | Entry::MemorySeen { .. }
-            | Entry::Session { .. }
-            | Entry::Kept { .. }
-            | Entry::Unheard { .. }
+            | Entry::Retired { .. }
             | Entry::Scoped { .. }
             | Entry::Coding { .. }
             | Entry::Erased { .. }

@@ -2,7 +2,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::secretary;
 use crate::secretary::verbs::{Reasoned, propose};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
@@ -69,10 +68,7 @@ impl Verb for Web {
             .transpose()?;
         // A round that has read mail may be asking on that mail's behalf, and a fetch carries its
         // URL off the box, so there an allowed host is asked too, as `remember` asks.
-        let read_outside = taint::tainted(&secretary::read(
-            call.caps.conversations,
-            call.conversation,
-        )?);
+        let read_outside = call.sent == taint::Taint::Tainted;
         if !read_outside && web::allowed(&call.caps.web.allow_rules(), &request) {
             return Ok(match call.caps.web.perform(&request) {
                 Ok(answer) => json!({

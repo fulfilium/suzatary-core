@@ -2196,7 +2196,7 @@ pub fn forget(
     memory(memories)
 }
 
-/// `GET /api/secretary/record`: the summaries a session opening is told.
+/// `GET /api/secretary/record`: the summaries a call is told.
 pub fn record(
     digests: &suzatary_digest::secretary::digests::Digests<'_>,
 ) -> Answered<RecordPayload> {
@@ -2577,6 +2577,7 @@ mod tests {
                 verb: "remember".into(),
                 outcome: remembered(1),
                 files: Vec::new(),
+                carries: None,
             },
             vec![
                 suzatary_memory::secretary::words::Gone::Erased {

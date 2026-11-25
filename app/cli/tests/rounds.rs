@@ -37,7 +37,7 @@ fn opened(caps: &Fakes) {
     .expect("the conversation opens");
 }
 
-/// `converse` with no session, as the brief runs.
+/// `converse`, as the brief runs.
 fn conversed(caps: &Fakes, said: &str) -> Result<Option<usize>, String> {
     let policy = common::chain();
     let deployment = deployment();
@@ -73,7 +73,7 @@ const CALLS: &str = r#"{"say": "Looking.", "calls": [
 
 /// A verb, an unknown verb and a refused verb, then an answer.
 #[test]
-fn a_round_without_a_session() {
+fn a_round_of_verbs() {
     let caps = Fakes::new("rounds-window").model(FakeModel::saying([CALLS, r#"{"say": "Done."}"#]));
     opened(&caps);
     assert_eq!(conversed(&caps, "what changed?"), Ok(Some(2)));
@@ -97,9 +97,9 @@ fn a_round_whose_model_fails() {
     common::pinned("failed", &common::scene(&caps, &id()));
 }
 
-/// A session opened on the first round and resumed with the delta on the second.
+/// Two rounds, each a fresh call told the memory and its window, its reply streamed.
 #[test]
-fn a_round_over_a_session() {
+fn two_rounds_each_a_fresh_call() {
     let caps = Fakes::new("rounds-session").model(FakeModel::saying([
         CALLS,
         r#"{"say": "Done."}"#,
@@ -140,7 +140,7 @@ fn a_round_over_a_session() {
         .expect("the person turn appends");
         suzatary_secretary::secretary::answer(
             &caps.secretary(),
-            || suzatary_conversations::secretary::model::Pick::Held(&caps.model),
+            || -> suzatary_conversations::secretary::model::Pick<'_> { Box::new(&caps.model) },
             &deployment,
             &suzatary_connect::settings::Settables::default(),
             &chains,
@@ -160,7 +160,7 @@ fn a_round_over_a_session() {
         working.lock().expect("not poisoned"),
         deltas.lock().expect("not poisoned"),
     );
-    common::pinned("session", &scene);
+    common::pinned("streamed", &scene);
 }
 
 /// One `Round` over a transcript-only ask, a surface of `weather` and `todo_show`, and a `run`
@@ -201,7 +201,8 @@ fn round_under(
     };
     let run = |request: suzatary_secretary::verb::Request<
         suzatary_secretary::secretary::SecretaryCall,
-    >| {
+    >,
+               _sent| {
         let verb = request.call.verb().name();
         ran.lock().expect("not poisoned").push(verb.to_owned());
         if verb == "todo_show" {
@@ -599,7 +600,7 @@ proptest::proptest! {
         }
         // Nothing waits after any ending, so no model is asked again for this question.
         let stored = conversations::read(caps.conversations.conversations(), &id()).expect("reads");
-        proptest::prop_assert!(suzatary_conversations::secretary::queue::Pending::of(&stored).is_none());
+        proptest::prop_assert!(!suzatary_conversations::secretary::queue::waits(&suzatary_conversations::secretary::queue::delta(&stored)));
     }
 }
 
@@ -615,10 +616,12 @@ impl suzatary_conversations::secretary::model::Model for Interrupted<'_> {
         suzatary_conversations::secretary::model::Model::name(self.model)
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &suzatary_conversations::secretary::model::Conversation,
         tools: &serde_json::Value,
+        _on_delta: &dyn Fn(&str),
+        _halt: &suzatary_conversations::secretary::model::Halt,
     ) -> Result<suzatary_conversations::secretary::model::Reply, ModelError> {
         let reply =
             suzatary_conversations::secretary::model::Model::turn(self.model, conversation, tools);
@@ -666,7 +669,7 @@ fn a_question_said_during_the_last_answer_is_still_owed() {
                 ask: Ask::Transcript { model: &model },
                 system: "you are the secretary",
                 verbs: &suzatary_secretary::secretary::surface::Subset::ALL,
-                run: &|_| Ok(serde_json::json!("unused").into()),
+                run: &|_, _| Ok(serde_json::json!("unused").into()),
                 bound: 8,
                 sink: &Sink::quiet(&Halt::new()),
                 load: LOAD_NOTHING,
@@ -734,10 +737,12 @@ impl suzatary_conversations::secretary::model::Model for Panicking<'_> {
         suzatary_conversations::secretary::model::Model::name(self.model)
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &suzatary_conversations::secretary::model::Conversation,
         tools: &serde_json::Value,
+        _on_delta: &dyn Fn(&str),
+        _halt: &suzatary_conversations::secretary::model::Halt,
     ) -> Result<suzatary_conversations::secretary::model::Reply, ModelError> {
         let left = self.panics.load(std::sync::atomic::Ordering::SeqCst);
         if left > 0 {
@@ -762,7 +767,7 @@ fn round_over(
                 ask: Ask::Transcript { model },
                 system: "you are the secretary",
                 verbs: &suzatary_secretary::secretary::surface::Subset::ALL,
-                run: &|_| Ok(serde_json::json!("unused").into()),
+                run: &|_, _| Ok(serde_json::json!("unused").into()),
                 bound: 8,
                 sink: &Sink::quiet(&Halt::new()),
                 load: LOAD_NOTHING,
@@ -1041,7 +1046,7 @@ fn a_question_said_during_another_holder_s_last_ask_is_answered_by_that_holder()
     }];
     let answered = suzatary_secretary::secretary::answer(
         &caps.secretary(),
-        || suzatary_conversations::secretary::model::Pick::Turn(Box::new(&model)),
+        || -> suzatary_conversations::secretary::model::Pick<'_> { Box::new(&model) },
         &deployment,
         &suzatary_connect::settings::Settables::default(),
         &chains,

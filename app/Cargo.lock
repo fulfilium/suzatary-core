@@ -5022,6 +5022,7 @@ dependencies = [
  "suzatary-health",
  "suzatary-held",
  "suzatary-inbox",
+ "suzatary-io-model",
  "suzatary-lines",
  "suzatary-mail",
  "suzatary-memory",

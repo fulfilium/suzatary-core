@@ -19,4 +19,7 @@ pub struct Call<'a> {
     pub chain: &'a ChainPolicy,
     pub chains: &'a [Bound<'a>],
     pub conversation: &'a ConversationId,
+    /// What the round's asks were sent carried, joined, handed by the round that made the call:
+    /// the one fact the gate reads of what the model holds.
+    pub sent: suzatary_conversations::secretary::taint::Taint,
 }

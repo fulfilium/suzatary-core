@@ -194,7 +194,7 @@ impl Stores {
     fn say(&self, conversation: &str, entries: &[Entry]) {
         let id = ConversationId::new(conversation).expect("a slug");
         for (held, entry) in entries.iter().enumerate() {
-            let (line, keys) = LineEvent::write(
+            let (line, keys) = LineEvent::older(
                 id.clone(),
                 suzatary_lines::secretary::transcript::writer(),
                 u32::try_from(held).expect("few lines"),
@@ -496,8 +496,8 @@ fn no_triage_call_writes_the_memory_the_digest_or_the_conversations() {
 /// `context` tells the agent the facts and the owner's own words, and nobody else's, and so do
 /// `recall` and `zoom`: neither the secretary's answer, a verb's answer quoting an email, the
 /// box's own note, nor a summary over any of them is shown, however it is asked for or opened; a
-/// summary of nothing but the owner's lines is. The secretary's opening leaves the box's note out
-/// too.
+/// summary of nothing but the owner's lines is. The secretary's call shows the owner's lines and
+/// clean summaries, and neither the box's note nor the verb's answer as a line.
 #[test]
 fn the_agent_reads_the_facts_and_the_owners_words_alone() {
     let stores = remembered();
@@ -566,7 +566,7 @@ fn the_agent_reads_the_facts_and_the_owners_words_alone() {
     }
     let reading = Reading::of(&stores.memories().digests.reads()).expect("the record reads");
     let opening = suzatary_digest::secretary::told::context_of(
-        &stores.memories().reads().read().expect("the memory reads"),
+        stores.memories().reads().read().as_ref(),
         Ok(&suzatary_topics::secretary::topics::reading::Reading::default()),
         Ok(&reading),
         1024 * 1024,
@@ -575,4 +575,5 @@ fn the_agent_reads_the_facts_and_the_owners_words_alone() {
     .text();
     assert!(opening.contains("A last note, number 31"), "{opening}");
     assert!(!opening.contains("BOXNOTE"), "{opening}");
+    assert!(!opening.contains("INJECTED"), "{opening}");
 }

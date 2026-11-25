@@ -175,7 +175,7 @@ fn review(
     let quiet = crate::conversation::round::Sink::quiet(&halt);
     let answered = match super::answer(
         caps,
-        || suzatary_conversations::secretary::model::Pick::Turn(Box::new(caps.model)),
+        || -> suzatary_conversations::secretary::model::Pick<'_> { Box::new(caps.model) },
         deployment,
         settables,
         chains,

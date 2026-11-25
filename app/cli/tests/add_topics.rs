@@ -74,7 +74,7 @@ fn say_in(fakes: &Fakes, id: &ConversationId, turns: Vec<Turn>) {
     }
     for (minute, turn) in (1..).zip(turns) {
         let by = matches!(turn, Turn::Person { .. }).then(|| "ada".into());
-        transcript::push(
+        transcript::push_older(
             conversations,
             id,
             &Entry::Said {

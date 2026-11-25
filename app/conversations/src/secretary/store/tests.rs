@@ -1,5 +1,5 @@
 use super::*;
-use crate::secretary::model::{SessionId, Turn};
+use crate::secretary::model::Turn;
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
@@ -228,90 +228,39 @@ fn an_act_proposal_round_trips_and_names_itself() {
     assert_eq!(read, proposal);
 }
 
-/// An unheard turn ends the session it names and no other.
+/// A retired line is read as nothing: the conversation folds as if it were not there.
 #[test]
-fn an_unheard_turn_ends_only_the_session_it_names() {
-    let first = SessionId::new("96f709a3-43d7-4453-bf59-6fb5291b5a3c").expect("a uuid");
-    let second = SessionId::new("11111111-2222-4333-8444-555555555555").expect("a uuid");
-    let kept = |at: &str, id: &SessionId| Entry::Kept {
-        at: instant(at),
-        session: id.clone(),
-        model: "a-cli/small".to_owned(),
-        cwd: "/home/ada/Documents/Suzatary".to_owned(),
-        surface: None,
-        from: 0,
+fn a_retired_line_folds_to_nothing() {
+    let asked = Entry::Said {
+        at: instant("t1"),
+        turn: Turn::Person {
+            text: "read everything".to_owned(),
+            references: Vec::new(),
+            attachments: Vec::new(),
+        },
+        by: Some("ada".into()),
     };
-    let unheard = |id: &SessionId| Entry::Unheard {
-        at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 3, 0, 0).expect("an instant"),
-        session: id.clone(),
-        model: "openai-compatible/deepseek-v4-flash".to_owned(),
-    };
-    let ended = Stored::of(
-        &id(),
-        &[
-            opened(),
-            kept("2026-09-13T09:01:00", &first),
-            unheard(&first),
-        ],
-    )
-    .expect("a conversation");
-    assert!(ended.session.is_none());
-    let standing = Stored::of(
-        &id(),
-        &[
-            opened(),
-            kept("2026-09-13T09:01:00", &first),
-            kept("2026-09-13T09:05:00", &second),
-            unheard(&first),
-        ],
-    )
-    .expect("a conversation");
-    assert_eq!(standing.session.map(|kept| kept.session.id), Some(second));
+    let retired = [
+        super::Retired::MemorySeen,
+        super::Retired::Session,
+        super::Retired::Unheard {
+            model: "a-cli/small".to_owned(),
+        },
+    ]
+    .map(|retired| Entry::Retired {
+        at: instant("t2"),
+        retired,
+    });
+    let without = Stored::of(&id(), &[opened(), asked.clone()]).expect("a conversation");
+    let with: Vec<Entry> = [opened(), asked].into_iter().chain(retired).collect();
+    assert_eq!(Stored::of(&id(), &with).expect("a conversation"), without);
 }
 
+/// A stop reads as the owner's act.
 #[test]
-fn the_last_session_line_wins() {
-    let first = SessionId::new("96f709a3-43d7-4453-bf59-6fb5291b5a3c").expect("a uuid");
-    let second = SessionId::new("11111111-2222-4333-8444-555555555555").expect("a uuid");
+fn a_stop_is_an_act() {
     let entries = vec![
         opened(),
-        Entry::Session {
-            at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 1, 0, 0)
-                .expect("an instant"),
-            session: first.clone(),
-            model: "a-cli/small".to_owned(),
-            cwd: "/home/ada/Documents/Suzatary".to_owned(),
-            surface: None,
-        },
-        Entry::Session {
-            at: suzatary_base::capability::Datetime::new(2026, 9, 13, 9, 5, 0, 0)
-                .expect("an instant"),
-            session: second.clone(),
-            model: "a-cli/small".to_owned(),
-            cwd: "/home/ada/Documents/Suzatary".to_owned(),
-            surface: None,
-        },
-    ];
-    let stored = Stored::of(&id(), &entries).expect("a conversation");
-    let session = stored.session.expect("a session");
-    assert_eq!(session.session.id, second);
-    assert_ne!(session.session.id, first);
-    assert_eq!(session.session.created, "2026-09-13T09:05:00");
-}
-
-/// A stop reads as the owner's act and ends the session.
-#[test]
-fn a_stop_is_an_act_and_ends_the_session() {
-    let entries = vec![
-        opened(),
-        Entry::Session {
-            at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 30, 0)
-                .expect("an instant"),
-            session: SessionId::new("96f709a3-43d7-4453-bf59-6fb5291b5a3c").expect("a uuid"),
-            model: "a-cli/small".to_owned(),
-            cwd: "/srv".to_owned(),
-            surface: None,
-        },
         Entry::Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 1, 0, 0)
                 .expect("an instant"),
@@ -329,7 +278,6 @@ fn a_stop_is_an_act_and_ends_the_session() {
         },
     ];
     let stored = Stored::of(&id(), &entries).expect("a conversation");
-    assert!(stored.session.is_none(), "a stopped session is not resumed");
     let last = stored.turns.last().expect("the act");
     assert_eq!(
         last.turn,
@@ -407,7 +355,7 @@ fn one_round() -> Vec<Entry> {
 }
 
 /// A regenerate sets the trace and answer aside: the question is pending again, every index
-/// still names its turn, and the session is gone.
+/// still names its turn.
 #[test]
 fn a_regenerate_leaves_the_question_pending_on_the_live_path() {
     let stored = Stored::of(&id(), &one_round()).expect("a conversation");
@@ -435,7 +383,6 @@ fn a_regenerate_leaves_the_question_pending_on_the_live_path() {
         vec![0],
         "the question is asked again"
     );
-    assert!(after.session.is_none());
 }
 
 /// An edit sets the question aside too, and the new one is all the queue holds.

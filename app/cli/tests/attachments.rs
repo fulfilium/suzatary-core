@@ -74,14 +74,12 @@ fn answers(payload: &serde_json::Value, verb: &str) -> Vec<(String, bool)> {
         .collect()
 }
 
-/// Every file a turn the model was handed carries, across whole conversations and resumes.
+/// Every file a turn the model was handed carries, across every call.
 fn handed(model: &FakeModel) -> Vec<suzatary_held::enclosed::Enclosed> {
     model
         .asked()
         .into_iter()
-        .map(|conversation| conversation.turns)
-        .chain(model.resumed_with())
-        .flatten()
+        .flat_map(|conversation| conversation.turns)
         .filter_map(|turn| match turn {
             Turn::Tool { files, .. } => Some(files),
             _ => None,

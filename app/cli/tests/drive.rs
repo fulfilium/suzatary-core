@@ -619,7 +619,7 @@ fn a_tapped_private_file_is_proposed_without_a_read_and_sent_on_the_tap() {
         read_on_tap,
         "proposing read nothing from Drive"
     );
-    let asked = format!("{:?}{:?}", fakes.model.asked(), fakes.model.resumed_with());
+    let asked = format!("{:?}", fakes.model.asked());
     assert!(
         !asked.contains(&digest.as_str()[..12]),
         "a model was told the file's digest"

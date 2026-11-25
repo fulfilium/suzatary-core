@@ -14,7 +14,7 @@ use crate::secretary::digest_label::{Kind, Label};
 use crate::secretary::digest_line::Line;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::outcome::Outcome;
-use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::store::{Entry, Retired};
 use suzatary_conversations::secretary::tool_name::ToolName;
 use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_inbox::secretary::stamp::Stamp;
@@ -22,6 +22,8 @@ use suzatary_inbox::secretary::stamp::Stamp;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shown {
     pub part: Part,
+    /// The join of what the part stands for.
+    pub label: Label,
     pub body: Body,
 }
 
@@ -40,13 +42,6 @@ pub const LINE_BYTES: usize = 4_096;
 
 pub const VIEW_BYTES: usize = 131_072;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Keep {
-    /// The oldest parts: a prefix a model's cache keeps.
-    Earliest,
-    Latest,
-}
-
 /// The view of `digest` under `budget` bytes: a part `shows` reads as its words, any other
 /// hidden by its kinds.
 #[must_use]
@@ -64,8 +59,9 @@ pub fn view(
         .into_iter()
         .filter_map(|part| {
             let node = digest.node(&part.node)?;
-            let body = shown_as(*node.measure(), shows, || said(digest, entries, node))?;
-            Some(Shown { part, body })
+            let label = digest.label(node);
+            let body = shown_as(label, shows, || said(digest, entries, node))?;
+            Some(Shown { part, label, body })
         })
         .collect()
 }
@@ -97,13 +93,14 @@ pub fn opened(
     };
     let label = beneath
         .iter()
-        .map(|child| child.measure())
-        .filter(|label| reads(label))
-        .fold(Label::empty(), |label, child| label.join(child));
+        .map(|child| digest.label(child))
+        .filter(&reads)
+        .fold(Label::empty(), |label, child| label.join(&child));
     let shown = beneath
         .into_iter()
         .map(|child| {
-            let body = shown_as(*child.measure(), reads, || {
+            let label = digest.label(child);
+            let body = shown_as(label, reads, || {
                 Some(if child.is_leaf() {
                     Body::Said(cut(&whole(entries.get(digest.line(child.name()))?)))
                 } else {
@@ -112,6 +109,7 @@ pub fn opened(
             })?;
             Some(Shown {
                 part: part(child),
+                label,
                 body,
             })
         })
@@ -174,34 +172,25 @@ fn said(digest: &Digest, entries: &BTreeMap<&Hash, &Entry>, node: &Node<Label>) 
     }
 }
 
-/// `shown` within `budget` bytes, the end `keep` names kept; a line says how many were left out.
+/// The earliest of `shown` within `budget` bytes, a prefix a model's cache keeps; a line says how
+/// many were left out. The compactor's view; a reader's is `told`'s, which names what it cuts by a
+/// handle.
 #[must_use]
-pub fn fit(shown: Vec<String>, budget: usize, keep: Keep) -> Vec<String> {
+pub fn fit_earliest(shown: Vec<String>, budget: usize) -> Vec<String> {
     let mut bytes = 0;
-    let mut room = |line: &String| {
-        bytes += line.len() + 1;
-        bytes <= budget
-    };
-    let kept = match keep {
-        Keep::Earliest => shown.iter().take_while(|line| room(line)).count(),
-        Keep::Latest => shown.iter().rev().take_while(|line| room(line)).count(),
-    };
+    let kept = shown
+        .iter()
+        .take_while(|line| {
+            bytes += line.len() + 1;
+            bytes <= budget
+        })
+        .count();
     let left = shown.len() - kept;
-    let note = |which| format!("({left} {which} parts of the log are not shown here.)");
-    let mut lines: Vec<String> = Vec::with_capacity(kept + 1);
-    match keep {
-        Keep::Earliest => {
-            lines.extend(shown.into_iter().take(kept));
-            if left > 0 {
-                lines.push(note("later"));
-            }
-        }
-        Keep::Latest => {
-            if left > 0 {
-                lines.push(note("earlier"));
-            }
-            lines.extend(shown.into_iter().skip(left));
-        }
+    let mut lines: Vec<String> = shown.into_iter().take(kept).collect();
+    if left > 0 {
+        lines.push(format!(
+            "({left} later parts of the log are not shown here.)"
+        ));
     }
     lines
 }
@@ -229,7 +218,8 @@ pub fn kinds(label: Label) -> String {
     label.kinds.iter().map(word).collect::<Vec<_>>().join(", ")
 }
 
-fn word(kind: Kind) -> &'static str {
+#[must_use]
+pub fn word(kind: Kind) -> &'static str {
     match kind {
         Kind::Opened => "an opening",
         Kind::Titled => "a title",
@@ -243,8 +233,8 @@ fn word(kind: Kind) -> &'static str {
         Kind::ReviewFailed => "failed reviews",
         Kind::Stopped => "stops",
         Kind::Rewound => "retries",
-        Kind::MemorySeen => "memory notes",
-        Kind::Session => "session notes",
+        Kind::MemorySeen => "retired notes",
+        Kind::Session => "the box's bookkeeping",
         Kind::Coding => "coding sessions",
         Kind::Erased => "erased words",
     }
@@ -283,12 +273,15 @@ pub fn whole(entry: &Entry) -> String {
         Entry::ReviewFailed { reason, .. } => format!("A review could not run: {reason}"),
         Entry::Stopped { .. } => "The owner stopped the answer.".to_owned(),
         Entry::Rewound { .. } | Entry::Again { .. } => "The owner asked again.".to_owned(),
-        Entry::MemorySeen { .. } => "The secretary was told the memory.".to_owned(),
-        Entry::Session { .. } | Entry::Kept { .. } => "A model session opened.".to_owned(),
+        Entry::Retired {
+            retired: Retired::MemorySeen | Retired::Session,
+            ..
+        } => "A line of retired bookkeeping.".to_owned(),
         Entry::Scoped { scope, .. } => format!("The model is asked over its {}.", scope.as_str()),
-        Entry::Unheard { model, .. } => {
-            format!("The model session ended: {model} said a turn the session never heard.")
-        }
+        Entry::Retired {
+            retired: Retired::Unheard { model },
+            ..
+        } => format!("A line of retired bookkeeping about a turn {model} said."),
         Entry::Coding { .. } => "A coding session moved on.".to_owned(),
         Entry::Began { covers, .. } => format!(
             "The secretary began answering {} turn{}.",
@@ -322,7 +315,15 @@ fn said_turn(turn: &Turn, by: Option<&Stamp>) -> String {
         } if attachments.is_empty() => format!("Owner: {text}"),
         Turn::Person {
             text, attachments, ..
-        } => format!("Owner, with {} attached: {text}", attachments.len()),
+        } => format!(
+            "Owner, with {} attached ({}): {text}",
+            attachments.len(),
+            attachments
+                .iter()
+                .map(|attachment| attachment.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         Turn::Model { text, calls } if calls.is_empty() => format!("Secretary: {text}"),
         Turn::Model { text, calls } => {
             let verbs: Vec<&str> = calls.iter().map(|call| call.verb.as_str()).collect();
@@ -344,7 +345,7 @@ fn said_turn(turn: &Turn, by: Option<&Stamp>) -> String {
             let prose = suzatary_conversations::secretary::turn_shape::prose(words);
             match shape {
                 TurnShape::Person { .. } => format!("Owner: {prose}"),
-                TurnShape::Model { calls } => {
+                TurnShape::Model { calls, .. } => {
                     let verbs: Vec<&str> = calls.iter().map(ToolName::as_str).collect();
                     format!("Secretary: {prose} [asked {}]", verbs.join(", "))
                 }

@@ -267,7 +267,7 @@ const CONNECT_OUTSIDE: &str = "an account, a calendar or a folder is one the own
 fn owners_round(call: &Call<'_>, why: &str) -> Result<Reference, Refusal> {
     let stored =
         suzatary_lines::secretary::conversations::read(call.caps.conversations, call.conversation)?;
-    if taint::tainted(&stored) {
+    if call.sent == taint::Taint::Tainted {
         return Err(Refusal::forbidden(format!(
             "{READ_OUTSIDE}, and {why}: say so, and the owner asks again in a round of its own"
         )));

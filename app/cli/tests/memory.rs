@@ -206,7 +206,7 @@ fn erased_call(fakes: &Fakes, id: &str, words: &str, verb: &str) {
             entry,
             store::Entry::Said {
                 turn: model::Turn::Erased {
-                    shape: suzatary_conversations::secretary::turn_shape::TurnShape::Model { calls },
+                    shape: suzatary_conversations::secretary::turn_shape::TurnShape::Model { calls, .. },
                     ..
                 },
                 ..

@@ -124,7 +124,7 @@ fn said(line: &line_event::LineEvent) -> Option<&TurnShape> {
 }
 
 fn model_calls(line: &line_event::LineEvent) -> Option<&[tool_name::ToolName]> {
-    if let Some(TurnShape::Model { calls }) = said(line) {
+    if let Some(TurnShape::Model { calls, .. }) = said(line) {
         Some(calls)
     } else {
         None

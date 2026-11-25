@@ -521,7 +521,7 @@ fn conversation(
             turn,
             by,
         };
-        transcript::push(stores.conversations(), &id, &said).expect("said");
+        transcript::push_older(stores.conversations(), &id, &said).expect("said");
     }
 }
 
@@ -1146,7 +1146,7 @@ pub(crate) fn written_before_the_rules(instance: &Instance) -> ConversationId {
         Erasure::Asked { by: actor },
     );
     stores.lines.append(erasure).expect("erased");
-    transcript::push(
+    transcript::push_older(
         stores.conversations(),
         &id,
         &Entry::Said {
@@ -1404,7 +1404,7 @@ fn owed_compare_reads_a_copy_and_changes_nothing() {
             },
         )
         .expect("opened");
-        transcript::push(
+        transcript::push_older(
             stores.conversations(),
             &id,
             &Entry::Said {

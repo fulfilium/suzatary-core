@@ -1,4 +1,4 @@
-//! The `claude` CLI as a [`Model`] and a [`SessionModel`].
+//! The `claude` CLI as a [`Model`].
 //!
 //! It is given no tools: `--tools ""`, `--strict-mcp-config` with no config and a deny-all
 //! `--settings` [`Fence`] keep the account's own servers (a mail sender among them) and the
@@ -17,14 +17,12 @@ use std::time::Duration;
 
 use suzatary_base::capability::{Clock, Secret};
 use suzatary_conversations::secretary::model::{
-    Conversation, Delta, Halt, Model, ModelError, Reply, Session, SessionId, SessionModel,
-    Sessioned, TokenUsage, Turn,
+    Conversation, Halt, Model, ModelError, Reply, TokenUsage, Turn,
 };
 use suzatary_held::for_model::ForModel;
-use suzatary_inbox::secretary::stamp::stamp;
 
 use crate::blocks::{Blocks, Stores};
-use crate::prompt::{delta_prompt, prompt_of};
+use crate::prompt::{Prompt, prompt_of};
 use failure::{Heard, failed};
 use stream::{Ended, Unreadable, delta_of, result_of};
 use suzatary_io_access::run::{Cmd, RunError, run, watch, zero};
@@ -207,13 +205,9 @@ impl ClaudeCli {
         Ok(token)
     }
 
-    fn feed(
-        &self,
-        prompt: ForModel,
-        turns: &[Turn],
-    ) -> Result<(Stdin, Option<Secret>), ModelError> {
+    fn feed(&self, prompt: &Prompt, turns: &[Turn]) -> Result<(Stdin, Option<Secret>), ModelError> {
         let token = self.ready()?;
-        Ok((stdin_of(prompt, Blocks::of(&self.stores, turns)?), token))
+        Ok((stdin_for(prompt, &Blocks::of(&self.stores, turns)?), token))
     }
 
     /// The prompt goes down stdin: a day's conversation outgrows one argv string's 128 KB.
@@ -279,22 +273,25 @@ impl Model for ClaudeCli {
         name_of(&self.model)
     }
 
-    fn turn(
+    fn streamed(
         &self,
         conversation: &Conversation,
         tools: &serde_json::Value,
+        on_delta: &dyn Fn(&str),
+        halt: &Halt,
     ) -> Result<Reply, ModelError> {
         let prompt = prompt_of(conversation, tools, Reads::Files);
-        let (stdin, token) = self.feed(prompt.user, &conversation.turns)?;
-        let ended = self.ended(&self.command(
+        let (stdin, token) = self.feed(&prompt, &conversation.turns)?;
+        // The manual and the verb list outgrow one argument, so they go by a file the call holds.
+        let system = system_file(&prompt.system)?;
+        let cmd = self.command(
             Mode::Stateless {
-                system: &prompt.system,
+                system: system.path(),
             },
             stdin,
             token.as_ref(),
-        ))?;
-        let usage = ended.usage.map(TokenUsage::from);
-        Ok(Reply::parse(&reply_of(ended)?).with_usage(usage))
+        );
+        self.exchange(&cmd, on_delta, halt)
     }
 }
 
@@ -354,63 +351,16 @@ fn clean(ended: Ended, heard: &Heard) -> Result<Ended, ModelError> {
     Err(heard.failure(format!("the model's run ended {}", ended.subtype), now()))
 }
 
-impl SessionModel for ClaudeCli {
-    fn open(
-        &self,
-        id: &SessionId,
-        conversation: &Conversation,
-        tools: &serde_json::Value,
-        halt: &Halt,
-    ) -> Result<Sessioned, ModelError> {
-        let prompt = prompt_of(conversation, tools, Reads::Files);
-        let (stdin, token) = self.feed(prompt.user, &conversation.turns)?;
-        let created = stamp(SystemClock.now());
-        let cmd = self.command(
-            Mode::Open {
-                session_id: id,
-                system: &prompt.system,
-            },
-            stdin,
-            token.as_ref(),
-        );
-        self.exchange(id, &cmd, &|_| {}, halt, created)
-    }
-
-    /// No tool list: the session opened with one and remembers it.
-    fn resume(
-        &self,
-        system: &str,
-        session: &Session,
-        delta: &Delta,
-        _tools: &serde_json::Value,
-        on_delta: &dyn Fn(&str),
-        halt: &Halt,
-    ) -> Result<Sessioned, ModelError> {
-        let (stdin, token) = self.feed(delta_prompt(delta, Reads::Files), delta.turns())?;
-        let system = ForModel::of(system);
-        let cmd = self.command(
-            Mode::Resume {
-                session_id: &session.id,
-                system: &system,
-            },
-            stdin,
-            token.as_ref(),
-        );
-        self.exchange(&session.id, &cmd, on_delta, halt, session.created.clone())
-    }
-}
-
 impl ClaudeCli {
-    /// [`ModelError::Lost`] only when a failed run's stderr names the session or says "No
-    /// conversation found"; a bad flag or a network failure also fails.
+    /// One run of `cmd`, each fragment of its reply to `on_delta` as the stream carries it, the
+    /// process ended when `halt` is pulled; the reply is the result line's text, else the
+    /// fragments.
     fn exchange(
         &self,
-        id: &SessionId,
         cmd: &Cmd,
         on_delta: &dyn Fn(&str),
         halt: &Halt,
-        created: String,
-    ) -> Result<Sessioned, ModelError> {
+    ) -> Result<Reply, ModelError> {
         let mut assembled = String::new();
         let mut result: Option<Result<Ended, Unreadable>> = None;
         let mut heard = Heard::default();
@@ -430,47 +380,21 @@ impl ClaudeCli {
         )
         .and_then(|ran| zero(cmd, ran))
         .map_err(|failed| match failed {
-            RunError::Exited { stderr, .. }
-                if stderr.quotes(id.as_str())
-                    || stderr
-                        .as_str()
-                        .to_lowercase()
-                        .contains("no conversation found") =>
-            {
-                ModelError::Lost(stderr.to_string())
-            }
             exited @ RunError::Exited { .. } => heard.failure(exited.to_string(), now()),
             other => self.failure(other),
         })?;
-        let result = result
-            .transpose()
-            .map_err(|unreadable| ModelError::Failed(unreadable.to_string()))?
-            .map(|ended| clean(ended, &heard))
-            .transpose()?;
-        // A sessioned run's reply is also its streamed deltas, so a result with no text keeps them.
-        let (text, usage) = match result {
-            Some(Ended {
-                result: text,
-                usage,
-                ..
-            }) => (text.unwrap_or(assembled), usage.map(TokenUsage::from)),
-            None => (assembled, None),
-        };
-        Ok(Sessioned {
-            reply: Reply::parse(&text).with_usage(usage),
-            session: Session {
-                id: id.clone(),
-                model: self.model.clone(),
-                cwd: self
-                    .cwd
-                    .as_ref()
-                    .map(|path| path.display().to_string())
-                    .unwrap_or_default(),
-                created,
-                last: stamp(SystemClock.now()),
-                surface: None,
-            },
-        })
+        let ended = result
+            .ok_or_else(|| {
+                heard.failure(
+                    "the model printed no result (not logged in?)".to_owned(),
+                    now(),
+                )
+            })?
+            .map_err(|unreadable| ModelError::Failed(unreadable.to_string()))?;
+        let ended = clean(ended, &heard)?;
+        let usage = ended.usage.map(TokenUsage::from);
+        let text = ended.result.unwrap_or(assembled);
+        Ok(Reply::parse(&text).with_usage(usage))
     }
 }
 
@@ -488,34 +412,29 @@ pub const QUIET: &[(&str, &str)] = &[
     ("DO_NOT_TRACK", "1"),
 ];
 
-/// Which invocation a call to `claude` is, each with its manual as the system prompt.
+/// Which invocation a call to `claude` is, each with its system text.
 #[derive(Debug, Clone, Copy)]
 pub enum Mode<'a> {
-    /// [`Model::turn`]: the whole conversation, no session.
-    Stateless { system: &'a ForModel },
-    /// [`SessionModel::open`]: start a session under an id the box minted.
-    Open {
-        session_id: &'a SessionId,
-        system: &'a ForModel,
-    },
-    Resume {
-        session_id: &'a SessionId,
-        system: &'a ForModel,
-    },
+    /// [`Model::streamed`]: the whole conversation, no session; the manual and the verb list in
+    /// the file at `system`.
+    Stateless { system: &'a Path },
     /// [`ClaudeCli::plain`]: no tools, no session, none of the secretary's framing.
     Plain { system: &'a ForModel },
 }
 
-impl Mode<'_> {
-    #[must_use]
-    pub fn system(&self) -> &ForModel {
-        match self {
-            Mode::Stateless { system }
-            | Mode::Open { system, .. }
-            | Mode::Resume { system, .. }
-            | Mode::Plain { system } => system,
-        }
-    }
+/// `system` in a file of its own, removed when the returned handle drops.
+fn system_file(system: &ForModel) -> Result<tempfile::NamedTempFile, ModelError> {
+    use std::io::Write as _;
+    let unwritten = |failed: std::io::Error| {
+        ModelError::Unreachable(format!("the system text could not be written: {failed}"))
+    };
+    let mut file = tempfile::Builder::new()
+        .prefix("suzatary-system-")
+        .tempfile()
+        .map_err(unwritten)?;
+    file.write_all(system.as_str().as_bytes())
+        .map_err(unwritten)?;
+    Ok(file)
 }
 
 /// Every mode carries the fence (no tools, no MCP server, the deny-all settings) and nothing
@@ -523,34 +442,24 @@ impl Mode<'_> {
 #[must_use]
 pub fn argv(model: &str, fence: &Fence, mode: Mode<'_>) -> Vec<String> {
     let mut built = vec!["-p".to_owned(), "--model".to_owned(), model.to_owned()];
-    let streamed = |flag: &str, id: &SessionId| {
-        [
-            flag,
-            id.as_str(),
-            "--output-format",
-            "stream-json",
-            "--include-partial-messages",
-            "--verbose",
-        ]
-        .map(str::to_owned)
-    };
-    // Stream-json out in every mode: a request that carries a file goes in as stream-json,
-    // and the CLI takes that only with stream-json out.
-    let unsessioned = ["--output-format", "stream-json", "--verbose"].map(str::to_owned);
-    match mode {
-        Mode::Stateless { .. } | Mode::Plain { .. } => built.extend(unsessioned),
-        Mode::Open { session_id, .. } => built.extend(streamed("--session-id", session_id)),
-        Mode::Resume { session_id, .. } => built.extend(streamed("--resume", session_id)),
+    // Stream-json out in every mode: a request whose blocks go in as stream-json is taken only
+    // with stream-json out.
+    built.extend(["--output-format", "stream-json"].map(str::to_owned));
+    if matches!(mode, Mode::Stateless { .. }) {
+        built.push("--include-partial-messages".to_owned());
     }
-    built.extend([
-        "--system-prompt".to_owned(),
-        mode.system().as_str().to_owned(),
-    ]);
+    built.push("--verbose".to_owned());
+    built.extend(match mode {
+        Mode::Stateless { system } => [
+            "--system-prompt-file".to_owned(),
+            system.display().to_string(),
+        ],
+        Mode::Plain { system } => ["--system-prompt".to_owned(), system.as_str().to_owned()],
+    });
     match mode {
         Mode::Stateless { .. } => built.push("--no-session-persistence".to_owned()),
         Mode::Plain { .. } => built
             .extend(["--no-session-persistence", "--disable-slash-commands"].map(str::to_owned)),
-        Mode::Open { .. } | Mode::Resume { .. } => {}
     }
     // The per-machine sections move out so the cached prefix is the same from round to round.
     if !matches!(mode, Mode::Plain { .. }) {
@@ -578,7 +487,7 @@ pub struct Stdin {
 }
 
 /// Plain text when there are no blocks; otherwise one stream-json user message, the blocks
-/// followed by the text.
+/// followed by the text. [`ClaudeCli::plain`]'s.
 #[must_use]
 pub fn stdin_of(prompt: ForModel, blocks: Blocks) -> Stdin {
     if blocks.is_empty() {
@@ -597,9 +506,44 @@ pub fn stdin_of(prompt: ForModel, blocks: Blocks) -> Stdin {
     }
 }
 
+/// One stream-json user message: what the context tells before the turns, the transcript's head,
+/// the earlier rounds' turns, the round's turns, each after the files it hands over, the newest
+/// carrying the call's one cache mark, then what the context tells after it and the tail. The
+/// CLI places marks of its own (two in the system text, one after or on the message's last
+/// block) and the API takes four a request. `files` are the blocks of the round's turns, by turn.
+#[must_use]
+pub fn stdin_for(prompt: &Prompt, files: &Blocks) -> Stdin {
+    let text = |text: &ForModel| serde_json::json!({ "type": "text", "text": text.as_str() });
+    let mut content: Vec<serde_json::Value> = prompt.told.iter().map(text).collect();
+    content.push(text(&prompt.head));
+    content.extend(prompt.earlier.iter().map(text));
+    for (at, turn) in prompt.round.iter().enumerate() {
+        content.extend(files.of_turn(at));
+        content.push(text(turn));
+    }
+    // The newest turn's files, and any of a turn the prompt holds no block for.
+    content.extend(files.from_turn(prompt.round.len()));
+    if let Some(newest) = &prompt.newest {
+        let mut marked = text(newest);
+        marked["cache_control"] = serde_json::json!({ "type": "ephemeral", "ttl": "1h" });
+        content.push(marked);
+    }
+    content.extend(prompt.after.iter().map(text));
+    content.push(text(&prompt.tail));
+    let message = serde_json::json!({
+        "type": "user",
+        "message": { "role": "user", "content": content },
+    });
+    Stdin {
+        args: vec!["--input-format".to_owned(), "stream-json".to_owned()],
+        payload: format!("{message}\n"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use suzatary_conversations::secretary::model::Earlier;
     use suzatary_held::for_model::ForModel;
 
     use suzatary_held::attachment::Attachment;
@@ -607,7 +551,6 @@ mod tests {
     /// A CLI that met a limit exits 1 with nothing on stderr and says why on stdout.
     #[test]
     fn a_failed_run_names_its_failure_from_what_the_cli_printed() {
-        use suzatary_conversations::secretary::model::Halt;
         use suzatary_health::health::{Limit, Limited};
         let dir = suzatary_testkit::scratch("model");
         let result = |text: &str| {
@@ -634,7 +577,6 @@ mod tests {
             ModelError::Unreachable(_)
             | ModelError::TimedOut(_)
             | ModelError::TooLong(_)
-            | ModelError::Lost(_)
             | ModelError::Halted => format!("other: {failed}"),
         };
         for (n, (stdout, stderr, expected)) in [
@@ -686,6 +628,8 @@ mod tests {
             let cli = ClaudeCli::new("m", shipped()).with_binary(script.display().to_string());
             let conversation = Conversation {
                 system: String::new(),
+                context: suzatary_conversations::secretary::model::Context::default(),
+                earlier: Vec::new(),
                 turns: vec![person_with(Vec::new())],
             };
             let failures = [
@@ -693,13 +637,6 @@ mod tests {
                     .expect_err("exit 1"),
                 cli.plain(&ForModel::of("s"), ForModel::of("hi"))
                     .expect_err("exit 1"),
-                cli.open(
-                    &a_session_id(),
-                    &conversation,
-                    &serde_json::json!([]),
-                    &Halt::new(),
-                )
-                .expect_err("exit 1"),
             ];
             for failed in &failures {
                 let said = class(failed);
@@ -746,12 +683,28 @@ mod tests {
         };
         let fed = ClaudeCli::new("m", shipped())
             .with_files(files)
-            .feed(ForModel::of("read it"), &[turn])
+            .feed(
+                &Prompt {
+                    system: ForModel::of(""),
+                    told: Vec::new(),
+                    head: ForModel::of("read it"),
+                    earlier: Vec::new(),
+                    round: Vec::new(),
+                    newest: None,
+                    after: Vec::new(),
+                    tail: ForModel::of("answer"),
+                },
+                &[turn],
+            )
             .expect("fed")
             .0;
         let content = &message_of(&fed)["message"]["content"];
         assert_eq!(
             content[0],
+            serde_json::json!({"type": "text", "text": "read it"})
+        );
+        assert_eq!(
+            content[1],
             serde_json::json!({
                 "type": "document",
                 "source": {
@@ -762,9 +715,70 @@ mod tests {
                 "title": "notice.pdf",
             })
         );
+    }
+
+    /// F8: a turn's files stand just before its own block: with a file on two turns of the round,
+    /// each document block is followed by its own turn's text, the newest's by the marked block.
+    #[test]
+    fn a_turns_files_stand_just_before_its_own_block() {
+        use suzatary_held::enclosed::{Enclosed, Enclosure};
+        let dir = suzatary_testkit::scratch("model");
+        let files = Blobs::open(dir.path().to_path_buf());
+        let handed = |name: &str, bytes: &[u8]| Turn::Tool {
+            verb: "attachments".into(),
+            answer: "{}".to_owned(),
+            outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
+            files: vec![Enclosed {
+                id: files.put(bytes).expect("kept"),
+                name: name.to_owned(),
+                media: Enclosure::Pdf,
+                size: bytes.len() as u64,
+                text: String::new(),
+            }],
+        };
+        let turns = [
+            handed("first.pdf", b"%PDF-1.7\n%first\n%%EOF\n"),
+            handed("second.pdf", b"%PDF-1.7\n%second\n%%EOF\n"),
+        ];
+        let stores = Stores {
+            files: Some(files.clone()),
+            ..Stores::default()
+        };
+        let blocks = Blocks::of(&stores, &turns).expect("read");
+        let prompt = Prompt {
+            system: ForModel::of(""),
+            told: Vec::new(),
+            head: ForModel::of("head"),
+            earlier: Vec::new(),
+            round: vec![ForModel::of("first turn")],
+            newest: Some(ForModel::of("second turn")),
+            after: Vec::new(),
+            tail: ForModel::of("tail"),
+        };
+        let content = message_of(&stdin_for(&prompt, &blocks))["message"]["content"].clone();
+        let kinds: Vec<String> = content
+            .as_array()
+            .expect("blocks")
+            .iter()
+            .map(|block| match block["type"].as_str() {
+                Some("document") => format!("file {}", block["title"].as_str().unwrap_or("")),
+                _ => block["text"].as_str().unwrap_or("").to_owned(),
+            })
+            .collect();
         assert_eq!(
-            content[1],
-            serde_json::json!({"type": "text", "text": "read it"})
+            kinds,
+            [
+                "head",
+                "file first.pdf",
+                "first turn",
+                "file second.pdf",
+                "second turn",
+                "tail"
+            ]
+        );
+        assert!(
+            content[4].get("cache_control").is_some(),
+            "the newest turn's block is marked"
         );
     }
 
@@ -779,19 +793,15 @@ mod tests {
     /// transcript a page's text could reach.
     #[test]
     fn every_mode_carries_the_whole_fence() {
-        let id = a_session_id();
         let system = ForModel::of("s");
-        for mode in [
-            Mode::Stateless { system: &system },
-            Mode::Open {
-                session_id: &id,
-                system: &system,
-            },
-            Mode::Resume {
-                session_id: &id,
-                system: &system,
-            },
-            Mode::Plain { system: &system },
+        let file = Path::new("/run/system.md");
+        for (mode, flag, said) in [
+            (
+                Mode::Stateless { system: file },
+                "--system-prompt-file",
+                "/run/system.md",
+            ),
+            (Mode::Plain { system: &system }, "--system-prompt", "s"),
         ] {
             let built = argv("m", &shipped(), mode);
             let after = |flag: &str| {
@@ -807,7 +817,7 @@ mod tests {
                 "{built:?}"
             );
             assert!(built.contains(&"--strict-mcp-config".to_owned()));
-            assert_eq!(after("--system-prompt").as_deref(), Some("s"), "{built:?}");
+            assert_eq!(after(flag).as_deref(), Some(said), "{built:?}");
         }
         assert!(shipped().stands(), "the repository ships its deny-all");
     }
@@ -820,6 +830,8 @@ mod tests {
             .turn(
                 &Conversation {
                     system: String::new(),
+                    context: suzatary_conversations::secretary::model::Context::default(),
+                    earlier: Vec::new(),
                     turns: vec![person_with(Vec::new())],
                 },
                 &serde_json::json!([]),
@@ -831,17 +843,15 @@ mod tests {
         );
     }
 
-    fn a_session_id() -> SessionId {
-        SessionId::new("00000000-0000-4000-8000-000000000001").expect("a uuid")
-    }
-
     /// A call that names no session keeps none: nothing of it is written under the CLI's
     /// projects, where a transcript would outlive the answer.
     #[test]
     fn a_call_with_no_session_persists_none() {
         let system = ForModel::of("s");
         for mode in [
-            Mode::Stateless { system: &system },
+            Mode::Stateless {
+                system: Path::new("/run/system.md"),
+            },
             Mode::Plain { system: &system },
         ] {
             let built = argv("claude-haiku-4-5", &shipped(), mode);
@@ -877,6 +887,8 @@ mod tests {
         cli.turn(
             &Conversation {
                 system: String::new(),
+                context: suzatary_conversations::secretary::model::Context::default(),
+                earlier: Vec::new(),
                 turns: vec![person_with(Vec::new())],
             },
             &serde_json::json!([]),
@@ -910,6 +922,8 @@ mod tests {
             .turn(
                 &Conversation {
                     system: String::new(),
+                    context: suzatary_conversations::secretary::model::Context::default(),
+                    earlier: Vec::new(),
                     turns: vec![person_with(Vec::new())],
                 },
                 &serde_json::json!([]),
@@ -965,6 +979,8 @@ mod tests {
             .turn(
                 &Conversation {
                     system: String::new(),
+                    context: suzatary_conversations::secretary::model::Context::default(),
+                    earlier: Vec::new(),
                     turns: vec![person_with(Vec::new())],
                 },
                 &serde_json::json!([]),
@@ -1008,53 +1024,29 @@ mod tests {
         );
     }
 
+    /// A turn's call moves the per-machine sections out of the system prompt and keeps its cache
+    /// an hour, so the cached prefix is the same from round to round.
     #[test]
-    fn every_mode_excludes_the_dynamic_system_prompt_sections() {
-        let id = a_session_id();
-        let system = ForModel::of("s");
-        for mode in [
-            Mode::Stateless { system: &system },
-            Mode::Open {
-                session_id: &id,
-                system: &system,
-            },
-            Mode::Resume {
-                session_id: &id,
-                system: &system,
-            },
-        ] {
-            let built = argv("claude-haiku-4-5", &shipped(), mode);
-            assert!(
-                built.contains(&"--exclude-dynamic-system-prompt-sections".to_owned()),
-                "{built:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn every_mode_pins_the_cache_ttl_on_the_built_command() {
-        let id = a_session_id();
-        let system = ForModel::of("s");
-        let cli = ClaudeCli::new("claude-haiku-4-5", shipped());
-        for mode in [
-            Mode::Stateless { system: &system },
-            Mode::Open {
-                session_id: &id,
-                system: &system,
-            },
-            Mode::Resume {
-                session_id: &id,
-                system: &system,
-            },
-        ] {
-            let cmd = cli.command(mode, stdin_of(ForModel::of(""), Blocks::default()), None);
-            let ttl = cmd
-                .env
-                .iter()
-                .find(|(name, _)| name == CACHE_TTL_VAR)
-                .and_then(|(_, value)| value.clone());
-            assert_eq!(ttl.as_deref(), Some("1h".as_ref()), "{:?}", cmd.args);
-        }
+    fn a_turn_keeps_its_prefix_the_same_and_its_cache_an_hour() {
+        let mode = Mode::Stateless {
+            system: Path::new("/run/system.md"),
+        };
+        let built = argv("claude-haiku-4-5", &shipped(), mode);
+        assert!(
+            built.contains(&"--exclude-dynamic-system-prompt-sections".to_owned()),
+            "{built:?}"
+        );
+        let cmd = ClaudeCli::new("claude-haiku-4-5", shipped()).command(
+            mode,
+            stdin_of(ForModel::of(""), Blocks::default()),
+            None,
+        );
+        let ttl = cmd
+            .env
+            .iter()
+            .find(|(name, _)| name == CACHE_TTL_VAR)
+            .and_then(|(_, value)| value.clone());
+        assert_eq!(ttl.as_deref(), Some("1h".as_ref()), "{:?}", cmd.args);
     }
 
     #[test]
@@ -1125,62 +1117,50 @@ mod tests {
         }
     }
 
+    /// THE CACHE LAYOUT: the facts and the record, the head, the earlier rounds, the round with
+    /// the one mark on its newest turn, then the topics and the tail; the verbs are in the system
+    /// text, and the same conversation is the same bytes.
     #[test]
-    fn open_and_resume_carry_the_fence_and_nothing_that_widens_it() {
-        let settings = Path::new("/repo/.claude/secretary-settings.json");
-        let id = a_session_id();
-        let system = ForModel::of("s");
-        for mode in [
-            Mode::Open {
-                session_id: &id,
-                system: &system,
+    fn the_one_cache_mark_is_on_the_newest_turn() {
+        let told = |earlier: Vec<Earlier>| Conversation {
+            system: "s".to_owned(),
+            context: suzatary_conversations::secretary::model::Context {
+                cached: vec!["facts".to_owned(), "record 0+4".to_owned()],
+                rest: vec!["topics".to_owned()],
             },
-            Mode::Resume {
-                session_id: &id,
-                system: &system,
-            },
-        ] {
-            let built = argv("claude-haiku-4-5", &Fence::at(settings), mode);
-            assert!(
-                built.contains(&"--strict-mcp-config".to_owned()),
-                "{built:?}"
-            );
-            assert!(built.contains(&"--settings".to_owned()), "{built:?}");
-            assert!(
-                built.contains(&"/repo/.claude/secretary-settings.json".to_owned()),
-                "{built:?}"
-            );
-            assert!(
-                built.contains(&"--session-id".to_owned())
-                    || built.contains(&"--resume".to_owned()),
-                "{built:?}"
-            );
-            for forbidden in ["--allowedTools", "--permission-mode", "--mcp-config"] {
-                assert!(
-                    !built.iter().any(|arg| arg == forbidden),
-                    "{forbidden} in {built:?}"
-                );
-            }
-        }
-        let open = argv(
-            "claude-haiku-4-5",
-            &shipped(),
-            Mode::Open {
-                session_id: &id,
-                system: &system,
-            },
+            earlier,
+            turns: vec![person_with(Vec::new()), person_with(Vec::new())],
+        };
+        let content = |conversation: &Conversation| {
+            let prompt = prompt_of(conversation, &serde_json::json!([]), Reads::Files);
+            assert!(prompt.system.as_str().contains("# The verbs you may call"));
+            message_of(&stdin_for(&prompt, &Blocks::default()))["message"]["content"].clone()
+        };
+        let marked = told(vec![Earlier::Said(person_with(Vec::new()))]);
+        let blocks = content(&marked);
+        let texts: Vec<&str> = blocks
+            .as_array()
+            .expect("blocks")
+            .iter()
+            .map(|block| block["text"].as_str().expect("text"))
+            .collect();
+        assert_eq!(texts[..2], ["facts", "record 0+4"]);
+        assert!(texts[2].starts_with("# The conversation so far"));
+        assert!(
+            texts[3..6]
+                .iter()
+                .all(|text| text.starts_with("OWNER: look"))
         );
-        assert!(open.contains(&"--session-id".to_owned()));
-        assert!(!open.contains(&"--resume".to_owned()));
-        let resume = argv(
-            "claude-haiku-4-5",
-            &shipped(),
-            Mode::Resume {
-                session_id: &id,
-                system: &system,
-            },
+        assert_eq!(texts[6], "topics");
+        assert!(
+            texts[7].starts_with("# Your turn"),
+            "the box's own words are last"
         );
-        assert!(resume.contains(&"--resume".to_owned()));
-        assert!(!resume.contains(&"--session-id".to_owned()));
+        assert_eq!(texts.len(), 8);
+        let marks: Vec<usize> = (0..texts.len())
+            .filter(|at| blocks[*at].get("cache_control").is_some())
+            .collect();
+        assert_eq!(marks, [5], "the newest turn carries the one mark");
+        assert_eq!(content(&marked), blocks, "a function of the conversation");
     }
 }

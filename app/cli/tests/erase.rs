@@ -97,11 +97,28 @@ fn the_owner_erases_a_whole_conversation_and_no_file_keeps_it() {
     );
 }
 
-/// Law: erasing one turn over the tap route deletes the conversation's model session, which
-/// holds every round's words in the clear.
+/// Law: erasing one turn over the tap route deletes every model session the conversation's
+/// retired lines name, since an older box's session files hold its words in the clear.
 #[test]
 fn an_erasure_deletes_the_conversation_s_model_session() {
     let (fakes, base, id) = one_round("erase-session", "the spare key is in the blue folder");
+    let session = suzatary_conversations::secretary::model::SessionId::new(
+        "96f709a3-43d7-4453-bf59-6fb5291b5a3c",
+    )
+    .expect("a uuid");
+    suzatary_lines::secretary::transcript::push_retired(
+        fakes.conversations.conversations(),
+        &suzatary_base::conversation_id::ConversationId::new(&id).expect("an id"),
+        common::now(),
+        suzatary_lines::secretary::line_shape::LineShape::Kept {
+            session: session.clone(),
+            model: "a-cli/small".to_owned(),
+            cwd: "/srv".to_owned(),
+            surface: None,
+            from: 0,
+        },
+    )
+    .expect("an older box's session line");
     assert!(
         !fakes
             .forgot
@@ -114,19 +131,15 @@ fn an_erasure_deletes_the_conversation_s_model_session() {
         &common::erasing(&base, &id, &[0]),
     );
     assert_eq!(common::status(&erased), 200);
-    let opened = fakes.model.opened();
-    assert!(!opened.is_empty(), "the round held a session");
-    for session in opened {
-        assert!(
-            fakes
-                .forgot
-                .sources()
-                .iter()
-                .any(|forgot| forgot.starts_with(&format!("session {session} in "))),
-            "{:?}",
-            fakes.forgot.sources()
-        );
-    }
+    assert!(
+        fakes
+            .forgot
+            .sources()
+            .iter()
+            .any(|forgot| forgot.starts_with(&format!("session {session} in "))),
+        "{:?}",
+        fakes.forgot.sources()
+    );
 }
 
 /// A summary that read erased words is a copy of them: the erasure's route runs the memory's

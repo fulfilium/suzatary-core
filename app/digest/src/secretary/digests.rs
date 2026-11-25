@@ -172,7 +172,7 @@ impl Held<'_> {
         model: ModelName,
         at: Datetime,
     ) -> Result<Hash, Refusal> {
-        let label = self.pending(node)?;
+        let (label, shown) = self.pending(node)?;
         let text = Text::new(line.clone(), self.salt()?);
         let name = text.name();
         let event = digest_event::summarized(
@@ -183,7 +183,7 @@ impl Held<'_> {
             Attempt {
                 over,
                 model,
-                taint: label.taint,
+                taint: shown,
                 beside: Beside::of(&label),
             },
         )
@@ -239,9 +239,18 @@ impl Held<'_> {
         Ok(object)
     }
 
-    /// Refuse unless every store reads whole and `node` is waiting for a summary; its label
-    /// when it is.
-    fn pending(&self, node: &Hash) -> Result<crate::secretary::digest_label::Label, Refusal> {
+    /// Refuse unless every store reads whole and `node` is waiting for a summary; its label, and
+    /// what its asking shows in words carries ([`Digest::asked`]), when it is.
+    fn pending(
+        &self,
+        node: &Hash,
+    ) -> Result<
+        (
+            crate::secretary::digest_label::Label,
+            suzatary_conversations::secretary::taint::Taint,
+        ),
+        Refusal,
+    > {
         let digests = self.digests().reads();
         digests.whole()?;
         let read = digests.read()?;
@@ -249,6 +258,7 @@ impl Held<'_> {
         if !read.pending().contains(node) {
             return Err(waiting());
         }
-        Ok(*read.node(node).ok_or_else(waiting)?.measure())
+        let label = *read.node(node).ok_or_else(waiting)?.measure();
+        Ok((label, read.asked(node).ok_or_else(waiting)?))
     }
 }

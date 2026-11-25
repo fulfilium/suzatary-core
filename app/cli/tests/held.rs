@@ -247,7 +247,7 @@ fn a_held_value_reaches_only_the_wire_and_only_on_the_owners_tap() {
     assert_eq!(running.sent.sent().len(), 1, "a refused tap sends nothing");
 
     // The value is in no prompt, stored line, kept answer or request record.
-    let asked = format!("{:?}{:?}", fakes.model.asked(), fakes.model.resumed_with());
+    let asked = format!("{:?}", fakes.model.asked());
     assert!(!asked.contains(SSN), "a prompt holds the value");
     let port = running.port();
     for dir in [
@@ -547,7 +547,7 @@ fn a_held_file_reaches_only_the_wire_and_only_on_the_owners_tap() {
 
     // Neither the file's bytes nor the number is in a prompt, a stored line, a kept answer or a
     // request record, and no file was handed to the model.
-    let asked = format!("{:?}{:?}", fakes.model.asked(), fakes.model.resumed_with());
+    let asked = format!("{:?}", fakes.model.asked());
     for kept in [W2_BYTES, SSN] {
         assert!(!asked.contains(kept), "a prompt holds {kept}");
     }

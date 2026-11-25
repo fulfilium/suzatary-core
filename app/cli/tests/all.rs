@@ -12,6 +12,8 @@ mod acts;
 mod add_topics;
 #[path = "adoption.rs"]
 mod adoption;
+#[path = "asking.rs"]
+mod asking;
 #[path = "attaching.rs"]
 mod attaching;
 #[path = "attachments.rs"]
@@ -125,8 +127,9 @@ mod routes;
 mod secretary;
 #[path = "secretary_cli.rs"]
 mod secretary_cli;
-#[path = "session.rs"]
-mod session;
+#[cfg(feature = "fixture")]
+#[path = "seeds.rs"]
+mod seeds;
 #[path = "sign_in.rs"]
 mod sign_in;
 #[path = "signatures.rs"]

@@ -12,9 +12,6 @@ use super::verb_name::VerbName;
 #[serde(from = "String", into = "String")]
 pub enum ToolName {
     Verb(VerbName),
-    /// The memory's heading, filed as a verb-shaped turn so a model reads it as data like any
-    /// answer, never as the owner's words.
-    Memory,
     /// Something the person pointed at, loaded before the round.
     Reference,
     /// A name the surface does not list: a model's guess, or a verb since retired.
@@ -22,7 +19,7 @@ pub enum ToolName {
 }
 
 /// A name that is none of the others; only [`ToolName::from`] makes one, so it never spells a
-/// listed verb or a heading.
+/// listed verb or a reference.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Unlisted(String);
 
@@ -32,7 +29,6 @@ impl ToolName {
     pub fn as_str(&self) -> &str {
         match self {
             Self::Verb(verb) => verb.name(),
-            Self::Memory => "your_memory",
             Self::Reference => "reference",
             Self::Unlisted(Unlisted(name)) => name,
         }
@@ -43,7 +39,7 @@ impl ToolName {
     pub const fn verb(&self) -> Option<VerbName> {
         match self {
             Self::Verb(verb) => Some(*verb),
-            Self::Memory | Self::Reference | Self::Unlisted(_) => None,
+            Self::Reference | Self::Unlisted(_) => None,
         }
     }
 }
@@ -51,7 +47,6 @@ impl ToolName {
 impl From<&str> for ToolName {
     fn from(name: &str) -> Self {
         match name {
-            "your_memory" => Self::Memory,
             "reference" => Self::Reference,
             _ => VerbName::named(name)
                 .map_or_else(|| Self::Unlisted(Unlisted(name.to_owned())), Self::Verb),
@@ -103,7 +98,7 @@ mod tests {
             .iter()
             .copied()
             .map(ToolName::Verb)
-            .chain([ToolName::Memory, ToolName::Reference])
+            .chain([ToolName::Reference])
             .collect()
     }
 

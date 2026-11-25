@@ -85,10 +85,12 @@ impl Model for Says {
     fn name(&self) -> String {
         "titler".to_owned()
     }
-    fn turn(
+    fn streamed(
         &self,
         _: &Conversation,
         _: &serde_json::Value,
+        _on_delta: &dyn Fn(&str),
+        _halt: &suzatary_conversations::secretary::model::Halt,
     ) -> Result<
         suzatary_conversations::secretary::model::Reply,
         suzatary_conversations::secretary::model::ModelError,
@@ -120,7 +122,7 @@ fn lines_of(stored: &Stored) -> Lines {
     let id = ConversationId::new("2026-09-25-1").expect("a slug");
     transcript::start(lines.conversations(), &id, &entries[0]).expect("opens");
     for entry in &entries[1..] {
-        transcript::push(lines.conversations(), &id, entry).expect("pushes");
+        transcript::push_older(lines.conversations(), &id, entry).expect("pushes");
     }
     Lines(lines)
 }

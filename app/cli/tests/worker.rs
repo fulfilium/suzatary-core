@@ -183,7 +183,7 @@ fn an_idle_worker_drops_out_of_the_table() {
 /// is said after.
 #[test]
 fn a_restarted_box_refires_nothing_already_answered() {
-    let asks = |model: &FakeModel| model.asked().len() + model.resumed_with().len();
+    let asks = |model: &FakeModel| model.asked().len();
     let deployment = || common::deployment([ada()], [(ada(), common::actor("ada"))]);
     let whois = || common::FakeWhois::new().naming(common::v4(), ada());
     let first = Arc::new(

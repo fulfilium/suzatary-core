@@ -10,6 +10,7 @@ use prodrome_data::event::{Actor, Envelope, Hash};
 use prodrome_data::literal::Datetime;
 use prodrome_data::schema::Schema as _;
 
+use crate::secretary::answer::{Answer, BoxLine};
 pub use crate::secretary::claim::Retry;
 use crate::secretary::claim::{Asked, Bound, Claims, Due, Line, Mark, Standing, Wakes};
 use crate::secretary::conversations::Conversations;
@@ -22,7 +23,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::SessionId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{
-    ConversationState, Covered, Entry, NotAConversation, RunId, Said, Stored,
+    ConversationState, Covered, Entry, Folded, NotAConversation, RunId, Said, Stored,
 };
 use suzatary_conversations::secretary::taint::{self, Taint};
 use suzatary_conversations::secretary::turn_shape::TurnShape;
@@ -96,50 +97,12 @@ impl Transcript {
         id: &ConversationId,
         writes: &[(Write<'_>, Entry)],
     ) -> Result<Self, NotAConversation> {
-        let order = sequenced(
-            &writes
-                .iter()
-                .map(|(write, _)| sequence::Node {
-                    name: write.name,
-                    at: write.line.at(),
-                    parents: write.parents,
-                    writer: LineWriter::of(write.line.actor()),
-                })
-                .collect::<Vec<_>>(),
-        );
-        let mut lines: Vec<Written> = order
-            .into_iter()
-            .map(|(at, rests_on)| Written {
-                name: writes[at].0.name.clone(),
-                line: writes[at].0.line.clone(),
-                entry: writes[at].1.clone(),
-                rests_on,
-            })
-            .collect();
-        judged(&mut lines);
-        let turns: Vec<usize> = lines
-            .iter()
-            .enumerate()
-            .skip(1)
-            .filter(|(_, w)| matches!(w.entry, Entry::Said { .. } | Entry::Stopped { .. }))
-            .map(|(at, _)| at)
-            .collect();
-        // An edit's `Again` folds at its own question's place, where it takes effect: a session
-        // line written between them is dropped with what the edit sets aside.
-        let edits = takers(lines.len(), |at| &lines[at].line, |at| &lines[at].rests_on);
-        let mut takes = vec![None; lines.len()];
-        for (at, edit) in edits.iter().enumerate() {
-            if let EditAt::TakenBy(then) = *edit {
-                takes[then] = Some(at);
-            }
-        }
-        let stored = Stored::of_read(
-            id,
-            (0..lines.len())
-                .filter(|&at| edits[at] == EditAt::Neither)
-                .flat_map(|at| takes[at].into_iter().chain([at]))
-                .map(|at| (&lines[at].entry, set_aside(&lines, &turns, at))),
-        )?;
+        let Folding {
+            lines,
+            turns,
+            order,
+        } = folding(writes);
+        let stored = Stored::of_read(id, folded(&lines, &order))?;
         let marks = marks(&lines, &stored, &turns);
         let claims = Claims::of(
             &marks
@@ -431,21 +394,20 @@ pub enum Answering {
     Answered,
 }
 
-/// [`push`] each of `entries`, a round's lines, in one hold of the lock, while the round of `run`
-/// is open: a round that another line closed writes nothing more.
+/// `lines` in one hold of the lock, while the round of `run` is open.
 pub fn push_open(
     conversations: Conversations<'_>,
     id: &ConversationId,
     run: &RunId,
-    entries: &[Entry],
+    lines: &[BoxLine],
 ) -> Result<Answering, StoreError> {
     let _held = conversations.lines.locked()?;
     let read = read(conversations, id)?;
     if read.claims().open(run).is_none() {
         return Ok(Answering::Answered);
     }
-    for (more, entry) in entries.iter().enumerate() {
-        write(conversations, id, read.lines().len() + more, entry)?;
+    for (more, line) in lines.iter().enumerate() {
+        write_line(conversations, id, read.lines().len() + more, line)?;
     }
     Ok(Answering::Written)
 }
@@ -481,7 +443,7 @@ pub fn claim(
     now: Datetime,
     retry: Retry,
     confirms: &Confirms<'_>,
-    close: impl FnOnce(&Stored) -> Vec<Entry>,
+    close: impl FnOnce(&Stored) -> Vec<BoxLine>,
 ) -> Result<Claimed, StoreError> {
     let _held = conversations.lines.locked()?;
     let read = read(conversations, id)?;
@@ -494,8 +456,8 @@ pub fn claim(
             Due::Nothing => return Ok(Claimed::Nothing),
             Due::Claim(covers) | Due::Retry(covers) => covers,
             Due::Close => {
-                for (more, entry) in close(read.stored()).iter().enumerate() {
-                    write(conversations, id, held + more, entry)?;
+                for (more, line) in close(read.stored()).iter().enumerate() {
+                    write_line(conversations, id, held + more, line)?;
                 }
                 return Ok(Claimed::Closed);
             }
@@ -659,8 +621,8 @@ fn marks(lines: &[Written], stored: &Stored, turns: &[usize]) -> Vec<Mark<RunId>
         .map(|(at, written)| match written.line.shape() {
             LineShape::Said { turn, .. } => match turn {
                 TurnShape::Person { .. } | TurnShape::Act { .. } => Mark::Request,
-                TurnShape::Model { calls } if calls.is_empty() && live(at) => Mark::Close,
-                TurnShape::Model { calls } if calls.is_empty() => Mark::Withdrawn,
+                TurnShape::Model { calls, .. } if calls.is_empty() && live(at) => Mark::Close,
+                TurnShape::Model { calls, .. } if calls.is_empty() => Mark::Withdrawn,
                 TurnShape::Model { .. } | TurnShape::Tool { .. } => Mark::Answer,
             },
             LineShape::Stopped { .. } if live(at) => Mark::Stop,
@@ -694,6 +656,88 @@ fn marks(lines: &[Written], stored: &Stored, turns: &[usize]) -> Vec<Mark<RunId>
 
 /// The turns the line at `at` sets aside, by index, where it is an `Again` whose question is a line
 /// here; none for any other line.
+/// One conversation's lines as its fold reads them: in causal order and judged, the position of
+/// each turn's line, and the order the fold takes them in, each beside the turns it sets aside.
+pub struct Folding {
+    pub lines: Vec<Written>,
+    pub turns: Vec<usize>,
+    pub order: Vec<(usize, Vec<usize>)>,
+}
+
+impl Folding {
+    /// Each line as the fold takes it, in its order: what [`Stored`] and the digest's labels
+    /// both fold.
+    pub fn folded(&self) -> impl Iterator<Item = Folded<'_>> {
+        folded(&self.lines, &self.order)
+    }
+}
+
+/// `order`'s lines of `lines` as the fold takes them: each entry, its asides, its line's stored
+/// weight, and its line's stored carry.
+fn folded<'l>(
+    lines: &'l [Written],
+    order: &'l [(usize, Vec<usize>)],
+) -> impl Iterator<Item = Folded<'l>> {
+    order.iter().map(|(at, aside)| Folded {
+        entry: &lines[*at].entry,
+        aside: aside.clone(),
+        weight: lines[*at].line.weight(),
+        carries: lines[*at].line.carries(),
+    })
+}
+
+/// The one reading of a conversation's writes that every fold of it takes, [`Stored`]'s and the
+/// digest's labels alike: an edit's `Again` folds at its own question's place, where it takes
+/// effect, and sets aside what the edit replaces.
+#[must_use]
+pub fn folding(writes: &[(Write<'_>, Entry)]) -> Folding {
+    let order = sequenced(
+        &writes
+            .iter()
+            .map(|(write, _)| sequence::Node {
+                name: write.name,
+                at: write.line.at(),
+                parents: write.parents,
+                writer: LineWriter::of(write.line.actor()),
+            })
+            .collect::<Vec<_>>(),
+    );
+    let mut lines: Vec<Written> = order
+        .into_iter()
+        .map(|(at, rests_on)| Written {
+            name: writes[at].0.name.clone(),
+            line: writes[at].0.line.clone(),
+            entry: writes[at].1.clone(),
+            rests_on,
+        })
+        .collect();
+    judged(&mut lines);
+    let turns: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter(|(_, w)| matches!(w.entry, Entry::Said { .. } | Entry::Stopped { .. }))
+        .map(|(at, _)| at)
+        .collect();
+    let edits = takers(lines.len(), |at| &lines[at].line, |at| &lines[at].rests_on);
+    let mut takes = vec![None; lines.len()];
+    for (at, edit) in edits.iter().enumerate() {
+        if let EditAt::TakenBy(then) = *edit {
+            takes[then] = Some(at);
+        }
+    }
+    let order = (0..lines.len())
+        .filter(|&at| edits[at] == EditAt::Neither)
+        .flat_map(|at| takes[at].into_iter().chain([at]))
+        .map(|at| (at, set_aside(&lines, &turns, at)))
+        .collect();
+    Folding {
+        lines,
+        turns,
+        order,
+    }
+}
+
 fn set_aside(lines: &[Written], turns: &[usize], at: usize) -> Vec<usize> {
     let Entry::Again { question, how, .. } = &lines[at].entry else {
         return Vec::new();
@@ -1728,7 +1772,7 @@ pub fn begin(
 }
 
 /// Append `entry` to conversation `id`, its words through the redaction door and locked, resting
-/// on every line the conversation holds.
+/// on every line the conversation holds; a model's turn is [`answer`]'s.
 ///
 /// # Errors
 /// [`StoreError::Absent`] for an id never started, or an entry the door or the schema refuses.
@@ -1740,6 +1784,52 @@ pub fn push(
     let _held = conversations.lines.locked()?;
     let held = read(conversations, id)?.lines().len();
     write(conversations, id, held, entry)
+}
+
+/// Append the model's turn `answer` to conversation `id`.
+pub fn answer(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    answer: &Answer,
+) -> Result<(), StoreError> {
+    let _held = conversations.lines.locked()?;
+    let held = read(conversations, id)?.lines().len();
+    sealed(conversations, id, held, |id, actor, held, entropy| {
+        LineEvent::answered(id, actor, held, answer, entropy)
+    })
+}
+
+/// `entry` appended as an older box wrote it, for tests and fixtures.
+#[cfg(any(test, feature = "nothing", feature = "fixture"))]
+pub fn push_older(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    entry: &Entry,
+) -> Result<(), StoreError> {
+    let _held = conversations.lines.locked()?;
+    let held = read(conversations, id)?.lines().len();
+    sealed(conversations, id, held, |id, actor, held, entropy| {
+        LineEvent::older(id, actor, held, entry, entropy)
+    })
+}
+
+/// A line of a retired kind appended to conversation `id`, as an older box wrote it, for the
+/// tests and fixtures that read a store holding one.
+#[cfg(any(test, feature = "nothing", feature = "fixture"))]
+pub fn push_retired(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    at: Datetime,
+    shape: LineShape,
+) -> Result<(), StoreError> {
+    let _held = conversations.lines.locked()?;
+    let held = u32::try_from(read(conversations, id)?.lines().len())
+        .map_err(|_| StoreError::not_appended("conversation store", "too many lines"))?;
+    let line = LineEvent::retired(id.clone(), writer(), held, at, shape).ok_or_else(|| {
+        StoreError::not_appended("conversation store", "a shape still written is not retired")
+    })?;
+    conversations.lines.append(line)?;
+    Ok(())
 }
 
 /// The line `owed` answers on conversation `id`'s reading, appended under the lines' lock, where
@@ -1758,20 +1848,53 @@ pub fn push_owed(
     Ok(true)
 }
 
-/// Each key kept first, then the line that names them. A key is never taken back when the
-/// append fails: the store may have placed the object before it answered, and a line whose key
-/// is gone has lost its words for good, while a key nothing names opens nothing.
+/// `entry` written as line `held` of conversation `id` ([`sealed`]).
 fn write(
     conversations: Conversations<'_>,
     id: &ConversationId,
     held: usize,
     entry: &Entry,
 ) -> Result<(), StoreError> {
+    sealed(conversations, id, held, |id, actor, held, entropy| {
+        LineEvent::write(id, actor, held, entry, entropy)
+    })
+}
+
+/// `line` written as line `held` of conversation `id`, a model's turn with its carry.
+fn write_line(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    held: usize,
+    line: &BoxLine,
+) -> Result<(), StoreError> {
+    match line {
+        BoxLine::Entry(entry) => write(conversations, id, held, entry),
+        BoxLine::Answer(answer) => sealed(conversations, id, held, |id, actor, held, entropy| {
+            LineEvent::answered(id, actor, held, answer, entropy)
+        }),
+    }
+}
+
+/// The line `seal` makes as line `held` of conversation `id`, written by the box. Each key kept
+/// first, then the line that names them. A key is never taken back when the append fails: the
+/// store may have placed the object before it answered, and a line whose key is gone has lost
+/// its words for good, while a key nothing names opens nothing.
+fn sealed(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
+    held: usize,
+    seal: impl FnOnce(
+        ConversationId,
+        Actor,
+        u32,
+        &dyn suzatary_base::capability::Entropy,
+    ) -> Result<(LineEvent, Vec<TextKey>), crate::secretary::line_event::NotALine>,
+) -> Result<(), StoreError> {
     let refused =
         |failed: &dyn std::fmt::Display| StoreError::not_appended("conversation store", failed);
     let held = u32::try_from(held)
         .map_err(|_| refused(&format!("{id} holds more lines than a count can say")))?;
-    let (line, keys) = LineEvent::write(id.clone(), writer(), held, entry, conversations.entropy)
+    let (line, keys) = seal(id.clone(), writer(), held, conversations.entropy)
         .map_err(|failed| refused(&failed))?;
     for key in &keys {
         conversations.keys.set(&key.name(), key)?;

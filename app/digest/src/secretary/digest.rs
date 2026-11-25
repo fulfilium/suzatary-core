@@ -489,46 +489,39 @@ fn taints<'l>(
     conversations
         .into_iter()
         .flat_map(|(id, said)| {
-            let order = transcript::sequenced(
-                &said
-                    .iter()
-                    .map(
-                        |&((name, line, parents), _)| suzatary_lines::secretary::sequence::Node {
-                            name,
-                            at: line.at(),
-                            parents,
-                            writer: suzatary_lines::wire::lines::LineWriter::of(
-                                prodrome_data::schema::Schema::actor(line),
-                            ),
-                        },
-                    )
-                    .collect::<Vec<_>>(),
-            );
-            // A tab's turn no claim judged clean is tainted here too, as the transcript reads it.
-            let judgments = suzatary_lines::secretary::transcript::judgments(
-                said.iter().map(|(_, entry)| *entry),
-            );
-            let read: Vec<Entry> = said
+            // The transcript's own fold: the judged order, and each edit's asides.
+            let writes: Vec<(transcript::Write<'_>, Entry)> = said
                 .iter()
-                .map(|&((name, line, _), entry)| {
-                    let mut entry = entry.clone();
-                    suzatary_lines::secretary::transcript::judge(
-                        name,
-                        line.actor(),
-                        &mut entry,
-                        &judgments,
-                    );
-                    entry
+                .map(|&((name, line, parents), entry)| {
+                    (
+                        transcript::Write {
+                            name,
+                            line,
+                            parents,
+                        },
+                        entry.clone(),
+                    )
                 })
                 .collect();
-            let taints = suzatary_conversations::secretary::taint::rounds(
-                id,
-                order.iter().map(|(at, _)| &read[*at]),
-            );
-            order
-                .into_iter()
-                .map(|(at, _)| said[at].0.0)
+            let folding = transcript::folding(&writes);
+            let taints = suzatary_conversations::secretary::taint::rounds(id, folding.folded());
+            let mut labelled: BTreeMap<&Hash, Taint> = folding
+                .order
+                .iter()
+                .map(|(at, _)| &folding.lines[*at].name)
                 .zip(taints)
+                .collect();
+            // A line the fold takes no part of (an edit another line took up) is its own class.
+            for written in &folding.lines {
+                labelled.entry(&written.name).or_insert_with(|| {
+                    suzatary_conversations::secretary::taint::line(&written.entry)
+                });
+            }
+            said.iter()
+                .map(|&((name, _, _), _)| {
+                    let taint = labelled.get(name).copied().unwrap_or(Taint::Tainted);
+                    (name, taint)
+                })
                 .collect::<Vec<_>>()
         })
         .collect()
@@ -667,21 +660,51 @@ impl Digest {
     }
 
     /// The summary a single-record reading shows: the least-named candidate's, when it is a
-    /// summary whose words read, unless it is stale and its node is labelled the owner's alone,
-    /// or it is written over a retracted summary. The first may have been asked beside more than
-    /// the owner's words, and the second from the line he said was wrong. No reader, the
-    /// compactor included, is shown either.
+    /// summary whose words read, unless it is stale and its node is asked beside its own kind
+    /// alone (the owner's words, or those and the secretary's clean answers), or it is written
+    /// over a retracted summary. The first may have been asked beside more than its own kind,
+    /// and the second from the line he said was wrong. No reader, the compactor included, is
+    /// shown either.
     #[must_use]
     pub fn summary(&self, node: &Hash) -> Option<&Line> {
         let (words, standing) = self.shown(node)?;
         match standing {
             Standing::Current => Some(words),
             Standing::Stale => {
-                let owners = self.node(node)?.measure().is_owners();
-                (!owners).then_some(words)
+                let own_kind = Beside::of(self.node(node)?.measure()) != Beside::CleanWords;
+                (!own_kind).then_some(words)
             }
             Standing::OverRetracted => None,
         }
+    }
+
+    /// What a summary of `node` is written from carries, the one join its record holds: the
+    /// node's own lines' and each child summary's recorded taint ([`Digest::summary_taint`]),
+    /// since its asking shows those words; the log beside it shows clean parts alone. `None` for
+    /// a node the tree does not hold.
+    #[must_use]
+    pub fn asked(&self, node: &Hash) -> Option<Taint> {
+        let node = self.node(node)?;
+        Some(
+            node.children()
+                .iter()
+                .filter(|child| !child.is_leaf())
+                .filter_map(|child| self.summary_taint(child.name()))
+                .fold(node.measure().taint, Taint::join),
+        )
+    }
+
+    /// What a part stands for to a reader: its node's label, and for a node showing a summary
+    /// that label joined with the taint the summary recorded when it was written
+    /// ([`Digest::summary_taint`]), so no summary is shown in words that read anything its node
+    /// is not.
+    #[must_use]
+    pub fn label(&self, node: &prodrome_digest::Node<Label>) -> Label {
+        let mut label = *node.measure();
+        if let Some(taint) = self.summary_taint(node.name()) {
+            label.taint = label.taint.join(taint);
+        }
+        label
     }
 
     /// How the summary [`Digest::summary`] would show stands, whether it is shown or not.

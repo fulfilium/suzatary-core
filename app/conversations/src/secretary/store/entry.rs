@@ -1,7 +1,7 @@
 //! One line of a conversation, and the instant every line carries.
 
 use super::{Begun, Decision, Kind, Namer, Scope, Start, Title};
-use crate::secretary::model::{SessionId, Turn};
+use crate::secretary::model::Turn;
 use serde::Serialize;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::Reference;
@@ -81,8 +81,8 @@ pub enum Entry {
         standing: usize,
     },
     /// The owner stopped the running round, written once its model process ended so nothing lands
-    /// after it; it closes the question it stopped and ends the session, since a killed process
-    /// holds a question it never answered.
+    /// after it; it closes the question it stopped, since a killed process holds a question it
+    /// never answered.
     Stopped {
         #[serde(serialize_with = "stamped")]
         at: Datetime,
@@ -100,47 +100,12 @@ pub enum Entry {
         /// Who asked again: the actor the gate admitted.
         by: String,
     },
-    /// This conversation has been told the memory as of `version`, written once a batch headed with
-    /// the memory's change was answered.
-    MemorySeen {
+    /// A line of retired bookkeeping, read and never written.
+    Retired {
         #[serde(serialize_with = "stamped")]
         at: Datetime,
-        version: u64,
-    },
-    /// A model session stands behind this conversation from here; the last one stands.
-    Session {
-        #[serde(serialize_with = "stamped")]
-        at: Datetime,
-        /// The session id `--session-id`/`--resume` names.
-        session: SessionId,
-        model: String,
-        cwd: String,
-        /// The manual-and-verbs digest it was opened with.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        surface: Option<String>,
-    },
-    /// A session opened over this conversation's turns from `from` on, recorded when it was sent
-    /// and never derived again from the turns that stand when this line is read.
-    Kept {
-        #[serde(serialize_with = "stamped")]
-        at: Datetime,
-        /// The session id `--session-id`/`--resume` names.
-        session: SessionId,
-        model: String,
-        cwd: String,
-        /// The manual-and-verbs digest it was opened with.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        surface: Option<String>,
-        /// The first turn it was sent.
-        from: usize,
-    },
-    /// A turn was said past the kept `session`; a session is sent only the turns since its last,
-    /// so [`Stored::of`](super::Stored::of) ends that session.
-    Unheard {
-        #[serde(serialize_with = "stamped")]
-        at: Datetime,
-        session: SessionId,
-        model: String,
+        #[serde(flatten)]
+        retired: super::Retired,
     },
     /// How the asks from here on send their model this conversation, recorded when sent.
     Scoped {
@@ -215,10 +180,7 @@ impl Entry {
             | Entry::ReviewFailed { .. }
             | Entry::Stopped { .. }
             | Entry::Rewound { .. }
-            | Entry::MemorySeen { .. }
-            | Entry::Session { .. }
-            | Entry::Kept { .. }
-            | Entry::Unheard { .. }
+            | Entry::Retired { .. }
             | Entry::Scoped { .. }
             | Entry::Coding { .. }
             | Entry::Erased { .. }
@@ -240,10 +202,7 @@ impl Entry {
             | Entry::ReviewFailed { at, .. }
             | Entry::Stopped { at, .. }
             | Entry::Rewound { at, .. }
-            | Entry::MemorySeen { at, .. }
-            | Entry::Session { at, .. }
-            | Entry::Kept { at, .. }
-            | Entry::Unheard { at, .. }
+            | Entry::Retired { at, .. }
             | Entry::Scoped { at, .. }
             | Entry::Coding { at, .. }
             | Entry::Erased { at, .. }
@@ -287,10 +246,7 @@ impl Entry {
             | Entry::ReviewFailed { .. }
             | Entry::Stopped { .. }
             | Entry::Rewound { .. }
-            | Entry::MemorySeen { .. }
-            | Entry::Session { .. }
-            | Entry::Kept { .. }
-            | Entry::Unheard { .. }
+            | Entry::Retired { .. }
             | Entry::Scoped { .. }
             | Entry::Coding { .. }
             | Entry::Erased { .. }

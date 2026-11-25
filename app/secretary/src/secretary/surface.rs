@@ -103,8 +103,8 @@ impl Holds for SecretarySurface {
         markup — use this, never `detail`, when the detail already exists; give at most one \
         of the two.\n\n`chain` must be the store the todo was authored in; there is no moving \
         one between them.",
-        zoom: "OPEN A PART OF THE RECORD of every conversation you \
-        were told when this one opened: `handle` is a part's `first+lines`. Answers what is \
+        zoom: "OPEN A PART OF THE RECORD of every conversation, as \
+        this call shows it: `handle` is a part's `first+lines`. Answers what is \
         beneath it, each with its own handle: a line whole, a summary (`derived`, nobody's own \
         words), or a span not summarised yet. A part you were shown in parentheses may hold \
         somebody else's words, and opening it shows them: its answer says `taint: tainted`, \
@@ -133,7 +133,7 @@ impl Holds for SecretarySurface {
             call.caps.conversations,
             call.conversation,
         )?;
-        match Gate::of(Binding::Writes, &round) {
+        match Gate::of(Binding::Writes, &round, call.sent) {
             Gate::Binds(_) => applied(call, &changeset),
             Gate::Card => {
                 let reasons = carded.reasons("the write")?;

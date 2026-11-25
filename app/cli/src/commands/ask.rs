@@ -123,9 +123,9 @@ pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Resu
 }
 
 /// The secretary's words in reply to `line` once the claims read it settled: the model's turns of
-/// the round that covered it, read off the lines since a session's first exchange streams no delta
-/// (position is not the reply: an earlier round's can stand after it); None while the line is not
-/// held yet or still owed, and nothing for a stopped question.
+/// the round that covered it, read off the lines (position is not the reply: an earlier round's can
+/// stand after it); None while the line is not held yet or still owed, and nothing for a stopped
+/// question.
 fn answered(
     operator: &Operator,
     id: &ConversationId,

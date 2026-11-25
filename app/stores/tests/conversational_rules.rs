@@ -30,7 +30,7 @@ fn store() -> suzatary_stores::stores::conversations::InMemory {
 }
 
 fn say(store: &suzatary_stores::stores::conversations::InMemory, turn: Turn) {
-    transcript::push(
+    transcript::push_older(
         store.conversations(),
         &id(),
         &Entry::Said {

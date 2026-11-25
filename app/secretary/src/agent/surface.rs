@@ -47,7 +47,7 @@ impl Holds for TriageSurface {
         `upkeep_chain` `context` names reads this system's own work. Checking one and \
         writing to the other is how a duplicate gets made.",
         git_diff_summary: "A short --stat summary of uncommitted changes, for a final sanity check \
-        before ending your session. You do not commit or push yourself — that \
+        before your run ends. You do not commit or push yourself — that \
         happens afterward, deterministically, only if every store verifies.",
         history: "The full lifecycle event stream for one todo from the chain, oldest \
         first, as readable text (one line per event: kind, at, actor, note). An \

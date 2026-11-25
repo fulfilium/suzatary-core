@@ -66,7 +66,10 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
         Some(Stamp::Actor(Speaker::at(CAST.owner.actor, Seat::Operator)))
     );
     assert!(Stamp::owners(said.by.as_ref()), "the owner's words");
-    assert!(!suzatary_conversations::secretary::taint::tainted(&stored));
+    assert_eq!(
+        suzatary_conversations::secretary::taint::held(&stored),
+        suzatary_conversations::secretary::taint::Taint::Clean
+    );
     let signers: Vec<String> =
         suzatary_store::store::Reads::objects(fakes.conversations.conversations().lines)
             .expect("the lines read")

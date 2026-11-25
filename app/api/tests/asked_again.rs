@@ -268,6 +268,14 @@ impl Boxed {
 }
 
 /// The box's close of a question it will not answer, as `Round::close` writes it.
+/// `entry` as the box writes it, a model's turn carrying nothing from outside.
+fn boxed(entry: Entry) -> suzatary_lines::secretary::answer::BoxLine {
+    suzatary_lines::secretary::answer::BoxLine::of(
+        entry,
+        suzatary_conversations::secretary::taint::Taint::Clean,
+    )
+}
+
 fn closing(second: u32, text: &str) -> Entry {
     Entry::Said {
         at: at(second),
@@ -988,7 +996,7 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
                     at(second),
                     Retry::Allowed,
                     &|_| true,
-                    |_| vec![closing(second, "The box closed this unanswered.")],
+                    |_| vec![boxed(closing(second, "The box closed this unanswered."))],
                 )
                 .expect("claims");
                 if claimed == transcript::Claimed::Began {
@@ -1016,7 +1024,7 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
                     the_box.lines.conversations(),
                     &DEFAULT,
                     &held.run,
-                    &[closing(second, "Here it is.")],
+                    &[boxed(closing(second, "Here it is."))],
                 )
                 .expect("answers");
             }
@@ -1285,89 +1293,6 @@ fn an_again_that_would_reopen_another_question_is_refused() {
     .expect("the laws hold");
 }
 
-/// A session the box kept between an edit's `Again` and its question, which reach the box in two
-/// posts, is dropped with the edit: the edit takes effect where its question stands, so no session
-/// that saw the old question and its answer is resumed after it.
-#[test]
-fn a_session_kept_between_an_edit_s_two_posts_is_dropped_with_it() {
-    let lines = InMemory::default();
-    let opened = Entry::Opened {
-        at: at(0),
-        title: Words::kept("Secretary".to_owned()),
-        model: "a-cli/small".to_owned(),
-        kind: Kind::Default,
-    };
-    transcript::start(lines.conversations(), &DEFAULT, &opened).expect("opened");
-    let ada = Actor::new("ada").expect("an actor");
-    let entropy = Counting(AtomicU8::new(1));
-    let mut tab =
-        HeldReplica::pulled(|_| Ok::<_, NotAnAnswer>(skeleton(&lines))).expect("the tab pulled");
-    let (asked, _, _) = tab
-        .seal(
-            Sealing::Say {
-                conversation: DEFAULT.clone(),
-                question: question("what changed"),
-            },
-            at(1),
-            &ada,
-            &entropy,
-        )
-        .expect("sealed");
-    let _ = handed(&lines, &[asked[0].node.clone()], &ada);
-    transcript::push(lines.conversations(), &DEFAULT, &closing(2, "Here it is."))
-        .expect("answered");
-    land(&lines, &mut tab, 1);
-    let question_line = asked[0].node.name().clone();
-    let seen = tab_lines(&mut tab);
-    let (owned, again, _) = tab
-        .seal(
-            Sealing::Again {
-                conversation: DEFAULT.clone(),
-                question: question_line.clone(),
-                how: AskedAgain::Edit(question("what changed today")),
-                seen,
-            },
-            at(3),
-            &ada,
-            &entropy,
-        )
-        .expect("sealed");
-    let (first, second): (Vec<_>, Vec<_>) = owned
-        .iter()
-        .map(|own| own.node.clone())
-        .filter(|own| own.drawn_on() != own.name() || own.rests_on().contains(&again))
-        .partition(|own| *own.name() == again);
-    let _ = handed(&lines, &first, &ada);
-    transcript::push(
-        lines.conversations(),
-        &DEFAULT,
-        &Entry::Kept {
-            at: at(4),
-            session: suzatary_conversations::secretary::model::SessionId::minted("default/kept"),
-            model: "a-cli/small".to_owned(),
-            cwd: String::new(),
-            surface: None,
-            from: 0,
-        },
-    )
-    .expect("kept");
-    let _ = handed(&lines, &second, &ada);
-    let read = transcript::read(lines.conversations(), &DEFAULT).expect("reads");
-    assert!(
-        read.stored().session.is_none(),
-        "{:?}",
-        read.stored().session
-    );
-}
-
-/// The lines of every turn `tab` draws of the conversation.
-fn tab_lines(tab: &mut HeldReplica) -> Vec<Hash> {
-    let Some(Whole::Read(Ok(read))) = tab.transcript(&DEFAULT) else {
-        return Vec::new();
-    };
-    read.turn_lines().into_iter().cloned().collect()
-}
-
 /// What `tab` holds unsent, handed over in one post and answered.
 fn hand_over(lines: &InMemory, tab: &mut HeldReplica, ada: &Actor) -> Vec<(Hash, Answer)> {
     let fit = Fit {
@@ -1473,7 +1398,7 @@ fn a_refused_edit_of_a_question_whose_row_has_not_landed_comes_back_as_an_edit()
         at(2),
         Retry::Allowed,
         &|_| true,
-        |_| vec![closing(2, "The box closed this unanswered.")],
+        |_| vec![boxed(closing(2, "The box closed this unanswered."))],
     )
     .expect("claims");
     assert_eq!(claimed, transcript::Claimed::Began);

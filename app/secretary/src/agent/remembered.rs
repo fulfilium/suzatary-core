@@ -36,6 +36,16 @@ pub(crate) fn remembered(
     let views = suzatary_digest::secretary::digest::views();
     // The view is built once, within all the room there is; each probe below fits its lines.
     let lines = record.map(|record| record.lines(room));
+    let count = lines.as_ref().map_or(0, Vec::len);
+    // The bytes of the newest `newest` lines, the budget that shows exactly them.
+    let bytes_of = |newest: usize| -> usize {
+        lines.as_ref().map_or(0, |lines| {
+            lines[count - newest..]
+                .iter()
+                .map(|(_, line)| line.len() + 1)
+                .sum()
+        })
+    };
     let mut newest = memory.facts.clone();
     newest.sort_by_key(|fact| std::cmp::Reverse(fact.id));
     let told = |kept: usize, view: usize| {
@@ -65,8 +75,15 @@ pub(crate) fn remembered(
         return TOO_BIG.to_owned();
     }
     let kept = largest(newest.len(), |kept| fits(&told(kept, 0)));
-    let view = largest(room, |view| fits(&told(kept, view)));
-    let answer = told(kept, view);
+    // Every line shown drops the note of what is cut, so all of them is tried on its own.
+    let shown = if fits(&told(kept, bytes_of(count))) {
+        count
+    } else {
+        largest(count.saturating_sub(1), |shown| {
+            fits(&told(kept, bytes_of(shown)))
+        })
+    };
+    let answer = told(kept, bytes_of(shown));
     timings::counted(
         timings::Phase::Remembered,
         "views",
@@ -137,20 +154,27 @@ mod tests {
 
             let all = record.lines(room);
             let told_with = |newest: usize| {
-                let bytes = all[all.len() - newest..].iter().map(|line| line.len() + 1).sum();
+                let bytes = all[all.len() - newest..]
+                    .iter()
+                    .map(|(_, line)| line.len() + 1)
+                    .sum();
                 told(&nothing_remembered(), Ok(&all), bytes).text()
             };
             if answer == TOO_BIG {
                 prop_assert!(wire_len(&told_with(0)) > room);
                 return Ok(());
             }
+            let words: Vec<&str> = all.iter().map(|(_, line)| line.as_str()).collect();
+            let said: Vec<&str> = answer.lines().filter(|line| !line.is_empty()).collect();
             let shown = (0..=all.len())
                 .rev()
                 .find(|&newest| {
                     newest == 0
-                        || answer.ends_with(&format!("\n{}", all[all.len() - newest..].join("\n")))
+                        || said
+                            .windows(newest)
+                            .any(|run| run == &words[all.len() - newest..])
                 })
-                .expect("none is always a suffix");
+                .expect("none is always shown");
             if shown < all.len() {
                 prop_assert!(wire_len(&told_with(shown + 1)) > room, "one more line fits");
             }
