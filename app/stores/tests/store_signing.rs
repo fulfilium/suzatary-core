@@ -1,9 +1,10 @@
 //! `store::signing`'s laws. They hold their store in [`suzatary_stores::stores::InMemory`], which reads
 //! its hold from `stores::Store`, above the store's cut.
 
-use prodrome_core::event::{Envelope, mk_completed};
-use prodrome_core::literal::Datetime;
-use prodrome_core::sign::Secret;
+use prodrome_dag::sign::Secret;
+use prodrome_data::event::Envelope;
+use prodrome_data::literal::Datetime;
+use prodrome_todo::event::mk_completed;
 
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::*;

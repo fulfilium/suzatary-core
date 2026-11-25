@@ -205,8 +205,8 @@ fn the_brief_offers_the_day_s_withdrawals_back_once() {
         )
         .expect("offers")
     };
-    let later = prodrome_core::fpl::datetime_of(
-        prodrome_core::fpl::instant_of(caps.clock.now()) + chrono::Duration::days(2),
+    let later = prodrome_data::instant::datetime_of(
+        prodrome_data::instant::instant_of(caps.clock.now()) + chrono::Duration::days(2),
     )
     .expect("an instant");
     assert_eq!(offer(later), 0, "a withdrawal two days old is not offered");
@@ -375,7 +375,7 @@ fn unreadable(caps: &Fakes) -> suzatary_base::conversation_id::ConversationId {
 }
 
 fn named(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) -> usize {
-    let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
+    let today = prodrome_data::instant::instant_of(caps.clock.now()).date();
     let round = conversations::read(caps.conversations.conversations(), &today_of(today))
         .expect("today's review reads");
     round
@@ -440,7 +440,7 @@ fn a_limited_model_starts_no_box_round_and_writes_nothing() {
     let deployment = deployment();
     let limited = suzatary_health::health::Limited {
         limit: suzatary_health::health::Limit::Usage,
-        until: prodrome_core::fpl::instant_of(caps.clock.now()) + chrono::Duration::hours(3),
+        until: prodrome_data::instant::instant_of(caps.clock.now()) + chrono::Duration::hours(3),
     };
     let caps = caps.model(FakeModel::saying([]).limited(limited));
     let chains = [Bound {
@@ -507,7 +507,7 @@ fn a_review_that_cannot_reach_its_model_writes_the_outage_down() {
     );
     assert!(refused.is_err(), "an unreachable model refuses the review");
 
-    let today = prodrome_core::fpl::instant_of(caps.clock.now()).date();
+    let today = prodrome_data::instant::instant_of(caps.clock.now()).date();
     let stored = conversations::read(caps.conversations.conversations(), &today_of(today))
         .expect("the conversation was opened before the model was asked");
     assert_eq!(

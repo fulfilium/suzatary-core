@@ -43,7 +43,7 @@ pub fn briefs(stored: &Stored) -> Vec<Brief> {
         if text != BRIEF {
             continue;
         }
-        let date = prodrome_core::fpl::instant_of(said.at).date();
+        let date = prodrome_data::instant::instant_of(said.at).date();
         let round: Vec<&(usize, &Said)> = live[at + 1..]
             .iter()
             .take_while(|(_, later)| !matches!(later.turn, Turn::Person { .. } | Turn::Act { .. }))

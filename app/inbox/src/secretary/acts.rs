@@ -4,12 +4,12 @@
 //! consent is `AuthSend`, a card only the box files, kept in the SMTP slot apart from the IMAP
 //! one, so a leaked read token still cannot send.
 
-use prodrome_core::literal::{ProdromeError, Value};
+use prodrome_data::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 use suzatary_base::drive_path::DrivePath;
 use suzatary_signatures::signatures::Enrolment;
 
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_connect::connect::Connection;
@@ -130,7 +130,7 @@ pub enum Act {
     /// Retract the summary `node` shows, as the memory page's Wrong does.
     Retract {
         #[serde(with = "node_text")]
-        node: prodrome_core::event::Hash,
+        node: prodrome_data::event::Hash,
     },
     /// Ask the owner's request again in a fresh topic, copying turn `turn` only while it is his
     /// own clean words (`suzatary_cards::secretary::afresh::Request::at_tap`).
@@ -295,7 +295,7 @@ fn silencing(sender: &str, message: &str) -> String {
     )
 }
 
-fn retracting(node: &prodrome_core::event::Hash) -> String {
+fn retracting(node: &prodrome_data::event::Hash) -> String {
     format!(
         "mark wrong the summary {}… on the Memory page: it is deleted, never shown to a model \
          again, and written again from your lines, with every summary above it",
@@ -454,8 +454,8 @@ impl Literal for Act {
             "Device" => {
                 let fields = Fields::of(value, DEVICE)?;
                 Act::Device(Enrolment {
-                    actor: prodrome_core::event::Actor::new(fields.get::<String>("actor")?)?,
-                    key: prodrome_core::sign::PublicKey::new(fields.get::<String>("key")?)?,
+                    actor: prodrome_data::event::Actor::new(fields.get::<String>("actor")?)?,
+                    key: prodrome_data::sign::PublicKey::new(fields.get::<String>("key")?)?,
                 })
             }
             "SignIn" => Act::SignIn {
@@ -531,7 +531,7 @@ fn noise(value: &Value) -> Result<Act, ProdromeError> {
 
 /// A node's content name as its text, as serde spells it.
 mod node_text {
-    use prodrome_core::event::Hash;
+    use prodrome_data::event::Hash;
     use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S: Serializer>(node: &Hash, to: S) -> Result<S::Ok, S::Error> {
@@ -596,7 +596,7 @@ mod tests {
             "authorise ada@example.com to send mail (SMTP)"
         );
         assert_eq!(
-            prodrome_core::literal::print_literal(&send.to_value()),
+            prodrome_data::literal::print_literal(&send.to_value()),
             "AuthSend(account='ada@example.com')"
         );
         assert_eq!(Act::from_value(&send.to_value()).as_ref(), Ok(&send));
@@ -637,17 +637,17 @@ mod tests {
             }),
         };
         assert_eq!(
-            prodrome_core::literal::print_literal(&act.to_value()),
+            prodrome_data::literal::print_literal(&act.to_value()),
             "UnlockStore(after='proposal:setup/3')"
         );
         let unparsed = record(
             UNLOCK_STORE,
-            vec![prodrome_core::literal::Value::str("the third card")],
+            vec![prodrome_data::literal::Value::str("the third card")],
         );
         assert!(Act::from_value(&unparsed).is_err());
         let a_todo = record(
             UNLOCK_STORE,
-            vec![prodrome_core::literal::Value::str("todo:life/reply")],
+            vec![prodrome_data::literal::Value::str("todo:life/reply")],
         );
         assert!(Act::from_value(&a_todo).is_err(), "a todo is no card");
     }

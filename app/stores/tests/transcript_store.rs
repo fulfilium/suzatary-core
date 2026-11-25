@@ -1,8 +1,8 @@
 //! The transcript's laws over the conversations held in core's memory: what a restart answers,
 //! the order lines read back in, and what an erasure destroys.
 
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
@@ -254,7 +254,7 @@ fn a_pushed_line_holds_no_credential() {
     )
     .expect("appended");
     for (_, object) in held.lines.objects().expect("objects") {
-        let print = prodrome_core::event::canonical_envelope(&object);
+        let print = prodrome_data::event::canonical_envelope(&object);
         assert!(!print.contains("s3cret"), "{print}");
     }
     assert!(matches!(
@@ -393,7 +393,7 @@ proptest::proptest! {
             }
             let objects = held.lines.objects().expect("objects");
             for (_, object) in &objects {
-                let print = prodrome_core::event::canonical_envelope(object);
+                let print = prodrome_data::event::canonical_envelope(object);
                 for words in &said {
                     prop_assert!(!print.contains(words.as_str()));
                 }
@@ -439,7 +439,7 @@ fn written(lines: &[(&str, Entry)]) -> Transcript {
 /// places second, the first after the opening.
 fn digest_taint(lines: &[(&str, Entry)]) -> suzatary_conversations::secretary::taint::Taint {
     let (held, opens) = sealed_lines(lines);
-    let opened: std::collections::BTreeMap<prodrome_core::event::Hash, Entry> = held
+    let opened: std::collections::BTreeMap<prodrome_data::event::Hash, Entry> = held
         .iter()
         .map(|(name, line, _)| (name.clone(), line.entry(&opens)))
         .collect();
@@ -464,9 +464,9 @@ fn sealed_lines(
     lines: &[(&str, Entry)],
 ) -> (
     Vec<(
-        prodrome_core::event::Hash,
+        prodrome_data::event::Hash,
         suzatary_lines::secretary::line_event::LineEvent,
-        Vec<prodrome_core::event::Hash>,
+        Vec<prodrome_data::event::Hash>,
     )>,
     impl Fn(&KeyName) -> Words<suzatary_memory::secretary::locked_text::TextKey>,
 ) {
@@ -488,13 +488,13 @@ fn sealed_over(
     lines: &[(&str, Entry, Vec<usize>)],
 ) -> (
     Vec<(
-        prodrome_core::event::Hash,
+        prodrome_data::event::Hash,
         suzatary_lines::secretary::line_event::LineEvent,
-        Vec<prodrome_core::event::Hash>,
+        Vec<prodrome_data::event::Hash>,
     )>,
     impl Fn(&KeyName) -> Words<suzatary_memory::secretary::locked_text::TextKey> + use<>,
 ) {
-    use prodrome_core::event::Hash;
+    use prodrome_data::event::Hash;
     use suzatary_lines::secretary::line_event::LineEvent;
     struct Fresh(std::sync::atomic::AtomicU8);
     impl suzatary_base::capability::Entropy for Fresh {
@@ -549,7 +549,7 @@ fn a_tab_s_turn_reads_tainted_until_every_claim_judged_it_clean() {
         },
         by: Some(Stamp::Actor(Speaker::device("device0"))),
     };
-    let question = prodrome_core::event::Hash::new(format!("{:064x}", 2)).expect("a name");
+    let question = prodrome_data::event::Hash::new(format!("{:064x}", 2)).expect("a name");
     let judged = |taint: Taint, second: u32| {
         (
             "assistant",
@@ -618,7 +618,7 @@ fn a_stop_ends_the_rounds_before_it_and_none_begun_after_its_take() {
     use suzatary_conversations::secretary::taint::Taint;
     use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
     let name =
-        |at: usize| prodrome_core::event::Hash::new(format!("{:064x}", at + 1)).expect("a name");
+        |at: usize| prodrome_data::event::Hash::new(format!("{:064x}", at + 1)).expect("a name");
     let asked = |second: u32| Entry::Said {
         at: at(second),
         turn: Turn::Person {

@@ -1,4 +1,4 @@
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 use schemars::JsonSchema;
 use serde::Serialize;
 

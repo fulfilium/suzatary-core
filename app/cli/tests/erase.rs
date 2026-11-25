@@ -169,7 +169,7 @@ fn an_erasure_takes_the_summaries_that_read_it() {
         .append(
             suzatary_digest::secretary::digest_event::summarized(
                 root.name().clone(),
-                prodrome_core::literal::Datetime::new(2026, 10, 9, 9, 0, 0, 0).expect("an instant"),
+                prodrome_data::literal::Datetime::new(2026, 10, 9, 9, 0, 0, 0).expect("an instant"),
                 suzatary_digest::secretary::digests::compactor(),
                 &text,
                 suzatary_digest::secretary::digest_event::Attempt {

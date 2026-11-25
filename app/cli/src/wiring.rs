@@ -19,7 +19,7 @@ use suzatary_io_sources::briefings::BriefingFiles;
 use suzatary_io_typeset::render::Typst;
 use suzatary_io_typeset::typeset::Closed;
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::persona::Persona;
 use suzatary_base::zone::Zone;

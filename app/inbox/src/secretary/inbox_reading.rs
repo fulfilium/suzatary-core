@@ -1,8 +1,8 @@
 //! One proposal's state register, read: a conflict performs nothing, and a reading holding a
 //! check of nothing is unreadable, so its card is drawn with its reason and nothing acts on it.
 
-use prodrome_core::event::Hash;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Hash;
+use prodrome_data::literal::Datetime;
 
 use crate::secretary::inbox::{Check, Unchecked};
 use crate::secretary::phase::Phase;

@@ -5,13 +5,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash, canonical, canonical_envelope, parse_event};
-use prodrome_core::fold::{Discrete, Order};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Everything;
-use prodrome_core::registers::Node;
-use prodrome_core::store::EventStore;
+use prodrome_dag::dag::Dag;
+use prodrome_dag::registers::Node;
+use prodrome_data::event::{Actor, Envelope, Hash, canonical, canonical_envelope, parse_event};
+use prodrome_data::fold::{Discrete, Order};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Everything;
+use prodrome_store::store::EventStore;
 use proptest::prelude::*;
 
 use suzatary_base::conversation_id::ConversationId;
@@ -181,7 +181,7 @@ fn arrival(
     while !waiting.is_empty() {
         let ready: Vec<usize> = (0..waiting.len())
             .filter(|&at| {
-                prodrome_core::event::parents_of(&waiting[at].1)
+                prodrome_data::event::parents_of(&waiting[at].1)
                     .iter()
                     .all(|parent| arrived.iter().any(|(held, _)| held == parent))
             })
@@ -201,7 +201,7 @@ fn adopt(to: &Disk, from: &Disk) {
         .map(|(name, object)| (name.clone(), canonical_envelope(object)))
         .collect();
     for tip in from.tips().expect("tips") {
-        to.adopt_objects(&prints, &tip, prodrome_core::store::Sender::Stranger)
+        to.adopt_objects(&prints, &tip, prodrome_data::husk::Sender::Stranger)
             .expect("adopted");
     }
 }
@@ -436,9 +436,9 @@ fn two_consolidations_numbered_alike_keep_the_least_named() {
 
 #[test]
 fn the_stored_names_are_pinned() {
-    use prodrome_core::schema::headed::Body;
+    use prodrome_data::schema::headed::Body;
     let stored = [<Said as Body>::EVENTS, <Said as Body>::NESTED].concat();
-    prodrome_core::literal::codec::assert_pinned(
+    prodrome_data::literal::codec::assert_pinned(
         &stored,
         "
         Remembered(fact, at, actor, text, kind, said)

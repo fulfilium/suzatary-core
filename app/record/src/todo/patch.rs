@@ -48,19 +48,19 @@ impl<'de, A: Deserialize<'de>> Deserialize<'de> for Patch<A> {
 }
 
 /// A kept field is `None`, a set one its value. By hand: the derive takes no generic.
-impl<A: prodrome_core::literal::codec::Literal> prodrome_core::literal::codec::Literal
+impl<A: prodrome_data::literal::codec::Literal> prodrome_data::literal::codec::Literal
     for Patch<A>
 {
-    fn to_value(&self) -> prodrome_core::literal::Value {
+    fn to_value(&self) -> prodrome_data::literal::Value {
         self.set().map_or(
-            prodrome_core::literal::Value::None,
-            prodrome_core::literal::codec::Literal::to_value,
+            prodrome_data::literal::Value::None,
+            prodrome_data::literal::codec::Literal::to_value,
         )
     }
 
     fn from_value(
-        value: &prodrome_core::literal::Value,
-    ) -> Result<Self, prodrome_core::literal::ProdromeError> {
+        value: &prodrome_data::literal::Value,
+    ) -> Result<Self, prodrome_data::literal::ProdromeError> {
         Option::<A>::from_value(value).map(Patch::from)
     }
 }

@@ -1,14 +1,14 @@
 //! A schema's constructors reuse no Prodrome envelope or term name; the parser reads those first.
 
-use prodrome_core::event::ENVELOPE_SIGNATURES;
-use prodrome_core::literal::Vocabulary as _;
-use prodrome_core::literal::codec::Constructor;
+use prodrome_data::event::ENVELOPE_SIGNATURES;
+use prodrome_data::literal::Vocabulary as _;
+use prodrome_data::literal::codec::Constructor;
 
 /// Fails on the first of `constructors` that is an envelope's or a term's.
 pub fn assert_own(constructors: &[Constructor]) {
     for (name, _) in constructors {
         assert!(
-            prodrome_core::term::schema::signatures()
+            prodrome_term::term::schema::signatures()
                 .signature(name)
                 .is_none(),
             "{name} is a term"

@@ -1,7 +1,7 @@
 //! The calendar, read in the owner's zone: the one place a calendar's UTC instants meet a day.
 
 use chrono::NaiveDate;
-use prodrome_core::store::Replica as _;
+use prodrome_store::store::Replica as _;
 use suzatary_base::zone::Zone;
 use suzatary_google::calendar::{Calendar as Reading, Day, Occurrence};
 use suzatary_store::store::StoreError;

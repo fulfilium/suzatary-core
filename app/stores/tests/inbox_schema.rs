@@ -6,11 +6,12 @@
 
 use std::collections::HashSet;
 
-use prodrome_core::event::{Actor, Hash, canonical, parse_event};
-use prodrome_core::fold::{Order, maximal, read};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Everything;
-use prodrome_core::store::EventStore;
+use prodrome_dag::fold::read;
+use prodrome_data::event::{Actor, Hash, canonical, parse_event};
+use prodrome_data::fold::{Order, maximal};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Everything;
+use prodrome_store::store::EventStore;
 use proptest::prelude::*;
 
 use suzatary_health::health::plugin::PluginName;
@@ -81,7 +82,7 @@ fn every_phase() -> Vec<Phase> {
 /// The phases the store reads for the one proposal.
 fn phases(store: &Store) -> HashSet<Phase> {
     let nodes = store.dag().expect("reads").nodes().expect("orders");
-    let state = prodrome_core::registers::fold(&nodes);
+    let state = prodrome_dag::registers::fold(&nodes);
     state
         .entities()
         .find(|(key, _)| **key == id())
@@ -258,7 +259,7 @@ proptest! {
         try_all(&here.0, 1, &shared);
         let tips: Vec<Hash> = here.0.tips().expect("derive").into_iter().collect();
         for tip in &tips {
-            there.0.adopt(&here.0, tip, prodrome_core::store::Sender::Stranger).expect("adopts");
+            there.0.adopt(&here.0, tip, prodrome_data::husk::Sender::Stranger).expect("adopts");
         }
         try_all(&here.0, 10, &mine);
         try_all(&there.0, 20, &theirs);
@@ -284,7 +285,7 @@ proptest! {
 /// whole) neither panics when read nor lets a tap perform what it cannot then record.
 #[test]
 fn a_check_over_nothing_never_lets_a_tap_perform_unrecorded() {
-    use prodrome_core::event::{canonical_envelope, mk_sealed, seal_hash};
+    use prodrome_data::event::{canonical_envelope, mk_sealed, seal_hash};
     use suzatary_store::store::Prodrome as _;
     use suzatary_stores::stores::{Faulty, InMemory};
 
@@ -329,7 +330,7 @@ fn a_check_over_nothing_never_lets_a_tap_perform_unrecorded() {
 /// the other cannot be read, which a tap is refused and `verify` reports.
 #[test]
 fn one_unreadable_proposal_leaves_every_other_tappable() {
-    use prodrome_core::event::{canonical_envelope, mk_sealed, seal_hash};
+    use prodrome_data::event::{canonical_envelope, mk_sealed, seal_hash};
     use suzatary_inbox::secretary::inbox::Unchecked;
     use suzatary_store::store::Prodrome as _;
     use suzatary_stores::stores::{Faulty, InMemory};

@@ -1,9 +1,9 @@
 //! The inbox's fold over a store that holds its proposals: a proposal named by its content, and
 //! answers given apart that settle or conflict. Over core's in-memory store.
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::literal::Datetime;
+use prodrome_dag::dag::Dag;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::literal::Datetime;
 use suzatary_inbox::secretary::acts::Act;
 use suzatary_inbox::secretary::card;
 use suzatary_inbox::secretary::inbox::*;
@@ -187,7 +187,7 @@ fn two_answers_apart_are_a_conflict_of_two() {
         .map(|(name, object)| {
             (
                 name.clone(),
-                prodrome_core::event::canonical_envelope(object),
+                prodrome_data::event::canonical_envelope(object),
             )
         })
         .collect();
@@ -250,7 +250,7 @@ fn a_withdrawal_and_a_no_apart_settle_as_the_no() {
         .map(|(name, object)| {
             (
                 name.clone(),
-                prodrome_core::event::canonical_envelope(object),
+                prodrome_data::event::canonical_envelope(object),
             )
         })
         .collect();

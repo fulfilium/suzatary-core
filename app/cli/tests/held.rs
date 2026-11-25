@@ -113,7 +113,7 @@ fn an_untrusted_device_a_viewer_and_a_malformed_handle_are_refused() {
     let running = serving("held-refused", "ada@example.com", true);
     let url = format!("{}/api/held/reveal", running.base);
     let body = serde_json::json!({ "handle": handle(MESSAGE, 0) });
-    let stranger = prodrome_core::sign::Secret::new(&"7".repeat(64)).expect("a seed");
+    let stranger = prodrome_dag::sign::Secret::new(&"7".repeat(64)).expect("a seed");
     let (status, text) = answered(common::act_signed(&url, &body, &stranger));
     assert_eq!(status, 403, "{text}");
     assert!(!text.contains(SSN), "{text}");
@@ -405,7 +405,7 @@ fn a_trusted_device_opens_a_held_file_its_conversation_read_and_the_box_keeps_no
     let asking = |handle: &Handle, conversation: Option<&str>| serde_json::json!({ "handle": handle.print(), "conversation": conversation });
     let file = asking(&Handle::File(attached(W2_MESSAGE)), Some(&id));
 
-    let stranger = prodrome_core::sign::Secret::new(&"7".repeat(64)).expect("a seed");
+    let stranger = prodrome_dag::sign::Secret::new(&"7".repeat(64)).expect("a seed");
     let (status, text) = answered(common::act_signed(&url, &file, &stranger));
     assert_eq!(status, 403, "{text}");
     assert!(!text.contains(&encoded), "{text}");

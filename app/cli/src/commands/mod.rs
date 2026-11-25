@@ -78,7 +78,7 @@ pub(crate) fn opened(
 
 pub(crate) fn chain_at(
     events: std::path::PathBuf,
-    untrusted: prodrome_core::policy::Untrusted,
+    untrusted: prodrome_data::policy::Untrusted,
 ) -> Objects<suzatary_record::record::TodoEvent> {
     Objects::chain(EventStore::new(events, untrusted))
 }

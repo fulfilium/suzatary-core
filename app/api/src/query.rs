@@ -4,10 +4,10 @@
 //! ties up the one process a phone is waiting on. An empty value is absent, not malformed,
 //! since a form sends `?t=` for a field nobody filled in.
 
-use prodrome_core::fpl;
+use prodrome_term::fpl;
 
-use prodrome_core::event::Hash;
-use prodrome_core::store::frontier;
+use prodrome_data::event::Hash;
+use prodrome_store::store::frontier;
 use suzatary_base::capability::Datetime;
 use suzatary_base::reference::Reference;
 use suzatary_base::refusal::{Refusal, shown};
@@ -107,7 +107,7 @@ impl Hashes {
         let hashes = names
             .into_iter()
             .map(|name| {
-                prodrome_core::event::Hash::new(name).map_err(|_| {
+                prodrome_data::event::Hash::new(name).map_err(|_| {
                     Refusal::bad_request(format!(
                         "hashes is object names of 64 hex digits, comma-separated, got {}",
                         shown(name)

@@ -5,9 +5,10 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
-use prodrome_core::event::{Actor, mk_created};
-use prodrome_core::fpl;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
+use prodrome_term::fpl;
+use prodrome_todo::event::mk_created;
 use suzatary_conversations::secretary::store;
 use suzatary_record::record::{EventStore, mk_authored};
 
@@ -23,7 +24,7 @@ fn at(day: u32) -> Datetime {
 
 /// One trusted todo the agent can talk about, on a chain of its own.
 fn a_chain(root: &Path) -> EventStore {
-    let untrusted = prodrome_core::policy::Untrusted::of([Actor::new("triage").expect("valid")]);
+    let untrusted = prodrome_data::policy::Untrusted::of([Actor::new("triage").expect("valid")]);
     let store = EventStore::new(root.join("events"), untrusted);
     suzatary_store::store::append_to(
         &store,
@@ -427,7 +428,7 @@ fn after_adoption_the_agents_card_is_filed_and_verifies() {
     let root = scratch("adopted-agent");
     let _chain = a_chain(&root);
     let instance = an_instance(&root);
-    let root_key = prodrome_core::sign::Secret::new(OWN)
+    let root_key = prodrome_dag::sign::Secret::new(OWN)
         .expect("a seed")
         .public();
     let text = std::fs::read_to_string(&instance).expect("reads");

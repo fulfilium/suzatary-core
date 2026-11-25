@@ -1,7 +1,7 @@
 //! A request the cast's phone signed, proven, and a chain trusting the phone: test support,
 //! never production.
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::signatures::{Asking, Request, Trusted, body_digest, request_name, trust};
@@ -17,9 +17,9 @@ pub fn scene(actor: &str) -> Trusted {
     use suzatary_connect::cast::keys;
     let actor = Actor::new(actor).expect("a roster name");
     let chain: super::InMemory<TodoEvent> = super::InMemory::default();
-    let begun = prodrome_core::event::mk_completed(
+    let begun = prodrome_todo::event::mk_completed(
         "scene",
-        prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
+        prodrome_data::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
         "scene",
         "",
     )
@@ -71,9 +71,9 @@ pub fn scene(actor: &str) -> Trusted {
 pub fn phone_trusted(actors: &[&str]) -> crate::stores::InMemory<TodoEvent> {
     use suzatary_connect::cast::keys;
     let chain: crate::stores::InMemory<TodoEvent> = crate::stores::InMemory::default();
-    let begun = prodrome_core::event::mk_completed(
+    let begun = prodrome_todo::event::mk_completed(
         "scene",
-        prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
+        prodrome_data::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
         "scene",
         "",
     )

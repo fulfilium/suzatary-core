@@ -6,9 +6,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Actor;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::sign::{PublicKey, Registrar};
+use prodrome_dag::sign::Registrar;
+use prodrome_data::event::Actor;
+use prodrome_data::policy::Untrusted;
+use prodrome_data::sign::PublicKey;
 
 /// A chain's name: a slug, so a path segment refuses `..` and anything a router normalises.
 #[derive(

@@ -15,8 +15,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context as _, bail};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
 use schemars::JsonSchema;
 use serde::Serialize;
 use sha2::Digest as _;

@@ -5,7 +5,7 @@ use suzatary_base::capability::Datetime;
 
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::{Chained, Verb};
-use prodrome_core::fpl::instant_of;
+use prodrome_data::instant::instant_of;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_health::health::Reading;
 use suzatary_health::health::SourceKey;
@@ -29,7 +29,7 @@ fn before(zone: suzatary_base::zone::Zone, event: &TodoEvent, since: chrono::Nai
     zone.day(instant_of(event.at())) < since
 }
 
-fn life_row(todo: &str, life: &prodrome_core::event::Lifecycle) -> Value {
+fn life_row(todo: &str, life: &prodrome_data::event::Lifecycle) -> Value {
     json!({
         "todo": todo,
         "at": stamp(life.at),

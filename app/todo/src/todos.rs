@@ -4,13 +4,13 @@
 //! Absence is openness, so there is no open record to keep in sync. `untrusted` is required so a
 //! provisional triage event cannot close or reprice a todo; content is folded from every actor.
 
-use prodrome_core::event::TodoId;
-use prodrome_core::fpl::Outcome;
-use prodrome_core::fpl::{self};
-use prodrome_core::literal::Datetime;
-use prodrome_core::payload::Payload as _;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::term::Term;
+use prodrome_data::event::TodoId;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::fpl::{self};
+use prodrome_term::fpl::Outcome;
+use prodrome_term::term::Term;
+use prodrome_todo::payload::Payload as _;
 use suzatary_record::record::{Authored, Node};
 use suzatary_signatures::believed::{Believed, one_outcome, records};
 
@@ -125,7 +125,7 @@ pub fn open_todos(
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
     use suzatary_record::record::{TodoEvent, mk_authored, mk_source};
 
     use super::*;
@@ -209,7 +209,7 @@ mod tests {
     fn a_triage_completion_leaves_the_todo_open() {
         let events = vec![
             TodoEvent::Authored(Box::new(a_record("ada"))),
-            prodrome_core::event::mk_completed("filething", at(8), "triage", "").expect("an event"),
+            prodrome_todo::event::mk_completed("filething", at(8), "triage", "").expect("an event"),
         ];
         let open = open_todos(
             suzatary_signatures::believed::Preview::chain(&events).nodes(),

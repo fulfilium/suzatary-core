@@ -1,12 +1,12 @@
 use std::collections::BTreeSet;
 
-use prodrome_core::event::Actor;
-use prodrome_core::literal::{Datetime, ProdromeError, Value};
+use prodrome_data::event::Actor;
+use prodrome_data::literal::{Datetime, ProdromeError, Value};
 
 use super::registers::{DecisionRegister, DecisionRegisters};
 use super::{DecisionId, NotADecision, Statement};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal};
-use prodrome_core::schema::headed::{Body, Constructors, Event};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal};
+use prodrome_data::schema::headed::{Body, Constructors, Event};
 use suzatary_record::record::MarkupSource;
 
 /// One event about one decision: which, when its writer recorded it (data, never an order), who,
@@ -215,7 +215,7 @@ impl Body for Said {
             "Revised" => revised(decision, at, actor, statement()?, fields.get("supersedes")?),
             "Withdrawn" => withdrawn(decision, at, actor, &fields.get::<String>("reason")?),
             other => {
-                return Err(prodrome_core::literal::codec::no_arm(Self::NAME, other));
+                return Err(prodrome_data::literal::codec::no_arm(Self::NAME, other));
             }
         }
         .map_err(invalid)
@@ -234,7 +234,7 @@ mod tests {
     /// A set of links has one spelling: sorted, each once; any other print is not this event's.
     #[test]
     fn links_read_back_only_sorted_and_once() {
-        use prodrome_core::event::{canonical, parse_event};
+        use prodrome_data::event::{canonical, parse_event};
         let at = Datetime::new(2026, 10, 3, 9, 0, 0, 0).expect("an instant");
         let statement =
             Statement::new("Plugins", MarkupSource::escaped("body"), "why").expect("a statement");

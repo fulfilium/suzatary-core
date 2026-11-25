@@ -1,6 +1,6 @@
 //! The holders an erasure and a reseal empty, as the sweep reads them.
 
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::{SessionId, Turn};

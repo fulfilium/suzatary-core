@@ -75,7 +75,7 @@ fn an_operators_question_is_the_owners_words_stamped_as_the_operators() {
             .expect("the lines read")
             .into_iter()
             .filter_map(|(_, object)| match object {
-                prodrome_core::event::Envelope::Signed(signed) if signed.object == asked.line => {
+                prodrome_data::event::Envelope::Signed(signed) if signed.object == asked.line => {
                     Some(signed.key.as_str().to_owned())
                 }
                 _ => None,

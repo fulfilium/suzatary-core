@@ -4,8 +4,8 @@
 use crate::common;
 
 use common::Fakes;
-use prodrome_core::declared::Declaration;
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
+use prodrome_declared::Declaration;
 use suzatary_base::capability::Datetime;
 use suzatary_google::calendar::{
     Attendees, CalendarName, Content, Occurrence, OccurrenceId, Status, When,

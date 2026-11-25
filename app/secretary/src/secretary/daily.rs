@@ -39,7 +39,7 @@ pub fn begin(caps: &Secretary<'_>, zone: Zone, daily: Daily) -> Result<Run<Round
 /// Today's round of `daily`, in `zone`'s day; a conversation that exists and does not read is an
 /// error, never one never opened.
 pub fn daily_round(caps: &Secretary<'_>, zone: Zone, daily: Daily) -> Result<Round, Refusal> {
-    let today = zone.day(prodrome_core::fpl::instant_of(caps.clock.now()));
+    let today = zone.day(prodrome_data::instant::instant_of(caps.clock.now()));
     let id = ConversationId::daily(daily, today);
     let held = match conversations::read(caps.conversations, &id) {
         Ok(stored) => Some(stored),

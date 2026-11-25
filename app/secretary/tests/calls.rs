@@ -6,8 +6,8 @@
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::policy::Untrusted;
 use serde_json::{Map, Value, json};
 use suzatary_base::capability::{Datetime, Nothing};
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
@@ -69,9 +69,9 @@ struct NoLock;
 impl WriteLock for NoLock {}
 
 /// What the store on disk reports of `objects` under `policy`, or why they could not be read.
-fn held_findings<E: prodrome_core::schema::Schema>(
-    objects: Result<Vec<(Hash, prodrome_core::event::Envelope<E>)>, StoreError>,
-    policy: &impl prodrome_core::policy::Policy<E>,
+fn held_findings<E: prodrome_data::schema::Schema>(
+    objects: Result<Vec<(Hash, prodrome_data::event::Envelope<E>)>, StoreError>,
+    policy: &impl prodrome_dag::policy::Policy<E>,
 ) -> Vec<String> {
     match objects {
         Ok(objects) => findings_of(&objects.into_iter().collect(), policy)
@@ -167,7 +167,7 @@ static OPENED: std::sync::LazyLock<opened::Opened> =
 impl Reads<LineEvent> for Fixed {
     fn objects(
         &self,
-    ) -> Result<Vec<(Hash, prodrome_core::event::Envelope<LineEvent>)>, StoreError> {
+    ) -> Result<Vec<(Hash, prodrome_data::event::Envelope<LineEvent>)>, StoreError> {
         let (opened, _) = LineEvent::write(
             suzatary_base::conversation_id::DEFAULT.clone(),
             Actor::new("assistant").expect("an actor"),
@@ -182,8 +182,8 @@ impl Reads<LineEvent> for Fixed {
             &Nothing,
         )
         .expect("a line");
-        let object = prodrome_core::event::mk_sealed(None, opened);
-        Ok(vec![(prodrome_core::event::seal_hash(&object), object)])
+        let object = prodrome_data::event::mk_sealed(None, opened);
+        Ok(vec![(prodrome_data::event::seal_hash(&object), object)])
     }
     fn excluded(&self) -> Result<std::collections::BTreeSet<Hash>, StoreError> {
         Ok(std::collections::BTreeSet::new())
@@ -202,8 +202,8 @@ impl Reads<LineEvent> for Fixed {
 
 impl Prodrome<LineEvent> for Fixed {
     fn append(&self, event: LineEvent) -> Result<Hash, StoreError> {
-        Ok(prodrome_core::event::seal_hash(
-            &prodrome_core::event::mk_sealed(None, event),
+        Ok(prodrome_data::event::seal_hash(
+            &prodrome_data::event::mk_sealed(None, event),
         ))
     }
     fn accept(&self, _objects: &[(Hash, String)]) -> Result<Vec<Hash>, StoreError> {

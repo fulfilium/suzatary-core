@@ -2,7 +2,7 @@
 //! what its own reading plans, devices sync by the Prodrome's `sync` (the union of two object
 //! sets), and every law is about the reading after that union.
 //!
-//! The merge laws of the stores are the Prodrome's (`prodrome_core::tags`, SPEC law 48). Here:
+//! The merge laws of the stores are the Prodrome's (`prodrome_tags::tags`, SPEC law 48). Here:
 //! - The box's door merges as the union does: a box that takes each device's own signed objects
 //!   through `sync::receive_changes`, whatever order they are posted in, reads what a device
 //!   holding the union of every device's objects reads.
@@ -16,13 +16,13 @@ use suzatary_api::sync::Holding;
 use suzatary_store::admission::{Admission, Inadmissible, Shared};
 use suzatary_store::receipt::Grounds;
 
-use prodrome_core::event::{
+use prodrome_data::event::{
     Actor, Envelope, canonical, canonical_envelope, parse_event, seal_hash,
 };
-use prodrome_core::genesis::mk_genesis;
-use prodrome_core::literal::Datetime;
-use prodrome_core::schema::Schema;
-use prodrome_core::store::{MemoryStore, Replica, sync};
+use prodrome_data::genesis::mk_genesis;
+use prodrome_data::literal::Datetime;
+use prodrome_data::schema::Schema;
+use prodrome_store::store::{MemoryStore, Replica, sync};
 use proptest::prelude::*;
 
 use suzatary_base::conversation_id::ConversationId;
@@ -70,7 +70,7 @@ fn begun<E: Schema<Vocabulary: Default>>() -> MemoryStore<E> {
         .receive(
             [seal_hash(&genesis)].into(),
             &|_| Some(print.clone()),
-            prodrome_core::store::Sender::Stranger,
+            prodrome_data::husk::Sender::Stranger,
         )
         .expect("begins");
     store
@@ -133,13 +133,13 @@ impl Device {
         sync(
             &other.memberships,
             &self.memberships,
-            prodrome_core::store::Sender::Stranger,
+            prodrome_data::husk::Sender::Stranger,
         )
         .expect("synced");
         sync(
             &other.aliases,
             &self.aliases,
-            prodrome_core::store::Sender::Stranger,
+            prodrome_data::husk::Sender::Stranger,
         )
         .expect("synced");
     }
@@ -508,7 +508,7 @@ fn posted<E: Schema<Vocabulary: Default>>(
     from.receive(
         signed.keys().cloned().collect(),
         &|name| signed.get(name).cloned(),
-        prodrome_core::store::Sender::Stranger,
+        prodrome_data::husk::Sender::Stranger,
     )
     .expect("the device keeps its signatures");
     let mine: Vec<String> = own
@@ -540,7 +540,7 @@ fn posted<E: Schema<Vocabulary: Default>>(
     to.receive(
         prints.keys().cloned().collect(),
         &|name| prints.get(name).cloned(),
-        prodrome_core::store::Sender::Stranger,
+        prodrome_data::husk::Sender::Stranger,
     )
     .expect("the box takes what its door took");
     received.outcome.taken.len()
@@ -548,7 +548,7 @@ fn posted<E: Schema<Vocabulary: Default>>(
 
 /// A topic store the box began, and what a tab of `device0` posts to it.
 struct Door {
-    held: prodrome_core::dag::Dag<MembershipEvent>,
+    held: prodrome_dag::dag::Dag<MembershipEvent>,
     ada: Actor,
     /// `device0`'s topic, resting on the genesis.
     mine: Envelope<MembershipEvent>,
@@ -564,22 +564,22 @@ struct Door {
 
 impl Door {
     fn new() -> Self {
-        use prodrome_core::change::mk_change;
+        use prodrome_data::change::mk_change;
         let genesis: Envelope<MembershipEvent> =
             Envelope::Genesis(mk_genesis("topics", &"0".repeat(32)).expect("a genesis"));
         let begun = seal_hash(&genesis);
         let ada = Actor::new("device0").expect("an actor");
-        let change = |actor: &Actor, deps: Vec<prodrome_core::event::Hash>, add: bool| {
+        let change = |actor: &Actor, deps: Vec<prodrome_data::event::Hash>, add: bool| {
             let (target, topic, at) = (target(0), topic("travel"), at(1 + u32::from(!add)));
             let event = if add {
-                prodrome_core::tags::membership::added::<Topics>(target, topic, at, actor.clone())
+                prodrome_tags::membership::added::<Topics>(target, topic, at, actor.clone())
             } else {
-                prodrome_core::tags::membership::removed::<Topics>(target, topic, at, actor.clone())
+                prodrome_tags::membership::removed::<Topics>(target, topic, at, actor.clone())
             };
             Envelope::Change(mk_change(begun.clone(), deps, event).expect("a change"))
         };
         let mine = change(&ada, Vec::new(), true);
-        let unheld = prodrome_core::event::Hash::new("f".repeat(64)).expect("a name");
+        let unheld = prodrome_data::event::Hash::new("f".repeat(64)).expect("a name");
         let theirs = change(&Actor::new("triage").expect("an actor"), Vec::new(), true);
         Self {
             held: [(begun.clone(), genesis)].into_iter().collect(),
@@ -650,9 +650,9 @@ fn the_box_door_takes_only_the_posters_changes() {
     let other: Envelope<MembershipEvent> =
         Envelope::Genesis(mk_genesis("topics", &"1".repeat(32)).expect("a genesis"));
     assert_eq!(door.refused(&[print(&other)]), vec![Reason::BoxOnly]);
-    let legacy: Envelope<MembershipEvent> = prodrome_core::event::mk_sealed(
+    let legacy: Envelope<MembershipEvent> = prodrome_data::event::mk_sealed(
         None,
-        prodrome_core::tags::membership::added::<Topics>(
+        prodrome_tags::membership::added::<Topics>(
             target(0),
             topic("travel"),
             at(1),
@@ -724,9 +724,9 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
         type Beside = ();
         type Held<'e> = ();
         type World = ();
-        fn held(_: &prodrome_core::dag::Dag<MembershipEvent>) {}
+        fn held(_: &prodrome_dag::dag::Dag<MembershipEvent>) {}
         fn refuses(
-            change: &prodrome_core::change::Change<MembershipEvent>,
+            change: &prodrome_data::change::Change<MembershipEvent>,
             _: &suzatary_store::admission::Post<'_, '_, Self>,
         ) -> Option<Inadmissible> {
             (!change.deps.is_empty()).then(|| Inadmissible {
@@ -736,8 +736,8 @@ fn a_stores_own_rule_refuses_what_the_shared_rule_takes() {
         }
         fn take(
             (): &mut (),
-            _: &prodrome_core::event::Hash,
-            _: &prodrome_core::change::Change<MembershipEvent>,
+            _: &prodrome_data::event::Hash,
+            _: &prodrome_data::change::Change<MembershipEvent>,
         ) {
         }
     }
@@ -812,7 +812,7 @@ fn the_box_door_takes_a_change_only_with_its_writers_signature() {
         door.refused(&[print(mine)]),
         vec![Reason::Unproven(Unproven::Unsigned)]
     );
-    let stranger = prodrome_core::sign::Secret::new(&"7".repeat(64)).expect("a seed");
+    let stranger = prodrome_dag::sign::Secret::new(&"7".repeat(64)).expect("a seed");
     let untrusted: Envelope<MembershipEvent> = Envelope::Signed(stranger.sign(&seal_hash(mine)));
     assert!(matches!(
         door.refused(&[print(mine), print(&untrusted)]).as_slice(),

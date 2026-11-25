@@ -1,6 +1,6 @@
 //! What an effect that binds may do in a round: the one decision every such verb takes.
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 use crate::secretary::Secretary;
 use suzatary_base::chains::ChainPolicy;

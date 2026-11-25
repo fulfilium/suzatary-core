@@ -1,7 +1,7 @@
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 
 use super::{BoxKeys, Custody};
-use prodrome_core::policy::Untrusted;
+use prodrome_data::policy::Untrusted;
 use suzatary_store::store::Signer;
 
 /// What the box signs with, resolved once per process; missing keys never stop the box, which

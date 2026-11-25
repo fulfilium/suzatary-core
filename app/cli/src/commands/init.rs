@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail};
 use clap::{Parser as _, ValueEnum as _};
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use suzatary_base::capability::Login;
 use suzatary_base::zone::Zone;
 
@@ -127,7 +127,7 @@ pub fn run_keyed(
 fn written(
     path: &Path,
     onboarding: &Onboarding,
-    root: &prodrome_core::sign::PublicKey,
+    root: &prodrome_data::sign::PublicKey,
     env: &crate::paths::Env,
 ) -> anyhow::Result<Instance> {
     onboarding
@@ -391,7 +391,7 @@ fn begin_chains(data: &Path) -> anyhow::Result<()> {
 /// The todo store at `events` begun with its `Genesis`. A store found begun (`--force`, or a
 /// clone) stays the store it is.
 pub(crate) fn begin_chain(events: &Path) -> anyhow::Result<()> {
-    super::chain_at(events.to_owned(), prodrome_core::policy::Untrusted::none())
+    super::chain_at(events.to_owned(), prodrome_data::policy::Untrusted::none())
         .begin()
         .with_context(|| format!("beginning {}", events.display()))
 }
@@ -532,13 +532,13 @@ mod tests {
         for chain in &read.chains {
             let begun = suzatary_record::record::EventStore::new(
                 &chain.events,
-                prodrome_core::policy::Untrusted::none(),
+                prodrome_data::policy::Untrusted::none(),
             );
             let objects = begun.dag().expect("reads").objects().clone();
             assert_eq!(objects.len(), 1, "{:?}", chain.events);
             assert!(matches!(
                 objects.values().next(),
-                Some(prodrome_core::event::Envelope::Genesis(_))
+                Some(prodrome_data::event::Envelope::Genesis(_))
             ));
         }
     }

@@ -5,13 +5,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{
+use prodrome_dag::dag::Dag;
+use prodrome_dag::sign::Registrar;
+use prodrome_data::event::{
     Actor, Hash, TodoId, canonical_envelope, parents_of, parse_envelope, seal_hash,
 };
-use prodrome_core::policy::Untrusted;
-use prodrome_core::schema::Schema as _;
-use prodrome_core::sign::{PublicKey, Registrar};
+use prodrome_data::policy::Untrusted;
+use prodrome_data::schema::Schema as _;
+use prodrome_data::sign::PublicKey;
 use suzatary_lines::parts::part;
 use suzatary_record::record::{Envelope, TodoEvent};
 use suzatary_signatures::signatures::{Trust, Trusting, Unproven};
@@ -360,11 +361,11 @@ struct Placed {
 
 /// `candidates` placed by fixpoint, parents first; each left over refused at its first missing parent.
 fn settled<E>(
-    candidates: Vec<(Hash, String, prodrome_core::event::Envelope<E>)>,
+    candidates: Vec<(Hash, String, prodrome_data::event::Envelope<E>)>,
     holds: &dyn Fn(&Hash) -> bool,
 ) -> Settled<E> {
     let mut taken: Vec<(Hash, String)> = Vec::new();
-    let mut taking: BTreeMap<Hash, prodrome_core::event::Envelope<E>> = BTreeMap::new();
+    let mut taking: BTreeMap<Hash, prodrome_data::event::Envelope<E>> = BTreeMap::new();
     let mut left = candidates;
     loop {
         let mut waiting = Vec::new();
@@ -410,7 +411,7 @@ fn settled<E>(
 /// What [`settled`] placed.
 struct Settled<E> {
     taken: Vec<(Hash, String)>,
-    taking: BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    taking: BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
     refused: Vec<Refused>,
 }
 
@@ -450,7 +451,7 @@ pub fn receive_changes<A: Admission>(
     trusting: &Trusting,
 ) -> Received
 where
-    <A::Schema as prodrome_core::schema::Schema>::Vocabulary: Default,
+    <A::Schema as prodrome_data::schema::Schema>::Vocabulary: Default,
 {
     let Holding { history, world } = holding;
     let read = read_post::<A::Schema>(history.objects(), posted);
@@ -486,7 +487,7 @@ struct Door<'a, A: Admission> {
     world: &'a A::World,
     read: &'a Read<A::Schema>,
     /// The keys of each posted change's signatures the trust admits ([`admitted`]).
-    signers: BTreeMap<&'a Hash, Vec<prodrome_core::sign::PublicKey>>,
+    signers: BTreeMap<&'a Hash, Vec<prodrome_data::sign::PublicKey>>,
     beside: &'a A::Beside,
     writer: &'a Actor,
     trusting: &'a Trusting,
@@ -503,7 +504,7 @@ struct Judged {
 impl<A: Admission> Door<'_, A> {
     /// The post judged one change at a time, each of `reported` refused in the check's words.
     fn judge(&self, reported: &BTreeMap<Hash, Vec<String>>) -> Judged {
-        use prodrome_core::event::Envelope as E;
+        use prodrome_data::event::Envelope as E;
         let (parsed, writer, trusting) = (&self.read.parsed, self.writer, self.trusting);
         let names = self.history.objects();
         let mut judged = Judged {
@@ -624,17 +625,17 @@ impl<A: Admission> Door<'_, A> {
     clippy::too_many_arguments,
     reason = "the fold's state, read and extended once"
 )]
-fn unaccompanied<E: prodrome_core::schema::Schema>(
-    parsed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+fn unaccompanied<E: prodrome_data::schema::Schema>(
+    parsed: &BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
     taken: &[(Hash, String)],
     taking: &BTreeSet<Hash>,
-    names: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    names: &BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
     writer: &Actor,
     trusting: &Trusting,
     refused: &mut Vec<Refused>,
     kinds: &mut BTreeMap<Hash, suzatary_signatures::wire::signatures::RefusalKind>,
 ) {
-    use prodrome_core::event::Envelope as E;
+    use prodrome_data::event::Envelope as E;
     for (name, envelope) in parsed {
         if let E::Signed(signed) = envelope
             && !taken.iter().any(|(one, _)| one == name)
@@ -657,15 +658,15 @@ fn unaccompanied<E: prodrome_core::schema::Schema>(
 /// A post's literals read: each object new to the store by name, beside its print; each the store
 /// holds already; and each that is no object, refused.
 struct Read<E> {
-    parsed: BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    parsed: BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
     prints: BTreeMap<Hash, String>,
     refused: Vec<Refused>,
     already: Vec<Hash>,
 }
 
 /// `posted` read at the schema `E`, against the store's objects by name.
-fn read_post<E: prodrome_core::schema::Schema>(
-    names: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+fn read_post<E: prodrome_data::schema::Schema>(
+    names: &BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
     posted: &[String],
 ) -> Read<E>
 where
@@ -695,13 +696,13 @@ where
 /// signature proves its key, and so its seat; one merely posted beside the line, naming a key it
 /// was not made with, proves nothing.
 fn admitted<'p, E>(
-    parsed: &'p BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    parsed: &'p BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
     writer: &Actor,
     trusting: &Trusting,
-) -> BTreeMap<&'p Hash, Vec<prodrome_core::sign::PublicKey>> {
-    let mut signers: BTreeMap<&Hash, Vec<prodrome_core::sign::PublicKey>> = BTreeMap::new();
+) -> BTreeMap<&'p Hash, Vec<prodrome_data::sign::PublicKey>> {
+    let mut signers: BTreeMap<&Hash, Vec<prodrome_data::sign::PublicKey>> = BTreeMap::new();
     for envelope in parsed.values() {
-        if let prodrome_core::event::Envelope::Signed(signed) = envelope
+        if let prodrome_data::event::Envelope::Signed(signed) = envelope
             && trusting.admits(writer, signed).is_ok()
         {
             signers
@@ -731,7 +732,7 @@ fn refuse(
 /// of those ready together the least name first.
 fn canonical<'n, E>(
     changes: &[&'n Hash],
-    parsed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    parsed: &BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
 ) -> Vec<&'n Hash> {
     let posted: BTreeSet<&Hash> = changes.iter().copied().collect();
     let mut waits: BTreeMap<&Hash, usize> = BTreeMap::new();
@@ -800,13 +801,13 @@ fn resting(
 /// Why no signature of `name` among `signed` proves it for `actor`; a revocation wins.
 fn proof<E>(
     name: &Hash,
-    signed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+    signed: &BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
     actor: &Actor,
     trusting: &Trusting,
 ) -> Option<Unproven> {
     let mut why = Unproven::Unsigned;
     for object in signed.values() {
-        if let prodrome_core::event::Envelope::Signed(signature) = object
+        if let prodrome_data::event::Envelope::Signed(signature) = object
             && signature.object == *name
         {
             match trusting.admits(actor, signature) {
@@ -821,8 +822,8 @@ fn proof<E>(
 
 /// Of `refused`, each change refused for good that a posted signature proves for its actor,
 /// once, however many times the post names it.
-fn recorded<E: prodrome_core::schema::Schema>(
-    parsed: &BTreeMap<Hash, prodrome_core::event::Envelope<E>>,
+fn recorded<E: prodrome_data::schema::Schema>(
+    parsed: &BTreeMap<Hash, prodrome_data::event::Envelope<E>>,
     refused: &[Refused],
     trusting: &Trusting,
 ) -> Vec<(Hash, suzatary_store::receipt::Grounds, Reason)> {
@@ -910,9 +911,9 @@ fn proven(
 /// rests on, so the check is asked once, of `taken` and the closure of what they rest on in
 /// `history`, never of the whole store; a finding the store already holds names an object it
 /// holds, never one of `taken`.
-fn found<E: prodrome_core::schema::Schema>(
+fn found<E: prodrome_data::schema::Schema>(
     history: &Dag<E>,
-    taken: &BTreeMap<&Hash, &prodrome_core::event::Envelope<E>>,
+    taken: &BTreeMap<&Hash, &prodrome_data::event::Envelope<E>>,
     policy: &Untrusted,
 ) -> BTreeMap<Hash, Vec<String>> {
     if taken.is_empty() {
@@ -948,8 +949,8 @@ fn found<E: prodrome_core::schema::Schema>(
 /// The one object `finding` refuses at a door, where there is one. A signature's findings are the
 /// proof's, which judges every posted change against the post's signatures and the store's keys
 /// before the check, and which the closure of what a change rests on does not hold.
-fn about(finding: &prodrome_core::dag::Finding) -> Option<&Hash> {
-    use prodrome_core::dag::Finding as F;
+fn about(finding: &prodrome_dag::dag::Finding) -> Option<&Hash> {
+    use prodrome_dag::dag::Finding as F;
     match finding {
         F::Foreign { change, .. } | F::Redundant { change, .. } => Some(change),
         F::Stranger { object, .. } | F::Crossing { object, .. } => Some(object),
@@ -996,7 +997,7 @@ fn unasserted(
 }
 
 /// An object's parents and the genesis a change names, which verify-on-receive walks to.
-fn rests_on<E>(envelope: &prodrome_core::event::Envelope<E>) -> Vec<Hash> {
+fn rests_on<E>(envelope: &prodrome_data::event::Envelope<E>) -> Vec<Hash> {
     let mut names = parents_of(envelope);
     names.extend(envelope.genesis().cloned());
     names
@@ -1008,10 +1009,10 @@ fn named(literal: &str) -> Result<(Hash, String, Envelope), Reason> {
 }
 
 /// [`named`], at the schema `E`.
-fn named_at<E: prodrome_core::schema::Schema>(
+fn named_at<E: prodrome_data::schema::Schema>(
     vocabulary: &E::Vocabulary,
     literal: &str,
-) -> Result<(Hash, String, prodrome_core::event::Envelope<E>), Reason> {
+) -> Result<(Hash, String, prodrome_data::event::Envelope<E>), Reason> {
     let envelope =
         parse_envelope::<E>(vocabulary, literal).map_err(|e| Reason::NotAnObject(e.to_string()))?;
     let canonical = canonical_envelope(&envelope);
@@ -1025,11 +1026,10 @@ fn named_at<E: prodrome_core::schema::Schema>(
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::{
-        Hash, mk_cancelled, mk_completed, mk_created, mk_reopened, mk_sealed, mk_woven,
-    };
-    use prodrome_core::literal::Datetime;
-    use prodrome_core::store::{MemoryStore, Replica};
+    use prodrome_data::event::{Hash, mk_sealed, mk_woven};
+    use prodrome_data::literal::Datetime;
+    use prodrome_store::store::{MemoryStore, Replica};
+    use prodrome_todo::event::{mk_cancelled, mk_completed, mk_created, mk_reopened};
     use suzatary_record::record::TodoEvent;
 
     use super::*;
@@ -1047,7 +1047,7 @@ mod tests {
     }
 
     fn heads(set: &Objects) -> BTreeSet<Hash> {
-        prodrome_core::dag::Dag::from_iter(objects_of(set)).tips()
+        prodrome_dag::dag::Dag::from_iter(objects_of(set)).tips()
     }
 
     fn objects_of(set: &Objects) -> Vec<(Hash, Envelope)> {
@@ -1059,7 +1059,7 @@ mod tests {
                 (name, envelope)
             })
             .collect();
-        prodrome_core::dag::Dag::from_iter(by_name.clone())
+        prodrome_dag::dag::Dag::from_iter(by_name.clone())
             .linearise()
             .expect("a closed set linearises")
             .iter()
@@ -1081,10 +1081,10 @@ mod tests {
     }
 
     fn folded(set: &Objects) -> Vec<suzatary_record::record::Entry> {
-        let nodes = prodrome_core::dag::Dag::from_iter(objects_of(set))
+        let nodes = prodrome_dag::dag::Dag::from_iter(objects_of(set))
             .nodes()
             .expect("a closed set reads");
-        prodrome_core::view::entries(&nodes, at(28), &prodrome_core::policy::Untrusted::none())
+        prodrome_reading::view::entries(&nodes, at(28), &prodrome_data::policy::Untrusted::none())
             .expect("a closed set folds")
     }
 
@@ -1216,7 +1216,7 @@ mod tests {
                 "decision",
                 at(1),
                 suzatary_record::record::MarkupSource::escaped("Send the reply"),
-                prodrome_core::fpl::mk_absent(),
+                prodrome_term::fpl::mk_absent(),
                 vec!["because he asked".to_owned()],
                 "",
                 "",
@@ -1357,7 +1357,7 @@ mod tests {
         tab.receive(
             heads(&set),
             &|name| prints.get(name).map(|print| print.clone().into_bytes()),
-            prodrome_core::store::Sender::Stranger,
+            prodrome_data::husk::Sender::Stranger,
         )
         .expect("a closed set is received");
         tab
@@ -1416,15 +1416,15 @@ mod tests {
         );
     }
 
-    fn seed(byte: char) -> prodrome_core::sign::Secret {
-        prodrome_core::sign::Secret::new(&byte.to_string().repeat(64)).expect("a seed")
+    fn seed(byte: char) -> prodrome_dag::sign::Secret {
+        prodrome_dag::sign::Secret::new(&byte.to_string().repeat(64)).expect("a seed")
     }
 
     fn print(object: &Envelope) -> (Hash, String) {
         (seal_hash(object), canonical_envelope(object))
     }
 
-    fn rooted(held: &mut Objects, root: &prodrome_core::sign::Secret, object: Envelope) -> Hash {
+    fn rooted(held: &mut Objects, root: &prodrome_dag::sign::Secret, object: Envelope) -> Hash {
         let name = seal_hash(&object);
         held.insert(name.clone(), object);
         let signed = Envelope::Signed(root.sign(&name));
@@ -1434,8 +1434,8 @@ mod tests {
 
     /// A little history with `phone` registered to ada by the root, held by the box and a tab.
     fn signed_box(
-        root: &prodrome_core::sign::Secret,
-        phone: &prodrome_core::sign::Secret,
+        root: &prodrome_dag::sign::Secret,
+        phone: &prodrome_dag::sign::Secret,
     ) -> (Objects, Vec<Envelope>, Hash) {
         let base = branch(None, "alpha", 2);
         let mut held = Objects::default();
@@ -1445,7 +1445,7 @@ mod tests {
         rooted(
             &mut held,
             root,
-            Envelope::KeyAdded(prodrome_core::sign::KeyAdded {
+            Envelope::KeyAdded(prodrome_data::sign::KeyAdded {
                 genesis: seal_hash(&base[0]),
                 actor: actor("ada"),
                 key: phone.public(),
@@ -1460,7 +1460,7 @@ mod tests {
 
     fn act(
         tab: &MemoryStore<TodoEvent>,
-        key: &prodrome_core::sign::Secret,
+        key: &prodrome_dag::sign::Secret,
         todo: &str,
     ) -> (String, String) {
         let change = wrote(tab, mk_completed(todo, at(9), "ada", "").expect("valid"));
@@ -1537,7 +1537,7 @@ mod tests {
         );
 
         let (other, _) = act(&tab, &phone, "beta");
-        let forged = prodrome_core::sign::Signed {
+        let forged = prodrome_data::sign::Signed {
             object: name_of(&change),
             ..phone.sign(&name_of(&other))
         };
@@ -1581,7 +1581,7 @@ mod tests {
         rooted(
             &mut held,
             &phone,
-            Envelope::KeyAdded(prodrome_core::sign::KeyAdded {
+            Envelope::KeyAdded(prodrome_data::sign::KeyAdded {
                 genesis: genesis.clone(),
                 actor: actor("ada"),
                 key: stranger.public(),
@@ -1602,7 +1602,7 @@ mod tests {
         rooted(
             &mut held,
             &root,
-            Envelope::KeyAdded(prodrome_core::sign::KeyAdded {
+            Envelope::KeyAdded(prodrome_data::sign::KeyAdded {
                 genesis: genesis.clone(),
                 actor: actor("ada"),
                 key: stranger.public(),
@@ -1638,7 +1638,7 @@ mod tests {
             &mut held,
             &root,
             Envelope::KeyRevoked(
-                prodrome_core::sign::mk_key_revoked(
+                prodrome_data::sign::mk_key_revoked(
                     genesis.clone(),
                     vec![kept],
                     actor("ada"),
@@ -1701,7 +1701,7 @@ mod tests {
     fn a_replica_may_not_post_a_genesis_a_key_or_an_epoch() {
         let (root, phone) = (seed('9'), seed('1'));
         let (held, _, genesis) = signed_box(&root, &phone);
-        let added = Envelope::KeyAdded(prodrome_core::sign::KeyAdded {
+        let added = Envelope::KeyAdded(prodrome_data::sign::KeyAdded {
             genesis: genesis.clone(),
             actor: actor("ada"),
             key: seed('3').public(),
@@ -1717,7 +1717,7 @@ mod tests {
         assert_eq!(reasons(&outcome), vec![Reason::BoxOnly]);
         // Nor a prodrome of its own, which would wedge every enrolment that reads the first.
         let (_, begun) = print(&Envelope::Genesis(
-            prodrome_core::genesis::mk_genesis("chain", &"7".repeat(32)).expect("a genesis"),
+            prodrome_data::genesis::mk_genesis("chain", &"7".repeat(32)).expect("a genesis"),
         ));
         let outcome = receive(
             &held,
@@ -1732,22 +1732,22 @@ mod tests {
     /// A genesis, a key or an epoch is the box's alone, refused before any signature is read.
     #[test]
     fn a_genesis_a_key_or_an_epoch_is_refused_from_the_objects_alone() {
-        let genesis = prodrome_core::genesis::mk_genesis("chain", &"7".repeat(32)).expect("one");
+        let genesis = prodrome_data::genesis::mk_genesis("chain", &"7".repeat(32)).expect("one");
         let begun = Envelope::Genesis(genesis);
         let named = seal_hash(&begun);
         let mut held = Objects::default();
         held.insert(named.clone(), begun);
         let posted = [
             Envelope::Genesis(
-                prodrome_core::genesis::mk_genesis("chain", &"8".repeat(32)).expect("one"),
+                prodrome_data::genesis::mk_genesis("chain", &"8".repeat(32)).expect("one"),
             ),
-            Envelope::KeyAdded(prodrome_core::sign::KeyAdded {
+            Envelope::KeyAdded(prodrome_data::sign::KeyAdded {
                 genesis: named.clone(),
                 actor: actor("ada"),
                 key: seed('3').public(),
             }),
             Envelope::Snapshot(
-                prodrome_core::snapshot::mk_snapshot(named.clone(), vec![named], None)
+                prodrome_data::snapshot::mk_snapshot(named.clone(), vec![named], None)
                     .expect("an epoch"),
             ),
         ];

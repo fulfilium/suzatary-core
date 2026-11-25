@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use prodrome_core::event::Actor;
-use prodrome_core::sign::{PublicKey, Registrar, Signed};
+use prodrome_dag::sign::Registrar;
+use prodrome_data::event::Actor;
+use prodrome_data::sign::{PublicKey, Signed};
 
 use super::{Keeper, Keeping, Trust, Unproven, Unread};
 

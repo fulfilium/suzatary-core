@@ -1,7 +1,7 @@
 //! The memory's laws, over the stores held in core's memory.
 
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
 use std::sync::atomic::{AtomicU8, Ordering};
 use suzatary_base::capability::Entropy;
 use suzatary_digest::secretary::digests::Digests;
@@ -105,7 +105,7 @@ fn forgetting_deletes_the_words_and_keeps_the_history() {
     assert_eq!(read.forgotten, vec![forgotten]);
     assert_eq!(read.version, 3);
     for (_, object) in history.objects().expect("objects") {
-        let print = prodrome_core::event::canonical_envelope(&object);
+        let print = prodrome_data::event::canonical_envelope(&object);
         assert!(
             !print.contains("Mira") && !print.contains("7:40"),
             "{print}"
@@ -186,8 +186,8 @@ impl<E: suzatary_stores::stores::Store> Reads<E> for Failing<E> {
         &self,
     ) -> Result<
         Vec<(
-            prodrome_core::event::Hash,
-            prodrome_core::event::Envelope<E>,
+            prodrome_data::event::Hash,
+            prodrome_data::event::Envelope<E>,
         )>,
         suzatary_store::store::StoreError,
     > {
@@ -201,7 +201,7 @@ impl<E: suzatary_stores::stores::Store> Reads<E> for Failing<E> {
     fn excluded(
         &self,
     ) -> Result<
-        std::collections::BTreeSet<prodrome_core::event::Hash>,
+        std::collections::BTreeSet<prodrome_data::event::Hash>,
         suzatary_store::store::StoreError,
     > {
         if self.failing.load(Ordering::Relaxed) {
@@ -211,7 +211,7 @@ impl<E: suzatary_stores::stores::Store> Reads<E> for Failing<E> {
         }
         self.inner.excluded()
     }
-    fn tips(&self) -> Result<Vec<prodrome_core::event::Hash>, suzatary_store::store::StoreError> {
+    fn tips(&self) -> Result<Vec<prodrome_data::event::Hash>, suzatary_store::store::StoreError> {
         self.inner.tips()
     }
     fn verify(&self) -> Vec<String> {
@@ -223,13 +223,13 @@ impl<E: suzatary_stores::stores::Store> Prodrome<E> for Failing<E> {
     fn append(
         &self,
         event: E,
-    ) -> Result<prodrome_core::event::Hash, suzatary_store::store::StoreError> {
+    ) -> Result<prodrome_data::event::Hash, suzatary_store::store::StoreError> {
         self.inner.append(event)
     }
     fn accept(
         &self,
-        objects: &[(prodrome_core::event::Hash, String)],
-    ) -> Result<Vec<prodrome_core::event::Hash>, suzatary_store::store::StoreError> {
+        objects: &[(prodrome_data::event::Hash, String)],
+    ) -> Result<Vec<prodrome_data::event::Hash>, suzatary_store::store::StoreError> {
         self.inner.accept(objects)
     }
     fn locked(&self) -> Result<Box<dyn WriteLock + '_>, suzatary_store::store::StoreError> {

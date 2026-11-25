@@ -8,11 +8,13 @@ use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 use suzatary_store::store::Graph;
 
-use prodrome_core::declared::{Declaration, Declared};
-use prodrome_core::event::{Envelope, Hash, TodoEvent};
-use prodrome_core::policy::Untrusted;
-use prodrome_core::schema::Schema;
-use prodrome_core::store::{EventStore, Husking, Replica, Sender};
+use prodrome_data::event::{Envelope, Hash};
+use prodrome_data::husk::{Husking, Sender};
+use prodrome_data::policy::Untrusted;
+use prodrome_data::schema::Schema;
+use prodrome_declared::{Declaration, Declared};
+use prodrome_store::store::{EventStore, Replica};
+use prodrome_todo::event::TodoEvent;
 use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_record::record::Record;
 use suzatary_store::store::{
@@ -49,7 +51,7 @@ enum Door<E> {
 
 /// What one head set's read produced.
 struct Remembered<E: Schema> {
-    heads: prodrome_core::dag::Heads,
+    heads: prodrome_dag::dag::Heads,
     graph: std::sync::Arc<Graph<E>>,
     excluded: std::collections::BTreeSet<Hash>,
     /// The fsck's findings, filled on the first ask, since few callers ask.
@@ -91,7 +93,7 @@ impl Objects<DigestEvent> {
     #[must_use]
     pub fn digests(
         root: impl Into<std::path::PathBuf>,
-        owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
+        owners: std::collections::BTreeSet<prodrome_data::event::Actor>,
     ) -> Self {
         let mut store = Self::new(EventStore::new(root, Untrusted::none()));
         store.door = Door::Events(Box::new(move |event| {
@@ -446,7 +448,7 @@ impl<E: Store> Prodrome<E> for Objects<E> {
         if !matches!(self.door, Door::Open) {
             for (name, print) in objects {
                 let object =
-                    prodrome_core::event::parse_envelope::<E>(Replica::schema(&self.events), print)
+                    prodrome_data::event::parse_envelope::<E>(Replica::schema(&self.events), print)
                         .map_err(|e| Self::not_appended(format!("{}: {e}", name.as_str())))?;
                 self.receives(&object)
                     .map_err(|shut| Self::shut(shut.of(name.as_str())))?;
@@ -480,8 +482,9 @@ impl<E: Store> Prodrome<E> for Objects<E> {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::{Actor, mk_completed, mk_created};
-    use prodrome_core::literal::Datetime;
+    use prodrome_data::event::Actor;
+    use prodrome_data::literal::Datetime;
+    use prodrome_todo::event::{mk_completed, mk_created};
     use suzatary_digest::model_name::ModelName;
 
     use super::*;
@@ -491,8 +494,8 @@ mod tests {
     use suzatary_inbox::secretary::responded::{Done, Performed};
 
     /// The deployment's writers in these tests: ada, who taps.
-    fn owners() -> std::collections::BTreeSet<prodrome_core::event::Actor> {
-        [prodrome_core::event::Actor::new("ada").expect("an actor")].into()
+    fn owners() -> std::collections::BTreeSet<prodrome_data::event::Actor> {
+        [prodrome_data::event::Actor::new("ada").expect("an actor")].into()
     }
 
     fn store(name: &str) -> (tempfile::TempDir, Objects<TodoEvent<Record>>) {
@@ -510,7 +513,7 @@ mod tests {
     /// whether appended or received, and nothing is stored; the owner's is taken.
     #[test]
     fn the_digest_takes_a_retraction_only_from_an_owner() {
-        use prodrome_core::event::{canonical_envelope, parse_event};
+        use prodrome_data::event::{canonical_envelope, parse_event};
         use suzatary_digest::secretary::digest_event::{DigestEvent, DigestVocabulary};
 
         let dir = suzatary_testkit::scratch("objects");
@@ -762,7 +765,7 @@ mod tests {
         let read = transcript::read(store.conversations(), &id).expect("reads");
         assert_eq!(read.lines().len(), 4);
         for (_, object) in &objects {
-            let print = prodrome_core::event::canonical_envelope(object);
+            let print = prodrome_data::event::canonical_envelope(object);
             assert!(
                 !print.contains("s3cret")
                     && !print.contains("sign in")
@@ -1149,7 +1152,7 @@ mod tests {
     /// A damaged digest event, a retraction here, leaves the sweep deleting nothing.
     #[test]
     fn nothing_is_deleted_over_a_damaged_retraction() {
-        use prodrome_core::event::parse_event;
+        use prodrome_data::event::parse_event;
         use suzatary_digest::secretary::digest_event::{DigestEvent, DigestVocabulary};
         use suzatary_digest::secretary::digests::Digests;
         use suzatary_digest::secretary::memories::Memories;

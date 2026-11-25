@@ -1,9 +1,9 @@
 //! A proposal's registers: what it asks (discrete) and where its machine stands (a [`Phase`],
 //! inflationary), so folding a proposal's events in any order is one value.
 
-use prodrome_core::fold::{Climb, Discrete, Frontier, Product, Register, RegisterType};
-use prodrome_core::literal::ProdromeError;
-use prodrome_core::registers::Stamp;
+use prodrome_data::fold::{Climb, Discrete, Frontier, Product, Register, RegisterType};
+use prodrome_data::literal::ProdromeError;
+use prodrome_data::stamp::Stamp;
 
 use crate::secretary::inbox_event::{InboxEvent, Said};
 use crate::secretary::phase::Phase;

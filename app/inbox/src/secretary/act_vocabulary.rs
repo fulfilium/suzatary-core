@@ -2,7 +2,7 @@
 //! proposal down to its leaves' records, each declared beside the type it prints.
 
 use crate::secretary::{acts, changes, proposal};
-use prodrome_core::literal::codec::Constructor;
+use prodrome_data::literal::codec::Constructor;
 use suzatary_held::secretary::{attached, attachment_source};
 use suzatary_record::todo::price;
 
@@ -18,7 +18,7 @@ pub const SIGNATURES: &[Constructor] = &[
     changes::CHANGES,
     changes::ADD,
     changes::ADD_FROM,
-    <suzatary_record::record::Source as prodrome_core::literal::codec::Record>::CONSTRUCTOR,
+    <suzatary_record::record::Source as prodrome_data::literal::codec::Record>::CONSTRUCTOR,
     changes::UPDATE,
     changes::COMPLETE,
     changes::CANCEL,
@@ -79,7 +79,7 @@ mod tests {
             &[crate::secretary::inbox::RECURRING],
         ]
         .concat();
-        prodrome_core::literal::codec::assert_pinned(
+        prodrome_data::literal::codec::assert_pinned(
             &stored,
             "
             Email(account, to, cc, subject, body, attachments)

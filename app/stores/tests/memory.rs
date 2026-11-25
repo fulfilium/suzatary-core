@@ -6,8 +6,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
 use proptest::prelude::*;
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
@@ -40,7 +40,7 @@ struct Held {
     cards: InMemory<InboxEvent>,
     entropy: Counting,
     lines: suzatary_stores::stores::conversations::InMemory,
-    owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
+    owners: std::collections::BTreeSet<prodrome_data::event::Actor>,
     digests: InMemory<suzatary_digest::secretary::digest_event::DigestEvent>,
     digest_texts: InMemoryDoc<TextName, Text<suzatary_digest::secretary::digest_line::Line>>,
 }
@@ -68,7 +68,7 @@ impl Held {
             .objects()
             .expect("objects")
             .iter()
-            .map(|(_, object)| prodrome_core::event::canonical_envelope(object))
+            .map(|(_, object)| prodrome_data::event::canonical_envelope(object))
             .collect()
     }
 

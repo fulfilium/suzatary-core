@@ -84,7 +84,7 @@ fn tapped(store: &InMemory, id: &ConversationId, act: Act, performed: Performed)
         },
     )
     .expect("proposes");
-    let owner = prodrome_core::event::Actor::new("ada").expect("an actor");
+    let owner = prodrome_data::event::Actor::new("ada").expect("an actor");
     inbox::submit(&store.inbox, &object, &owner, now(), |_| Ok(performed)).expect("taps");
 }
 
@@ -201,7 +201,7 @@ fn a_store_with_no_standing_started_is_untouched() {
 fn a_todo_reference() -> Reference {
     Reference::Todo(TodoRef {
         chain: suzatary_base::chains::ChainName::new("life").expect("a slug"),
-        id: prodrome_core::event::TodoId::new("x").expect("a todo id"),
+        id: prodrome_data::event::TodoId::new("x").expect("a todo id"),
     })
 }
 
@@ -320,24 +320,24 @@ fn a_noted_act_in_the_default_conversation_leaves_his_round_clean() {
 /// different actor and a non-lifecycle event are each skipped.
 #[test]
 fn heard_from_objects_skips_what_carries_no_note_of_the_posters() {
-    let actor = prodrome_core::event::Actor::new("ada").expect("an actor");
+    let actor = prodrome_data::event::Actor::new("ada").expect("an actor");
     let chain = suzatary_base::chains::ChainName::new("life").expect("a slug");
     for event in [
-        prodrome_core::event::mk_cancelled::<suzatary_record::record::Record>(
+        prodrome_todo::event::mk_cancelled::<suzatary_record::record::Record>(
             "x",
             now(),
             "ada",
             "",
         )
         .expect("a cancelled event"),
-        prodrome_core::event::mk_reopened::<suzatary_record::record::Record>(
+        prodrome_todo::event::mk_reopened::<suzatary_record::record::Record>(
             "x",
             now(),
             "triage",
             "wrong call",
         )
         .expect("a reopened event"),
-        prodrome_core::event::mk_created::<suzatary_record::record::Record>(
+        prodrome_todo::event::mk_created::<suzatary_record::record::Record>(
             "x",
             now(),
             "ada",
@@ -357,7 +357,7 @@ fn heard_from_objects_skips_what_carries_no_note_of_the_posters() {
 /// content is the same, and updates it otherwise; a creation and an undo are not noted.
 #[test]
 fn an_adopted_record_is_noted_by_what_it_replaces() {
-    let actor = prodrome_core::event::Actor::new("ada").expect("an actor");
+    let actor = prodrome_data::event::Actor::new("ada").expect("an actor");
     let chain = suzatary_base::chains::ChainName::new("life").expect("a slug");
     let body = |text: &str| suzatary_record::record::MarkupSource::from_chain(text);
     let Ok(suzatary_record::record::TodoEvent::Authored(shown)) =
@@ -368,7 +368,7 @@ fn an_adopted_record_is_noted_by_what_it_replaces() {
             "todo",
             now(),
             body("File it"),
-            prodrome_core::fpl::mk_flat(0.5).expect("a term"),
+            prodrome_term::fpl::mk_flat(0.5).expect("a term"),
             vec!["why".to_owned()],
             "",
             "",
@@ -398,7 +398,7 @@ fn an_adopted_record_is_noted_by_what_it_replaces() {
     assert_eq!(verbs(posted("File it", "seen"), true), ["confirmed"]);
     assert_eq!(verbs(posted("File it now", "seen"), true), ["updated"]);
     assert!(verbs(posted("File it", "seen"), false).is_empty());
-    let of = prodrome_core::event::Hash::new("a".repeat(64)).expect("a hash");
+    let of = prodrome_data::event::Hash::new("a".repeat(64)).expect("a hash");
     let undo = suzatary_todo::authoring::Reversal::Undo { of }.note();
     assert!(verbs(posted("File it now", &undo), true).is_empty());
 }

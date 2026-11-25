@@ -17,9 +17,10 @@ use std::time::Instant;
 
 use flate2::Compression;
 use flate2::write::GzEncoder;
-use prodrome_core::event::Actor;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::{fpl, view as folds};
+use prodrome_data::event::Actor;
+use prodrome_data::policy::Untrusted;
+use prodrome_reading::view as folds;
+use prodrome_term::fpl;
 use sha2::{Digest, Sha256};
 use suzatary_api::routes;
 use suzatary_base::capability::Datetime;
@@ -147,7 +148,7 @@ fn fold_breakdown() {
         folds::entries(&nodes, at, &untrusted).expect("folds")
     });
     println!(
-        "core fold   (prodrome_core::view::entries, {} nodes): min {:.3} ms  mean {:.3} ms",
+        "core fold   (prodrome_reading::view::entries, {} nodes): min {:.3} ms  mean {:.3} ms",
         nodes.len(),
         min_ms(&core_times),
         mean_ms(&core_times)

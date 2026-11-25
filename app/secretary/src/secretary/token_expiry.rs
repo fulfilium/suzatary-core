@@ -2,7 +2,7 @@
 //! names the token and the day, so rereading an expiry adds nothing; a later expiry completes the
 //! earlier todo.
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 
 use suzatary_base::capability::Datetime;
 use suzatary_base::refusal::Refusal;
@@ -26,7 +26,7 @@ fn prefix(name: &Settable) -> String {
 pub fn acts(
     nodes: &[suzatary_record::record::Node],
     at: Datetime,
-    untrusted: &prodrome_core::policy::Untrusted,
+    untrusted: &prodrome_data::policy::Untrusted,
     expiring: &[(Settable, Instant)],
     (settings, category): (&str, &str),
 ) -> Result<Vec<Act>, Refusal> {
@@ -137,7 +137,7 @@ mod tests {
             suzatary_connect::settings::Declaration::Repos,
         );
         let name = Settable::mint(&settables, suzatary_services::repos::TOKEN).expect("declared");
-        let untrusted = prodrome_core::policy::Untrusted::none();
+        let untrusted = prodrome_data::policy::Untrusted::none();
         let at = Datetime::new(2026, 11, 4, 12, 0, 0, 0).expect("an instant");
         let building = Building {
             now: suzatary_base::zone::Moment {

@@ -1,6 +1,6 @@
 //! Turning markup into the HTML a browser is allowed to parse.
 
-use prodrome_core::memo::Finding;
+use prodrome_memo::Finding;
 
 use crate::rendering::CLOSED;
 use crate::template::{Called, named};
@@ -75,7 +75,7 @@ impl<T: Typeset> Remembered<T> {
 
 impl<T: Typeset> Typeset for Remembered<T> {
     fn closed(&self, source: &str) -> Result<String, Rejected> {
-        let key = prodrome_core::memo::Key {
+        let key = prodrome_memo::Key {
             function: CLOSED.clone(),
             argument: named(source),
         };

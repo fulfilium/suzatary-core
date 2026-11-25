@@ -7,10 +7,10 @@ use std::collections::BTreeMap;
 use proptest::prelude::*;
 
 use crate::record::{MarkupSource, Note, NoteSite, Source, StringSource, SubTodo, mk_subtodo};
-use prodrome_core::event::{Actor, Name, TodoId};
-use prodrome_core::fpl;
-use prodrome_core::fpl::Outcome;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::{Actor, Name, TodoId};
+use prodrome_data::literal::Datetime;
+use prodrome_term::fpl;
+use prodrome_term::fpl::Outcome;
 
 use super::*;
 use suzatary_base::escape::{escape_markup, escape_string};

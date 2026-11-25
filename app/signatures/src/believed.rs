@@ -2,16 +2,18 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::change::mk_change;
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Hash, TodoId, mk_sealed, seal_hash};
-use prodrome_core::fold;
-use prodrome_core::fpl::{self, Candidates, Env, FplError, Outcome};
-use prodrome_core::genesis::mk_genesis;
-use prodrome_core::literal::{Datetime, ProdromeError};
-use prodrome_core::policy::Untrusted;
-use prodrome_core::registers;
-use prodrome_core::term::Term;
+use prodrome_dag::dag::Dag;
+use prodrome_dag::registers;
+use prodrome_data::change::mk_change;
+use prodrome_data::event::{Hash, TodoId, mk_sealed, seal_hash};
+use prodrome_data::genesis::mk_genesis;
+use prodrome_data::instant::FplError;
+use prodrome_data::literal::{Datetime, ProdromeError};
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::fpl::{self};
+use prodrome_reading::fold;
+use prodrome_term::fpl::{Candidates, Env, Outcome};
+use prodrome_term::term::Term;
 
 use suzatary_record::record::{Authored, Envelope, Node, TodoEvent};
 

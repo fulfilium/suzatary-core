@@ -8,13 +8,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash, canonical, canonical_envelope, parse_event};
-use prodrome_core::fold::Order;
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Everything;
-use prodrome_core::registers::Node;
-use prodrome_core::store::EventStore;
+use prodrome_dag::dag::Dag;
+use prodrome_dag::registers::Node;
+use prodrome_data::event::{Actor, Envelope, Hash, canonical, canonical_envelope, parse_event};
+use prodrome_data::fold::Order;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Everything;
+use prodrome_store::store::EventStore;
 use proptest::prelude::*;
 
 use suzatary_record::record::MarkupSource;
@@ -169,7 +169,7 @@ fn arrival(
     while !waiting.is_empty() {
         let ready: Vec<usize> = (0..waiting.len())
             .filter(|&at| {
-                prodrome_core::event::parents_of(&waiting[at].1)
+                prodrome_data::event::parents_of(&waiting[at].1)
                     .iter()
                     .all(|parent| arrived.iter().any(|(held, _)| held == parent))
             })
@@ -189,7 +189,7 @@ fn adopt(to: &Disk, from: &Disk) {
         .map(|(name, object)| (name.clone(), canonical_envelope(object)))
         .collect();
     for tip in from.tips().expect("tips") {
-        to.adopt_objects(&prints, &tip, prodrome_core::store::Sender::Stranger)
+        to.adopt_objects(&prints, &tip, prodrome_data::husk::Sender::Stranger)
             .expect("adopted");
     }
 }
@@ -409,8 +409,8 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
         let n: usize = of.as_str()["decision".len()..].parse().expect("a number");
         id(n + offset)
     };
-    let decision = moved(prodrome_core::schema::Schema::key(event));
-    let when = prodrome_core::schema::Schema::at(event);
+    let decision = moved(prodrome_data::schema::Schema::key(event));
+    let when = prodrome_data::schema::Schema::at(event);
     match event.body() {
         suzatary_todo::decisions::Said::Decided {
             statement,
@@ -443,10 +443,10 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
 /// in print order.
 #[test]
 fn the_stored_names_are_pinned() {
-    use prodrome_core::schema::headed::Body;
+    use prodrome_data::schema::headed::Body;
     use suzatary_todo::decisions::{DECIDE, Said};
     let stored = [<Said as Body>::EVENTS, &[DECIDE]].concat();
-    prodrome_core::literal::codec::assert_pinned(
+    prodrome_data::literal::codec::assert_pinned(
         &stored,
         "
         Decided(decision, at, actor, title, body, rationale, supersedes)

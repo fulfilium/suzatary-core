@@ -1,8 +1,8 @@
 //! The calendar read over its in-memory stores: a later write supersedes, and two stores join.
 
-use prodrome_core::declared::{Declaration, Declared};
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
+use prodrome_declared::{Declaration, Declared};
 
 use suzatary_google::calendar::{
     Attendees, Calendar, CalendarName, Content, Occurrence, OccurrenceId, Status, When,

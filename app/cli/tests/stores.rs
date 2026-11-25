@@ -524,11 +524,11 @@ fn the_lines_skeleton_and_their_content_are_the_whole_pull() {
     assert_eq!(none["heads"], serde_json::json!({"are": "held"}));
 }
 
-fn topics_begun(base: &str) -> (prodrome_core::event::Hash, Vec<String>) {
+fn topics_begun(base: &str) -> (prodrome_data::event::Hash, Vec<String>) {
     let all = objects(base, "topics", "");
     let objects = all["objects"].as_array().expect("objects");
     assert_eq!(objects.len(), 1, "the box began the store: {all}");
-    let genesis = prodrome_core::event::Hash::new(objects[0]["hash"].as_str().expect("a name"))
+    let genesis = prodrome_data::event::Hash::new(objects[0]["hash"].as_str().expect("a name"))
         .expect("a name");
     let heads = all["heads"]
         .as_array()
@@ -541,42 +541,41 @@ fn topics_begun(base: &str) -> (prodrome_core::event::Hash, Vec<String>) {
 
 /// A tab's topic on the first round of `default`, written as `actor` over `genesis` and `deps`.
 fn added(
-    genesis: &prodrome_core::event::Hash,
-    deps: Vec<prodrome_core::event::Hash>,
+    genesis: &prodrome_data::event::Hash,
+    deps: Vec<prodrome_data::event::Hash>,
     actor: &str,
-) -> prodrome_core::event::Envelope<suzatary_topics::secretary::topics::reading::MembershipEvent> {
-    let event = prodrome_core::tags::membership::added::<
-        suzatary_topics::secretary::topics::reading::Topics,
-    >(
-        "round:default/0"
-            .parse::<suzatary_base::topic_target::Target>()
-            .expect("a target"),
-        suzatary_topics::secretary::topics::topic::Topic::new("travel").expect("a topic"),
-        prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
-        common::actor(actor),
-    );
-    prodrome_core::event::Envelope::Change(
-        prodrome_core::change::mk_change(genesis.clone(), deps, event).expect("a change"),
+) -> prodrome_data::event::Envelope<suzatary_topics::secretary::topics::reading::MembershipEvent> {
+    let event =
+        prodrome_tags::membership::added::<suzatary_topics::secretary::topics::reading::Topics>(
+            "round:default/0"
+                .parse::<suzatary_base::topic_target::Target>()
+                .expect("a target"),
+            suzatary_topics::secretary::topics::topic::Topic::new("travel").expect("a topic"),
+            prodrome_data::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
+            common::actor(actor),
+        );
+    prodrome_data::event::Envelope::Change(
+        prodrome_data::change::mk_change(genesis.clone(), deps, event).expect("a change"),
     )
 }
 
 /// The change's print and the print of `key`'s signature of it, as a tab posts them.
 fn signed_by(
-    change: &prodrome_core::event::Envelope<
+    change: &prodrome_data::event::Envelope<
         suzatary_topics::secretary::topics::reading::MembershipEvent,
     >,
-    key: &prodrome_core::sign::Secret,
+    key: &prodrome_dag::sign::Secret,
 ) -> Vec<String> {
-    let signature: prodrome_core::event::Envelope<
+    let signature: prodrome_data::event::Envelope<
         suzatary_topics::secretary::topics::reading::MembershipEvent,
-    > = prodrome_core::event::Envelope::Signed(key.sign(&prodrome_core::event::seal_hash(change)));
+    > = prodrome_data::event::Envelope::Signed(key.sign(&prodrome_data::event::seal_hash(change)));
     vec![
-        prodrome_core::event::canonical_envelope(change),
-        prodrome_core::event::canonical_envelope(&signature),
+        prodrome_data::event::canonical_envelope(change),
+        prodrome_data::event::canonical_envelope(&signature),
     ]
 }
 
-fn phone() -> prodrome_core::sign::Secret {
+fn phone() -> prodrome_dag::sign::Secret {
     suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE)
 }
 
@@ -629,7 +628,7 @@ fn a_trusted_tab_writes_a_topic_as_its_own_actor() {
     assert_eq!(objects(&base, "topics", "")["heads"], *heads);
     assert_eq!(recorded(&base), Vec::<String>::new());
 
-    let unheld = prodrome_core::event::Hash::new("f".repeat(64)).expect("a name");
+    let unheld = prodrome_data::event::Hash::new("f".repeat(64)).expect("a name");
     let orphan = added(&genesis, vec![unheld], "ada");
     let posted = serde_json::json!({ "objects": signed_by(&orphan, &phone()) });
     let mut waits = common::act(&url, &posted);
@@ -639,12 +638,12 @@ fn a_trusted_tab_writes_a_topic_as_its_own_actor() {
     let triage = added(&genesis, Vec::new(), "triage");
     let on_theirs = added(
         &genesis,
-        vec![prodrome_core::event::seal_hash(&triage)],
+        vec![prodrome_data::event::seal_hash(&triage)],
         "ada",
     );
-    let mut objects = vec![prodrome_core::event::canonical_envelope(&triage)];
+    let mut objects = vec![prodrome_data::event::canonical_envelope(&triage)];
     objects.extend(signed_by(&on_theirs, &phone()));
-    objects.push(prodrome_core::event::canonical_envelope(&on_theirs));
+    objects.push(prodrome_data::event::canonical_envelope(&on_theirs));
     for _ in 0..2 {
         let mut rests = common::act(&url, &serde_json::json!({ "objects": objects }));
         let receipt = common::body_json(&mut rests);
@@ -658,7 +657,7 @@ fn a_trusted_tab_writes_a_topic_as_its_own_actor() {
     let refusals = recorded(&base);
     assert_eq!(refusals.len(), 1, "{refusals:?}");
     assert!(
-        refusals[0].contains(prodrome_core::event::seal_hash(&on_theirs).as_str())
+        refusals[0].contains(prodrome_data::event::seal_hash(&on_theirs).as_str())
             && refusals[0].contains("store='topics'"),
         "{}",
         refusals[0]
@@ -673,10 +672,10 @@ fn only_a_trusted_device_of_a_mapped_peer_writes_a_topic() {
     let (genesis, heads) = topics_begun(&base);
     let url = format!("{base}/api/stores/topics/objects");
     let change = added(&genesis, Vec::new(), "ada");
-    let stranger = prodrome_core::sign::Secret::new(&"7".repeat(64)).expect("a seed");
+    let stranger = prodrome_dag::sign::Secret::new(&"7".repeat(64)).expect("a seed");
     for posted in [
         signed_by(&change, &stranger),
-        vec![prodrome_core::event::canonical_envelope(&change)],
+        vec![prodrome_data::event::canonical_envelope(&change)],
     ] {
         let mut answer = common::act(&url, &serde_json::json!({ "objects": posted }));
         assert_eq!(common::status(&answer), 200);
@@ -747,17 +746,17 @@ fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
         let mut answer = common::get(&format!("{base}/api/stores/lines/skeleton"));
         common::body_json(&mut answer)
     };
-    let genesis = prodrome_core::event::Hash::new(
+    let genesis = prodrome_data::event::Hash::new(
         skeleton(&base)["geneses"][0]
             .as_str()
             .expect("the lines began"),
     )
     .expect("a name");
-    let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant");
     let entropy = Counting(std::sync::atomic::AtomicU8::new(7));
     let change = |line: LineEvent| {
-        prodrome_core::event::Envelope::Change(
-            prodrome_core::change::mk_change(genesis.clone(), Vec::new(), line).expect("a change"),
+        prodrome_data::event::Envelope::Change(
+            prodrome_data::change::mk_change(genesis.clone(), Vec::new(), line).expect("a change"),
         )
     };
     let (open, open_keys) = LineEvent::begin(
@@ -789,17 +788,17 @@ fn a_tab_opens_a_conversation_and_a_refused_line_s_key_is_kept_nowhere() {
     let hex = |keys: &[suzatary_memory::secretary::locked_text::TextKey]| -> Vec<String> {
         keys.iter().map(|key| hex::encode(key.bytes())).collect()
     };
-    let name = |o: &prodrome_core::event::Envelope<LineEvent>| {
-        prodrome_core::event::seal_hash(o).as_str().to_owned()
+    let name = |o: &prodrome_data::event::Envelope<LineEvent>| {
+        prodrome_data::event::seal_hash(o).as_str().to_owned()
     };
-    let signed = |o: &prodrome_core::event::Envelope<LineEvent>| {
-        let signature: prodrome_core::event::Envelope<LineEvent> =
-            prodrome_core::event::Envelope::Signed(
-                phone().sign(&prodrome_core::event::seal_hash(o)),
+    let signed = |o: &prodrome_data::event::Envelope<LineEvent>| {
+        let signature: prodrome_data::event::Envelope<LineEvent> =
+            prodrome_data::event::Envelope::Signed(
+                phone().sign(&prodrome_data::event::seal_hash(o)),
             );
         [
-            prodrome_core::event::canonical_envelope(o),
-            prodrome_core::event::canonical_envelope(&signature),
+            prodrome_data::event::canonical_envelope(o),
+            prodrome_data::event::canonical_envelope(&signature),
         ]
     };
     let posted = serde_json::json!({
@@ -854,8 +853,8 @@ fn a_key_beside_anything_but_a_posted_line_is_refused() {
         .filter_map(|o| o.as_str())
         .find(|o| o.starts_with("Signed("))
         .expect("a signature");
-    let signature_name = prodrome_core::event::seal_hash(
-        &prodrome_core::event::parse_envelope::<suzatary_lines::secretary::line_event::LineEvent>(
+    let signature_name = prodrome_data::event::seal_hash(
+        &prodrome_data::event::parse_envelope::<suzatary_lines::secretary::line_event::LineEvent>(
             &suzatary_lines::secretary::line_event::LineVocabulary,
             signature,
         )

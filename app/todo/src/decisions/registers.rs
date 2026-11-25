@@ -1,7 +1,7 @@
-use prodrome_core::fold::{Climb, Discrete, Frontier, GrowSet, Product, Register, RegisterType};
-use prodrome_core::literal::ProdromeError;
-use prodrome_core::registers::Stamp;
-use prodrome_core::schema::Schema as _;
+use prodrome_data::fold::{Climb, Discrete, Frontier, GrowSet, Product, Register, RegisterType};
+use prodrome_data::literal::ProdromeError;
+use prodrome_data::schema::Schema as _;
+use prodrome_data::stamp::Stamp;
 
 use super::{DecisionEvent, DecisionId, Life, Said, Statement};
 

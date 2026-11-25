@@ -8,9 +8,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::TodoId;
-use prodrome_core::fpl::{LinkError, PRIORITY_POWER};
-use prodrome_core::term::{Term, TermF};
+use prodrome_data::event::TodoId;
+use prodrome_fpl::fpl::LinkError;
+use prodrome_term::fpl::PRIORITY_POWER;
+use prodrome_term::term::{Term, TermF};
 
 /// An associative combine with a unit.
 pub trait Monoid {

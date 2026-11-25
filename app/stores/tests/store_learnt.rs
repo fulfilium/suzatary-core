@@ -1,9 +1,9 @@
 //! `store::learnt`'s laws. They hold their store in [`suzatary_stores::stores::InMemory`], which reads
 //! its hold from `stores::Store`, above the store's cut.
 
-use prodrome_core::declared::Declaration;
+use prodrome_declared::Declaration;
 
-use prodrome_core::declared::Declared;
+use prodrome_declared::Declared;
 use suzatary_store::store::Reads as _;
 use suzatary_store::store::doors::{SCHEMA, seen};
 use suzatary_store::store::learn;

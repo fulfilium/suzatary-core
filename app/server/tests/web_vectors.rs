@@ -12,9 +12,10 @@ use std::path::{Path, PathBuf};
 use chrono::Duration;
 use serde::Serialize;
 
-use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
-use prodrome_core::fpl::{self, mk_decay, mk_flat};
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::policy::Untrusted;
+use prodrome_term::fpl::{self, mk_decay, mk_flat};
+use prodrome_todo::event::{mk_completed, mk_created};
 
 use suzatary_api::routes;
 use suzatary_base::capability::Entropy;
@@ -120,19 +121,19 @@ fn six_todo_chain(root: &Path) -> EventStore {
     let untrusted: Untrusted = Untrusted::of([actor("triage")]);
     let events = EventStore::new(root.join("events"), untrusted);
     // Begun with a nonce of zeros, so the vectors' names are a function of this file.
-    let genesis: suzatary_record::record::Envelope = prodrome_core::event::Envelope::Genesis(
-        prodrome_core::genesis::mk_genesis(suzatary_record::record::GENESIS, &"0".repeat(32))
+    let genesis: suzatary_record::record::Envelope = prodrome_data::event::Envelope::Genesis(
+        prodrome_data::genesis::mk_genesis(suzatary_record::record::GENESIS, &"0".repeat(32))
             .expect("a genesis"),
     );
-    let name = prodrome_core::event::seal_hash(&genesis);
+    let name = prodrome_data::event::seal_hash(&genesis);
     events
         .adopt_objects(
             &std::collections::BTreeMap::from([(
                 name.clone(),
-                prodrome_core::event::canonical_envelope(&genesis),
+                prodrome_data::event::canonical_envelope(&genesis),
             )]),
             &name,
-            prodrome_core::store::Sender::Stranger,
+            prodrome_data::husk::Sender::Stranger,
         )
         .expect("begins");
     let now = now();
@@ -299,7 +300,7 @@ struct Bundle<H: Health = Healthy> {
     texts: InMemoryDoc<TextName, Text<Fact>>,
     digests: InMemory<suzatary_digest::secretary::digest_event::DigestEvent>,
     digest_texts: InMemoryDoc<TextName, Text<suzatary_digest::secretary::digest_line::Line>>,
-    owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
+    owners: std::collections::BTreeSet<prodrome_data::event::Actor>,
     entropy: Counting,
     at: Datetime,
 }
@@ -1059,7 +1060,7 @@ fn with_an_unreadable_proposal(
     bundle: &Bundle<Faulty>,
     id: &ConversationId,
 ) -> (ProposalId, ProposalId) {
-    use prodrome_core::event::{Envelope, canonical_envelope, seal_hash};
+    use prodrome_data::event::{Envelope, canonical_envelope, seal_hash};
     use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};
     use suzatary_inbox::secretary::responded::Responded;
     use suzatary_store::store::Prodrome as _;
@@ -1115,7 +1116,7 @@ fn with_an_unreadable_proposal(
         .map(|(name, _)| name.clone())
         .expect("the first asking");
     let check = Envelope::Change(
-        prodrome_core::change::mk_change(
+        prodrome_data::change::mk_change(
             genesis,
             vec![asked],
             InboxEvent {
@@ -1138,7 +1139,7 @@ fn with_an_unreadable_proposal(
 /// Three proposal lines: one filed in another replica's inbox, so this box holds its line and not
 /// its record; one dismissed here with its asking never taken in; one filed here and placed.
 fn with_unplaced_lines(bundle: &Bundle, id: &ConversationId) {
-    use prodrome_core::event::{Envelope, canonical_envelope, seal_hash};
+    use prodrome_data::event::{Envelope, canonical_envelope, seal_hash};
     use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};
     use suzatary_inbox::secretary::responded::Responded;
     use suzatary_store::store::Prodrome as _;
@@ -1180,7 +1181,7 @@ fn with_unplaced_lines(bundle: &Bundle, id: &ConversationId) {
         .map(|(name, _)| name)
         .expect("a genesis");
     let dismissal = Envelope::Change(
-        prodrome_core::change::mk_change(
+        prodrome_data::change::mk_change(
             genesis,
             Vec::new(),
             InboxEvent {
@@ -1390,7 +1391,7 @@ fn a_conversation_with_an_unreadable_proposal_renders_and_the_rest_stay_tappable
         }),
         Ok(inbox::Response::Ran(_))
     ));
-    let key = prodrome_core::sign::Secret::new(&"1".repeat(64))
+    let key = prodrome_dag::sign::Secret::new(&"1".repeat(64))
         .expect("a seed")
         .public();
     secretary_routes::ask_trust(&server, &ada, &key).expect("a device may ask");
@@ -1438,7 +1439,7 @@ fn shipped<E: suzatary_stores::stores::Store>(store: &InMemory<E>) -> Vec<Shippe
         .into_iter()
         .map(|(hash, object)| Shipped {
             hash: hash.as_str().to_owned(),
-            text: prodrome_core::event::canonical_envelope(&object),
+            text: prodrome_data::event::canonical_envelope(&object),
         })
         .collect()
 }
@@ -1543,7 +1544,7 @@ fn life(bundle: &Bundle) -> (Read, ShippedChain) {
         .into_iter()
         .map(|(hash, object)| Shipped {
             hash: hash.as_str().to_owned(),
-            text: prodrome_core::event::canonical_envelope(&object),
+            text: prodrome_data::event::canonical_envelope(&object),
         })
         .collect();
     let shipped = ShippedChain {
@@ -1657,7 +1658,7 @@ impl suzatary_store::store::Reads<suzatary_digest::secretary::digest_event::Dige
     ) -> Result<
         Vec<(
             Hash,
-            prodrome_core::event::Envelope<suzatary_digest::secretary::digest_event::DigestEvent>,
+            prodrome_data::event::Envelope<suzatary_digest::secretary::digest_event::DigestEvent>,
         )>,
         suzatary_store::store::StoreError,
     > {
@@ -1840,11 +1841,11 @@ fn the_replicas_vector_is_what_the_box_answers() {
 fn skeleton_of(bundle: &Bundle) -> lines::SkeletonPayload {
     suzatary_api::routes::lines_skeleton(
         bundle.conversations.conversations(),
-        &prodrome_core::store::frontier::Since::Nothing,
+        &prodrome_store::store::frontier::Since::Nothing,
         suzatary_api::routes::Books {
             epochs: &suzatary_signatures::epoch::Epochs::remembered(),
-            frontiers: &prodrome_core::store::frontier::Frontiers::remembered(
-                prodrome_core::store::frontier::KEPT,
+            frontiers: &prodrome_store::store::frontier::Frontiers::remembered(
+                prodrome_store::store::frontier::KEPT,
             ),
         },
         bundle.at,
@@ -2080,13 +2081,15 @@ fn the_answers_vector_holds_every_answer() {
     }]);
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
-        prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+        prodrome_store::store::frontier::Frontiers::remembered(
+            prodrome_store::store::frontier::KEPT,
+        ),
     );
     let books = routes::Books {
         epochs: &epochs,
         frontiers: &frontiers,
     };
-    let nothing = prodrome_core::store::frontier::Since::Nothing;
+    let nothing = prodrome_store::store::frontier::Since::Nothing;
     samples
         .add([routes::objects_since(&bundle, &policy, &nothing, books, at).expect("the objects")]);
     let lines = suzatary_stores::stores::conversations::InMemory::default();
@@ -2977,7 +2980,7 @@ fn a_stored_slot_is_under_the_rules_this_build_names() {
         .collect();
     assert!(!stored.is_empty());
     for text in stored {
-        let envelope = prodrome_core::event::parse_envelope::<LineEvent>(&LineVocabulary, text)
+        let envelope = prodrome_data::event::parse_envelope::<LineEvent>(&LineVocabulary, text)
             .expect("a stored line reads");
         let line = envelope.event().expect("a line");
         assert!(line.scrubbed_under().count() > 0, "{text}");
@@ -2994,7 +2997,7 @@ fn a_stored_slot_is_under_the_rules_this_build_names() {
 /// A device that pulls the lines' skeleton whole from the frontier its last answer named, and
 /// holds every node and key it was given.
 struct Device {
-    since: prodrome_core::store::frontier::Since,
+    since: prodrome_store::store::frontier::Since,
     nodes: BTreeMap<String, lines::SkeletonNode>,
     keys: BTreeMap<String, String>,
 }
@@ -3013,8 +3016,9 @@ impl Device {
             routes::Cut::Whole,
         )
         .expect("the skeleton reads");
-        self.since = prodrome_core::store::frontier::Since::Frontier(
-            prodrome_core::store::frontier::Token::parse(&answer.frontier.digest).expect("a token"),
+        self.since = prodrome_store::store::frontier::Since::Frontier(
+            prodrome_store::store::frontier::Token::parse(&answer.frontier.digest)
+                .expect("a token"),
         );
         self.nodes.extend(
             answer
@@ -3164,7 +3168,7 @@ type Step<'a> = (
 
 fn fresh() -> Device {
     Device {
-        since: prodrome_core::store::frontier::Since::Nothing,
+        since: prodrome_store::store::frontier::Since::Nothing,
         nodes: BTreeMap::new(),
         keys: BTreeMap::new(),
     }
@@ -3245,7 +3249,9 @@ fn converged(
     use suzatary_memory::secretary::locked_text::KeyName;
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
-        prodrome_core::store::frontier::Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+        prodrome_store::store::frontier::Frontiers::remembered(
+            prodrome_store::store::frontier::KEPT,
+        ),
     );
     let books = routes::Books {
         epochs: &epochs,

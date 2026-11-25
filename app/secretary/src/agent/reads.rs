@@ -1,7 +1,7 @@
 //! The verbs that only look.
 
-use prodrome_core::fpl;
-use prodrome_core::payload::Payload as _;
+use prodrome_fpl::fpl;
+use prodrome_todo::payload::Payload as _;
 use serde_json::{Value, json};
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::believed::Believed;
@@ -206,7 +206,7 @@ pub(crate) fn todo_show(
             "category": found
                 .payload.category
                 .as_ref()
-                .map(prodrome_core::event::Name::as_str)
+                .map(prodrome_data::event::Name::as_str)
                 .filter(|c| !c.is_empty()),
             "created": format!(
                 "{:04}-{:02}-{:02}",
@@ -294,7 +294,7 @@ pub(crate) fn evaluate(
     let at = match at_iso {
         None => caps.clock.now(),
         Some(text) => match fpl::parse_iso(text).and_then(|t| {
-            fpl::datetime_of(t).map_err(|e| prodrome_core::fpl::FplError(e.to_string()))
+            fpl::datetime_of(t).map_err(|e| prodrome_data::instant::FplError(e.to_string()))
         }) {
             Ok(at) => at,
             Err(failed) => {
@@ -332,7 +332,7 @@ pub(crate) fn verify_chain(chain: &dyn Reads<TodoEvent>) -> String {
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use prodrome_core::policy::Untrusted;
+    use prodrome_data::policy::Untrusted;
 
     use super::*;
 

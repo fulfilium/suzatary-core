@@ -18,7 +18,7 @@ pub fn answer_key(source: &str) -> Result<String, JsError> {
 pub fn kept_functions() -> Result<String, JsError> {
     crate::json(
         &suzatary_todo::rendering::kept()
-            .map(prodrome_core::event::Hash::as_str)
+            .map(prodrome_data::event::Hash::as_str)
             .to_vec(),
     )
 }

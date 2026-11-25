@@ -1,11 +1,12 @@
 use std::collections::BTreeSet;
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::policy::Untrusted;
-use prodrome_core::schema::Schema;
-use prodrome_core::sign::{KeyAdded, PublicKey, Registrar, Secret, mk_key_revoked};
-use prodrome_core::snapshot::mk_snapshot;
+use prodrome_dag::dag::Dag;
+use prodrome_dag::sign::{Registrar, Secret};
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::policy::Untrusted;
+use prodrome_data::schema::Schema;
+use prodrome_data::sign::{KeyAdded, PublicKey, mk_key_revoked};
+use prodrome_data::snapshot::mk_snapshot;
 
 use super::{Custody, KeyStanding, Signers, Trust};
 use suzatary_store::store::{Prodrome, Signer, StoreError, sign};
@@ -218,7 +219,7 @@ pub struct UnsignedWrite {
     pub name: Hash,
     /// Whose key would sign it.
     pub actor: Actor,
-    pub at: prodrome_core::literal::Datetime,
+    pub at: prodrome_data::literal::Datetime,
 }
 
 /// Every unsigned write since an epoch; before an epoch, signing would put the root's name on

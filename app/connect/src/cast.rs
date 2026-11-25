@@ -286,7 +286,8 @@ impl Todos {
 /// The keys a scene's deployment signs with, as hex seeds; never a real deployment's, because
 /// this file is public.
 pub mod keys {
-    use prodrome_dag::sign::{PublicKey, Secret};
+    use prodrome_dag::sign::Secret;
+    use prodrome_data::sign::PublicKey;
 
     /// The box's own key, whose public half a scene's `[signatures] root` names.
     pub const ROOT: &str = "ca57000000000000000000000000000000000000000000000000000000000b0c";

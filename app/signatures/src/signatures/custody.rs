@@ -1,5 +1,5 @@
-use prodrome_core::event::Actor;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::Actor;
+use prodrome_data::policy::Untrusted;
 
 use suzatary_base::writer::Writer;
 

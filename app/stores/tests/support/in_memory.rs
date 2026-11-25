@@ -1,10 +1,11 @@
 use std::marker::PhantomData;
 
-use prodrome_core::event::{Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::genesis::mk_genesis;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::schema::Schema;
-use prodrome_core::store::{MemoryStore, Replica, Sender};
+use prodrome_data::event::{Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::genesis::mk_genesis;
+use prodrome_data::husk::Sender;
+use prodrome_data::policy::Untrusted;
+use prodrome_data::schema::Schema;
+use prodrome_store::store::{MemoryStore, Replica};
 
 use crate::stores::Store;
 use suzatary_store::store::{InMemoryHold, Prodrome, Reads, StoreError, WriteLock};
@@ -131,7 +132,7 @@ impl<E: Schema, H: Health> Drop for InMemory<E, H> {
 impl<E: Store, H: Health> Reads<E> for InMemory<E, H> {
     fn objects(&self) -> Result<Vec<(Hash, Envelope<E>)>, StoreError> {
         let unreadable =
-            |why: prodrome_core::literal::ProdromeError| StoreError::unreadable("memory", why);
+            |why: prodrome_data::literal::ProdromeError| StoreError::unreadable("memory", why);
         let dag = self.store.held().map_err(unreadable)?.dag;
         Ok(dag
             .linearise()
@@ -155,7 +156,7 @@ impl<E: Store, H: Health> Reads<E> for InMemory<E, H> {
         }
         // Of the store's own history, shared, as a store on disk builds it.
         let unreadable =
-            |why: prodrome_core::literal::ProdromeError| StoreError::unreadable("memory", why);
+            |why: prodrome_data::literal::ProdromeError| StoreError::unreadable("memory", why);
         let dag = self.store.held().map_err(unreadable)?.dag;
         let graph = std::sync::Arc::new(suzatary_store::store::Graph::over(dag)?);
         *kept = Some(std::sync::Arc::clone(&graph));

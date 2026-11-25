@@ -1,6 +1,6 @@
 //! The box's opened lines' law, over the conversations held in core's memory.
 
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Entry, Kind};

@@ -1,4 +1,4 @@
-use prodrome_core::sign::PublicKey;
+use prodrome_data::sign::PublicKey;
 
 /// Why the history does not prove an object's actor wrote it.
 #[derive(Debug, Clone, PartialEq, Eq)]

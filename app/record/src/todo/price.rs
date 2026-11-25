@@ -1,13 +1,13 @@
 //! What a todo is worth, as every writer authors it and a proposed act stores it.
 
-use prodrome_core::fpl;
-use prodrome_core::literal::{ProdromeError, Value};
-use prodrome_core::term::{Term, TermF};
+use prodrome_data::literal::{ProdromeError, Value};
+use prodrome_term::fpl;
+use prodrome_term::term::{Term, TermF};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::todo::{Cycle, Deadline};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::refusal::Refusal;
 use suzatary_base::zone::Moment;
 

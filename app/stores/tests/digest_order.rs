@@ -3,9 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::digest::{Node, Tree};
-use prodrome_core::event::Hash;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Hash;
+use prodrome_data::literal::Datetime;
+use prodrome_digest::{Node, Tree};
 use proptest::prelude::*;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
@@ -112,7 +112,7 @@ proptest! {
     }
 
     /// Law 3, prefix stability. An appended line renames only the nodes that hold the old last
-    /// line, at most one per level ([`prodrome_core::memo::balance`]); every node of the new
+    /// line, at most one per level ([`prodrome_memo::balance`]); every node of the new
     /// tree that does not hold the new last line is a node of the old one, of the same span,
     /// summarised alike, and a reader opening its handle is shown the same parts.
     #[test]

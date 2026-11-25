@@ -708,7 +708,7 @@ fn shown_summaries(stores: &Stores) -> String {
     let mut stack: Vec<_> = reading
         .digest()
         .tree()
-        .map(prodrome_core::digest::Tree::root)
+        .map(prodrome_digest::Tree::root)
         .into_iter()
         .collect();
     while let Some(node) = stack.pop() {

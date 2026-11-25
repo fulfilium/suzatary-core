@@ -1,7 +1,7 @@
 //! The tap: the one door out of a conversation into the world; the function that sends takes a
 //! `&Tap`, minted only from a [`Trusted`] request, which loopback never makes.
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 
 use super::{ActHeaders, Seat, Trusted, check_csrf};
 use suzatary_base::refusal::Refusal;
@@ -14,7 +14,7 @@ use suzatary_base::refusal::Refusal;
 ///
 /// ```compile_fail
 /// let tap = suzatary_signatures::signatures::Tap {
-///     who: prodrome_core::event::Actor::new("ada").unwrap(),
+///     who: prodrome_data::event::Actor::new("ada").unwrap(),
 ///     seat: suzatary_signatures::signatures::Seat::Device,
 /// };
 /// ```

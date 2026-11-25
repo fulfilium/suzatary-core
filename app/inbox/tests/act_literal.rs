@@ -2,9 +2,9 @@
 //! what it prints, through the walker that reads every other field of an `Asked`; and no
 //! constructor of an act is an inbox event's or a term's.
 
-use prodrome_core::event::EventVocabulary;
-use prodrome_core::literal::codec::Literal;
-use prodrome_core::literal::{Table, Vocabulary as _, parse_literal, print_literal};
+use prodrome_data::event::EventVocabulary;
+use prodrome_data::literal::codec::Literal;
+use prodrome_data::literal::{Table, Vocabulary as _, parse_literal, print_literal};
 use suzatary_inbox::secretary::act_vocabulary::SIGNATURES;
 use suzatary_inbox::secretary::inbox_event::{InboxEvent, InboxVocabulary};
 use suzatary_inbox::secretary::proposal::Proposal;
@@ -122,7 +122,7 @@ fn every_act_reads_back_what_it_prints_through_the_inbox_walker() {
 
 #[test]
 fn no_constructor_of_an_act_is_an_events_or_a_terms() {
-    let terms = prodrome_core::term::schema::signatures();
+    let terms = prodrome_term::term::schema::signatures();
     let events = Table(suzatary_inbox::secretary::inbox_event::SIGNATURES);
     for (name, _) in SIGNATURES {
         assert!(terms.signature(name).is_none(), "{name} is a term's");

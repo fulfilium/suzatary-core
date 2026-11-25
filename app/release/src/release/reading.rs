@@ -3,10 +3,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::{TodoEvent, TodoId, mk_completed};
-use prodrome_core::literal::{Datetime, ProdromeError};
-use prodrome_core::policy::{Policy, Untrusted};
-use prodrome_core::term::{Term, TermF};
+use prodrome_dag::policy::Policy;
+use prodrome_data::event::TodoId;
+use prodrome_data::literal::{Datetime, ProdromeError};
+use prodrome_data::policy::Untrusted;
+use prodrome_term::term::{Term, TermF};
+use prodrome_todo::event::{TodoEvent, mk_completed};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;

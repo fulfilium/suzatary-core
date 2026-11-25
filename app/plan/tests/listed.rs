@@ -10,12 +10,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::change::mk_change;
-use prodrome_core::event::{Actor, Hash, mk_completed, mk_created, mk_sealed, seal_hash};
-use prodrome_core::fpl;
-use prodrome_core::genesis::mk_genesis;
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::change::mk_change;
+use prodrome_data::event::{Actor, Hash, mk_sealed, seal_hash};
+use prodrome_data::genesis::mk_genesis;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_term::fpl;
+use prodrome_todo::event::{mk_completed, mk_created};
 use proptest::prelude::*;
 use suzatary_base::chains::ChainName;
 use suzatary_base::reference::{Reference, TodoRef};
@@ -784,8 +785,8 @@ fn spelled(generated: &Stores, here: usize, (there, task): (usize, usize)) -> St
     }
 }
 
-fn todo_id(task: usize) -> prodrome_core::event::TodoId {
-    prodrome_core::event::TodoId::new(format!("t{task}")).expect("an id")
+fn todo_id(task: usize) -> prodrome_data::event::TodoId {
+    prodrome_data::event::TodoId::new(format!("t{task}")).expect("an id")
 }
 
 /// The (store, id) a generated wait's reference names, by either spelling.

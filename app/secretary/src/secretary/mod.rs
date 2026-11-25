@@ -1,7 +1,7 @@
 //! The secretary: a trusted assistant in a conversation the owner is reading, which appends
 //! as itself and proposes, but cannot send, anything outward.
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use suzatary_base::writer::Writer;
 use suzatary_conversations::secretary::model::Pick;
 use suzatary_lines::secretary::conversations::Conversations;

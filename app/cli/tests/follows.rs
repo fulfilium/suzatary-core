@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use prodrome_core::fpl;
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
+use prodrome_term::fpl;
 use suzatary_record::record::{EventStore, MarkupSource, mk_authored};
 
 use super::todos::{a_chain, a_signing_instance, scratch, signing};
@@ -68,7 +68,7 @@ fn git(dir: &Path, args: &[&str]) {
 fn an_upstream(root: &Path, waiting_on: &str) -> PathBuf {
     let upstream = root.join("upstream");
     let store = upstream.join("roadmap");
-    let events = EventStore::new(store.clone(), prodrome_core::policy::Untrusted::none());
+    let events = EventStore::new(store.clone(), prodrome_data::policy::Untrusted::none());
     suzatary_store::store::append_to(
         &events,
         suzatary_record::record::GENESIS,
@@ -100,11 +100,11 @@ const MIRRORED: &str = "Authored(todo='gh-7', at=datetime(2026, 9, 18, 8, 0, 0),
 fn a_library_roadmap(root: &Path) -> String {
     let upstream = root.join("roadmap-upstream");
     let store = upstream.join("roadmap");
-    let events = EventStore::new(store.clone(), prodrome_core::policy::Untrusted::none());
+    let events = EventStore::new(store.clone(), prodrome_data::policy::Untrusted::none());
     let day = |d: u32, h: u32| Datetime::new(2026, 9, d, h, 0, 0, 0).expect("an instant");
     let issue = |n: u32, title: &str, d: u32| {
         let id = format!("gh-{n}");
-        let created = prodrome_core::event::mk_created(&id, day(d, 8), "github-mirror", title, "")
+        let created = prodrome_todo::event::mk_created(&id, day(d, 8), "github-mirror", title, "")
             .expect("a creation");
         let record = mk_authored(
             &id,
@@ -134,7 +134,7 @@ fn a_library_roadmap(root: &Path) -> String {
         [created, record]
     };
     let reprice = |actor: &str, value: f64| {
-        prodrome_core::event::mk_spec_revised(
+        prodrome_todo::event::mk_spec_revised(
             "gh-12",
             day(21, 9),
             actor,
@@ -207,7 +207,7 @@ fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
     a_chain(&root);
     let life = EventStore::new(
         root.join("events"),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     );
     for (id, price, waiting_on) in [
         ("ship", 0.2, "Ada, and todo:library/libtask"),
@@ -224,7 +224,7 @@ fn a_box(name: &str) -> (PathBuf, PathBuf, PathBuf) {
     let upstream = an_upstream(&root, &format!("todo:+{}/gh-12", &roadmap[..12]));
     let instance = a_signing_instance(
         &root,
-        &prodrome_core::sign::Secret::new(OWN)
+        &prodrome_dag::sign::Secret::new(OWN)
             .expect("a seed")
             .public(),
     );

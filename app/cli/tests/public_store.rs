@@ -9,7 +9,8 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use prodrome_core::event::{Envelope, canonical_envelope, mk_completed, seal_hash};
+use prodrome_data::event::{Envelope, canonical_envelope, seal_hash};
+use prodrome_todo::event::mk_completed;
 use suzatary_cli::commands::door::{Door, Opened};
 use suzatary_cli::instance::Instance;
 use suzatary_store::store::{Prodrome as _, Shut};
@@ -40,7 +41,7 @@ fn a_box(name: &str, public: bool) -> (PathBuf, PathBuf) {
         root.join("scripts/secret-rules.toml"),
     )
     .expect("the secret rules");
-    let key = prodrome_core::sign::Secret::new(SEED).expect("a seed");
+    let key = prodrome_dag::sign::Secret::new(SEED).expect("a seed");
     let instance = a_signing_instance(&root, &key.public());
     (root, instance)
 }
@@ -290,12 +291,12 @@ fn door_1_judges_a_batch_as_each_event_alone() {
     let event = |(actor, text): (usize, usize)| {
         suzatary_record::record::mk_authored(
             "zzbatch",
-            prodrome_core::literal::Datetime::new(2026, 11, 15, 9, 0, 0, 0).expect("an instant"),
+            prodrome_data::literal::Datetime::new(2026, 11, 15, 9, 0, 0, 0).expect("an instant"),
             ["ada", "assistant", "triage"][actor],
             "todo",
-            prodrome_core::literal::Datetime::new(2026, 11, 15, 0, 0, 0, 0).expect("a day"),
+            prodrome_data::literal::Datetime::new(2026, 11, 15, 0, 0, 0, 0).expect("a day"),
             suzatary_record::record::MarkupSource::escaped("Water the garden"),
-            prodrome_core::fpl::mk_flat(0.7).expect("a term"),
+            prodrome_term::fpl::mk_flat(0.7).expect("a term"),
             vec![texts[text].clone()],
             "home",
             "",
@@ -499,7 +500,7 @@ fn a_page_publishes_of_a_field_only_what_door_1_read() {
 #[test]
 fn a_public_store_refuses_a_markup_field_that_does_not_draw() {
     let door = a_door("door-undrawn");
-    let at = prodrome_core::literal::Datetime::new(2026, 11, 15, 9, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 11, 15, 9, 0, 0, 0).expect("an instant");
     let event = |body: &str, detail: &str| {
         suzatary_record::record::mk_authored(
             "zzundrawn",
@@ -508,7 +509,7 @@ fn a_public_store_refuses_a_markup_field_that_does_not_draw() {
             "todo",
             at,
             suzatary_record::record::MarkupSource::from_chain(body),
-            prodrome_core::fpl::mk_flat(0.7).expect("a term"),
+            prodrome_term::fpl::mk_flat(0.7).expect("a term"),
             Vec::new(),
             "home",
             "",
@@ -602,8 +603,8 @@ fn a_public_store_refuses_the_secretary_and_every_signature() {
         .expect("the instance reads");
     let chain = instance.chain(None).expect("life");
     let signers = instance.signers();
-    let as_owner = prodrome_core::event::Actor::new("ada").expect("an actor");
-    let at = prodrome_core::literal::Datetime::new(2026, 11, 15, 9, 0, 0, 0).expect("an instant");
+    let as_owner = prodrome_data::event::Actor::new("ada").expect("an actor");
+    let at = prodrome_data::literal::Datetime::new(2026, 11, 15, 9, 0, 0, 0).expect("an instant");
     let done = || mk_completed("parkingpermit", at, "assistant", "").expect("an event");
 
     let before = held(&root);
@@ -614,10 +615,10 @@ fn a_public_store_refuses_the_secretary_and_every_signature() {
     assert!(refused.to_string().contains("refuses it"), "{refused}");
     assert_eq!(held(&root), before, "the store moved");
 
-    let key = prodrome_core::sign::Secret::new(SEED).expect("a seed");
+    let key = prodrome_dag::sign::Secret::new(SEED).expect("a seed");
     let first = before.iter().next().expect("a begun chain");
     let signed = Envelope::<suzatary_record::record::TodoEvent>::Signed(
-        key.sign(&prodrome_core::event::Hash::new(first.trim_end_matches(".py")).expect("a name")),
+        key.sign(&prodrome_data::event::Hash::new(first.trim_end_matches(".py")).expect("a name")),
     );
     let refused = by_the_box
         .accept(&[(seal_hash(&signed), canonical_envelope(&signed))])
@@ -661,7 +662,7 @@ fn waiting(instance: &Path, id: &str, on: &str) -> std::process::Output {
 fn a_private_chain(root: &Path, instance: &Path) {
     let private = suzatary_record::record::EventStore::new(
         root.join("events-home"),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     );
     suzatary_store::store::append_to(
         &private,
@@ -796,7 +797,7 @@ fn a_public_store_takes_a_name_by_a_held_genesis_that_begins_with_digits() {
     let (genesis, hash) = (0u64..1 << 20)
         .map(|n| {
             let genesis: Envelope<suzatary_record::record::TodoEvent> = Envelope::Genesis(
-                prodrome_core::genesis::mk_genesis(
+                prodrome_data::genesis::mk_genesis(
                     suzatary_record::record::GENESIS,
                     &format!("{n:032x}"),
                 )
@@ -874,7 +875,7 @@ fn a_public_store_takes_no_name_while_a_chain_of_the_deployment_does_not_read() 
     let life = shown["name"].as_str().expect("its name").to_owned();
     // A second genesis: a chain is one prodrome, so it no longer reads.
     let second: Envelope<suzatary_record::record::TodoEvent> = Envelope::Genesis(
-        prodrome_core::genesis::mk_genesis("todos", &"1".repeat(32)).expect("a genesis"),
+        prodrome_data::genesis::mk_genesis("todos", &"1".repeat(32)).expect("a genesis"),
     );
     std::fs::write(
         root.join("events-home/objects")

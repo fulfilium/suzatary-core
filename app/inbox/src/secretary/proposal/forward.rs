@@ -1,11 +1,11 @@
 //! A stored message forwarded on a tap.
 
-use prodrome_core::literal::{ProdromeError, Value};
+use prodrome_data::literal::{ProdromeError, Value};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::Draft;
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, record};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, record};
 use suzatary_held::held_value::Original;
 use suzatary_held::message_part::Attachment;
 use suzatary_mail::mail::StoredMessage;
@@ -48,7 +48,7 @@ impl Style {
     }
 }
 
-prodrome_core::word_literal!(Style: Style::ALL => |style| style.as_str());
+prodrome_data::word_literal!(Style: Style::ALL => |style| style.as_str());
 
 /// The original of a forward, as its card shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

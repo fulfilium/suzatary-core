@@ -6,7 +6,7 @@
 //! file. [`Trust`] folds them and equals the Prodrome's [`Proof`] (a tested law). Objects beneath
 //! the root's signed `Snapshot` of a chain, its [`epoch`], read [`Provenance::Predates`].
 //!
-//! [`Proof`]: prodrome_core::sign::Proof
+//! [`Proof`]: prodrome_dag::sign::Proof
 
 mod admitted;
 mod asking;

@@ -7,14 +7,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use proptest::prelude::*;
 
-use prodrome_core::dag::{Dag, Excluded};
-use prodrome_core::event::{Actor, Hash, canonical_envelope, parents_of, parse_envelope};
-use prodrome_core::literal::Datetime;
-use prodrome_core::memo::Counts;
+use prodrome_dag::dag::{Dag, Excluded};
+use prodrome_data::event::{Actor, Hash, canonical_envelope, parents_of, parse_envelope};
+use prodrome_data::literal::Datetime;
+use prodrome_memo::Counts;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use prodrome_core::store::{Husk, HuskObject};
+use prodrome_data::husk::{Husk, HuskObject};
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
@@ -375,7 +375,7 @@ fn plain(
         prints
             .iter()
             .map(|(name, bytes)| (name.clone(), Ok(bytes.clone()))),
-        prodrome_core::store::Sender::Stranger,
+        prodrome_data::husk::Sender::Stranger,
     );
     let nodes = dag.interior().nodes().expect("a down-set reads");
     let read = transcript::transcripts(&nodes, &|name: &KeyName| keys.key(name)).map(|read| {
@@ -545,11 +545,11 @@ proptest! {
         prop_assert_eq!(memoised(&mut lines, &skeleton), before, "the reading is the same");
         let vocabulary = LineVocabulary;
         for (name, bytes) in &all {
-            let Ok(envelope) = prodrome_core::dag::decode::<LineEvent>(&vocabulary, name, bytes, prodrome_core::store::Sender::Stranger).map(prodrome_core::store::Stored::into_object) else {
+            let Ok(envelope) = prodrome_dag::dag::decode::<LineEvent>(&vocabulary, name, bytes, prodrome_data::husk::Sender::Stranger).map(prodrome_data::husk::Stored::into_object) else {
                 continue;
             };
             if let Some(object) = match &envelope {
-                prodrome_core::event::Envelope::Change(change) => HuskObject::of(change),
+                prodrome_data::event::Envelope::Change(change) => HuskObject::of(change),
                 _ => None,
             } {
                 let print = object.print();

@@ -12,7 +12,7 @@ use super::store_at::StoreAt;
 use super::store_of;
 use crate::instance::Instance;
 use crate::interpreters::{file_store, upload_store};
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::texts::Texts;
 use suzatary_lines::first_read;
@@ -34,7 +34,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
     args.store.or_instance(
         path,
         |dir| {
-            let store = super::chain_at(dir.to_owned(), prodrome_core::policy::Untrusted::none());
+            let store = super::chain_at(dir.to_owned(), prodrome_data::policy::Untrusted::none());
             let what = Kind::Chain.name().to_owned();
             reported(
                 &[(what.clone(), store.verify())],

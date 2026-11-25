@@ -7,12 +7,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash, parents_of};
-use prodrome_core::literal::Datetime;
+use prodrome_dag::dag::Dag;
+use prodrome_data::event::{Actor, Envelope, Hash, parents_of};
+use prodrome_data::literal::Datetime;
 use proptest::prelude::*;
 
-use prodrome_core::store::frontier::{Frontiers, Since, Token};
+use prodrome_store::store::frontier::{Frontiers, Since, Token};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
@@ -172,7 +172,7 @@ impl Writer {
                     .map(|(name, object)| {
                         (
                             name.clone(),
-                            prodrome_core::event::canonical_envelope(object),
+                            prodrome_data::event::canonical_envelope(object),
                         )
                     })
                     .collect();
@@ -189,7 +189,7 @@ impl Writer {
                     .map(|(name, object)| {
                         (
                             name.clone(),
-                            prodrome_core::event::canonical_envelope(object),
+                            prodrome_data::event::canonical_envelope(object),
                         )
                     })
                     .collect();
@@ -276,7 +276,7 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
+        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_store::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let first = store.lines.lines.objects().expect("reads");
         // A replica holds a down-set: a prefix of the store's order.
@@ -390,7 +390,7 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
+        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_store::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let mut since = Since::Nothing;
         let mut nodes: Vec<suzatary_lines::wire::lines::SkeletonNode> = Vec::new();
@@ -536,7 +536,7 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
+        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_store::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let mut landings: Vec<(bool, bool)> = Vec::new();
         let mut open_ever: Vec<ConversationId> = Vec::new();
@@ -605,7 +605,7 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
+        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_store::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let first = store.lines.lines.objects().expect("reads");
         let mut held: BTreeSet<Hash> =
@@ -660,7 +660,7 @@ proptest! {
         let mut literals = BTreeMap::new();
         for node in &nodes {
             let name = Hash::new(node.hash.clone()).expect("a name");
-            let print = prodrome_core::event::canonical_envelope(by_name[&name]);
+            let print = prodrome_data::event::canonical_envelope(by_name[&name]);
             let line = by_name[&name].event();
             let opens = line.is_none_or(|line| line.keys().next().is_none() || line.keys().any(|key| live.contains(key.as_str())));
             match &shipped[&node.hash] {
@@ -673,7 +673,7 @@ proptest! {
                     prop_assert!(!opens, "{}: husked though a key the pull sends opens it", node.hash);
                     // A node sized before an erasure the store moved by is sized as its literal.
                     prop_assert!(node.size == husk.len() || (moved && node.size == print.len()));
-                    prop_assert_eq!(Some(husk.clone()), line.and_then(prodrome_core::store::Husk::of).map(|h| h.print()));
+                    prop_assert_eq!(Some(husk.clone()), line.and_then(prodrome_data::husk::Husk::of).map(|h| h.print()));
                 }
             }
             literals.insert(node.hash.clone(), print);
@@ -787,7 +787,7 @@ fn the_content_bound_holds() {
     names.sort_unstable();
     let total: usize = objects
         .iter()
-        .map(|(_, object)| prodrome_core::event::canonical_envelope(object).len())
+        .map(|(_, object)| prodrome_data::event::canonical_envelope(object).len())
         .sum();
     assert!(
         total < routes::MOST_CONTENT_BYTES,
@@ -810,7 +810,7 @@ fn the_content_bound_holds() {
     let (large, _) = objects
         .iter()
         .find(|(_, object)| {
-            prodrome_core::event::canonical_envelope(object).len() > routes::MOST_CONTENT_BYTES
+            prodrome_data::event::canonical_envelope(object).len() > routes::MOST_CONTENT_BYTES
         })
         .expect("the large line");
     let alone = suzatary_api::query::Hashes::parse(Some(large.as_str())).expect("a set");
@@ -903,7 +903,7 @@ fn a_node_is_sized_by_the_bytes_its_content_answer_sends() {
     };
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
-        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+        Frontiers::remembered(prodrome_store::store::frontier::KEPT),
     );
     let books = Books {
         epochs: &epochs,
@@ -965,7 +965,7 @@ fn replica_of(
 ) -> suzatary_lines::secretary::held_replica::HeldReplica {
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
-        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+        Frontiers::remembered(prodrome_store::store::frontier::KEPT),
     );
     let books = Books {
         epochs: &epochs,
@@ -1202,7 +1202,7 @@ fn a_purge_takes_the_husks_of_the_lines_whose_keys_it_owes() {
     });
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
-        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+        Frontiers::remembered(prodrome_store::store::frontier::KEPT),
     );
     let books = Books {
         epochs: &epochs,
@@ -1280,7 +1280,7 @@ fn a_pull_s_size_is_the_weight_its_pieces_send() {
     store.apply(&Write::Erased { conversation: 1 });
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
-        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+        Frontiers::remembered(prodrome_store::store::frontier::KEPT),
     );
     let books = Books {
         epochs: &epochs,
@@ -1334,7 +1334,7 @@ proptest! {
         for write in &script {
             store.apply(write);
         }
-        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_core::store::frontier::KEPT));
+        let (epochs, frontiers) = (suzatary_signatures::epoch::Epochs::remembered(), Frontiers::remembered(prodrome_store::store::frontier::KEPT));
         let books = Books { epochs: &epochs, frontiers: &frontiers };
         let hashes = |since: &Since| -> Vec<String> {
             routes::lines_skeleton(store.lines.conversations(), since, books, now(), Cut::Whole)
@@ -1406,7 +1406,7 @@ fn every_conversation_of_the_known_store_pulled_has_a_closed_frontier() {
     let lines = crate::known_pull::store();
     let (epochs, frontiers) = (
         suzatary_signatures::epoch::Epochs::remembered(),
-        Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+        Frontiers::remembered(prodrome_store::store::frontier::KEPT),
     );
     let books = Books {
         epochs: &epochs,

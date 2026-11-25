@@ -102,7 +102,7 @@ impl From<&Speaker> for String {
     }
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     Stamp => |stamp| String::from(stamp.clone()),
 );
 
@@ -186,7 +186,7 @@ pub fn pointing(speaker: Speaker, references: &[Reference], set: &ChainSet<'_>) 
 /// payload date a thing the same way.
 #[must_use]
 pub fn stamp(at: suzatary_base::capability::Datetime) -> String {
-    prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(at))
+    prodrome_data::instant::iso(prodrome_data::instant::instant_of(at))
 }
 
 #[cfg(test)]
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn a_todo_named_by_genesis_is_stamped_unconfirmed() {
         let at =
-            prodrome_core::literal::Datetime::new(2026, 9, 1, 12, 0, 0, 0).expect("an instant");
+            prodrome_data::literal::Datetime::new(2026, 9, 1, 12, 0, 0, 0).expect("an instant");
         let set = ChainSet::new(at);
         let global: Reference = "todo:+3f2a9c1b2d4e/x".parse().expect("a reference");
         assert_eq!(

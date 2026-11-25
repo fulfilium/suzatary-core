@@ -5,10 +5,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
 
-use prodrome_core::policy::Untrusted;
+use prodrome_data::policy::Untrusted;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::persona::Persona;

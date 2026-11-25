@@ -66,9 +66,9 @@ pub struct NextChange {
 impl NextChange {
     /// `None` for never.
     #[must_use]
-    pub fn of(next: prodrome_core::observe::NextChange) -> Option<NextChange> {
+    pub fn of(next: prodrome_fpl::observe::NextChange) -> Option<NextChange> {
         next.at.map(|at| NextChange {
-            at: prodrome_core::fpl::iso(at),
+            at: prodrome_data::instant::iso(at),
             exact: next.exact,
         })
     }
@@ -551,11 +551,11 @@ impl<'de> Deserialize<'de> for Yes {
 
 /// A line's name as a request spells it, parsed where it is read.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LineName(pub prodrome_core::event::Hash);
+pub struct LineName(pub prodrome_data::event::Hash);
 
 impl<'de> Deserialize<'de> for LineName {
     fn deserialize<D: serde::Deserializer<'de>>(from: D) -> Result<Self, D::Error> {
-        prodrome_core::event::Hash::new(String::deserialize(from)?)
+        prodrome_data::event::Hash::new(String::deserialize(from)?)
             .map(Self)
             .map_err(|_| serde::de::Error::custom("a line is named by its 64-hex object name"))
     }

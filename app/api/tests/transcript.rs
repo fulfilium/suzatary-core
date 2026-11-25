@@ -10,10 +10,10 @@ use std::path::PathBuf;
 
 use proptest::prelude::*;
 
-use prodrome_core::event::{Actor, Envelope, Hash, canonical, canonical_envelope, parse_event};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Everything;
-use prodrome_core::store::EventStore;
+use prodrome_data::event::{Actor, Envelope, Hash, canonical, canonical_envelope, parse_event};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Everything;
+use prodrome_store::store::EventStore;
 
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::cast::CAST;
@@ -470,7 +470,7 @@ fn adopt(to: &Disk, from: &Disk) {
         .map(|(name, object)| (name.clone(), canonical_envelope(object)))
         .collect();
     for tip in from.tips().expect("tips") {
-        to.adopt_objects(&prints, &tip, prodrome_core::store::Sender::Stranger)
+        to.adopt_objects(&prints, &tip, prodrome_data::husk::Sender::Stranger)
             .expect("adopted");
     }
 }
@@ -1368,14 +1368,14 @@ fn measure_the_store_at_the_live_size() {
             let mut head: Option<Hash> = None;
             for held in 0..LINES - APPENDED {
                 let change = Envelope::Change(
-                    prodrome_core::change::mk_change(
+                    prodrome_data::change::mk_change(
                         genesis.clone(),
                         head.iter().cloned().collect(),
                         line(id, held),
                     )
                     .expect("a change"),
                 );
-                let name = prodrome_core::event::seal_hash(&change);
+                let name = prodrome_data::event::seal_hash(&change);
                 prints.insert(name.clone(), canonical_envelope(&change));
                 head = Some(name);
             }
@@ -1385,7 +1385,7 @@ fn measure_the_store_at_the_live_size() {
     timed("adopt them", || {
         for head in &heads {
             store
-                .adopt_objects(&prints, head, prodrome_core::store::Sender::Stranger)
+                .adopt_objects(&prints, head, prodrome_data::husk::Sender::Stranger)
                 .expect("adopted");
         }
     });

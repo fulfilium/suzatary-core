@@ -40,7 +40,7 @@ impl Verb for WatchMail {
             part: args.on,
             text: Pattern::new(&args.text)?,
         };
-        let now = prodrome_core::fpl::instant_of(call.caps.clock.now());
+        let now = prodrome_data::instant::instant_of(call.caps.clock.now());
         let accounts = call.caps.mail.accounts();
         let own: Vec<&str> = accounts.iter().map(String::as_str).collect();
         let set = watch::set(call.caps.watches, on, Days::new(args.days)?, &own, now)?;
@@ -55,7 +55,7 @@ fn part(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
 fn answer(watch: &watch::Watch) -> Value {
     json!({
         "watch": watch.id.as_str(),
-        "until": prodrome_core::fpl::iso(watch.set.until),
+        "until": prodrome_data::instant::iso(watch.set.until),
         "next": "Tell the owner in one clause what you are watching for and until when; they \
                  can cancel it on the Mail page.",
     })

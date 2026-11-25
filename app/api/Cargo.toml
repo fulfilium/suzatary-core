@@ -12,7 +12,12 @@ name = "suzatary_api"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_dag.workspace = true
+prodrome_store.workspace = true
+prodrome_term.workspace = true
+prodrome_fpl.workspace = true
+prodrome_todo.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-release.workspace = true
@@ -39,6 +44,9 @@ base64.workspace = true
 chrono.workspace = true
 
 [dev-dependencies]
+prodrome_memo.workspace = true
+prodrome_tags.workspace = true
+prodrome_reading.workspace = true
 suzatary-memory.workspace = true
 suzatary-health.workspace = true
 suzatary-services.workspace = true

@@ -1,7 +1,7 @@
-use prodrome_core::dag::{Dag, Finding};
-use prodrome_core::policy::Policy;
-use prodrome_core::schema::Schema;
-use prodrome_core::sign::Registrar;
+use prodrome_dag::dag::{Dag, Finding};
+use prodrome_dag::policy::Policy;
+use prodrome_dag::sign::Registrar;
+use prodrome_data::schema::Schema;
 
 use super::Trust;
 

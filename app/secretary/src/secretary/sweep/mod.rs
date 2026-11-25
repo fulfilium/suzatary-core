@@ -16,9 +16,9 @@ use crate::conversation::round::{Rules, Sink};
 use crate::secretary::Secretary;
 use crate::verb::{Chained, Request, Verb};
 use candidates::{Candidate, Match, OpenTodo};
-use prodrome_core::event::TodoId;
-use prodrome_core::fpl::instant_of;
-use prodrome_core::fpl::iso;
+use prodrome_data::event::TodoId;
+use prodrome_data::instant::instant_of;
+use prodrome_data::instant::iso;
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::{ConversationId, Daily};
 use suzatary_base::refusal::{Refusal, shown as quoted};
@@ -263,7 +263,7 @@ fn gather(chain: &Bound<'_>, zone: suzatary_base::zone::Zone) -> Result<Bounded,
     let records = suzatary_record::decoration::records_of(&nodes);
     let events = suzatary_todo::view::events_of(&nodes);
     let mut open = Vec::new();
-    for entry in prodrome_core::view::entries(&nodes, now, &chain.policy.untrusted)
+    for entry in prodrome_reading::view::entries(&nodes, now, &chain.policy.untrusted)
         .map_err(|failed| Refusal::internal(failed.to_string()))?
     {
         if one_outcome(entry.outcome()).is_some() {
@@ -273,9 +273,10 @@ fn gather(chain: &Bound<'_>, zone: suzatary_base::zone::Zone) -> Result<Bounded,
             continue;
         };
         // `created` is a day; a message counts from when that day began where the owner is.
-        let created =
-            prodrome_core::fpl::datetime_of(zone.start(instant_of(record.payload.created).date()))
-                .map_err(|failed| Refusal::internal(failed.to_string()))?;
+        let created = prodrome_data::instant::datetime_of(
+            zone.start(instant_of(record.payload.created).date()),
+        )
+        .map_err(|failed| Refusal::internal(failed.to_string()))?;
         open.push(OpenTodo {
             id: entry.key.clone(),
             since: since(&events, &entry.key, created, &chain.policy.untrusted),
@@ -311,7 +312,7 @@ fn since(
     events: &[TodoEvent],
     todo: &TodoId,
     created: Datetime,
-    untrusted: &prodrome_core::policy::Untrusted,
+    untrusted: &prodrome_data::policy::Untrusted,
 ) -> Datetime {
     events
         .iter()
@@ -494,11 +495,11 @@ mod tests {
     fn only_a_trusted_reopen_moves_the_floor() {
         let created = dt(2026, 9, 5, 0, 0, 0);
         let untrusted =
-            prodrome_core::policy::Untrusted::of([
-                prodrome_core::event::Actor::new("triage").expect("a name")
+            prodrome_data::policy::Untrusted::of([
+                prodrome_data::event::Actor::new("triage").expect("a name")
             ]);
         let reopened = |todo: &str, day: u32, who: &str| {
-            prodrome_core::event::mk_reopened(todo, dt(2026, 9, day, 9, 0, 0), who, "")
+            prodrome_todo::event::mk_reopened(todo, dt(2026, 9, day, 9, 0, 0), who, "")
                 .expect("a reopen")
         };
         let todo = todo_id("flightcheckin");
@@ -527,8 +528,8 @@ mod tests {
         }
     }
 
-    fn todo_id(id: &str) -> prodrome_core::event::TodoId {
-        prodrome_core::event::TodoId::new(id).expect("a valid id")
+    fn todo_id(id: &str) -> prodrome_data::event::TodoId {
+        prodrome_data::event::TodoId::new(id).expect("a valid id")
     }
 
     fn dt(

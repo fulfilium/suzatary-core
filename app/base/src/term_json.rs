@@ -1,12 +1,11 @@
 //! An FPL term as the web's JSON: lowercase kind tags, ISO instants, spans in hours.
 //! The shape is frozen by `prodrome-wasm`'s `conformance/term-json.json`.
 
-use prodrome_core::fpl::{
-    Closed, Delta, Env, Explanation, FplError, Instant, Note, Scalar, delta_from_hours, explained,
-    parse_iso, scalar, wire_key,
-};
-use prodrome_core::term::Term;
-use prodrome_core::term::schema::{Field, FieldSource, Fields, Slot, build, fields};
+use prodrome_data::instant::{FplError, Instant, parse_iso};
+use prodrome_fpl::fpl::{Closed, Explanation, Note, Scalar, explained, scalar, wire_key};
+use prodrome_term::fpl::{Delta, Env, delta_from_hours};
+use prodrome_term::term::Term;
+use prodrome_term::term::schema::{Field, FieldSource, Fields, Slot, build, fields};
 use serde_json::{Map, Value};
 
 /// One JSON object's fields, `null` or left out being absent.

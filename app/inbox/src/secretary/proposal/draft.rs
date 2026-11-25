@@ -22,15 +22,15 @@ pub struct Draft {
     pub attachments: Vec<suzatary_held::secretary::attached::Attached>,
 }
 
-pub const EMAIL: prodrome_core::literal::codec::Constructor = (
+pub const EMAIL: prodrome_data::literal::codec::Constructor = (
     "Email",
     &["account", "to", "cc", "subject", "body", "attachments"],
 );
 
 // By hand: its reads refuse as `Fields` does.
-impl prodrome_core::literal::codec::Literal for Draft {
-    fn to_value(&self) -> prodrome_core::literal::Value {
-        use prodrome_core::literal::codec::record;
+impl prodrome_data::literal::codec::Literal for Draft {
+    fn to_value(&self) -> prodrome_data::literal::Value {
+        use prodrome_data::literal::codec::record;
         record(
             EMAIL,
             vec![
@@ -45,9 +45,9 @@ impl prodrome_core::literal::codec::Literal for Draft {
     }
 
     fn from_value(
-        value: &prodrome_core::literal::Value,
-    ) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        let fields = prodrome_core::literal::codec::Fields::of(value, EMAIL)?;
+        value: &prodrome_data::literal::Value,
+    ) -> Result<Self, prodrome_data::literal::ProdromeError> {
+        let fields = prodrome_data::literal::codec::Fields::of(value, EMAIL)?;
         Ok(Draft {
             account: fields.get("account")?,
             to: fields.get("to")?,

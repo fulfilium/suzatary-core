@@ -336,7 +336,7 @@ fn a_question_handed_over_late_is_answered_within_the_bound_and_closed_past_it()
         .start()
         .base;
     let sealed_at = |hour: u32, minute: u32, text: &str| Entry::Said {
-        at: prodrome_core::literal::Datetime::new(2026, 9, 2, hour, minute, 0, 0)
+        at: prodrome_data::literal::Datetime::new(2026, 9, 2, hour, minute, 0, 0)
             .expect("an instant"),
         turn: Turn::Person {
             text: text.to_owned(),

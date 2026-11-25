@@ -2,8 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::TodoId;
-use prodrome_core::fpl::LinkError;
+use prodrome_data::event::TodoId;
+use prodrome_fpl::fpl::LinkError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use suzatary_base::term_json;
@@ -97,7 +97,7 @@ pub fn grow(members: &str, by: &str) -> Result<String, JsError> {
     json(&node(grown))
 }
 
-fn node(t: Tree<(Place, prodrome_core::term::Term)>) -> Node {
+fn node(t: Tree<(Place, prodrome_term::term::Term)>) -> Node {
     let (place, term) = t.node;
     Node {
         place: match place {

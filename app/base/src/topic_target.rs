@@ -74,7 +74,7 @@ impl From<Target> for String {
     }
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     Target => ToString::to_string,
 );
 

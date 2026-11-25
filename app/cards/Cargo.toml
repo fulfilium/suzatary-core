@@ -40,7 +40,8 @@ toml = { workspace = true, optional = true }
 nothing = ["dep:toml", "suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-mail/nothing", "suzatary-health/nothing", "suzatary-services/nothing", "suzatary-google/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing"]
 
 [dev-dependencies]
-prodrome_core.workspace = true
+prodrome_term.workspace = true
+prodrome_todo.workspace = true
 suzatary-cards = { path = ".", features = ["nothing"] }
 suzatary-stores = { workspace = true, features = ["nothing"] }
 proptest.workspace = true

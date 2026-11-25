@@ -34,7 +34,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
         Ended::Ok => Pass::Ok,
         Ended::Failed { stage } => Pass::Failed(stage),
     };
-    let now = prodrome_core::fpl::instant_of(suzatary_io_local::clock::SystemClock.now());
+    let now = prodrome_data::instant::instant_of(suzatary_io_local::clock::SystemClock.now());
     let outcome = Pulse::at(&instance.mail.heartbeat).record(pass, now)?;
     println!("{}", outcome.line());
     Ok(())

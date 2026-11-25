@@ -1,10 +1,10 @@
 //! The routes as functions of the capabilities they need, with nothing known about HTTP: a route
 //! that cannot name a capability cannot use it.
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Hash, TodoId, canonical_envelope, parse_envelope};
-use prodrome_core::schema::Schema;
-use prodrome_core::store::frontier::{Frontiers, Reached, Since};
+use prodrome_dag::dag::Dag;
+use prodrome_data::event::{Actor, Hash, TodoId, canonical_envelope, parse_envelope};
+use prodrome_data::schema::Schema;
+use prodrome_store::store::frontier::{Frontiers, Reached, Since};
 use std::collections::BTreeMap;
 use suzatary_base::escape::Escaped;
 use suzatary_base::zone::Moment;
@@ -20,15 +20,16 @@ use suzatary_stores::stores;
 use suzatary_stores::stores::Store;
 use suzatary_triage::mail::gone::SAID;
 
-use prodrome_core::observe::Observation;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::{event, fpl};
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::observe::Observation;
+use prodrome_term::fpl;
+use prodrome_todo::event;
 use suzatary_record::record::{Node, TodoEvent};
 use suzatary_signatures::believed::{Believed, records};
 
 use crate::query;
 use crate::wire;
-use prodrome_core::store::frontier;
+use prodrome_store::store::frontier;
 use suzatary_base::capability::{Clock, Datetime};
 use suzatary_base::chains::{ChainName, ChainPolicy};
 use suzatary_base::refusal::{Answered, Refusal, shown};
@@ -1291,7 +1292,7 @@ pub struct Writer<'a> {
     /// The gate's actor.
     pub actor: &'a Actor,
     pub chains: &'a signatures::Keeping<signatures::Keeper<'a>>,
-    pub root: &'a prodrome_core::sign::PublicKey,
+    pub root: &'a prodrome_data::sign::PublicKey,
 }
 
 /// Where and when a post records its refusals.
@@ -1854,7 +1855,7 @@ pub fn overview(
 /// and every line's content answer, asked as a device asks ([`asks`]).
 pub fn lines_readings(
     conversations: conversations::Conversations<'_>,
-    at: prodrome_core::literal::Datetime,
+    at: prodrome_data::literal::Datetime,
 ) -> Answered<[(&'static str, String); 3]> {
     let lines = conversations::list(conversations)?;
     let (epochs, frontiers) = (Epochs::remembered(), Frontiers::remembered(frontier::KEPT));
@@ -2019,10 +2020,10 @@ mod tests {
             let chain = ChainPolicy {
                 name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
                 untrusted: Untrusted::of([
-                    prodrome_core::event::Actor::new("triage").expect("an actor")
+                    prodrome_data::event::Actor::new("triage").expect("an actor")
                 ]),
                 roster: ["ada", "triage"]
-                    .map(|name| prodrome_core::event::Actor::new(name).expect("an actor"))
+                    .map(|name| prodrome_data::event::Actor::new(name).expect("an actor"))
                     .into_iter()
                     .collect(),
                 root: suzatary_connect::cast::keys::root(),

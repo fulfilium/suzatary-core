@@ -6,8 +6,8 @@
 use std::sync::{Barrier, Mutex};
 use std::time::Duration;
 
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
 use proptest::prelude::*;
 
 use suzatary_inbox::secretary::inbox;

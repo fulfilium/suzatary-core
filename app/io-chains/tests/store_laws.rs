@@ -12,11 +12,11 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use prodrome_core::declared::Declared;
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::store::{EventStore, Replica as _};
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_declared::Declared;
+use prodrome_store::store::{EventStore, Replica as _};
 use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said as Inboxed};
@@ -216,12 +216,12 @@ fn every_prodrome_keeps_the_store_laws() {
 /// Each inflationary register's reading, by the names of its writes, of every entity: its
 /// frontier may move under a received write, and its reading may not.
 fn readings<E: Store>(store: &Objects<E>) -> Vec<Vec<Hash>> {
-    use prodrome_core::fold::Product as _;
+    use prodrome_data::fold::Product as _;
     let nodes = store.nodes().expect("reads");
-    prodrome_core::registers::fold(&nodes)
+    prodrome_dag::registers::fold(&nodes)
         .entities()
         .flat_map(|(_, stream)| {
-            let read = prodrome_core::fold::read(stream, None, &prodrome_core::policy::Everything);
+            let read = prodrome_dag::fold::read(stream, None, &prodrome_data::policy::Everything);
             read.climbing()
                 .into_iter()
                 .map(|register| {
@@ -257,7 +257,7 @@ fn received_below<E: Store<Vocabulary: Default>>(store: &str, honest: Vec<E>, be
         .map(|(name, _)| name)
         .expect("a genesis");
     let change = Envelope::Change(
-        prodrome_core::change::mk_change(genesis, objects.tips().expect("tips"), below)
+        prodrome_data::change::mk_change(genesis, objects.tips().expect("tips"), below)
             .expect("a change"),
     );
     let name = seal_hash(&change);

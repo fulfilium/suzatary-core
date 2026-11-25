@@ -10,9 +10,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use chrono::Duration;
-use prodrome_core::event::{Actor, mk_completed, mk_created};
-use prodrome_core::fpl::{self, mk_decay, mk_flat};
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::Actor;
+use prodrome_data::policy::Untrusted;
+use prodrome_term::fpl::{self, mk_decay, mk_flat};
+use prodrome_todo::event::{mk_completed, mk_created};
 use suzatary_base::capability::RenderError;
 use suzatary_base::capability::{Clock, Datetime, Login, Manual, Manuals, Whois, WhoisError};
 use suzatary_base::escape::Escaped;
@@ -119,18 +120,18 @@ pub fn deployment(
 /// `store` begun with a nonce of zeros, so what a test writes is named the same every run.
 pub fn begun(store: &EventStore) {
     let genesis = suzatary_record::record::Envelope::Genesis(
-        prodrome_core::genesis::mk_genesis(suzatary_record::record::GENESIS, &"0".repeat(32))
+        prodrome_data::genesis::mk_genesis(suzatary_record::record::GENESIS, &"0".repeat(32))
             .expect("a genesis"),
     );
-    let name = prodrome_core::event::seal_hash(&genesis);
+    let name = prodrome_data::event::seal_hash(&genesis);
     store
         .adopt_objects(
             &std::collections::BTreeMap::from([(
                 name.clone(),
-                prodrome_core::event::canonical_envelope(&genesis),
+                prodrome_data::event::canonical_envelope(&genesis),
             )]),
             &name,
-            prodrome_core::store::Sender::Stranger,
+            prodrome_data::husk::Sender::Stranger,
         )
         .expect("begins");
 }
@@ -140,24 +141,24 @@ pub fn begun(store: &EventStore) {
 #[must_use]
 pub fn tab(
     store: &dyn suzatary_store::store::Prodrome<suzatary_record::record::TodoEvent>,
-) -> prodrome_core::store::MemoryStore<suzatary_record::record::TodoEvent> {
-    use prodrome_core::store::Replica as _;
-    let prints: std::collections::BTreeMap<prodrome_core::event::Hash, String> = store
+) -> prodrome_store::store::MemoryStore<suzatary_record::record::TodoEvent> {
+    use prodrome_store::store::Replica as _;
+    let prints: std::collections::BTreeMap<prodrome_data::event::Hash, String> = store
         .objects()
         .expect("the box's objects read")
         .iter()
         .map(|(name, object)| {
             (
                 name.clone(),
-                prodrome_core::event::canonical_envelope(object),
+                prodrome_data::event::canonical_envelope(object),
             )
         })
         .collect();
-    let tab = prodrome_core::store::MemoryStore::default();
+    let tab = prodrome_store::store::MemoryStore::default();
     tab.receive(
         prints.keys().cloned().collect(),
         &|name| prints.get(name).map(|print| print.clone().into_bytes()),
-        prodrome_core::store::Sender::Stranger,
+        prodrome_data::husk::Sender::Stranger,
     )
     .expect("the box's objects verify");
     tab
@@ -165,13 +166,13 @@ pub fn tab(
 
 /// What a tab does: `event` appended to `tab` as the `Change` its append answers.
 pub fn acted(
-    tab: &prodrome_core::store::MemoryStore<suzatary_record::record::TodoEvent>,
+    tab: &prodrome_store::store::MemoryStore<suzatary_record::record::TodoEvent>,
     event: suzatary_record::record::TodoEvent,
 ) -> suzatary_record::record::Envelope {
-    use prodrome_core::store::Replica as _;
+    use prodrome_store::store::Replica as _;
     let name = tab.append(event).expect("the tab appends");
     let print = String::from_utf8(tab.print(&name).expect("held")).expect("utf8");
-    prodrome_core::event::parse_envelope(
+    prodrome_data::event::parse_envelope(
         &suzatary_record::record::TodoVocabulary::default(),
         &print,
     )
@@ -234,7 +235,7 @@ pub fn scene(caps: &Fakes, id: &suzatary_base::conversation_id::ConversationId) 
 /// Every line of `read` as JSON, a claim's covered lines named by their turn's index and its run
 /// by the order runs first claim, since names and runs are drawn afresh on every run of a test.
 fn claims_named(read: &transcript::Transcript) -> Vec<String> {
-    let turn = |name: &prodrome_core::event::Hash| {
+    let turn = |name: &prodrome_data::event::Hash| {
         (0..read.stored().turns.len()).find(|&turn| {
             read.line_of(turn)
                 .is_some_and(|line| read.lines()[line].name == *name)
@@ -2054,7 +2055,7 @@ pub fn renamed(base: &str, id: &str, title: &str) {
 
 /// `text` said in conversation `id` as a tab says it: a person's turn stamped as the poster on a
 /// device, over the conversation's heads, handed to the lines: its line's name.
-pub fn say(base: &str, id: &str, text: &str) -> prodrome_core::event::Hash {
+pub fn say(base: &str, id: &str, text: &str) -> prodrome_data::event::Hash {
     say_with(base, id, text, Vec::new(), Vec::new())
 }
 
@@ -2065,7 +2066,7 @@ pub fn say_with(
     text: &str,
     references: Vec<suzatary_base::reference::Reference>,
     attachments: Vec<suzatary_held::attachment::Attachment>,
-) -> prodrome_core::event::Hash {
+) -> prodrome_data::event::Hash {
     let posted = sealed(base, id, &question(base, text, references, attachments));
     let name = posted.name.clone();
     let receipt = post_lines(base, &posted.body);
@@ -2102,7 +2103,7 @@ pub fn question(
 
 /// A line sealed by the poster: its name, and the body of its post to the lines.
 pub struct Sealed {
-    pub name: prodrome_core::event::Hash,
+    pub name: prodrome_data::event::Hash,
     pub body: serde_json::Value,
 }
 
@@ -2132,23 +2133,23 @@ pub fn sealed(
         .iter()
         .filter_map(|n| n["hash"].as_str())
         .filter(|n| !under.contains(n))
-        .map(|n| prodrome_core::event::Hash::new(n).expect("a name"))
+        .map(|n| prodrome_data::event::Hash::new(n).expect("a name"))
         .collect();
     let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
     let count = u32::try_from(nodes.len()).expect("a count");
     let (line, keys) =
         LineEvent::write(conversation, poster(base), count, entry, &Drawing).expect("a line");
     let genesis = lines_genesis(base);
-    let change = prodrome_core::event::Envelope::Change(
-        prodrome_core::change::mk_change(genesis, heads, line).expect("a change"),
+    let change = prodrome_data::event::Envelope::Change(
+        prodrome_data::change::mk_change(genesis, heads, line).expect("a change"),
     );
-    let name = prodrome_core::event::seal_hash(&change);
-    let signature: prodrome_core::event::Envelope<LineEvent> =
-        prodrome_core::event::Envelope::Signed(phone().sign(&name));
+    let name = prodrome_data::event::seal_hash(&change);
+    let signature: prodrome_data::event::Envelope<LineEvent> =
+        prodrome_data::event::Envelope::Signed(phone().sign(&name));
     let body = serde_json::json!({
         "objects": [
-            prodrome_core::event::canonical_envelope(&change),
-            prodrome_core::event::canonical_envelope(&signature),
+            prodrome_data::event::canonical_envelope(&change),
+            prodrome_data::event::canonical_envelope(&signature),
         ],
         "keys": { name.as_str(): keys.iter().map(|k| hex::encode(k.bytes())).collect::<Vec<_>>() },
     });
@@ -2174,7 +2175,7 @@ pub fn refused_line(base: &str, sealed: &Sealed) -> String {
 
 /// Conversation `id`'s answer stopped as a tab stops it: a `Stopped` line by the poster over the
 /// conversation's heads, handed to the lines.
-pub fn stop(base: &str, id: &str) -> prodrome_core::event::Hash {
+pub fn stop(base: &str, id: &str) -> prodrome_data::event::Hash {
     use suzatary_conversations::secretary::store::Entry;
     let by = poster(base);
     line_written(
@@ -2191,7 +2192,7 @@ pub fn stop(base: &str, id: &str) -> prodrome_core::event::Hash {
 #[must_use]
 pub fn again_line(
     base: &str,
-    question: &prodrome_core::event::Hash,
+    question: &prodrome_data::event::Hash,
     how: suzatary_conversations::secretary::store::Rewind,
 ) -> suzatary_conversations::secretary::store::Entry {
     suzatary_conversations::secretary::store::Entry::Again {
@@ -2207,9 +2208,9 @@ pub fn again_line(
 pub fn asked_again(
     base: &str,
     id: &str,
-    question: &prodrome_core::event::Hash,
+    question: &prodrome_data::event::Hash,
     how: suzatary_conversations::secretary::store::Rewind,
-) -> prodrome_core::event::Hash {
+) -> prodrome_data::event::Hash {
     line_written(base, id, &again_line(base, question, how))
 }
 
@@ -2219,7 +2220,7 @@ fn line_written(
     base: &str,
     id: &str,
     entry: &suzatary_conversations::secretary::store::Entry,
-) -> prodrome_core::event::Hash {
+) -> prodrome_data::event::Hash {
     use suzatary_lines::secretary::line_event::LineEvent;
     let (heads, count) = served_heads(base, id);
     let conversation = suzatary_base::conversation_id::ConversationId::new(id).expect("an id");
@@ -2229,7 +2230,7 @@ fn line_written(
 }
 
 /// The heads of conversation `id` the box serves, and how many lines it serves of it.
-fn served_heads(base: &str, id: &str) -> (Vec<prodrome_core::event::Hash>, u32) {
+fn served_heads(base: &str, id: &str) -> (Vec<prodrome_data::event::Hash>, u32) {
     let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
     let skeleton = body_json(&mut answer);
     let nodes: Vec<&serde_json::Value> = skeleton["nodes"]
@@ -2248,7 +2249,7 @@ fn served_heads(base: &str, id: &str) -> (Vec<prodrome_core::event::Hash>, u32) 
         .iter()
         .filter_map(|n| n["hash"].as_str())
         .filter(|n| !under.contains(n))
-        .map(|n| prodrome_core::event::Hash::new(n).expect("a name"))
+        .map(|n| prodrome_data::event::Hash::new(n).expect("a name"))
         .collect();
     (heads, u32::try_from(nodes.len()).expect("a count"))
 }
@@ -2259,9 +2260,9 @@ fn served_heads(base: &str, id: &str) -> (Vec<prodrome_core::event::Hash>, u32) 
 pub fn edited(
     base: &str,
     id: &str,
-    question: &prodrome_core::event::Hash,
+    question: &prodrome_data::event::Hash,
     text: &str,
-) -> prodrome_core::event::Hash {
+) -> prodrome_data::event::Hash {
     use suzatary_lines::secretary::line_event::LineEvent;
     let edit = again_line(
         base,
@@ -2283,7 +2284,7 @@ pub fn edited(
 }
 
 /// The actor `base` maps this test's peer to.
-fn poster(base: &str) -> prodrome_core::event::Actor {
+fn poster(base: &str) -> prodrome_data::event::Actor {
     let mut me = get(&format!("{base}/api/me"));
     actor(
         body_json(&mut me)["actor"]
@@ -2298,20 +2299,20 @@ fn handed(
     base: &str,
     line: suzatary_lines::secretary::line_event::LineEvent,
     keys: &[suzatary_memory::secretary::locked_text::TextKey],
-    deps: Vec<prodrome_core::event::Hash>,
-) -> prodrome_core::event::Hash {
+    deps: Vec<prodrome_data::event::Hash>,
+) -> prodrome_data::event::Hash {
     use suzatary_lines::secretary::line_event::LineEvent;
     let genesis = lines_genesis(base);
-    let change = prodrome_core::event::Envelope::Change(
-        prodrome_core::change::mk_change(genesis, deps, line).expect("a change"),
+    let change = prodrome_data::event::Envelope::Change(
+        prodrome_data::change::mk_change(genesis, deps, line).expect("a change"),
     );
-    let name = prodrome_core::event::seal_hash(&change);
-    let signature: prodrome_core::event::Envelope<LineEvent> =
-        prodrome_core::event::Envelope::Signed(phone().sign(&name));
+    let name = prodrome_data::event::seal_hash(&change);
+    let signature: prodrome_data::event::Envelope<LineEvent> =
+        prodrome_data::event::Envelope::Signed(phone().sign(&name));
     let posted = serde_json::json!({
         "objects": [
-            prodrome_core::event::canonical_envelope(&change),
-            prodrome_core::event::canonical_envelope(&signature),
+            prodrome_data::event::canonical_envelope(&change),
+            prodrome_data::event::canonical_envelope(&signature),
         ],
         "keys": { name.as_str(): keys.iter().map(|k| hex::encode(k.bytes())).collect::<Vec<_>>() },
     });
@@ -2327,13 +2328,13 @@ fn handed(
 }
 
 /// The lines' genesis, once the box has begun the lines.
-fn lines_genesis(base: &str) -> prodrome_core::event::Hash {
+fn lines_genesis(base: &str) -> prodrome_data::event::Hash {
     let began = std::time::Instant::now();
     loop {
         let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
         let skeleton = body_json(&mut answer);
         if let Some(genesis) = skeleton["geneses"][0].as_str() {
-            return prodrome_core::event::Hash::new(genesis).expect("a name");
+            return prodrome_data::event::Hash::new(genesis).expect("a name");
         }
         assert!(
             began.elapsed() < std::time::Duration::from_secs(5),
@@ -2345,12 +2346,12 @@ fn lines_genesis(base: &str) -> prodrome_core::event::Hash {
 
 /// A later instant at every call, so two openings in one test are two conversations.
 #[must_use]
-pub fn next_instant() -> prodrome_core::literal::Datetime {
+pub fn next_instant() -> prodrome_data::literal::Datetime {
     static DRAWN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = DRAWN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     // In the minute before the box's clock (`now`), a millisecond apart: a tab's line is dated
     // by its own clock, which the box takes up to a little ahead of its own.
-    prodrome_core::literal::Datetime::new(2026, 9, 2, 11, 59, n / 1000 % 60, n % 1000 * 1000)
+    prodrome_data::literal::Datetime::new(2026, 9, 2, 11, 59, n / 1000 % 60, n % 1000 * 1000)
         .expect("an instant")
 }
 
@@ -2440,7 +2441,7 @@ pub struct Fakes {
     pub digest_texts:
         suzatary_io_local::texts::Texts<suzatary_digest::secretary::digest_line::Line>,
     /// Whose retraction or erasure the digest believes: none here.
-    pub owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
+    pub owners: std::collections::BTreeSet<prodrome_data::event::Actor>,
     /// The topic stores, begun, as a box's server begins them.
     pub topics: suzatary_io_chains::topics::Topics,
     /// The inbox store, real so a submit holds the server's `flock`.
@@ -3660,10 +3661,10 @@ pub fn act(url: &str, body: &serde_json::Value) -> ureq::http::Response<ureq::Bo
 /// posts for one write.
 #[must_use]
 pub fn signed_prints(object: &suzatary_record::record::Envelope) -> Vec<String> {
-    let name = prodrome_core::event::seal_hash(object);
+    let name = prodrome_data::event::seal_hash(object);
     vec![
-        prodrome_core::event::canonical_envelope(object),
-        prodrome_core::event::canonical_envelope(&suzatary_record::record::Envelope::Signed(
+        prodrome_data::event::canonical_envelope(object),
+        prodrome_data::event::canonical_envelope(&suzatary_record::record::Envelope::Signed(
             phone().sign(&name),
         )),
     ]
@@ -3699,7 +3700,7 @@ pub fn cast_keys() -> suzatary_signatures::signatures::BoxKeys {
 /// The owner's phone: the device every scene's [`act`] is signed by, trusted when a server
 /// starts.
 #[must_use]
-pub fn phone() -> prodrome_core::sign::Secret {
+pub fn phone() -> prodrome_dag::sign::Secret {
     suzatary_connect::cast::keys::secret(suzatary_connect::cast::keys::PHONE)
 }
 
@@ -3724,7 +3725,7 @@ pub const STAMPED: &str = "2026-09-02T12:00:00.000Z";
 pub fn act_signed(
     url: &str,
     body: &serde_json::Value,
-    key: &prodrome_core::sign::Secret,
+    key: &prodrome_dag::sign::Secret,
 ) -> ureq::http::Response<ureq::Body> {
     act_signed_at(url, body, key, STAMPED)
 }
@@ -3739,8 +3740,8 @@ pub fn request_named(
     url: &str,
     body: &serde_json::Value,
     at: &str,
-    key: &prodrome_core::sign::PublicKey,
-) -> prodrome_core::event::Hash {
+    key: &prodrome_data::sign::PublicKey,
+) -> prodrome_data::event::Hash {
     named_with(url, body, at, NONCE, key)
 }
 
@@ -3749,8 +3750,8 @@ fn named_with(
     body: &serde_json::Value,
     at: &str,
     nonce: &str,
-    key: &prodrome_core::sign::PublicKey,
-) -> prodrome_core::event::Hash {
+    key: &prodrome_data::sign::PublicKey,
+) -> prodrome_data::event::Hash {
     let bytes = serde_json::to_vec(body).expect("JSON prints");
     suzatary_signatures::signatures::request_name(
         "POST",
@@ -3772,7 +3773,7 @@ fn target_of(url: &str) -> String {
 pub fn act_signed_at(
     url: &str,
     body: &serde_json::Value,
-    key: &prodrome_core::sign::Secret,
+    key: &prodrome_dag::sign::Secret,
     at: &str,
 ) -> ureq::http::Response<ureq::Body> {
     sent_signed(url, body, key, at, NONCE)
@@ -3781,7 +3782,7 @@ pub fn act_signed_at(
 fn sent_signed(
     url: &str,
     body: &serde_json::Value,
-    key: &prodrome_core::sign::Secret,
+    key: &prodrome_dag::sign::Secret,
     at: &str,
     nonce: &str,
 ) -> ureq::http::Response<ureq::Body> {
@@ -3804,7 +3805,7 @@ pub fn act_bytes(url: &str, bytes: &[u8]) -> ureq::http::Response<ureq::Body> {
 fn sent_bytes_signed(
     url: &str,
     bytes: &[u8],
-    key: &prodrome_core::sign::Secret,
+    key: &prodrome_dag::sign::Secret,
     at: &str,
     nonce: &str,
 ) -> ureq::http::Response<ureq::Body> {
@@ -3829,10 +3830,7 @@ fn sent_bytes_signed(
 
 /// A read as a tab under a deployment that signs sends one: named over its method, target,
 /// [`STAMPED`], [`NONCE`] and an empty body, and signed by `key`.
-pub fn get_signed(
-    url: &str,
-    key: &prodrome_core::sign::Secret,
-) -> ureq::http::Response<ureq::Body> {
+pub fn get_signed(url: &str, key: &prodrome_dag::sign::Secret) -> ureq::http::Response<ureq::Body> {
     suzatary_cli::commands::call::Signed::of("GET", &target_of(url), b"", key, STAMPED, NONCE)
         .headers
         .into_iter()
@@ -4143,19 +4141,19 @@ pub fn local_mirrors_declaring(
 
 /// One of the secretary's stores as a tab pulls it, `since` the heads it holds: its objects read
 /// into their nodes, and every head.
-pub fn pulled<E: prodrome_core::schema::Schema<Vocabulary: Default>>(
+pub fn pulled<E: prodrome_data::schema::Schema<Vocabulary: Default>>(
     base: &str,
     store: &str,
-) -> Vec<prodrome_core::registers::Node<E>> {
+) -> Vec<prodrome_dag::registers::Node<E>> {
     pulled_with_keys(base, store).0
 }
 
 /// [`pulled`], and the keys the pull carried, as a tab keeps them.
-pub fn pulled_with_keys<E: prodrome_core::schema::Schema<Vocabulary: Default>>(
+pub fn pulled_with_keys<E: prodrome_data::schema::Schema<Vocabulary: Default>>(
     base: &str,
     store: &str,
 ) -> (
-    Vec<prodrome_core::registers::Node<E>>,
+    Vec<prodrome_dag::registers::Node<E>>,
     suzatary_memory::secretary::key_ring::KeyRing,
 ) {
     let mut answer = get(&format!("{base}/api/stores/{store}/objects"));
@@ -4170,7 +4168,7 @@ pub fn pulled_with_keys<E: prodrome_core::schema::Schema<Vocabulary: Default>>(
         .iter()
         .map(|object| {
             (
-                prodrome_core::event::Hash::new(
+                prodrome_data::event::Hash::new(
                     object["hash"].as_str().expect("a name").to_owned(),
                 )
                 .expect("a name"),
@@ -4181,10 +4179,10 @@ pub fn pulled_with_keys<E: prodrome_core::schema::Schema<Vocabulary: Default>>(
                     .to_vec()),
             )
         });
-    let nodes = prodrome_core::dag::Dag::from_prints(
+    let nodes = prodrome_dag::dag::Dag::from_prints(
         &E::Vocabulary::default(),
         prints,
-        prodrome_core::store::Sender::Stranger,
+        prodrome_data::husk::Sender::Stranger,
     )
     .nodes()
     .expect("a replica of the store reads");
@@ -4356,7 +4354,7 @@ pub fn chains_read(base: &str) -> suzatary_signatures::chain_set::Read {
                     .iter()
                     .map(|object| {
                         (
-                            prodrome_core::event::Hash::new(
+                            prodrome_data::event::Hash::new(
                                 object["hash"].as_str().expect("a name").to_owned(),
                             )
                             .expect("a name"),
@@ -4367,23 +4365,23 @@ pub fn chains_read(base: &str) -> suzatary_signatures::chain_set::Read {
                                 .to_vec()),
                         )
                     });
-                let untrusted = prodrome_core::policy::Untrusted::of(
+                let untrusted = prodrome_data::policy::Untrusted::of(
                     payload["untrusted"]
                         .as_array()
                         .expect("untrusted")
                         .iter()
                         .map(|actor| {
-                            prodrome_core::event::Actor::new(actor.as_str().expect("a name"))
+                            prodrome_data::event::Actor::new(actor.as_str().expect("a name"))
                                 .expect("an actor")
                         }),
                 );
                 (
                     suzatary_base::chains::ChainName::new(name).expect("a slug"),
                     untrusted,
-                    prodrome_core::dag::Dag::from_prints(
+                    prodrome_dag::dag::Dag::from_prints(
                         &suzatary_record::record::TodoVocabulary::default(),
                         prints,
-                        prodrome_core::store::Sender::Stranger,
+                        prodrome_data::husk::Sender::Stranger,
                     )
                     .objects()
                     .clone()
@@ -4399,9 +4397,10 @@ pub fn chains_read(base: &str) -> suzatary_signatures::chain_set::Read {
 /// Every proposal the Inbox lists at `at`, as a tab's replica reads them.
 pub fn inbox_listing(base: &str, at: &str) -> Vec<serde_json::Value> {
     let (inbox, _) = replicas(base);
-    let at =
-        prodrome_core::fpl::datetime_of(prodrome_core::fpl::parse_iso(at).expect("an instant"))
-            .expect("in range");
+    let at = prodrome_data::instant::datetime_of(
+        prodrome_data::instant::parse_iso(at).expect("an instant"),
+    )
+    .expect("in range");
     let read = chains_read(base);
     let set = read.set(at);
     // As the tab asks it: the memory by its route, for a remember card's words.
@@ -4573,7 +4572,7 @@ pub fn a_plan_store(root: &std::path::Path) -> PathBuf {
     let dir = root.join("roadmap");
     let store = suzatary_record::record::EventStore::new(
         dir.clone(),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     );
     suzatary_store::store::begun(&store, suzatary_record::record::GENESIS).expect("begun");
     plan_beside(

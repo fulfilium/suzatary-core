@@ -1,4 +1,4 @@
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use sha2::{Digest, Sha256};
 
 /// A device's request of the box, named by its content under a prefix of its own, so a request's

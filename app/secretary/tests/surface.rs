@@ -250,7 +250,7 @@ fn record_forms() -> Vec<String> {
         },
         Entry::Again {
             at,
-            question: prodrome_core::event::Hash::new("0".repeat(64)).expect("a name"),
+            question: prodrome_data::event::Hash::new("0".repeat(64)).expect("a name"),
             how: Rewind::Edit,
             by: "ada".to_owned(),
         },

@@ -1,11 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Actor;
-use prodrome_core::fold::Order;
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Everything;
-use prodrome_core::registers::{Node, Stamp, fold};
-use prodrome_core::schema::Schema as _;
+use prodrome_dag::registers::{Node, fold};
+use prodrome_data::event::Actor;
+use prodrome_data::fold::Order;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Everything;
+use prodrome_data::schema::Schema as _;
+use prodrome_data::stamp::Stamp;
 
 use super::{DecisionEvent, DecisionId, DecisionRegisters, Said, Statement};
 
@@ -56,7 +57,7 @@ impl Ledger {
         let mut decisions = BTreeMap::new();
         for (id, stream) in folded.entities() {
             let registers: DecisionRegisters<'_> =
-                prodrome_core::fold::read(stream, None, &Everything);
+                prodrome_dag::fold::read(stream, None, &Everything);
             if let Some(decision) = Decision::of(stream, &registers) {
                 decisions.insert(id.clone(), decision);
             }

@@ -418,7 +418,7 @@ pub fn outage(
 
 /// Is this stored instant on or after that day? Parsed rather than sliced, to survive a hand edit.
 fn on_or_after(at: suzatary_base::capability::Datetime, since: chrono::NaiveDate) -> bool {
-    prodrome_core::fpl::instant_of(at).date() >= since
+    prodrome_data::instant::instant_of(at).date() >= since
 }
 
 #[cfg(test)]
@@ -434,7 +434,7 @@ mod tests {
         let conversations = store.conversations();
         let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 11).expect("a day");
         let at =
-            prodrome_core::literal::Datetime::new(2026, 10, 11, 9, 0, 0, 0).expect("an instant");
+            prodrome_data::literal::Datetime::new(2026, 10, 11, 9, 0, 0, 0).expect("an instant");
         let open = |id: &ConversationId| {
             transcript::start(
                 conversations,

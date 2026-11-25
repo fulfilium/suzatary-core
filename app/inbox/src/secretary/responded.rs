@@ -1,9 +1,9 @@
 //! The responses a proposal's state register records; the constructors below are a stored format.
 
-use prodrome_core::literal::{Datetime, Value};
+use prodrome_data::literal::{Datetime, Value};
 
 use crate::secretary::phase::Phase;
-use prodrome_core::literal::codec::{Constructor, Literal as _, record};
+use prodrome_data::literal::codec::{Constructor, Literal as _, record};
 
 /// A try that did not settle the proposal.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,8 +42,8 @@ impl Tried {
     #[must_use]
     pub fn stale(&self, now: Datetime) -> bool {
         match self {
-            Tried::Running { expires_at, .. } => prodrome_core::fpl::parse_iso(expires_at)
-                .is_ok_and(|at| prodrome_core::fpl::instant_of(now) > at),
+            Tried::Running { expires_at, .. } => prodrome_data::instant::parse_iso(expires_at)
+                .is_ok_and(|at| prodrome_data::instant::instant_of(now) > at),
             Tried::NotSent { .. }
             | Tried::Lacks(_)
             | Tried::Refused { .. }
@@ -312,7 +312,7 @@ impl<C: CheckFields> Responded<C> {
 impl<C: CheckFields> std::fmt::Display for Responded<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (signature, values) = self.body();
-        f.write_str(&prodrome_core::literal::print_literal(&record(
+        f.write_str(&prodrome_data::literal::print_literal(&record(
             signature, values,
         )))
     }

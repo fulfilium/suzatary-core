@@ -22,10 +22,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use prodrome_core::change::mk_change;
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::genesis::mk_genesis;
+use prodrome_dag::dag::Dag;
+use prodrome_data::change::mk_change;
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::genesis::mk_genesis;
 use suzatary_api::sync::{Holding, Received};
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
@@ -312,7 +312,7 @@ impl Door {
     /// The post taken in, as the store's accept does.
     fn take(&mut self, received: &Received) {
         for (name, print) in &received.outcome.taken {
-            let envelope: Envelope<LineEvent> = prodrome_core::event::parse_envelope(
+            let envelope: Envelope<LineEvent> = prodrome_data::event::parse_envelope(
                 &suzatary_lines::secretary::line_event::LineVocabulary,
                 print,
             )
@@ -814,11 +814,11 @@ fn stored(genesis: &Hash, line: LineEvent, deps: Vec<Hash>) -> (Hash, Envelope<L
 struct Moved;
 
 impl suzatary_lines::secretary::lines_rule::World for Moved {
-    fn now(&self) -> prodrome_core::literal::Datetime {
-        prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 20, 0, 0).expect("an instant")
+    fn now(&self) -> prodrome_data::literal::Datetime {
+        prodrome_data::literal::Datetime::new(2026, 11, 17, 9, 20, 0, 0).expect("an instant")
     }
 
-    fn seat(&self, key: &prodrome_core::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
+    fn seat(&self, key: &prodrome_data::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
         OnADevice.seat(key)
     }
 
@@ -834,11 +834,11 @@ impl suzatary_lines::secretary::lines_rule::World for Moved {
 struct OnADevice;
 
 impl suzatary_lines::secretary::lines_rule::World for OnADevice {
-    fn now(&self) -> prodrome_core::literal::Datetime {
-        prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 1, 0, 0).expect("an instant")
+    fn now(&self) -> prodrome_data::literal::Datetime {
+        prodrome_data::literal::Datetime::new(2026, 11, 17, 9, 1, 0, 0).expect("an instant")
     }
 
-    fn seat(&self, _: &prodrome_core::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
+    fn seat(&self, _: &prodrome_data::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
         suzatary_signatures::signatures::Seat::Device
     }
 
@@ -1054,11 +1054,11 @@ const PNG: &[u8] = &[
 struct ByKey;
 
 impl suzatary_lines::secretary::lines_rule::World for ByKey {
-    fn now(&self) -> prodrome_core::literal::Datetime {
-        prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 1, 0, 0).expect("an instant")
+    fn now(&self) -> prodrome_data::literal::Datetime {
+        prodrome_data::literal::Datetime::new(2026, 11, 17, 9, 1, 0, 0).expect("an instant")
     }
 
-    fn seat(&self, key: &prodrome_core::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
+    fn seat(&self, key: &prodrome_data::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
         if *key == suzatary_connect::cast::keys::root() {
             suzatary_signatures::signatures::Seat::Operator
         } else {
@@ -1865,7 +1865,7 @@ fn renamed(conversation: &ConversationId, n: u8, genesis: &Hash, deps: Vec<Hash>
 
 /// What the store's own check reports of `history`, as a store a tab writes verifies.
 fn findings(history: &Dag<LineEvent>) -> Vec<String> {
-    suzatary_signatures::signatures::findings_of(history, &prodrome_core::policy::Untrusted::none())
+    suzatary_signatures::signatures::findings_of(history, &prodrome_data::policy::Untrusted::none())
         .iter()
         .map(ToString::to_string)
         .collect()

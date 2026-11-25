@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{Hash, TodoId};
+use prodrome_data::event::{Hash, TodoId};
 use serde::Deserialize;
 
 use super::Counted;

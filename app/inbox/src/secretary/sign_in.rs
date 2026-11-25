@@ -63,7 +63,7 @@ pub trait Sessions: Sync {
     ) -> Option<(ProposalId, Result<Secret, String>)>;
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     SignInUrl => |url| url.as_str().to_owned(),
 );
 

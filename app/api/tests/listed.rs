@@ -9,8 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use proptest::prelude::*;
 use proptest::test_runner::FileFailurePersistence;
 
-use prodrome_core::literal::Datetime;
-use prodrome_core::store::frontier::{Frontiers, KEPT, Since};
+use prodrome_data::literal::Datetime;
+use prodrome_store::store::frontier::{Frontiers, KEPT, Since};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_conversations::secretary::search::{LIST_CONTEXT, Needle, search};
 use suzatary_conversations::secretary::store::Stored;
@@ -106,7 +106,7 @@ fn pulled(held: &InMemory) -> HeldReplica {
 fn again(boxed: &Boxed, held: &InMemory, mut tab: HeldReplica) -> HeldReplica {
     let since = match tab.rows().holding().replica().frontier().digest() {
         Some(digest) => Since::Frontier(
-            prodrome_core::store::frontier::Token::parse(digest.as_str()).expect("a digest"),
+            prodrome_store::store::frontier::Token::parse(digest.as_str()).expect("a digest"),
         ),
         None => Since::Nothing,
     };

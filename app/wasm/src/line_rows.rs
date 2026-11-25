@@ -7,7 +7,7 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_lines::secretary::held_replica::{Moved, Took};
 use suzatary_lines::secretary::line_form;

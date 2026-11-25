@@ -14,7 +14,7 @@ the evaluator. The tab and the box therefore give the same answers for the same 
 ## Depends on
 
 The model crates up to `suzatary-api` (`suzatary-inbox` and `suzatary-lines` with `wasm`),
-`prodrome_core` and `prodrome-wasm-exports`.
+the library's data, DAG, term, evaluator, todo, memo and reading crates, and `prodrome-wasm-exports`.
 
 ## Develop
 

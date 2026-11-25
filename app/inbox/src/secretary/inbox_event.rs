@@ -4,17 +4,18 @@
 //! [`Phase`](crate::secretary::phase::Phase)s are inflationary, so the store refuses a response
 //! below or beside the reading it supersedes. Its valuation is a [`Price`] alone.
 
-use prodrome_core::event::Actor;
-use prodrome_core::fold::Product as _;
-use prodrome_core::fpl::FplError;
-use prodrome_core::literal::{Datetime, ProdromeError, Table, Value, Vocabulary};
-use prodrome_core::schema::{Price, Schema};
-use prodrome_core::term::Term;
+use prodrome_data::event::Actor;
+use prodrome_data::fold::Product as _;
+use prodrome_data::instant::FplError;
+use prodrome_data::literal::{Datetime, ProdromeError, Table, Value, Vocabulary};
+use prodrome_data::schema::Schema;
+use prodrome_reading::schema::Price;
+use prodrome_term::term::Term;
 
 use crate::secretary::inbox::{Asked, ProposalId};
 use crate::secretary::inbox_registers::{InboxRegister, InboxRegisters};
 use crate::secretary::responded::{Done, Responded, Tried, Withdrawal};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal as _, headed};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal as _, headed};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InboxEvent {
@@ -87,11 +88,11 @@ pub const SIGNATURES: &[Constructor] = &[
 pub struct InboxVocabulary;
 
 impl Vocabulary for InboxVocabulary {
-    fn signature(&self, name: &str) -> Option<prodrome_core::literal::Signature<'_>> {
+    fn signature(&self, name: &str) -> Option<prodrome_data::literal::Signature<'_>> {
         Table(SIGNATURES)
             .find(name)
             .or_else(|| Table(crate::secretary::act_vocabulary::SIGNATURES).find(name))
-            .or_else(|| prodrome_core::term::schema::signatures().signature(name))
+            .or_else(|| prodrome_term::term::schema::signatures().signature(name))
     }
 }
 
@@ -177,7 +178,7 @@ impl InboxEvent {
                     why: fields.get("why")?,
                 },
             ))),
-            other => Err(prodrome_core::literal::codec::no_arm("InboxEvent", other)),
+            other => Err(prodrome_data::literal::codec::no_arm("InboxEvent", other)),
         }
     }
 }
@@ -303,7 +304,7 @@ mod tests {
     /// An attempt prints as itself and reads back at the widest it holds, and none is below one.
     #[test]
     fn an_attempt_round_trips_at_its_widest() {
-        use prodrome_core::event::{canonical, parse_event};
+        use prodrome_data::event::{canonical, parse_event};
         let event = |attempt| InboxEvent {
             proposal: ProposalId::new("p0").expect("an id"),
             at: Datetime::new(2026, 10, 12, 9, 0, 0, 0).expect("an instant"),

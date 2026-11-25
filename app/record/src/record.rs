@@ -7,12 +7,12 @@
 //! shipped constructor would rename every stored object. Evolution is a new constructor, never a
 //! new field; `app/cli/tests/live.rs` is the guard.
 
-use prodrome_core::event::Name;
-use prodrome_core::fpl::mk_absent;
-use prodrome_core::literal::codec::{self, Constructor, Literal};
-use prodrome_core::literal::{Datetime, ProdromeError, Value};
-use prodrome_core::payload::Payload;
-use prodrome_core::term::{Term, TermF};
+use prodrome_data::event::Name;
+use prodrome_data::literal::codec::{self, Constructor, Literal};
+use prodrome_data::literal::{Datetime, ProdromeError, Value};
+use prodrome_term::fpl::mk_absent;
+use prodrome_term::term::{Term, TermF};
+use prodrome_todo::payload::Payload;
 
 use suzatary_base::capability::{Rejected, Typeset, parsed};
 
@@ -243,7 +243,7 @@ impl NoteSite {
 /// The message a todo came from. `date` is a day; the three identifiers are `""` when the
 /// writer did not record them.
 #[derive(Debug, Clone, PartialEq, Eq, Literal)]
-#[literal(crate = prodrome_core)]
+#[literal(crate = prodrome_data)]
 pub struct Source {
     /// Who it came from, as the header read.
     #[literal(with = stored_text)]
@@ -266,7 +266,7 @@ pub struct Source {
 
 /// A comment run attached to one field of a record.
 #[derive(Debug, Clone, PartialEq, Eq, Literal)]
-#[literal(crate = prodrome_core, new = mk_note)]
+#[literal(crate = prodrome_data, new = mk_note)]
 pub struct Note {
     /// Which field it is about.
     #[literal(with = codec::text_field)]
@@ -288,7 +288,7 @@ pub struct SubTodo {
 /// the database owns. Stored as `Authored`, not `Record`: the constructor's name is in the bytes
 /// of every stored object.
 #[derive(Debug, Clone, PartialEq, Literal)]
-#[literal(crate = prodrome_core, rename = "Authored", new = mk_record)]
+#[literal(crate = prodrome_data, rename = "Authored", new = mk_record)]
 pub struct Record {
     /// Which constructor renders it, one of `decoration::KINDS`.
     #[literal(with = codec::text_field)]
@@ -444,7 +444,7 @@ pub fn mk_authored(
     notes: Vec<Note>,
     note: &str,
 ) -> Result<TodoEvent, ProdromeError> {
-    prodrome_core::event::mk_record(
+    prodrome_todo::event::mk_record(
         todo,
         at,
         actor,
@@ -471,7 +471,7 @@ pub fn mk_authored(
 mod stored_text {
     use super::{Literal as _, ProdromeError, StringSource, Value};
 
-    pub(super) use prodrome_core::literal::codec::text_field::to_value;
+    pub(super) use prodrome_data::literal::codec::text_field::to_value;
 
     pub(super) fn from_field(
         value: &Value,
@@ -485,7 +485,7 @@ mod stored_text {
 mod stored_markup {
     use super::{Literal as _, MarkupSource, ProdromeError, Value};
 
-    pub(super) use prodrome_core::literal::codec::text_field::to_value;
+    pub(super) use prodrome_data::literal::codec::text_field::to_value;
 
     pub(super) fn from_field(
         value: &Value,
@@ -599,46 +599,46 @@ impl Payload for Record {
 // --- the parameter, applied once ---------------------------------------------
 
 /// A stored content record: the database's three fields around a [`Record`].
-pub type Authored = prodrome_core::event::Authored<Record>;
+pub type Authored = prodrome_todo::event::Authored<Record>;
 
 /// One event of any kind, over this application's payload.
-pub type TodoEvent = prodrome_core::event::TodoEvent<Record>;
+pub type TodoEvent = prodrome_todo::event::TodoEvent<Record>;
 
 /// The label of the `Genesis` a chain's store begins with: a chain is a prodrome of todos.
 pub const GENESIS: &str = "todos";
 
 /// The schema a chain is opened at: what every print of one parses at.
-pub type TodoVocabulary = prodrome_core::todo::TodoVocabulary<Record>;
+pub type TodoVocabulary = prodrome_todo::todo::TodoVocabulary<Record>;
 
 /// One stored object, over the same.
-pub type Envelope = prodrome_core::event::Envelope<TodoEvent>;
+pub type Envelope = prodrome_data::event::Envelope<TodoEvent>;
 
 /// One object as the register folds read it.
-pub type Node = prodrome_core::registers::Node<TodoEvent>;
+pub type Node = prodrome_dag::registers::Node<TodoEvent>;
 
 /// The register fold's state.
-pub type Folded = prodrome_core::registers::Folded<TodoEvent>;
+pub type Folded = prodrome_dag::registers::Folded<TodoEvent>;
 
 /// The chain on disk, parsed against one closed vocabulary.
-pub type EventStore = prodrome_core::store::EventStore<TodoEvent>;
+pub type EventStore = prodrome_store::store::EventStore<TodoEvent>;
 
 /// One todo as the view reads it at a moment.
-pub type Entry = prodrome_core::view::Entry<TodoEvent>;
+pub type Entry = prodrome_reading::view::Entry<TodoEvent>;
 
 /// `SubTodo(body, done)`, a checklist line in a stored act.
 // By hand: an inbox act reads it through `Fields`, whose refusals the derive does not write.
-pub const SUBTODO: prodrome_core::literal::codec::Constructor = ("SubTodo", &["body", "done"]);
+pub const SUBTODO: prodrome_data::literal::codec::Constructor = ("SubTodo", &["body", "done"]);
 
-impl prodrome_core::literal::codec::Literal for SubTodo {
+impl prodrome_data::literal::codec::Literal for SubTodo {
     fn to_value(&self) -> Value {
-        prodrome_core::literal::codec::record(
+        prodrome_data::literal::codec::record(
             SUBTODO,
             vec![self.body.to_value(), self.done.to_value()],
         )
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        let fields = prodrome_core::literal::codec::Fields::of(value, SUBTODO)?;
+        let fields = prodrome_data::literal::codec::Fields::of(value, SUBTODO)?;
         Ok(SubTodo {
             body: fields.get("body")?,
             done: fields.get("done")?,
@@ -649,7 +649,7 @@ impl prodrome_core::literal::codec::Literal for SubTodo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prodrome_core::payload::record_signature;
+    use prodrome_todo::payload::record_signature;
 
     /// The frozen stored shape: `Authored(todo, at, actor, <the twelve>)`, in exactly that order.
     #[test]
@@ -681,8 +681,8 @@ mod tests {
     /// spec, as it always did. `Absent()` written out is refused, so it cannot be a second.
     #[test]
     fn an_unpriced_record_is_absent_in_memory_and_none_on_disk() {
-        use prodrome_core::event::{canonical, parse_event};
-        use prodrome_core::payload::Payload as _;
+        use prodrome_data::event::{canonical, parse_event};
+        use prodrome_todo::payload::Payload as _;
 
         let at = Datetime::new(2026, 9, 9, 7, 3, 0, 0).expect("a real instant");
         let event = mk_authored(
@@ -707,14 +707,14 @@ mod tests {
         assert!(printed.contains("spec=None"), "{printed}");
         let back: TodoEvent =
             parse_event(&TodoVocabulary::default(), &printed).expect("it reads back");
-        let prodrome_core::event::TodoEvent::Authored(record) = &back else {
+        let prodrome_todo::event::TodoEvent::Authored(record) = &back else {
             panic!("an Authored");
         };
         assert!(is_absent(&record.payload.spec));
         assert_eq!(record.payload.spec(), None);
         assert_eq!(back, event);
 
-        let absent = prodrome_core::literal::print_literal(&mk_absent().to_value());
+        let absent = prodrome_data::literal::print_literal(&mk_absent().to_value());
         let spelled = printed.replace("spec=None", &format!("spec={absent}"));
         assert!(parse_event::<TodoEvent>(&TodoVocabulary::default(), &printed).is_ok());
         assert!(
@@ -737,7 +737,7 @@ mod tests {
             price::RECUR_PRICE,
             price::PERIODIC_PRICE,
         ]);
-        prodrome_core::literal::codec::assert_pinned(
+        prodrome_data::literal::codec::assert_pinned(
             &stored,
             "
             Authored(kind, created, body, spec, rationale, category, waiting_on, detail, source, subtodos, notes, note)
@@ -758,12 +758,12 @@ mod tests {
     /// would be unreachable rather than in force.
     #[test]
     fn the_payloads_names_do_not_collide_with_the_databases() {
-        let core: Vec<&str> = prodrome_core::term::schema::signatures()
+        let core: Vec<&str> = prodrome_term::term::schema::signatures()
             .names()
             .chain(
-                prodrome_core::event::ENVELOPE_SIGNATURES
+                prodrome_data::event::ENVELOPE_SIGNATURES
                     .iter()
-                    .chain(prodrome_core::todo::TODO_SIGNATURES)
+                    .chain(prodrome_todo::todo::TODO_SIGNATURES)
                     .map(|(name, _)| *name),
             )
             .collect();

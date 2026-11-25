@@ -1,8 +1,8 @@
 //! THE TRUST BOUNDARY: the triage agent reads mail anyone can send, so its writing verbs file
 //! cards in the Inbox and append nothing to any chain; only the owner's tap performs a card.
 
-use prodrome_core::event::Actor;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::Actor;
+use prodrome_data::policy::Untrusted;
 use serde_json::{Map, Value, json};
 use suzatary_base::capability::Nothing;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
@@ -68,7 +68,7 @@ fn the_owners_chain() -> InMemory<TodoEvent> {
                     subtodos: Vec::new(),
                 },
                 suzatary_base::zone::Moment {
-                    at: prodrome_core::literal::Datetime::new(2026, 9, 1, 9, 0, 0, 0)
+                    at: prodrome_data::literal::Datetime::new(2026, 9, 1, 9, 0, 0, 0)
                         .expect("an instant"),
                     zone: suzatary_base::zone::Zone::UTC,
                 },
@@ -185,7 +185,7 @@ fn a_round_that_read_mail(lines: &suzatary_stores::stores::conversations::InMemo
     use suzatary_conversations::secretary::store::Entry;
     use suzatary_lines::secretary::transcript;
 
-    let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 9, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 9, 2, 9, 0, 0, 0).expect("an instant");
     let said = |turn: Turn, by: Option<&str>| Entry::Said {
         at,
         turn,

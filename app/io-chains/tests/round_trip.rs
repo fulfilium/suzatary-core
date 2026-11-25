@@ -8,10 +8,10 @@
 
 use std::path::Path;
 
-use prodrome_core::event::{Envelope, canonical_envelope, parse_envelope};
-use prodrome_core::literal::codec::Literal as _;
-use prodrome_core::literal::print_literal;
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{Envelope, canonical_envelope, parse_envelope};
+use prodrome_data::literal::codec::Literal as _;
+use prodrome_data::literal::print_literal;
+use prodrome_data::schema::Schema;
 use sha2::Digest as _;
 use suzatary_digest::secretary::digest_event::DigestEvent;
 use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};

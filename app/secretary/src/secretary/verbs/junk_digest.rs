@@ -43,7 +43,7 @@ impl Verb for JunkDigest {
         let today = call
             .deployment
             .zone
-            .day(prodrome_core::fpl::instant_of(call.caps.clock.now()));
+            .day(prodrome_data::instant::instant_of(call.caps.clock.now()));
         let window = Window::ending(today, args.days.unwrap_or(DEFAULT_DAYS))
             .map_err(|failed| Refusal::bad_request(failed.to_string()))?;
         let churn = call.caps.junk.churn();

@@ -7,9 +7,11 @@ use std::cmp::Ordering;
 use std::num::NonZeroU32;
 
 use chrono::{NaiveDateTime, NaiveTime};
-use prodrome_core::fpl::{Delta, Explanation, Instant, Note, Scalar, total_seconds};
-use prodrome_core::observe::{Observation, Rounding};
-use prodrome_core::term::{CurvePoint, TermF};
+use prodrome_data::instant::Instant;
+use prodrome_fpl::fpl::{Explanation, Note, Scalar};
+use prodrome_fpl::observe::{Observation, Rounding};
+use prodrome_term::fpl::{Delta, total_seconds};
+use prodrome_term::term::{CurvePoint, TermF};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use suzatary_base::zone::Zone;
@@ -492,7 +494,8 @@ mod tests {
     use super::*;
 
     use chrono::Duration;
-    use prodrome_core::fpl::{Env, explained, mk_decay};
+    use prodrome_fpl::fpl::explained;
+    use prodrome_term::fpl::{Env, mk_decay};
     use proptest::prelude::*;
 
     fn at(s: &str) -> Instant {
@@ -513,11 +516,11 @@ mod tests {
         ) {
             let term = mk_decay(start, end, at("2026-09-30T00:00:00"), Duration::days(days), None)
                 .expect("a decay");
-            let closed = prodrome_core::fpl::Closed::of(term).expect("closed");
+            let closed = prodrome_fpl::fpl::Closed::of(term).expect("closed");
             let env = Env::new();
             let page = |t: Instant| why(Zone::UTC, Some(&Explained::of(explained(&closed, t, &env))));
             let t0 = at("2026-09-01T00:00:00") + Duration::minutes(from);
-            let next = prodrome_core::observe::next_change(&closed, t0, &env, SHOWN);
+            let next = prodrome_fpl::observe::next_change(&closed, t0, &env, SHOWN);
             let Some(changes) = next.at else {
                 prop_assert_eq!(page(t0 + Duration::days(400)), page(t0));
                 return Ok(());

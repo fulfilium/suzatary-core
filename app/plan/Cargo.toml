@@ -21,7 +21,8 @@ suzatary-todo.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
-prodrome_core.workspace = true
+prodrome_term.workspace = true
+prodrome_todo.workspace = true
 proptest.workspace = true
 
 [lints]

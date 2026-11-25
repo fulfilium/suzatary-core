@@ -10,8 +10,9 @@ use std::process::Command;
 
 use anyhow::Context as _;
 use chrono::{Duration, Timelike};
-use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
-use prodrome_core::fpl::{self, mk_decay, mk_flat};
+use prodrome_data::event::{Actor, Hash};
+use prodrome_term::fpl::{self, mk_decay, mk_flat};
+use prodrome_todo::event::{mk_completed, mk_created};
 use suzatary_base::capability::Clock;
 use suzatary_connect::cast::{self, CAST};
 use suzatary_io_local::clock::SystemClock;
@@ -52,8 +53,8 @@ pub const BOX_SEED: &str = "e2e0000000000000000000000000000000000000000000000000
 pub const AGENT_SEED: &str = "e2e0000000000000000000000000000000000000000000000000000000000a9e";
 
 /// The fixture's root key, the public half of [`BOX_SEED`].
-fn fixture_root() -> prodrome_core::sign::PublicKey {
-    prodrome_core::sign::Secret::new(BOX_SEED)
+fn fixture_root() -> prodrome_data::sign::PublicKey {
+    prodrome_dag::sign::Secret::new(BOX_SEED)
         .expect("the fixture's seed is a seed")
         .public()
 }
@@ -421,7 +422,7 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
 /// `no_model` its last call failed instead, so the box asks for a model itself.
 fn answers(read: &crate::instance::Instance, no_model: bool) -> anyhow::Result<()> {
     use suzatary_base::capability::Clock as _;
-    let at = prodrome_core::fpl::instant_of(SystemClock.now());
+    let at = prodrome_data::instant::instant_of(SystemClock.now());
     let (outcome, words) = if no_model {
         (
             suzatary_health::health::Outcome::Failed(suzatary_health::health::Failure::KeyRefused),
@@ -591,7 +592,7 @@ fn a_calendar(read: &crate::instance::Instance, repo: &Path) -> anyhow::Result<(
     let name = PluginName::parse("ics")?;
     let text = std::fs::read_to_string(repo.join("app/plugin-ics/ics.schema"))
         .context("reading the calendar plugin's schema")?;
-    let schema = prodrome_core::declared::Declaration::admit(&text)
+    let schema = prodrome_declared::Declaration::admit(&text)
         .map_err(|refused| anyhow::anyhow!("the calendar's schema: {refused}"))?;
     suzatary_io_chains::plugin_store::PluginStore::at(read.plugins.store(&name)).begin(&schema)?;
     let run = |hour| -> anyhow::Result<LastRun> {
@@ -712,7 +713,7 @@ fn a_coding_session(root: &Path) -> anyhow::Result<()> {
         .first()
         .context("the round proposed the session")?
         .object;
-    let owner = prodrome_core::event::Actor::new(CAST.owner.actor)?;
+    let owner = prodrome_data::event::Actor::new(CAST.owner.actor)?;
     inbox::submit(&inbox, object, &owner, now, |_| {
         Ok(Performed::Done(Done::Acted {
             what: format!("started a coding session: {url}"),
@@ -886,7 +887,7 @@ fn seed_chain(events: &Path) -> anyhow::Result<()> {
     let now = fpl::instant_of(SystemClock.now())
         .with_nanosecond(0)
         .expect("zero is always a valid nanosecond");
-    let untrusted = prodrome_core::policy::Untrusted::of([Actor::new("triage")?]);
+    let untrusted = prodrome_data::policy::Untrusted::of([Actor::new("triage")?]);
     let store = EventStore::new(events, untrusted);
     append_to(
         &store,
@@ -927,7 +928,7 @@ fn build_chain(root: &Path) -> anyhow::Result<Option<Hash>> {
     let owner = CAST.owner.actor;
     let todos = &CAST.todos;
 
-    let untrusted = prodrome_core::policy::Untrusted::of([Actor::new("triage")?]);
+    let untrusted = prodrome_data::policy::Untrusted::of([Actor::new("triage")?]);
     let store = EventStore::new(root.join("events"), untrusted);
 
     // Every todo but the agent's is authored by the owner at `made`.
@@ -1028,7 +1029,7 @@ fn build_chain(root: &Path) -> anyhow::Result<Option<Hash>> {
 /// The agent's untrusted todo, served as typst source rather than HTML; its body holds
 /// markup on purpose so the page must show the asterisks.
 fn agents_todo(
-    made_at: prodrome_core::literal::Datetime,
+    made_at: prodrome_data::literal::Datetime,
     made: fpl::Instant,
 ) -> anyhow::Result<suzatary_record::record::TodoEvent> {
     let todo = &CAST.todos.agents;
@@ -1402,7 +1403,7 @@ fn bulk_lines(
     reseals: Resealing,
     depth: usize,
 ) -> anyhow::Result<()> {
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_lines::secretary::line_event::LineEvent;
     use suzatary_memory::secretary::line_words::LineWords;
@@ -1491,7 +1492,7 @@ fn bulk_lines(
 fn bulk_entry(
     n: usize,
     line: usize,
-    at: prodrome_core::literal::Datetime,
+    at: prodrome_data::literal::Datetime,
 ) -> suzatary_conversations::secretary::store::Entry {
     use suzatary_conversations::secretary::model::Turn;
     use suzatary_conversations::secretary::store::{Entry, Kind};
@@ -1539,11 +1540,11 @@ fn bulk_entry(
 /// append each would read it again for every event.
 fn appended<E>(store: &dyn suzatary_store::store::Prodrome<E>, events: Vec<E>) -> anyhow::Result<()>
 where
-    E: prodrome_core::schema::Schema,
+    E: prodrome_data::schema::Schema,
     E::Vocabulary: Default,
 {
-    use prodrome_core::event::canonical_envelope;
-    use prodrome_core::store::{MemoryStore, Replica as _};
+    use prodrome_data::event::canonical_envelope;
+    use prodrome_store::store::{MemoryStore, Replica as _};
     let held = store.objects()?;
     let memory: MemoryStore<E> = MemoryStore::default();
     let prints: std::collections::BTreeMap<Hash, Vec<u8>> = held
@@ -1554,7 +1555,7 @@ where
     memory.receive(
         prints.keys().cloned().collect(),
         &|name| prints.get(name).cloned(),
-        prodrome_core::store::Sender::Keeper,
+        prodrome_data::husk::Sender::Keeper,
     )?;
     for event in events {
         memory.append(event)?;
@@ -1646,7 +1647,7 @@ fn bulk_proposals(
     count: usize,
     todos: usize,
 ) -> anyhow::Result<()> {
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_conversations::secretary::store::{Entry, Kind};
     use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
@@ -1710,7 +1711,7 @@ fn bulk_proposals(
 /// One topic on each of the newest `count` rounds of the generated conversations, from eight
 /// names in turn, as a store whose rounds were filed under topics carries them.
 fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result<()> {
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
     use suzatary_lines::secretary::targets::rounds;
     use suzatary_topics::secretary::topics::topic::Topic;
     const NAMES: [&str; 8] = [
@@ -1734,7 +1735,7 @@ fn bulk_topics(read: &crate::instance::Instance, count: usize) -> anyhow::Result
         .take(count);
     for round in generated {
         let topic = names[events.len() % NAMES.len()].clone()?;
-        events.push(prodrome_core::tags::membership::added::<
+        events.push(prodrome_tags::membership::added::<
             suzatary_topics::secretary::topics::reading::Topics,
         >(round.target(), topic, at, actor.clone()));
     }
@@ -1768,7 +1769,7 @@ impl Sealed {
     fn write(
         self,
         id: suzatary_base::conversation_id::ConversationId,
-        writer: prodrome_core::event::Actor,
+        writer: prodrome_data::event::Actor,
         held: u32,
         entry: &suzatary_conversations::secretary::store::Entry,
         entropy: &dyn suzatary_base::capability::Entropy,
@@ -2025,7 +2026,7 @@ mod tests {
         });
         if let Some(after) = pull_after {
             std::thread::sleep(after);
-            halt.stop(prodrome_core::event::Actor::new("ada").expect("an actor"));
+            halt.stop(prodrome_data::event::Actor::new("ada").expect("an actor"));
         }
         let within = heard.recv_timeout(std::time::Duration::from_secs(5));
         if within.is_err() {
@@ -2037,7 +2038,7 @@ mod tests {
 
     #[test]
     fn a_waiting_script_line_ends_on_its_own_rounds_halt_whenever_it_is_pulled() {
-        let ada = || prodrome_core::event::Actor::new("ada").expect("an actor");
+        let ada = || prodrome_data::event::Actor::new("ada").expect("an actor");
         let before = suzatary_conversations::secretary::model::Halt::new();
         before.stop(ada());
         assert!(

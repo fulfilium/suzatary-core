@@ -7,9 +7,9 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::event::TodoId;
-use prodrome_core::fpl;
-use prodrome_core::payload::Payload as _;
+use prodrome_data::event::TodoId;
+use prodrome_fpl::fpl;
+use prodrome_todo::payload::Payload as _;
 
 use crate::wire::inbox as wire;
 use suzatary_record::record::{Authored, Node, TodoEvent};
@@ -190,6 +190,6 @@ fn price(record: &Authored) -> String {
 }
 
 /// An instant through `fpl::iso`, the one spelling every `at` on the wire uses.
-fn iso(at: prodrome_core::literal::Datetime) -> String {
+fn iso(at: prodrome_data::literal::Datetime) -> String {
     fpl::iso(fpl::instant_of(at))
 }

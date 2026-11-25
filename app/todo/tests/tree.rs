@@ -4,12 +4,14 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::event::{Hash, TodoId, mk_completed, mk_sealed, seal_hash};
-use prodrome_core::fpl::{self, LinkError, PRIORITY_POWER};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::{Hash, TodoId, mk_sealed, seal_hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::fpl::{self, LinkError};
+use prodrome_term::fpl::PRIORITY_POWER;
+use prodrome_todo::event::mk_completed;
 
-use prodrome_core::term::Term;
+use prodrome_term::term::Term;
 use suzatary_record::record::Entry;
 
 use suzatary_base::tree::{By, Classifier, Members, Monoid, Place, Segment, Tree};
@@ -69,11 +71,11 @@ fn folded(events: Vec<TodoEvent>) -> Folded {
         let envelope = mk_sealed(objects.last().map(|(name, _)| name.clone()), event);
         objects.push((seal_hash(&envelope), envelope));
     }
-    let nodes = prodrome_core::dag::Dag::from_iter(objects.clone())
+    let nodes = prodrome_dag::dag::Dag::from_iter(objects.clone())
         .nodes()
         .expect("a closed set reads");
     let none = Untrusted::none();
-    let entries = prodrome_core::view::entries(&nodes, at(20), &none).expect("a fold");
+    let entries = prodrome_reading::view::entries(&nodes, at(20), &none).expect("a fold");
     let members = view::members(&entries, &view::by_hash(&objects));
     let believed = Believed::of(&nodes, at(20), &none).expect("functions");
     Folded {
@@ -150,7 +152,7 @@ fn grouping_twice_by_a_key_is_grouping_once() {
 #[test]
 fn a_nodes_value_is_the_fulfillment_of_its_linked_term() {
     let house = household();
-    let specs = prodrome_core::fold::link_specs(&house.functions, house.functions.keys());
+    let specs = prodrome_reading::fold::link_specs(&house.functions, house.functions.keys());
     let now = fpl::instant_of(at(20));
     for classifier in [
         by(&[By::Category, By::Ancestry]),

@@ -1,7 +1,7 @@
 //! How the inbox's schema crosses into the browser's module: each proposal under `proposal`, its
 //! two registers by name, and each register's value as JSON, a function of the value alone.
 
-use prodrome_core::schema::Schema;
+use prodrome_data::schema::Schema;
 use prodrome_wasm_exports::Json;
 use prodrome_wasm_exports::wire::json_literal;
 use serde_json::Value;
@@ -39,8 +39,8 @@ impl Json for InboxEvent {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::Actor;
-    use prodrome_core::literal::Datetime;
+    use prodrome_data::event::Actor;
+    use prodrome_data::literal::Datetime;
     use proptest::prelude::*;
 
     use super::*;

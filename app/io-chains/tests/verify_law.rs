@@ -5,11 +5,11 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::change::mk_change;
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Envelope, Hash, canonical_envelope, parents_of, seal_hash};
 use prodrome_core::laws::script::Who;
-use prodrome_core::policy::Untrusted;
+use prodrome_dag::dag::Dag;
+use prodrome_data::change::mk_change;
+use prodrome_data::event::{Envelope, Hash, canonical_envelope, parents_of, seal_hash};
+use prodrome_data::policy::Untrusted;
 use proptest::prelude::*;
 
 use suzatary_inbox::secretary::inbox::ProposalId;
@@ -51,7 +51,7 @@ fn a_history() -> impl Strategy<Value = Vec<(InboxEvent, u64)>> {
 fn on_its_own(said: Responded) -> InboxEvent {
     InboxEvent {
         proposal: ProposalId::new("below").expect("a proposal id"),
-        at: prodrome_core::literal::Datetime::new(2026, 10, 1, 9, 0, 0, 0).expect("an instant"),
+        at: prodrome_data::literal::Datetime::new(2026, 10, 1, 9, 0, 0, 0).expect("an instant"),
         actor: Who::Ada.actor(),
         said: Said::Responded(said),
     }
@@ -106,7 +106,7 @@ fn read_as_prints(prints: &[(Hash, Vec<u8>)]) -> Vec<String> {
         prints
             .iter()
             .map(|(name, print)| (name.clone(), Ok(print.clone()))),
-        prodrome_core::store::Sender::Keeper,
+        prodrome_data::husk::Sender::Keeper,
     );
     findings_of(&dag, &Untrusted::none())
         .iter()

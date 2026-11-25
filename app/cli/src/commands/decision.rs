@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use clap::Subcommand;
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
 use suzatary_base::capability::Clock;
 use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::clock::SystemClock;

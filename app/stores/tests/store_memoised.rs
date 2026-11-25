@@ -4,8 +4,8 @@
 use std::cell::Cell;
 use std::sync::Mutex;
 
-use prodrome_core::event::mk_created;
-use prodrome_core::memo::{Cache, Lru};
+use prodrome_memo::{Cache, Lru};
+use prodrome_todo::event::mk_created;
 
 use suzatary_record::record::TodoEvent;
 use suzatary_store::store::Reads as _;
@@ -16,7 +16,7 @@ use suzatary_stores::stores::InMemory;
 fn created(todo: &str) -> TodoEvent {
     mk_created(
         todo,
-        prodrome_core::literal::Datetime::new(2026, 10, 13, 9, 0, 0, 0).expect("an instant"),
+        prodrome_data::literal::Datetime::new(2026, 10, 13, 9, 0, 0, 0).expect("an instant"),
         "ada",
         "A todo",
         "",

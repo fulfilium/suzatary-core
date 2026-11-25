@@ -14,7 +14,7 @@ pub mod verified;
 use std::collections::BTreeMap;
 
 use crate::record::{Authored, Node, TodoEvent};
-use prodrome_core::fpl::Outcome;
+use prodrome_term::fpl::Outcome;
 
 pub use block::Shown;
 pub use verified::render_verified;
@@ -56,7 +56,7 @@ pub struct DecorationError(pub String);
 /// An entry carries a name rather than the record (reprinting every `Authored`
 /// per fold is costly); this is the caller's lookup.
 #[must_use]
-pub fn records_of(nodes: &[Node]) -> BTreeMap<prodrome_core::event::Hash, &Authored> {
+pub fn records_of(nodes: &[Node]) -> BTreeMap<prodrome_data::event::Hash, &Authored> {
     nodes
         .iter()
         .filter_map(|node| match node.event() {

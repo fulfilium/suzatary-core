@@ -228,7 +228,7 @@ pub fn answered_by(answered: &Answered, model: &str, failed: Option<&ModelError>
             | ModelError::Halted,
         ) => return,
     };
-    let at = prodrome_core::fpl::instant_of(SystemClock.now());
+    let at = prodrome_data::instant::instant_of(SystemClock.now());
     let words = failed.map(ToString::to_string).unwrap_or_default();
     if let Err(failed) = answered.record(entry, at, outcome, &words) {
         tracing::warn!("model health: {failed}");
@@ -247,7 +247,7 @@ pub fn limited_now(instance: &Instance) -> Option<Limited> {
 fn limited_in(answered: &Answered) -> Option<Limited> {
     use suzatary_base::capability::Clock as _;
     use suzatary_health::health::Register as _;
-    let now = prodrome_core::fpl::instant_of(SystemClock.now());
+    let now = prodrome_data::instant::instant_of(SystemClock.now());
     answered
         .healths()
         .inspect_err(|failed| tracing::warn!("model health: {failed}"))

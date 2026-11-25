@@ -4,9 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::bail;
-use prodrome_core::event::Actor;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::sign::PublicKey;
+use prodrome_data::event::Actor;
+use prodrome_data::policy::Untrusted;
+use prodrome_data::sign::PublicKey;
 use suzatary_base::chains::{ChainPolicy, Naming};
 
 use super::charter::Charter;

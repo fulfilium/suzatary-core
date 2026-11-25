@@ -6,8 +6,8 @@ use crate::common;
 
 use std::path::{Path, PathBuf};
 
-use prodrome_core::fpl;
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
+use prodrome_term::fpl;
 use suzatary_record::record::{EventStore, GENESIS, MarkupSource, TodoEvent, mk_authored};
 
 fn at(day: u32) -> Datetime {
@@ -24,7 +24,7 @@ const ITEMS: [(&str, &str); 6] = [
     ("calendarlinks", "open"),
 ];
 
-fn authored(id: &str, body: &str, spec: prodrome_core::term::Term) -> TodoEvent {
+fn authored(id: &str, body: &str, spec: prodrome_term::term::Term) -> TodoEvent {
     mk_authored(
         id,
         at(1),
@@ -54,7 +54,7 @@ fn roadmap(root: &Path) -> String {
 fn a_project_chain(root: &Path) {
     let upkeep = EventStore::new(
         root.join("events-ops"),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     );
     suzatary_store::store::append_to(
         &upkeep,
@@ -68,7 +68,7 @@ fn a_project_chain(root: &Path) {
     .expect("appends");
     let store = EventStore::new(
         root.join("roadmap"),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     );
     let append = |event| {
         suzatary_store::store::append_to(&store, GENESIS, event).expect("appends");
@@ -91,8 +91,8 @@ fn a_project_chain(root: &Path) {
             fpl::mk_flat(0.7).expect("a term"),
         ));
         let settled = match lot {
-            "done" => Some(prodrome_core::event::mk_completed(id, at(2), "ada", "")),
-            "cancelled" => Some(prodrome_core::event::mk_cancelled(id, at(2), "ada", "")),
+            "done" => Some(prodrome_todo::event::mk_completed(id, at(2), "ada", "")),
+            "cancelled" => Some(prodrome_todo::event::mk_cancelled(id, at(2), "ada", "")),
             _ => None,
         };
         if let Some(event) = settled {
@@ -657,7 +657,7 @@ fn complete_writes_where_each_todo_is_found_once() {
         "a todo found nowhere was written"
     );
     let notes = |dir: &str, todo: &str| -> Vec<String> {
-        EventStore::new(root.join(dir), prodrome_core::policy::Untrusted::none())
+        EventStore::new(root.join(dir), prodrome_data::policy::Untrusted::none())
             .events()
             .expect("the store reads")
             .iter()

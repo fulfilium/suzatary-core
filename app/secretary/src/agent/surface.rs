@@ -11,7 +11,7 @@ use super::{Call, Holds, Says};
 use crate::agent::Agent;
 use crate::secretary::verbs::Reasoned;
 use crate::verb::{Chained, Surface, verbs};
-use prodrome_core::event::TodoId;
+use prodrome_data::event::TodoId;
 use serde_json::json;
 use suzatary_base::chains::ChainPolicy;
 use suzatary_base::reference::TodoRef;

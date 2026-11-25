@@ -3,7 +3,7 @@
 
 use std::convert::Infallible;
 
-use prodrome_dag::sign::{KeyAdded, Secret, mk_key_revoked};
+use prodrome_dag::sign::Secret;
 use prodrome_data::change::mk_change;
 use prodrome_data::event::{
     Actor, Envelope, Hash, canonical_envelope, mk_sealed, mk_woven, parse_envelope,
@@ -13,7 +13,8 @@ use prodrome_data::genesis::mk_genesis;
 use prodrome_data::literal::codec::{Constructor, Fields};
 use prodrome_data::literal::{Datetime, ProdromeError, Value};
 use prodrome_data::schema::headed::{Body, Constructors, Event};
-use prodrome_store::snapshot::mk_snapshot;
+use prodrome_data::sign::{KeyAdded, mk_key_revoked};
+use prodrome_data::snapshot::mk_snapshot;
 use suzatary_store::replica::objects::Object;
 
 #[derive(Debug, Clone, PartialEq)]

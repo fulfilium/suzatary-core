@@ -12,7 +12,10 @@ name = "suzatary_release"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_dag.workspace = true
+prodrome_term.workspace = true
+prodrome_todo.workspace = true
 suzatary-record.workspace = true
 thiserror.workspace = true
 serde.workspace = true

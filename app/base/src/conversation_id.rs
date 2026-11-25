@@ -150,7 +150,7 @@ impl AsRef<str> for ConversationId {
 }
 
 // Its literal is its text, as a stored line prints it.
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     ConversationId => |id| id.as_str().to_owned(),
 );
 

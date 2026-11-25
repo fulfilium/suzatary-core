@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use prodrome_core::fpl;
+use prodrome_fpl::fpl;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;

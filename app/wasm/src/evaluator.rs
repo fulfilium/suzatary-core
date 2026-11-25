@@ -1,7 +1,8 @@
 //! §7, the evaluator a page prices and draws with.
 
-use prodrome_core::breaks::series_knots as knots;
-use prodrome_core::fpl::{self, iso};
+use prodrome_data::instant::iso;
+use prodrome_fpl::breaks::series_knots as knots;
+use prodrome_fpl::fpl::{self};
 use prodrome_wasm_exports::json;
 use prodrome_wasm_exports::wire::{
     History, object, parse_closed, parse_env, parse_instant, parse_specs, parse_term,

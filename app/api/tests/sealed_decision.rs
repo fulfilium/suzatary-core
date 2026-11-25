@@ -2,13 +2,12 @@
 //! on a `decision` record is refused whether the record was held before the post or rides in it;
 //! a change the chain's own check would report once held is refused for good.
 
-use prodrome_core::change::mk_change;
-use prodrome_core::event::{
-    Actor, Hash, canonical_envelope, mk_completed, mk_created, mk_reopened, seal_hash,
-};
-use prodrome_core::genesis::mk_genesis;
-use prodrome_core::literal::Datetime;
-use prodrome_core::sign::Secret;
+use prodrome_dag::sign::Secret;
+use prodrome_data::change::mk_change;
+use prodrome_data::event::{Actor, Hash, canonical_envelope, seal_hash};
+use prodrome_data::genesis::mk_genesis;
+use prodrome_data::literal::Datetime;
+use prodrome_todo::event::{mk_completed, mk_created, mk_reopened};
 use suzatary_api::sync::{Objects, Reason, receive};
 use suzatary_record::record::{Envelope, MarkupSource, TodoEvent, mk_authored};
 
@@ -34,7 +33,7 @@ fn refusal_of(held: &[&Envelope], posted: &[&Envelope], completed: &Hash) -> Opt
         &posted,
         &ada,
         &root,
-        &prodrome_core::policy::Untrusted::none(),
+        &prodrome_data::policy::Untrusted::none(),
     )
     .refused
     .into_iter()
@@ -57,7 +56,7 @@ fn a_decision_record_seals_its_todo_whether_held_or_posted_beside() {
             "decision",
             at(0),
             MarkupSource::escaped("Send the reply"),
-            prodrome_core::fpl::mk_absent(),
+            prodrome_term::fpl::mk_absent(),
             Vec::new(),
             "",
             "",
@@ -108,7 +107,7 @@ fn a_change_the_chain_s_check_would_report_is_refused_for_good() {
         Secret::new(&"ab".repeat(32)).expect("a seed"),
         Secret::new(&"cd".repeat(32)).expect("a seed"),
     );
-    let added = Envelope::KeyAdded(prodrome_core::sign::KeyAdded {
+    let added = Envelope::KeyAdded(prodrome_data::sign::KeyAdded {
         genesis: begun,
         actor: Actor::new("ada").expect("an actor"),
         key: phone.public(),

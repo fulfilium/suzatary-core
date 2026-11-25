@@ -1,10 +1,9 @@
 //! §4, so a replica can spell an act with no network; the box re-verifies everything it is
 //! given, so nothing here widens what a page may write.
 
-use prodrome_core::event::{
-    canonical, mk_cancelled, mk_completed, mk_created, mk_reopened, mk_tended,
-};
-use prodrome_core::fpl::datetime_of;
+use prodrome_data::event::canonical;
+use prodrome_data::instant::datetime_of;
+use prodrome_todo::event::{mk_cancelled, mk_completed, mk_created, mk_reopened, mk_tended};
 use prodrome_wasm_exports::wire::parse_instant;
 use wasm_bindgen::prelude::*;
 

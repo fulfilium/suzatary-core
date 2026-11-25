@@ -1,16 +1,17 @@
-//! The chain projected onto the wire: conversion only, every number from `prodrome_core`.
+//! The chain projected onto the wire: conversion only, every number from `prodrome_reading`.
 //!
 //! `rich` travels beside the source, never instead, and is `null` when uncompiled or untrusted.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::{Hash, parents_of, seal_hash};
-use prodrome_core::fpl::{self, Env, LinkError};
-use prodrome_core::literal::{Value, print_literal};
-use prodrome_core::payload::Payload as _;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::term::{Term, TermF};
+use prodrome_data::event::{Hash, parents_of, seal_hash};
+use prodrome_data::literal::{Value, print_literal};
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::fpl::{self, LinkError};
+use prodrome_term::fpl::Env;
+use prodrome_term::term::{Term, TermF};
+use prodrome_todo::payload::Payload as _;
 use regex::Regex;
 use suzatary_record::record::{Authored, Entry, Envelope, Node, TodoEvent};
 
@@ -27,9 +28,9 @@ use suzatary_signatures::believed::one_outcome;
 pub fn provisional_content(entry: &Entry) -> bool {
     matches!(
         entry.confidence,
-        prodrome_core::view::Confidence::Provisional(
-            prodrome_core::view::Provisional::Content
-                | prodrome_core::view::Provisional::ClaimedAndContent
+        prodrome_reading::view::Confidence::Provisional(
+            prodrome_reading::view::Provisional::Content
+                | prodrome_reading::view::Provisional::ClaimedAndContent
         )
     )
 }
@@ -44,7 +45,7 @@ pub fn link(name: &Hash, envelope: &Envelope) -> wire::Link {
             .iter()
             .map(|p| p.as_str().to_owned())
             .collect(),
-        literal: prodrome_core::event::canonical_envelope(envelope),
+        literal: prodrome_data::event::canonical_envelope(envelope),
         holds: match envelope.event() {
             None => wire::Holds::Envelope {
                 kind: envelope_kind(envelope).to_owned(),
@@ -752,8 +753,9 @@ pub fn quoted(source: &str) -> Quoted {
 mod tests {
     use suzatary_record::record::{MarkupSource, mk_authored, mk_source};
 
-    use prodrome_core::event::{Actor, mk_completed, mk_reopened, mk_sealed};
-    use prodrome_core::literal::Datetime as Stamp;
+    use prodrome_data::event::{Actor, mk_sealed};
+    use prodrome_data::literal::Datetime as Stamp;
+    use prodrome_todo::event::{mk_completed, mk_reopened};
 
     use super::*;
     use crate::render::Html;
@@ -844,10 +846,10 @@ mod tests {
             .into_iter()
             .map(|object| (seal_hash(&object), object))
             .collect();
-        let nodes = prodrome_core::dag::Dag::from_iter(objects.clone())
+        let nodes = prodrome_dag::dag::Dag::from_iter(objects.clone())
             .nodes()
             .expect("a closed set reads");
-        let entries = prodrome_core::view::entries(&nodes, at(4), &untrusted()).expect("folds");
+        let entries = prodrome_reading::view::entries(&nodes, at(4), &untrusted()).expect("folds");
         let shown = entry(&Echo, &entries[0], &by_hash(&objects), &untrusted(), at(4));
         let bodies: BTreeSet<String> = shown
             .candidates
@@ -879,10 +881,10 @@ mod tests {
             mk_completed("permit", early, "ada", "").expect("an event"),
         );
         let read = |objects: &[(Hash, Envelope)], t: Stamp| {
-            let nodes = prodrome_core::dag::Dag::from_iter(objects.to_vec())
+            let nodes = prodrome_dag::dag::Dag::from_iter(objects.to_vec())
                 .nodes()
                 .expect("a closed set reads");
-            prodrome_core::view::entries(&nodes, t, &untrusted())
+            prodrome_reading::view::entries(&nodes, t, &untrusted())
                 .expect("folds")
                 .iter()
                 .map(|read| entry(&Echo, read, &by_hash(objects), &untrusted(), t))
@@ -1009,7 +1011,7 @@ mod tests {
         assert_eq!(wired.parents, Vec::<String>::new());
         assert_eq!(wired.hash, named.as_str());
 
-        let merge = prodrome_core::event::mk_woven(
+        let merge = prodrome_data::event::mk_woven(
             vec![named.clone(), Hash::new("b".repeat(64)).expect("hex")],
             None,
         )

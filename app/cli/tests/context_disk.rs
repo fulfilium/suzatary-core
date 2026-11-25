@@ -8,7 +8,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use prodrome_core::event::{Hash, canonical_envelope};
+use prodrome_data::event::{Hash, canonical_envelope};
 use suzatary_digest::secretary::compacting::Compacting;
 use suzatary_digest::secretary::digests::ReadDigests;
 use suzatary_digest::secretary::memories::ReadMemories;
@@ -37,11 +37,11 @@ struct Disk {
     summaries: Texts<suzatary_digest::secretary::digest_line::Line>,
     facts: Objects<suzatary_memory::secretary::memory_event::MemoryEvent>,
     words: Texts<suzatary_memory::secretary::memory::Fact>,
-    owners: std::collections::BTreeSet<prodrome_core::event::Actor>,
+    owners: std::collections::BTreeSet<prodrome_data::event::Actor>,
 }
 
 impl Disk {
-    fn open(root: &Path, owners: std::collections::BTreeSet<prodrome_core::event::Actor>) -> Self {
+    fn open(root: &Path, owners: std::collections::BTreeSet<prodrome_data::event::Actor>) -> Self {
         Self {
             lines: ConversationStores::open(
                 root.join("lines"),

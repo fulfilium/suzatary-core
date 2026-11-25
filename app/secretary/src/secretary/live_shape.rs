@@ -6,8 +6,8 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
 
 use suzatary_base::capability::Entropy as _;
 use suzatary_base::conversation_id::ConversationId;
@@ -100,11 +100,11 @@ fn ada() -> Actor {
 /// The `second`th second of the store's year.
 #[must_use]
 pub fn at(second: usize) -> Datetime {
-    let start = prodrome_core::fpl::instant_of(
+    let start = prodrome_data::instant::instant_of(
         Datetime::new(2026, 1, 1, 0, 0, 0, 0).expect("a constant instant"),
     );
     let offset = chrono::Duration::seconds(i64::try_from(second).expect("a year of seconds"));
-    prodrome_core::fpl::datetime_of(start + offset).expect("an instant in 2026")
+    prodrome_data::instant::datetime_of(start + offset).expect("an instant in 2026")
 }
 
 impl Shape {
@@ -220,7 +220,7 @@ impl Stores {
         &self,
         most: usize,
         second: usize,
-        words: &dyn Fn(&prodrome_core::event::Hash) -> String,
+        words: &dyn Fn(&prodrome_data::event::Hash) -> String,
     ) {
         let salts = Counting::default();
         let mut left = most;
@@ -279,7 +279,7 @@ pub fn context(memory: &Recollection<'_>) -> serde_json::Value {
         actors: std::collections::BTreeMap::new(),
         chains: Chains::of(vec![ChainPolicy {
             name: ChainName::new("life").expect("a constant slug"),
-            untrusted: prodrome_core::policy::Untrusted::of([]),
+            untrusted: prodrome_data::policy::Untrusted::of([]),
             roster: BTreeSet::new(),
             root: suzatary_connect::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,

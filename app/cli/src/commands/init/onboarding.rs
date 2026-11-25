@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::bail;
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use suzatary_base::capability::Login;
 use suzatary_base::chains::ChainName;
 use suzatary_base::persona::Persona;
@@ -200,7 +200,7 @@ impl Onboarding {
     }
 
     /// The instance file this onboarding means.
-    pub(crate) fn file(&self, root: &prodrome_core::sign::PublicKey) -> anyhow::Result<File> {
+    pub(crate) fn file(&self, root: &prodrome_data::sign::PublicKey) -> anyhow::Result<File> {
         let roster: Vec<Actor> = std::iter::once(self.owner.clone())
             .chain(agents())
             .collect();
@@ -281,7 +281,7 @@ impl Onboarding {
     }
 
     /// The file as `init` writes it under `root`, header and all.
-    pub fn printed(&self, root: &prodrome_core::sign::PublicKey) -> anyhow::Result<String> {
+    pub fn printed(&self, root: &prodrome_data::sign::PublicKey) -> anyhow::Result<String> {
         self.file(root)?.to_toml_string(HEADER)
     }
 

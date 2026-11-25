@@ -8,11 +8,11 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use prodrome_core::event::{Actor, Hash, canonical_envelope};
-use prodrome_core::literal::Datetime;
-use prodrome_core::store::{MemoryStore, Replica as _};
+use prodrome_data::event::{Actor, Hash, canonical_envelope};
+use prodrome_data::literal::Datetime;
+use prodrome_store::store::{MemoryStore, Replica as _};
 
-use prodrome_core::store::frontier::{Frontiers, KEPT, Since, Token};
+use prodrome_store::store::frontier::{Frontiers, KEPT, Since, Token};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
@@ -130,7 +130,7 @@ pub(crate) fn shaped(long: usize) -> InMemory {
         .receive(
             begun.keys().cloned().collect(),
             &|name| begun.get(name).cloned(),
-            prodrome_core::store::Sender::Keeper,
+            prodrome_data::husk::Sender::Keeper,
         )
         .expect("received");
     for event in events {

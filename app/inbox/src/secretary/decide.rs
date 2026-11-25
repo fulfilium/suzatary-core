@@ -4,7 +4,7 @@
 //! round that read mail stands only once he has read the card. A refusal at tap time (the id
 //! decided meanwhile, a link gone, the markup refused) is an outcome, like a failed send.
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 
 use crate::secretary::responded::{Done, Performed, Tried};
 use crate::wire::inbox as wire;

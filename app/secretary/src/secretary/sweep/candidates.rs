@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use prodrome_core::event::TodoId;
+use prodrome_data::event::TodoId;
 use regex::Regex;
 
 use suzatary_base::capability::Datetime;
@@ -220,7 +220,7 @@ fn parse_shown_timestamp(text: &str) -> Option<Datetime> {
         .ok()?
         .naive_utc(),
     };
-    prodrome_core::fpl::datetime_of(utc).ok()
+    prodrome_data::instant::datetime_of(utc).ok()
 }
 
 /// For every open todo, the later mail that plausibly bears on it; proposes and writes nothing.

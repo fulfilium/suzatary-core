@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::bail;
 use clap::Subcommand;
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 use suzatary_base::chains::ChainName;
 use suzatary_base::reference::GlobalTodo;
 use suzatary_plan::listed::{ListRow, Package, Store, Units, Unresolved, Urgency, listed};

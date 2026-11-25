@@ -17,13 +17,14 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use prodrome_core::event::{Actor, Hash, canonical_envelope};
 use prodrome_core::laws::script::{self, Script, Who, a_script};
 use prodrome_core::laws::{Broken, Registers};
-use prodrome_core::memo::{Cache, Lru};
-use prodrome_core::policy::{Everything, Policy, Untrusted};
-use prodrome_core::registers::fold;
-use prodrome_core::store::{EventStore, Held as Replicated};
+use prodrome_dag::policy::Policy;
+use prodrome_dag::registers::fold;
+use prodrome_data::event::{Actor, Hash, canonical_envelope};
+use prodrome_data::policy::{Everything, Untrusted};
+use prodrome_memo::{Cache, Lru};
+use prodrome_store::store::{EventStore, Held as Replicated};
 use proptest::prelude::*;
 use proptest::test_runner::Config;
 

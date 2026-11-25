@@ -73,7 +73,7 @@ pub struct Post<'a, 'e, A: Admission + ?Sized> {
     pub held: &'a A::Held<'e>,
     pub world: &'a A::World,
     /// The keys the post's signatures of this change name; the shared rule proves them.
-    pub signers: &'a [prodrome_dag::sign::PublicKey],
+    pub signers: &'a [prodrome_data::sign::PublicKey],
 }
 
 /// A store's own rule for what a tab posts to it.

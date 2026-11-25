@@ -1,6 +1,7 @@
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::sign::{KeyAdded, PublicKey, Registrar, Secret, Signature, Signed};
+use prodrome_dag::dag::Dag;
+use prodrome_dag::sign::{Registrar, Secret};
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::sign::{KeyAdded, PublicKey, Signature, Signed};
 use serde::{Deserialize, Serialize};
 
 use super::{KeyStanding, Keyed, Trust, Unproven};

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::SystemTime;
 
-use prodrome_core::store::Doors;
+use prodrome_store::store::Doors;
 
 use suzatary_io_access::repository::{Checkout, Stamp};
 use suzatary_os::present::Present as _;

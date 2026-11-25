@@ -56,7 +56,7 @@ pub fn read_calendars(
     store_of: impl Fn(&suzatary_mail::mail::account::MailAccount) -> std::path::PathBuf,
     now: suzatary_base::capability::Datetime,
 ) -> (Vec<String>, Healths<SourceKey>, bool) {
-    let at = prodrome_core::fpl::instant_of(now);
+    let at = prodrome_data::instant::instant_of(now);
     let mut healths = Healths::default();
     let mut stored = true;
     let mut lines = Vec::new();
@@ -123,7 +123,7 @@ pub fn read_calendars(
 /// # Errors
 /// The calendar's schema refused, or the store not emptied.
 fn settle(root: &std::path::Path) -> Result<(), String> {
-    let schema = prodrome_core::declared::Declaration::admit(suzatary_google::google::SCHEMA)
+    let schema = prodrome_declared::Declaration::admit(suzatary_google::google::SCHEMA)
         .map_err(|refused| format!("the calendar's schema: {refused}"))?;
     suzatary_io_chains::plugin_store::PluginStore::at(root)
         .settle(&schema)

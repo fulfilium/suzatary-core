@@ -5,10 +5,11 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::fpl::{Stores, datetime_of, link_in};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::term::Term;
+use prodrome_data::instant::datetime_of;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::fpl::{Stores, link_in};
+use prodrome_term::term::Term;
 use prodrome_wasm_exports::wire::{parse_instant, parse_specs, parse_term, parse_untrusted};
 use prodrome_wasm_exports::{Replica, json};
 use suzatary_base::chains::ChainName;

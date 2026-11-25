@@ -13,8 +13,8 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::OnceLock;
 
-use prodrome_core::event::Hash;
-use prodrome_core::memo::{self, Key};
+use prodrome_data::event::Hash;
+use prodrome_memo::{self as memo, Key};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

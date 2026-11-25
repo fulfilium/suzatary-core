@@ -772,7 +772,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
         "two calendars, each read to its bound"
     );
     let root = common::scratch("google-calendar");
-    let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
     let learnt = suzatary_io_mail::google::learn(&root, &read, at).expect("learned");
     assert_eq!(learnt.written, read.len());
     let again = suzatary_io_mail::google::learn(&root, &read, at).expect("learned");
@@ -1033,7 +1033,7 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
     // process alone is one store that each removes while another appends to it.
     let scratch = suzatary_testkit::scratch("google");
     let root = scratch.path();
-    let at = prodrome_core::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
     // The unsigned account's store, written at an older schema, holds an address; it is not
     // fetched, and is emptied all the same.
     let address = format!("{}@{}", "mira", "example.invalid");

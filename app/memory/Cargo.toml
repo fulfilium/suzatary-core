@@ -30,7 +30,7 @@ zeroize.workspace = true
 nothing = ["suzatary-base/nothing", "suzatary-store/nothing", "suzatary-held/nothing"]
 
 [dev-dependencies]
-prodrome_core.workspace = true
+prodrome_store.workspace = true
 suzatary-memory = { path = ".", features = ["nothing"] }
 suzatary-testkit = { path = "../testkit" }
 proptest.workspace = true

@@ -10,9 +10,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope};
-use prodrome_core::literal::Datetime;
-use prodrome_core::store::frontier::{Frontiers, KEPT, Since};
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope};
+use prodrome_data::literal::Datetime;
+use prodrome_store::store::frontier::{Frontiers, KEPT, Since};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_api::sync::Holding;
 use suzatary_base::capability::Entropy;
@@ -610,7 +610,7 @@ fn reusing(the_box: &Boxed, craft: Craft, n: u32) -> Option<(OwnLine, Actor)> {
     };
     let (line, keys) = write(DEFAULT.clone(), actor.clone(), held, &entry, &entropy).ok()?;
     let change =
-        prodrome_core::change::mk_change(genesis, vec![lines[at].name.clone()], line).ok()?;
+        prodrome_data::change::mk_change(genesis, vec![lines[at].name.clone()], line).ok()?;
     Some((
         OwnLine::sealed(&Envelope::Change(change), &keys).ok()?,
         actor,

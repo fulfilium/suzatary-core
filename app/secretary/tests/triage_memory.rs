@@ -10,9 +10,9 @@
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use prodrome_core::event::{Actor, Hash, canonical_envelope};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::{Actor, Hash, canonical_envelope};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
 use serde_json::{Map, Value, json};
 use suzatary_base::capability::Entropy;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};

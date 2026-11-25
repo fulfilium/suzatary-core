@@ -59,7 +59,7 @@ pub fn register_device(
     devices: &dyn Log<String, Device>,
     clock: &dyn suzatary_base::capability::Clock,
     registering: &crate::wire::signatures::Registering,
-    actor: &prodrome_core::event::Actor,
+    actor: &prodrome_data::event::Actor,
 ) -> Result<crate::wire::signatures::DevicePayload, Refusal> {
     let token = registering.token.trim().to_owned();
     if token.is_empty() || token.len() > MAX_TOKEN || token.chars().any(char::is_whitespace) {

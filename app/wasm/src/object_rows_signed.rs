@@ -4,9 +4,9 @@
 //! page reads those, so only what is not a signature among the tips with them is a tip without
 //! them.
 
-use prodrome_core::event::{Actor, Envelope, Hash, canonical, canonical_envelope};
-use prodrome_core::literal::Datetime;
-use prodrome_core::sign::Secret;
+use prodrome_dag::sign::Secret;
+use prodrome_data::event::{Actor, Envelope, Hash, canonical, canonical_envelope};
+use prodrome_data::literal::Datetime;
 use suzatary_topics::secretary::topics::provenance::Owner;
 use suzatary_topics::secretary::topics::reading::{self, AliasEvent, MembershipEvent};
 use suzatary_topics::secretary::topics::topic::Topic;

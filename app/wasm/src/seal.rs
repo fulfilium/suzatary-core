@@ -9,8 +9,8 @@
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::fpl::datetime_of;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::instant::datetime_of;
 use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;

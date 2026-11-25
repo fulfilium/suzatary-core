@@ -6,8 +6,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use prodrome_core::fpl;
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
+use prodrome_term::fpl;
 use suzatary_record::record::{EventStore, MarkupSource, TodoEvent, mk_authored};
 
 use crate::todos::scratch;
@@ -16,7 +16,7 @@ const IDS: [&str; 4] = ["permit", "taxes", "garden", "roof"];
 const AT: &str = "2026-10-01T12:00:00";
 
 type Lifecycle =
-    fn(&str, Datetime, &str, &str) -> Result<TodoEvent, prodrome_core::literal::ProdromeError>;
+    fn(&str, Datetime, &str, &str) -> Result<TodoEvent, prodrome_data::literal::ProdromeError>;
 
 /// One step of a generated history: a todo authored at a flat price, two records written by two
 /// replicas that did not see each other (a conflict), or a lifecycle event with its note.
@@ -53,9 +53,9 @@ fn body() -> impl proptest::strategy::Strategy<Value = String> {
 fn step() -> impl proptest::strategy::Strategy<Value = (usize, &'static str, Step)> {
     use proptest::prelude::*;
     let lifecycle: [Lifecycle; 3] = [
-        prodrome_core::event::mk_completed,
-        prodrome_core::event::mk_cancelled,
-        prodrome_core::event::mk_reopened,
+        prodrome_todo::event::mk_completed,
+        prodrome_todo::event::mk_cancelled,
+        prodrome_todo::event::mk_reopened,
     ];
     let step = prop_oneof![
         3 => (1u32..100, body()).prop_map(|(percent, body)| Step::Authored(f64::from(percent) / 100.0, body)),
@@ -91,10 +91,10 @@ fn authored(todo: &str, day: u32, actor: &str, body: &str, value: f64) -> TodoEv
 }
 
 fn store(dir: &Path) -> EventStore {
-    EventStore::new(dir, prodrome_core::policy::Untrusted::none())
+    EventStore::new(dir, prodrome_data::policy::Untrusted::none())
 }
 
-fn append(dir: &Path, event: TodoEvent) -> prodrome_core::event::Hash {
+fn append(dir: &Path, event: TodoEvent) -> prodrome_data::event::Hash {
     suzatary_store::store::append_to(&store(dir), suzatary_record::record::GENESIS, event)
         .expect("appends")
 }
@@ -121,7 +121,7 @@ fn written(root: &Path, steps: &[(usize, &str, Step)]) -> std::path::PathBuf {
                     .adopt(
                         &store(&replica),
                         &theirs,
-                        prodrome_core::store::Sender::Stranger,
+                        prodrome_data::husk::Sender::Stranger,
                     )
                     .expect("adopts the replica's record");
             }
@@ -293,7 +293,7 @@ fn the_stores_words(store: &Path) -> BTreeSet<String> {
                 .unwrap_or_default()
                 .into_iter()
                 .map(|(_, text)| text);
-            published.chain([prodrome_core::event::canonical_envelope(envelope)])
+            published.chain([prodrome_data::event::canonical_envelope(envelope)])
         })
         .flat_map(|text| words(&text))
         .collect()

@@ -147,7 +147,7 @@ fn printed(instance: &Instance) -> String {
                     .policy
                     .roster
                     .iter()
-                    .map(prodrome_core::event::Actor::as_str)
+                    .map(prodrome_data::event::Actor::as_str)
                     .collect::<Vec<_>>()
             ),
         );

@@ -1,8 +1,8 @@
 //! One act the secretary wants performed and will not perform itself, with its reasons.
 
 use crate::secretary::changes::Changeset;
-use prodrome_core::literal::Value;
-use prodrome_core::literal::codec::Constructor;
+use prodrome_data::literal::Value;
+use prodrome_data::literal::codec::Constructor;
 mod draft;
 mod forward;
 mod reasons;
@@ -162,9 +162,9 @@ pub const REMEMBER: Constructor = ("Remember", &["text", "kind"]);
 pub const CONSOLIDATE: Constructor = ("Consolidate", &["text", "kind", "from"]);
 
 // By hand: most variants print as the record they hold, and one prints two constructors.
-impl prodrome_core::literal::codec::Literal for Proposal {
+impl prodrome_data::literal::codec::Literal for Proposal {
     fn to_value(&self) -> Value {
-        use prodrome_core::literal::codec::record;
+        use prodrome_data::literal::codec::record;
         match self {
             Proposal::Email(draft) => draft.to_value(),
             Proposal::Forward(forward) => forward.to_value(),
@@ -187,8 +187,8 @@ impl prodrome_core::literal::codec::Literal for Proposal {
         }
     }
 
-    fn from_value(value: &Value) -> Result<Self, prodrome_core::literal::ProdromeError> {
-        use prodrome_core::literal::codec::{Fields, arm};
+    fn from_value(value: &Value) -> Result<Self, prodrome_data::literal::ProdromeError> {
+        use prodrome_data::literal::codec::{Fields, arm};
         Ok(match arm(value)? {
             "Email" => Proposal::Email(Draft::from_value(value)?),
             "Forward" => Proposal::Forward(Forward::from_value(value)?),

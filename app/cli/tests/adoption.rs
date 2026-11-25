@@ -4,8 +4,9 @@
 
 use std::path::Path;
 
-use prodrome_core::event::Envelope;
-use prodrome_core::sign::{PublicKey, Secret};
+use prodrome_dag::sign::Secret;
+use prodrome_data::event::Envelope;
+use prodrome_data::sign::PublicKey;
 use suzatary_record::record::{EventStore, TodoEvent};
 use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY};
 
@@ -40,8 +41,8 @@ fn ok(output: &std::process::Output) {
 }
 
 fn done(todo: &str, by: &str) -> TodoEvent {
-    let at = prodrome_core::literal::Datetime::new(2026, 9, 3, 9, 0, 0, 0).expect("an instant");
-    prodrome_core::event::mk_completed(todo, at, by, "").expect("an event")
+    let at = prodrome_data::literal::Datetime::new(2026, 9, 3, 9, 0, 0, 0).expect("an instant");
+    prodrome_todo::event::mk_completed(todo, at, by, "").expect("an event")
 }
 
 #[test]
@@ -82,7 +83,7 @@ fn adopting_again_refuses_an_unsigned_write_since_the_epoch_until_it_is_repaired
     let unsigned = suzatary_store::store::append_to(
         &EventStore::new(
             root.join("events"),
-            prodrome_core::policy::Untrusted::none(),
+            prodrome_data::policy::Untrusted::none(),
         ),
         suzatary_record::record::GENESIS,
         done("parkingpermit", "ada"),
@@ -211,10 +212,10 @@ fn device_init_repairs_a_box_adopted_before_custody() {
     {
         let chain = suzatary_io_chains::objects::Objects::chain(EventStore::new(
             root.join("events"),
-            prodrome_core::policy::Untrusted::none(),
+            prodrome_data::policy::Untrusted::none(),
         ));
         for actor in ["ada", "assistant", "triage"] {
-            let actor = prodrome_core::event::Actor::new(actor).expect("an actor");
+            let actor = prodrome_data::event::Actor::new(actor).expect("an actor");
             suzatary_signatures::signatures::trust(&chain, &own, &actor, &own.public())
                 .expect("registered");
         }

@@ -8,10 +8,10 @@
 use std::collections::BTreeMap;
 
 use crate::record::{MarkupSource, Note, NoteSite, Source, StringSource, SubTodo};
-use prodrome_core::event::{Actor, Name, TodoId};
-use prodrome_core::fpl;
-use prodrome_core::fpl::Outcome;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::{Actor, Name, TodoId};
+use prodrome_data::literal::Datetime;
+use prodrome_term::fpl;
+use prodrome_term::fpl::Outcome;
 
 use super::value::{Arg, Call, Value};
 use super::{DecorationError, read};

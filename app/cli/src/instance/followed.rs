@@ -7,9 +7,9 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::bail;
-use prodrome_core::event::Actor;
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::Actor;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
 use serde::{Deserialize, Serialize};
 use suzatary_base::chains::ChainName;
 use suzatary_io_access::run::{Cmd, run, succeed};
@@ -312,7 +312,7 @@ impl Followed {
     /// that fails after it began to change the tree leaves the copy unconfirmed, read as no store
     /// until a fetch confirms it again, and the next fetch puts the tree back first.
     pub fn fetch(&self, now: Datetime) -> anyhow::Result<()> {
-        let at = prodrome_core::fpl::iso(prodrome_core::fpl::instant_of(now));
+        let at = prodrome_data::instant::iso(prodrome_data::instant::instant_of(now));
         let _held = suzatary_os::durable::hold(&self.record("lock"))?;
         match self.fetched() {
             Ok(commit) => {

@@ -2,8 +2,8 @@
 //! with one, a Junk message read from its server, and a search row are answered to the secretary
 //! and to the triage agent with placeholders, and nothing else of them moves.
 
-use prodrome_core::event::Actor;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::Actor;
+use prodrome_data::policy::Untrusted;
 use serde_json::{Map, Value, json};
 use suzatary_base::capability::Nothing;
 use suzatary_base::chains::{ChainName, ChainPolicy, Chains};

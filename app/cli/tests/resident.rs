@@ -64,8 +64,8 @@ fn served(root: &Path) -> (Serving, String) {
 }
 
 /// A key the box trusts, trusted at the terminal as `suzatary device trust` does.
-fn trusted(root: &Path) -> prodrome_core::sign::Secret {
-    let key = prodrome_core::sign::Secret::new(&"7".repeat(64)).expect("a seed");
+fn trusted(root: &Path) -> prodrome_dag::sign::Secret {
+    let key = prodrome_dag::sign::Secret::new(&"7".repeat(64)).expect("a seed");
     let trusted = fixture(root)
         .arg("--instance")
         .arg(root.join("box/instance.toml"))
@@ -123,7 +123,7 @@ fn pulled(base: &str, path: &str) -> Vec<String> {
 /// that hands it to the lines.
 fn question(
     base: &str,
-    key: &prodrome_core::sign::Secret,
+    key: &prodrome_dag::sign::Secret,
     id: &str,
     round: usize,
 ) -> serde_json::Value {
@@ -159,14 +159,14 @@ fn question(
         .iter()
         .filter_map(|n| n["hash"].as_str())
         .filter(|n| !under.contains(n))
-        .map(|n| prodrome_core::event::Hash::new(n).expect("a name"))
+        .map(|n| prodrome_data::event::Hash::new(n).expect("a name"))
         .collect();
     let actor = get(base, "/api/me")["actor"]
         .as_str()
         .expect("an actor")
         .to_owned();
     let entry = suzatary_conversations::secretary::store::Entry::Said {
-        at: prodrome_core::literal::Datetime::new(
+        at: prodrome_data::literal::Datetime::new(
             2026,
             11,
             17,
@@ -187,31 +187,31 @@ fn question(
     };
     let (line, keys) = LineEvent::write(
         suzatary_base::conversation_id::ConversationId::new(id).expect("an id"),
-        prodrome_core::event::Actor::new(&actor).expect("an actor"),
+        prodrome_data::event::Actor::new(&actor).expect("an actor"),
         u32::try_from(ours.len()).expect("a count"),
         &entry,
         &suzatary_io_local::texts::SystemEntropy,
     )
     .expect("a line");
     let genesis =
-        prodrome_core::event::Hash::new(genesis.expect("the lines began")).expect("a name");
-    let change = prodrome_core::event::Envelope::Change(
-        prodrome_core::change::mk_change(genesis, heads, line).expect("a change"),
+        prodrome_data::event::Hash::new(genesis.expect("the lines began")).expect("a name");
+    let change = prodrome_data::event::Envelope::Change(
+        prodrome_data::change::mk_change(genesis, heads, line).expect("a change"),
     );
-    let name = prodrome_core::event::seal_hash(&change);
-    let signature: prodrome_core::event::Envelope<LineEvent> =
-        prodrome_core::event::Envelope::Signed(key.sign(&name));
+    let name = prodrome_data::event::seal_hash(&change);
+    let signature: prodrome_data::event::Envelope<LineEvent> =
+        prodrome_data::event::Envelope::Signed(key.sign(&name));
     serde_json::json!({
         "objects": [
-            prodrome_core::event::canonical_envelope(&change),
-            prodrome_core::event::canonical_envelope(&signature),
+            prodrome_data::event::canonical_envelope(&change),
+            prodrome_data::event::canonical_envelope(&signature),
         ],
         "keys": { name.as_str(): keys.iter().map(|k| hex::encode(k.bytes())).collect::<Vec<_>>() },
     })
 }
 
 /// One round of the page's request mix; `round` picks the conversation and the window of lines.
-fn round(base: &str, key: &prodrome_core::sign::Secret, round: usize) {
+fn round(base: &str, key: &prodrome_dag::sign::Secret, round: usize) {
     for path in [
         "/api/about",
         "/api/me",

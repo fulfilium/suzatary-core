@@ -6,8 +6,8 @@ use crate::commands::coding::Firing;
 use crate::interpreters::Brain;
 use crate::wiring::Opened;
 use crate::wiring::Stores;
-use prodrome_core::event::Actor;
-use prodrome_core::fpl::instant_of;
+use prodrome_data::event::Actor;
+use prodrome_data::instant::instant_of;
 use std::path::Path;
 use std::sync::Arc;
 use suzatary_base::capability::Clock;
@@ -643,7 +643,7 @@ impl Flow<'_> {
         let expiry_seconds = code.expires_in_seconds.min(deadline_seconds);
         let expiry_instant = instant_of(started)
             + chrono::Duration::seconds(i64::try_from(expiry_seconds).unwrap_or(i64::MAX));
-        let expires_at = prodrome_core::fpl::iso(expiry_instant);
+        let expires_at = prodrome_data::instant::iso(expiry_instant);
 
         // Never the device code.
         let announced = format!(
@@ -1020,7 +1020,7 @@ fn begin_recording(
     };
     // Fixed, for byte-stable scenes.
     let now =
-        prodrome_core::literal::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("a real instant");
+        prodrome_data::literal::Datetime::new(2026, 9, 14, 9, 0, 0, 0).expect("a real instant");
     let at = now;
     let expires_at = "2026-09-14T09:15:00".to_owned();
     let announced = format!(
@@ -1784,7 +1784,7 @@ pub fn prune_lines(
 /// Each line of `dead` kept as its husk, and what that let go said.
 fn husk_dead(
     stores: &ConversationStores,
-    dead: &std::collections::BTreeSet<prodrome_core::event::Hash>,
+    dead: &std::collections::BTreeSet<prodrome_data::event::Hash>,
     out: &mut impl std::io::Write,
 ) -> anyhow::Result<()> {
     let let_go = stores.lines.husk(dead)?;
@@ -1807,7 +1807,7 @@ pub fn readings(instance: &Instance, out: &mut impl std::io::Write) -> anyhow::R
     let refused = |refusal: Refusal| anyhow::anyhow!("{}", refusal.message());
     let stores = conversations(instance);
     let conversations = stores.conversations();
-    let at = prodrome_core::literal::Datetime::new(2026, 1, 1, 0, 0, 0, 0)?;
+    let at = prodrome_data::literal::Datetime::new(2026, 1, 1, 0, 0, 0, 0)?;
     let mut digest = Vec::new();
     census(instance, &mut digest)?;
     let read = super::chains_read(instance);
@@ -2752,7 +2752,7 @@ mod sign_in_completion {
         );
         let inbox: super::ActingInbox = Box::leak(Box::new(InMemory::default()));
         let at =
-            prodrome_core::literal::Datetime::new(2026, 10, 7, 9, 0, 0, 0).expect("an instant");
+            prodrome_data::literal::Datetime::new(2026, 10, 7, 9, 0, 0, 0).expect("an instant");
         transcript::start(
             conversations.conversations(),
             &DEFAULT,

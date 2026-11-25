@@ -101,8 +101,8 @@ pub const QUIET_SECONDS: u64 = 120;
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::{mk_completed, mk_created, mk_reopened};
-    use prodrome_core::fpl;
+    use prodrome_term::fpl;
+    use prodrome_todo::event::{mk_completed, mk_created, mk_reopened};
     use proptest::prelude::*;
     use suzatary_inbox::secretary::inbox::ProposalId;
     use suzatary_inbox::secretary::inbox_event::{InboxEvent, Said};

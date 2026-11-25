@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
-use prodrome_core::event::seal_hash;
-use prodrome_core::sign::Secret;
+use prodrome_dag::sign::Secret;
+use prodrome_data::event::seal_hash;
 
 use crate::binary::{Serving, keyed_fixture};
 
@@ -128,14 +128,14 @@ fn a_box_that_mounts_a_public_chain_performs_a_trusted_tap() {
     );
     assert_eq!(status, 200, "{asked}");
     let index = asked["proposed"].as_u64().expect("an index");
-    let life = prodrome_core::store::EventStore::<suzatary_record::record::TodoEvent>::new(
+    let life = prodrome_store::store::EventStore::<suzatary_record::record::TodoEvent>::new(
         root.join("box/events"),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     )
     .dag()
     .expect("life reads");
     let added = suzatary_signatures::signatures::Enrolment {
-        actor: prodrome_core::event::Actor::new(suzatary_connect::cast::CAST.owner.actor)
+        actor: prodrome_data::event::Actor::new(suzatary_connect::cast::CAST.owner.actor)
             .expect("an actor"),
         key: new.public(),
     }

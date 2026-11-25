@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 
 use sha2::{Digest, Sha256};
 
-use prodrome_core::literal::codec::Literal;
+use prodrome_data::literal::codec::Literal;
 
 #[derive(Debug)]
 pub struct ContentId<T> {
@@ -17,7 +17,7 @@ impl<T: Literal> ContentId<T> {
     /// The name of `value`: the SHA-256, in lowercase hex, of its literal's canonical print.
     #[must_use]
     pub fn of(value: &T) -> Self {
-        let print = prodrome_core::literal::print_literal(&value.to_value());
+        let print = prodrome_data::literal::print_literal(&value.to_value());
         Self {
             hex: hex::encode(Sha256::digest(print.as_bytes())),
             of: PhantomData,

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::event::Hash;
+use prodrome_data::event::Hash;
 use schemars::JsonSchema;
 use serde::Serialize;
 use suzatary_base::escape::{markup_text, string_text};
@@ -72,7 +72,7 @@ pub fn open<'a>(
         .filter_map(|entry| Some((entry, *records.get(entry.content().first()?)?)))
         .filter(|(_, record)| !record.payload.is_decision())
         .collect();
-    open.sort_by(|(left, _), (right, _)| prodrome_core::view::list_order(left, right));
+    open.sort_by(|(left, _), (right, _)| prodrome_reading::view::list_order(left, right));
     open
 }
 

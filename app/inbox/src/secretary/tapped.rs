@@ -5,7 +5,7 @@
 //! his say), so its witness is a [`Tap`], which only the gate mints: an engine holds no such
 //! rule, and the box can only PROPOSE what this rule performs.
 
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 
 use crate::secretary::inbox::{self, Object, ProposalId, Response};
 use crate::secretary::inbox_event::InboxEvent;

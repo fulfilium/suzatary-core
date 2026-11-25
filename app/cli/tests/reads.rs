@@ -4,7 +4,8 @@
 use crate::common;
 
 use common::Fakes;
-use prodrome_core::event::{mk_completed, mk_created, seal_hash};
+use prodrome_data::event::seal_hash;
+use prodrome_todo::event::{mk_completed, mk_created};
 use suzatary_record::record::mk_authored;
 
 fn base() -> String {
@@ -31,7 +32,7 @@ fn every_literal_rehashes_to_its_own_name() {
     assert!(!links.is_empty());
     for link in links {
         let literal = link["literal"].as_str().expect("a literal");
-        let envelope: suzatary_record::record::Envelope = prodrome_core::event::parse_envelope(
+        let envelope: suzatary_record::record::Envelope = prodrome_data::event::parse_envelope(
             &suzatary_record::record::TodoVocabulary::default(),
             literal,
         )
@@ -129,7 +130,7 @@ fn an_untrusted_completion_is_claimed_but_not_bound() {
     let root = common::scratch("reads-untrusted-completion");
     let events = suzatary_record::record::EventStore::new(
         root.join("events"),
-        prodrome_core::policy::Untrusted::of([common::actor("triage")]),
+        prodrome_data::policy::Untrusted::of([common::actor("triage")]),
     );
     let born = common::shift(common::now(), -10);
     let made = common::shift(common::now(), -5);
@@ -149,7 +150,7 @@ fn an_untrusted_completion_is_claimed_but_not_bound() {
             "todo",
             made,
             suzatary_record::record::MarkupSource::escaped("Email Harrow"),
-            prodrome_core::fpl::mk_flat(0.5).expect("valid"),
+            prodrome_term::fpl::mk_flat(0.5).expect("valid"),
             Vec::new(),
             "",
             "",
@@ -198,7 +199,7 @@ fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
     let root = common::scratch("reads-diffs");
     let events = suzatary_record::record::EventStore::new(
         root.join("events"),
-        prodrome_core::policy::Untrusted::of([common::actor("triage")]),
+        prodrome_data::policy::Untrusted::of([common::actor("triage")]),
     );
     let born = common::shift(common::now(), -10);
     let first = common::shift(common::now(), -5);
@@ -219,7 +220,7 @@ fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
             "todo",
             first,
             suzatary_record::record::MarkupSource::escaped("File the deed"),
-            prodrome_core::fpl::mk_flat(0.5).expect("valid"),
+            prodrome_term::fpl::mk_flat(0.5).expect("valid"),
             Vec::new(),
             "",
             "",
@@ -242,7 +243,7 @@ fn the_stream_is_chronological_and_every_authored_carries_its_diff() {
             "todo",
             first,
             suzatary_record::record::MarkupSource::escaped("File the permit renewal"),
-            prodrome_core::fpl::mk_flat(0.5).expect("valid"),
+            prodrome_term::fpl::mk_flat(0.5).expect("valid"),
             Vec::new(),
             "work",
             "",

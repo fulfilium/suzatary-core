@@ -1,5 +1,5 @@
-use prodrome_core::event::Hash;
-use prodrome_core::sign::{PublicKey, Signature, Signed};
+use prodrome_data::event::Hash;
+use prodrome_data::sign::{PublicKey, Signature, Signed};
 use serde::{Deserialize, Serialize};
 
 /// Which device asked for what the box wrote: one performed request, as provenance only.

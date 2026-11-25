@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail};
-use prodrome_core::event::TodoId;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::TodoId;
+use prodrome_data::literal::Datetime;
 use suzatary_base::capability::Typeset;
 use suzatary_base::chains::ChainName;
 use suzatary_io_typeset::typeset::Compiler;

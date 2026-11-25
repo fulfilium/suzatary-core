@@ -3,7 +3,7 @@
 //! never by a crate's source, so a cut moves no compiled input. The file is public, so it holds
 //! ids alone: a title is the chain's, looked up where it is shown.
 
-use prodrome_core::event::TodoId;
+use prodrome_data::event::TodoId;
 use serde::{Deserialize, Serialize};
 
 use super::{NotAVersion, Version};

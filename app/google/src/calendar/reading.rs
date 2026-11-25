@@ -3,9 +3,10 @@
 use std::collections::BTreeMap;
 
 use chrono::{NaiveDate, NaiveDateTime};
-use prodrome_dag::registers::{Node, Stamp, fold};
+use prodrome_dag::registers::{Node, fold};
 use prodrome_data::fold::Product;
 use prodrome_data::policy::Everything;
+use prodrome_data::stamp::Stamp;
 use prodrome_declared::{Declared, Registers};
 
 use super::{Content, Occurrence, OccurrenceId, When};

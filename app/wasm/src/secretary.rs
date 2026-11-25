@@ -5,9 +5,9 @@
 use crate::topics::TopicReading;
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::dag::Unread;
-use prodrome_core::event::Hash;
-use prodrome_core::fpl::datetime_of;
+use prodrome_dag::dag::Unread;
+use prodrome_data::event::Hash;
+use prodrome_data::instant::datetime_of;
 use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_api::query;
 use suzatary_base::conversation_id::ConversationId;

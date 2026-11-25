@@ -144,7 +144,7 @@ pub enum Why {
     /// The store refused, or what the question points at would not load.
     Refused(Refusal),
     /// Somebody pulled the round's [`Halt`]; the line is an [`Entry::Stopped`] naming them.
-    Stopped(prodrome_core::event::Actor),
+    Stopped(prodrome_data::event::Actor),
     /// No round answered in time: two runs that covered it were lost, or it was asked longer
     /// ago than [`transcript::ANSWERED_WITHIN`].
     Unanswered,

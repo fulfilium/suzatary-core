@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use prodrome_core::fpl::{datetime_of, instant_of, iso, parse_iso};
+use prodrome_data::instant::{datetime_of, instant_of, iso, parse_iso};
 use suzatary_signatures::devices::Device;
 
 use crate::lines::{Codec, Layout, Lines};

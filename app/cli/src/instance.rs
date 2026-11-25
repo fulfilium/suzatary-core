@@ -38,8 +38,8 @@ use std::path::{Path, PathBuf};
 use suzatary_services::plugin::Plugins;
 
 use anyhow::{Context, bail};
-use prodrome_core::event::Actor;
-use prodrome_core::sign::PublicKey;
+use prodrome_data::event::Actor;
+use prodrome_data::sign::PublicKey;
 use suzatary_base::chains::Chains;
 use suzatary_connect::connect::{self, Channel, Reach};
 use suzatary_connect::deployment::Deployment;
@@ -443,7 +443,7 @@ impl Instance {
     pub fn writer_of(
         chain: &ChainDir,
         signers: &signatures::Signers,
-        actor: &prodrome_core::event::Actor,
+        actor: &prodrome_data::event::Actor,
         opened: crate::commands::door::Opened,
     ) -> Signing<Objects<TodoEvent>> {
         Signing::new(
@@ -628,7 +628,7 @@ pub(crate) fn adoption_lock(events: &Path) -> anyhow::Result<suzatary_os::durabl
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
     use suzatary_base::capability::Login;
     use suzatary_connect::settings::Edits as _;
 

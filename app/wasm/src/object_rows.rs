@@ -3,8 +3,8 @@
 
 use std::cell::OnceCell;
 
-use prodrome_core::event::{Envelope, Hash, parse_envelope};
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{Envelope, Hash, parse_envelope};
+use prodrome_data::schema::Schema;
 use prodrome_wasm_exports::Replica;
 use suzatary_lines::secretary::object_stores;
 use suzatary_lines::wire::lines::{ObjectsPayload, ReceiptPayload};

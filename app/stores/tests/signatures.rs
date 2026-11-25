@@ -1,10 +1,12 @@
 use std::collections::BTreeSet;
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash, mk_completed};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::sign::{PublicKey, Registrar, Secret, Signed};
+use prodrome_dag::dag::Dag;
+use prodrome_dag::sign::{Registrar, Secret};
+use prodrome_data::event::{Actor, Envelope, Hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_data::sign::{PublicKey, Signed};
+use prodrome_todo::event::mk_completed;
 use proptest::prelude::*;
 
 use suzatary_record::record::TodoEvent;
@@ -60,7 +62,7 @@ fn signed<H: Health>(store: &InMemory<TodoEvent, H>, by: &Secret, event: TodoEve
 }
 
 /// The registers' key of the store's one prodrome.
-fn home<H: Health>(store: &InMemory<TodoEvent, H>) -> prodrome_core::registers::Genesis {
+fn home<H: Health>(store: &InMemory<TodoEvent, H>) -> prodrome_dag::registers::Genesis {
     let dag = dag(store);
     let genesis = dag.geneses().into_iter().next().expect("begun");
     dag.key(&genesis)
@@ -101,8 +103,8 @@ fn an_unsigned_object_is_unsigned_and_a_forged_one_forged() {
     };
     store
         .accept(&[(
-            prodrome_core::event::seal_hash(&Envelope::<TodoEvent>::Signed(forged.clone())),
-            prodrome_core::event::canonical_envelope(&Envelope::<TodoEvent>::Signed(forged)),
+            prodrome_data::event::seal_hash(&Envelope::<TodoEvent>::Signed(forged.clone())),
+            prodrome_data::event::canonical_envelope(&Envelope::<TodoEvent>::Signed(forged)),
         )])
         .expect("held");
     assert_eq!(trust_of(&store).why(&bare), Some(Unproven::Forged));
@@ -286,8 +288,8 @@ fn signer() -> impl Strategy<Value = Signer> {
 fn held<H: Health>(store: &InMemory<TodoEvent, H>, object: &Envelope<TodoEvent>) {
     store
         .accept(&[(
-            prodrome_core::event::seal_hash(object),
-            prodrome_core::event::canonical_envelope(object),
+            prodrome_data::event::seal_hash(object),
+            prodrome_data::event::canonical_envelope(object),
         )])
         .expect("held");
 }
@@ -381,7 +383,7 @@ fn adopting_signatures_makes_history_earlier_and_a_later_unsigned_write_a_findin
     .expect("the deployment's keys");
     let chain = suzatary_base::chains::ChainPolicy {
         name: suzatary_base::chains::ChainName::new("life").expect("a slug"),
-        untrusted: prodrome_core::policy::Untrusted::of([actor("triage")]),
+        untrusted: prodrome_data::policy::Untrusted::of([actor("triage")]),
         roster: [actor("ada"), actor("triage")].into_iter().collect(),
         root: root().public(),
         naming: suzatary_base::chains::Naming::AsActs,
@@ -403,7 +405,7 @@ fn adopting_signatures_makes_history_earlier_and_a_later_unsigned_write_a_findin
     let later = store.append(done("beta", "ada")).expect("appends");
     assert!(matches!(
         findings(&store).as_slice(),
-        [prodrome_core::dag::Finding::Unsigned { object, .. }] if *object == later
+        [prodrome_dag::dag::Finding::Unsigned { object, .. }] if *object == later
     ));
     sign(&store, keys.root().sign(&later)).expect("signed");
     assert!(findings(&store).is_empty());
@@ -461,7 +463,7 @@ fn adoption_registers_each_actor_with_the_key_that_signs_its_writes() {
         assert!(
             matches!(
                 findings.as_slice(),
-                [prodrome_core::dag::Finding::Unsigned { object, .. }] if *object == boxs
+                [prodrome_dag::dag::Finding::Unsigned { object, .. }] if *object == boxs
             ),
             "{findings:?}"
         );
@@ -621,7 +623,7 @@ fn written_by<H: Health>(
     object: &Envelope<TodoEvent>,
 ) {
     held(store, object);
-    sign(store, by.sign(&prodrome_core::event::seal_hash(object))).expect("signed");
+    sign(store, by.sign(&prodrome_data::event::seal_hash(object))).expect("signed");
 }
 
 fn taken<H: Health>(store: &InMemory<TodoEvent, H>, step: Step, n: usize) {
@@ -651,7 +653,7 @@ fn taken<H: Health>(store: &InMemory<TodoEvent, H>, step: Step, n: usize) {
         Step::Register(by, false) => written_by(
             store,
             &key('5'),
-            &Envelope::KeyAdded(prodrome_core::sign::KeyAdded {
+            &Envelope::KeyAdded(prodrome_data::sign::KeyAdded {
                 genesis,
                 actor: actor("ada"),
                 key: numbered(by).public(),
@@ -664,7 +666,7 @@ fn taken<H: Health>(store: &InMemory<TodoEvent, H>, step: Step, n: usize) {
             store,
             &root(),
             &Envelope::KeyRevoked(
-                prodrome_core::sign::mk_key_revoked(
+                prodrome_data::sign::mk_key_revoked(
                     genesis,
                     vec![],
                     actor("ada"),
@@ -696,7 +698,7 @@ proptest! {
         capacity in prop_oneof![1..4_usize, Just(KEPT_CHECKS)],
     ) {
         let store = begun(InMemory::faulty());
-        let warm = prodrome_core::sign::Checks::new(capacity);
+        let warm = prodrome_dag::sign::Checks::new(capacity);
         for (n, step) in steps.iter().enumerate() {
             taken(&store, *step, n);
             if n == steps.len() / 2 {
@@ -706,8 +708,8 @@ proptest! {
         let history = dag(&store);
         let reversed: Dag<TodoEvent> = store.objects().expect("reads").into_iter().rev().collect();
         for registrar in [roots(), Registrar::Anyone] {
-            let cold = Trust::through(&history, &registrar, &prodrome_core::sign::Checks::new(KEPT_CHECKS));
-            let proof = prodrome_core::sign::Proof::of(&history, &registrar);
+            let cold = Trust::through(&history, &registrar, &prodrome_dag::sign::Checks::new(KEPT_CHECKS));
+            let proof = prodrome_dag::sign::Proof::of(&history, &registrar);
             for name in history.objects().keys() {
                 prop_assert_eq!(cold.proves(name), proof.proves(name), "{}", name);
             }
@@ -726,7 +728,7 @@ fn a_key_revoked_between_two_asks_is_refused_on_the_second() {
     let store = begun(InMemory::default());
     let phone = key('1');
     trust(&store, &root(), &actor("ada"), &phone.public()).expect("registered");
-    let request = phone.sign(&prodrome_core::memo::name(b"a request", []));
+    let request = phone.sign(&prodrome_memo::name(b"a request", []));
     let first = Trust::held(&store, &roots()).expect("reads");
     assert_eq!(first.admits(first.home(), &actor("ada"), &request), Ok(()));
     let again = Trust::held(&store, &roots()).expect("reads");
@@ -750,9 +752,10 @@ fn a_key_revoked_between_two_asks_is_refused_on_the_second() {
 /// say signed or proven, while the same line held whole is proven.
 #[test]
 fn a_signed_line_held_as_its_husk_is_vouched_for_and_not_proven() {
-    use prodrome_core::event::{canonical_envelope, seal_hash};
-    use prodrome_core::sign::{KeyAdded, Proof, Proved};
-    use prodrome_core::store::{HuskObject, Sender};
+    use prodrome_dag::sign::{Proof, Proved};
+    use prodrome_data::event::{canonical_envelope, seal_hash};
+    use prodrome_data::husk::{HuskObject, Sender};
+    use prodrome_data::sign::KeyAdded;
     use suzatary_lines::secretary::line_event::{LineEvent, LineVocabulary};
 
     struct Ones;
@@ -765,7 +768,7 @@ fn a_signed_line_held_as_its_husk_is_vouched_for_and_not_proven() {
     let ada = actor("ada");
     let phone = key('1');
     let genesis: Envelope<LineEvent> = Envelope::Genesis(
-        prodrome_core::genesis::mk_genesis("lines", &"0".repeat(32)).expect("a genesis"),
+        prodrome_data::genesis::mk_genesis("lines", &"0".repeat(32)).expect("a genesis"),
     );
     let registered: Envelope<LineEvent> = Envelope::KeyAdded(KeyAdded {
         genesis: seal_hash(&genesis),
@@ -782,7 +785,7 @@ fn a_signed_line_held_as_its_husk_is_vouched_for_and_not_proven() {
         suzatary_base::conversation_id::ConversationId::new("2026-10-05-vouched").expect("a slug");
     let (line, _) = LineEvent::write(id, ada, 0, &opened, &Ones).expect("a line");
     let change =
-        prodrome_core::change::mk_change(seal_hash(&genesis), Vec::new(), line).expect("a change");
+        prodrome_data::change::mk_change(seal_hash(&genesis), Vec::new(), line).expect("a change");
     let husk = HuskObject::of(&change).expect("a line with words has a husk");
     let whole = Envelope::Change(change);
     let name = seal_hash(&whole);

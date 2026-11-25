@@ -9,7 +9,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use prodrome_core::event::{Hash, TodoId};
+use prodrome_data::event::{Hash, TodoId};
 use serde::{Deserialize, Serialize};
 
 use crate::chains::ChainName;
@@ -479,7 +479,7 @@ fn target(text: &str, scheme: &'static str) -> Result<Reference, NotAReference> 
     })
 }
 
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     Reference => |reference| reference.to_string(),
     TodoRef => |todo| todo.to_string(),
     ProposalRef => |proposal| proposal.to_string(),

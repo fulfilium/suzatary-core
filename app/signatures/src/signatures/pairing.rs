@@ -1,6 +1,6 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use hmac::{Hmac, Mac as _};
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 

@@ -120,7 +120,7 @@ fn digest(
     let stored = read.stored();
     let window = queue::window(stored, &read.queued());
     let carries = taint::sent(stored, window.all().map(|(index, _)| *index));
-    let sent: std::collections::BTreeSet<prodrome_core::event::Hash> = window
+    let sent: std::collections::BTreeSet<prodrome_data::event::Hash> = window
         .first()
         .and_then(|first| read.line_of(first))
         .map(|line| {

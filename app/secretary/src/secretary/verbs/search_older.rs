@@ -58,7 +58,7 @@ impl Verb for SearchOlder {
         let today = call
             .deployment
             .zone
-            .day(prodrome_core::fpl::instant_of(call.caps.clock.now()));
+            .day(prodrome_data::instant::instant_of(call.caps.clock.now()));
         let range = Range::older(since, query.before(), window_start(today))
             .map_err(|failed| Refusal::bad_request(failed.to_string()))?;
         let roster = call.caps.mail.accounts();
@@ -95,8 +95,8 @@ impl From<Older> for VerbAnswer {
 mod tests {
     use std::sync::Mutex;
 
-    use prodrome_core::event::Actor;
-    use prodrome_core::policy::Untrusted;
+    use prodrome_data::event::Actor;
+    use prodrome_data::policy::Untrusted;
     use serde_json::{Value, json};
 
     use super::*;

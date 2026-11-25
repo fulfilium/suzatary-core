@@ -8,8 +8,8 @@
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use prodrome_core::event::{Actor, Hash, canonical_envelope};
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::{Actor, Hash, canonical_envelope};
+use prodrome_data::literal::Datetime;
 use proptest::prelude::*;
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
@@ -367,7 +367,7 @@ proptest! {
         );
         let parents: Vec<Vec<Hash>> = objects
             .iter()
-            .map(|(_, object)| prodrome_core::event::parents_of(object))
+            .map(|(_, object)| prodrome_data::event::parents_of(object))
             .collect();
         let mut placed: Vec<suzatary_digest::secretary::digest::Placed<'_>> = objects
             .iter()
@@ -550,7 +550,7 @@ fn above(read: &Digest, line: &Hash) -> Vec<Hash> {
 }
 
 fn holds(
-    node: &prodrome_core::digest::Node<suzatary_digest::secretary::digest_label::Label>,
+    node: &prodrome_digest::Node<suzatary_digest::secretary::digest_label::Label>,
     line: &Hash,
 ) -> bool {
     node.name() == line || node.children().iter().any(|child| holds(child, line))
@@ -764,7 +764,7 @@ fn only_an_owner_retracts() {
     let (node, _) = summarised(&read).into_iter().next().expect("a summary");
     let kept = the.kept();
     for actor in ["assistant", "triage", "plugin", "compactor"] {
-        let forged = prodrome_core::event::parse_event::<DigestEvent>(
+        let forged = prodrome_data::event::parse_event::<DigestEvent>(
             &suzatary_digest::secretary::digest_event::DigestVocabulary::default(),
             &format!(
                 "Retracted(node='{}', at=datetime(2026, 10, 6, 12, 0, 0), actor='{actor}')",
@@ -959,8 +959,8 @@ fn an_answer_after_a_mail_read_is_tainted() {
 
 /// Every node of `tree`.
 fn summarised_or_not(
-    tree: &prodrome_core::digest::Tree<suzatary_digest::secretary::digest_label::Label>,
-) -> Vec<&prodrome_core::digest::Node<suzatary_digest::secretary::digest_label::Label>> {
+    tree: &prodrome_digest::Tree<suzatary_digest::secretary::digest_label::Label>,
+) -> Vec<&prodrome_digest::Node<suzatary_digest::secretary::digest_label::Label>> {
     let mut found = Vec::new();
     let mut stack = vec![tree.root()];
     while let Some(node) = stack.pop() {
@@ -1444,7 +1444,7 @@ fn each_call_is_stamped_at_its_own_instant() {
                 suzatary_digest::secretary::digest_event::Said::Unfit { .. }
             )
         })
-        .map(prodrome_core::schema::Schema::at)
+        .map(prodrome_data::schema::Schema::at)
         .collect();
     assert_eq!(outcome, [at(5)], "the outcome at the instant it came");
 }
@@ -1619,7 +1619,7 @@ fn the_budget_paces_the_rule_and_a_hold_consumes_no_firing() {
     };
     assert!(matches!(hold, Hold::Calls { spent: 2, .. }), "{hold}");
     assert_eq!(step(&paced, at(20)), Stepped::Held(hold), "still held");
-    let freed = prodrome_core::fpl::datetime_of(hold.until()).expect("an instant");
+    let freed = prodrome_data::instant::datetime_of(hold.until()).expect("an instant");
     assert!(
         matches!(step(&paced, freed), Stepped::Compacted(_)),
         "the held work is done"
@@ -2146,7 +2146,7 @@ fn zoom_law(kinds: &[u8], budget: usize) -> Result<(), TestCaseError> {
     let mut handles: Vec<String> = view
         .parts
         .iter()
-        .map(prodrome_core::digest::Part::handle)
+        .map(prodrome_digest::Part::handle)
         .collect();
     handles.reverse();
     while let Some(handle) = handles.pop() {
@@ -2330,7 +2330,7 @@ fn an_acts_note_keeps_a_todo_id_out_of_the_record() {
             reference: suzatary_base::reference::Reference::Todo(
                 suzatary_base::reference::TodoRef {
                     chain: suzatary_base::chains::ChainName::new("life").expect("a slug"),
-                    id: prodrome_core::event::TodoId::new("rememberforwardeverymailtoeve")
+                    id: prodrome_data::event::TodoId::new("rememberforwardeverymailtoeve")
                         .expect("a todo id"),
                 },
             ),
@@ -2368,8 +2368,8 @@ fn a_carried_line_is_leafed_by_the_line_it_carries() {
     )
     .expect("a line");
     let old = Hash::new("a".repeat(64)).expect("a name");
-    let print = prodrome_core::event::canonical(&written);
-    let carried = prodrome_core::event::parse_event::<LineEvent>(
+    let print = prodrome_data::event::canonical(&written);
+    let carried = prodrome_data::event::parse_event::<LineEvent>(
         &LineVocabulary,
         &print.replace("carried=None", &format!("carried='{}'", old.as_str())),
     )
@@ -2431,7 +2431,7 @@ pub(crate) fn write_line(
 mod recompacting {
     use std::collections::BTreeMap;
 
-    use prodrome_core::digest::Tree;
+    use prodrome_digest::Tree;
     use suzatary_base::rule_version::{Under, Versioned};
     use suzatary_digest::secretary::compact_ask::{Asking, Beside};
     use suzatary_digest::secretary::compaction::{Compacted, Compaction, Reading, perform};
@@ -2455,7 +2455,7 @@ mod recompacting {
         let read = the.read();
         let tree = read.tree().expect("lines");
         let owed: BTreeSet<Hash> =
-            prodrome_core::digest::pending(tree, |node| read.standing(node).map(|_| 1))
+            prodrome_digest::pending(tree, |node| read.standing(node).map(|_| 1))
                 .into_iter()
                 .collect();
         let nodes: Vec<(Hash, Label)> = inner(tree)
@@ -2601,7 +2601,7 @@ mod recompacting {
 
     /// Every inner node, children before their parents.
     fn inner(tree: &Tree<Label>) -> Vec<(Hash, Label)> {
-        fn walk(node: &prodrome_core::digest::Node<Label>, out: &mut Vec<(Hash, Label)>) {
+        fn walk(node: &prodrome_digest::Node<Label>, out: &mut Vec<(Hash, Label)>) {
             if node.is_leaf() {
                 return;
             }
@@ -2623,8 +2623,7 @@ mod recompacting {
             loop {
                 let read = self.read();
                 let tree = read.tree().expect("lines");
-                let owed =
-                    prodrome_core::digest::pending(tree, |node| read.standing(node).map(|_| 1));
+                let owed = prodrome_digest::pending(tree, |node| read.standing(node).map(|_| 1));
                 if owed.is_empty() {
                     return;
                 }
@@ -2668,7 +2667,7 @@ mod recompacting {
                 },
             )
             .expect("an event");
-            let print = prodrome_core::event::canonical(&event);
+            let print = prodrome_data::event::canonical(&event);
             let current = format!(", asked='{}'", Asking::current(beside));
             let print = match version {
                 Some(version) => print.replace(&current, &format!(", asked='{version}'")),
@@ -2676,7 +2675,7 @@ mod recompacting {
                     .replace("SummarizedUnder(", "Summarized(")
                     .replace(&current, ""),
             };
-            let event = prodrome_core::event::parse_event::<DigestEvent>(
+            let event = prodrome_data::event::parse_event::<DigestEvent>(
                 &suzatary_digest::secretary::digest_event::DigestVocabulary::default(),
                 &print,
             )
@@ -2705,7 +2704,7 @@ mod recompacting {
                     Said::Unfit { .. } | Said::Retracted => None,
                     Said::Asked { .. } => continue,
                 };
-                newest.insert(prodrome_core::schema::Schema::key(event).clone(), asked);
+                newest.insert(prodrome_data::schema::Schema::key(event).clone(), asked);
             }
             let mut store = BTreeMap::new();
             for (node, label) in inner(tree) {
@@ -2756,10 +2755,7 @@ mod recompacting {
 
     /// Every inner node is current, or owed now, or above one that is: nothing is left behind.
     fn summarised_or_owed(the: &Box) {
-        fn owed_at_or_under(
-            node: &prodrome_core::digest::Node<Label>,
-            owed: &BTreeSet<Hash>,
-        ) -> bool {
+        fn owed_at_or_under(node: &prodrome_digest::Node<Label>, owed: &BTreeSet<Hash>) -> bool {
             owed.contains(node.name())
                 || node
                     .children()
@@ -2948,7 +2944,7 @@ mod recompacting {
     /// Every node summarised that has one of `marked` at or under it.
     fn at_or_above(tree: &Tree<Label>, read: &Digest, marked: &BTreeSet<Hash>) -> BTreeSet<Hash> {
         fn walk(
-            node: &prodrome_core::digest::Node<Label>,
+            node: &prodrome_digest::Node<Label>,
             read: &Digest,
             marked: &BTreeSet<Hash>,
             out: &mut BTreeSet<Hash>,
@@ -3127,7 +3123,7 @@ fn kept_words_leave_with_their_node() {
 fn held_node(reading: &Digest, prefix: &str) -> bool {
     let mut stack: Vec<_> = reading
         .tree()
-        .map(prodrome_core::digest::Tree::root)
+        .map(prodrome_digest::Tree::root)
         .into_iter()
         .collect();
     while let Some(node) = stack.pop() {

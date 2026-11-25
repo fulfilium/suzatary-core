@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail};
-use prodrome_core::policy::Untrusted;
+use prodrome_data::policy::Untrusted;
 use suzatary_base::chains::ChainName;
 use suzatary_signatures::chain_set::Read;
 use suzatary_store::store::Reads as _;

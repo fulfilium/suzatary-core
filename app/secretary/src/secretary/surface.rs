@@ -182,7 +182,7 @@ fn applied(call: &Call<'_>, changeset: &Changeset) -> Result<Value, Refusal> {
             "todo": changeset.acts().first().map(Act::todo),
             "appended": names
                 .iter()
-                .map(prodrome_core::event::Hash::as_str)
+                .map(prodrome_data::event::Hash::as_str)
                 .collect::<Vec<_>>(),
         })),
         Err(Unapplied::Refused(refusal) | Unapplied::Appending(refusal)) => Err(refusal),

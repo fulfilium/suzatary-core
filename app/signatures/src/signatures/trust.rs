@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, LazyLock};
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash};
-use prodrome_core::memo::{self, Key};
-use prodrome_core::registers::Genesis;
-use prodrome_core::schema::Schema;
-use prodrome_core::sign::{Checks, PublicKey, Registrar, Signed};
+use prodrome_dag::dag::Dag;
+use prodrome_dag::registers::Genesis;
+use prodrome_dag::sign::{Checks, Registrar};
+use prodrome_data::event::{Actor, Envelope, Hash};
+use prodrome_data::schema::Schema;
+use prodrome_data::sign::{PublicKey, Signed};
+use prodrome_memo::{self as memo, Key};
 
 use super::{KeyStanding, Provenance, Unproven};
 use suzatary_base::table::Table;

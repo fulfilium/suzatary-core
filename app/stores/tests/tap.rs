@@ -43,7 +43,7 @@ fn a_write_without_the_apps_own_header_gets_no_tap() {
 /// nothing.
 #[test]
 fn a_tap_performs_once_and_its_response_discharges_the_rule() {
-    use prodrome_core::literal::Datetime;
+    use prodrome_data::literal::Datetime;
     use suzatary_base::conversation_id::ConversationId;
     use suzatary_base::reference::ProposalRef;
     use suzatary_inbox::secretary::inbox;

@@ -4,13 +4,13 @@
 //! Acts are stored and events are not, because an `Authored` built at proposal time would undo
 //! whatever moved on the chain since; a direct write and a tap build each act the same way.
 
-use prodrome_core::literal::{ProdromeError, Value as LiteralValue};
+use prodrome_data::literal::{ProdromeError, Value as LiteralValue};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::priced::{PRICE_SPELLINGS, Priced};
-use prodrome_core::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal, arm, no_arm, record};
 use suzatary_base::capability::{Datetime, Typeset};
 use suzatary_base::refusal::{Refusal, shown as quoted};
 use suzatary_base::writer::Writer;
@@ -325,16 +325,16 @@ impl Act {
                 .map(|event| vec![event])
             }
             Act::Complete { todo, note } => lifecycle(nodes, todo, note, |t, n| {
-                prodrome_core::event::mk_completed(t, at, by.actor(), n)
+                prodrome_todo::event::mk_completed(t, at, by.actor(), n)
             }),
             Act::Cancel { todo, note } => lifecycle(nodes, todo, note, |t, n| {
-                prodrome_core::event::mk_cancelled(t, at, by.actor(), n)
+                prodrome_todo::event::mk_cancelled(t, at, by.actor(), n)
             }),
             Act::Reopen { todo, note } => lifecycle(nodes, todo, note, |t, n| {
-                prodrome_core::event::mk_reopened(t, at, by.actor(), n)
+                prodrome_todo::event::mk_reopened(t, at, by.actor(), n)
             }),
             Act::Tend { todo, note } => lifecycle(nodes, todo, note, |t, n| {
-                prodrome_core::event::mk_tended(t, at, by.actor(), n)
+                prodrome_todo::event::mk_tended(t, at, by.actor(), n)
             }),
         }
     }
@@ -347,7 +347,7 @@ pub struct Building<'a> {
     pub by: Writer,
     pub categories: &'a [&'a str],
     /// The chain's untrusted actors, which a subtodo's loop check folds under.
-    pub untrusted: &'a prodrome_core::policy::Untrusted,
+    pub untrusted: &'a prodrome_data::policy::Untrusted,
     /// Typst, which admits every body.
     pub typeset: &'a dyn Typeset,
 }
@@ -381,7 +381,7 @@ fn lifecycle(
     nodes: &[Node],
     todo: &str,
     note: &str,
-    build: impl FnOnce(&str, &str) -> Result<TodoEvent, prodrome_core::literal::ProdromeError>,
+    build: impl FnOnce(&str, &str) -> Result<TodoEvent, prodrome_data::literal::ProdromeError>,
 ) -> Result<Vec<TodoEvent>, Refusal> {
     known(nodes, todo)?;
     build(todo, note)
@@ -854,7 +854,7 @@ mod tests {
             &Parses,
         )
         .expect("a todo");
-        let untrusted = prodrome_core::policy::Untrusted::none();
+        let untrusted = prodrome_data::policy::Untrusted::none();
         let building = Building {
             now: suzatary_base::zone::Moment {
                 at,
@@ -892,9 +892,9 @@ mod tests {
         };
         let spec = &built.payload.spec;
         assert!(
-            matches!(spec.out(), prodrome_core::term::TermF::Recur { todo, .. } if todo == "brush"),
+            matches!(spec.out(), prodrome_term::term::TermF::Recur { todo, .. } if todo == "brush"),
             "{}",
-            prodrome_core::fpl::print_term(spec)
+            prodrome_term::fpl::print_term(spec)
         );
     }
 }

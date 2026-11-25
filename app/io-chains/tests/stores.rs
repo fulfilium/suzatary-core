@@ -5,9 +5,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use prodrome_core::event::{Actor, Hash, mk_completed, mk_created};
-use prodrome_core::fpl::mk_flat;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::policy::Untrusted;
+use prodrome_term::fpl::mk_flat;
+use prodrome_todo::event::{mk_completed, mk_created};
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::drive_path::DriveFailure;
@@ -277,20 +278,20 @@ fn begun(root: &Path) -> Objects<suzatary_inbox::secretary::inbox_event::InboxEv
 
 /// Begin `store` with a genesis labelled `label` and a nonce of zeros, so its names are pinned.
 fn rooted<E: suzatary_stores::stores::Store<Vocabulary: Clone>>(store: &Objects<E>, label: &str) {
-    let genesis = prodrome_core::event::Envelope::<E>::Genesis(
-        prodrome_core::genesis::mk_genesis(label, &"0".repeat(32)).expect("a genesis"),
+    let genesis = prodrome_data::event::Envelope::<E>::Genesis(
+        prodrome_data::genesis::mk_genesis(label, &"0".repeat(32)).expect("a genesis"),
     );
-    let name = prodrome_core::event::seal_hash(&genesis);
+    let name = prodrome_data::event::seal_hash(&genesis);
     let print = BTreeMap::from([(
         name.clone(),
-        prodrome_core::event::canonical_envelope(&genesis),
+        prodrome_data::event::canonical_envelope(&genesis),
     )]);
-    prodrome_core::store::EventStore::<E, Untrusted>::at(
+    prodrome_store::store::EventStore::<E, Untrusted>::at(
         store.inner().root(),
         Untrusted::none(),
-        prodrome_core::store::Replica::schema(store.inner()).clone(),
+        prodrome_store::store::Replica::schema(store.inner()).clone(),
     )
-    .adopt_objects(&print, &name, prodrome_core::store::Sender::Stranger)
+    .adopt_objects(&print, &name, prodrome_data::husk::Sender::Stranger)
     .expect("begins");
 }
 
@@ -385,8 +386,8 @@ fn conversations(root: &Path, asked: &inbox::ProposalId) {
 }
 
 /// The deployment's writers in these tests: ada, who taps.
-fn owners() -> std::collections::BTreeSet<prodrome_core::event::Actor> {
-    [prodrome_core::event::Actor::new("ada").expect("an actor")].into()
+fn owners() -> std::collections::BTreeSet<prodrome_data::event::Actor> {
+    [prodrome_data::event::Actor::new("ada").expect("an actor")].into()
 }
 
 /// The memory: two facts remembered and one forgotten, then two more consolidated into a sixth.
@@ -507,8 +508,8 @@ fn calendar(root: &Path) {
     learned(Status::Cancelled, 30);
 }
 
-fn calendar_schema() -> prodrome_core::declared::Declaration {
-    prodrome_core::declared::Declaration::admit(include_str!("../../plugin-ics/ics.schema"))
+fn calendar_schema() -> prodrome_declared::Declaration {
+    prodrome_declared::Declaration::admit(include_str!("../../plugin-ics/ics.schema"))
         .expect("lawful")
 }
 
@@ -569,7 +570,7 @@ fn uploads(root: &Path) {
 
 /// The digest: one node's summary retracted by the owner.
 fn digests(root: &Path) {
-    use prodrome_core::event::parse_event;
+    use prodrome_data::event::parse_event;
     use suzatary_digest::secretary::digest_event::{DigestEvent, DigestVocabulary};
     let store = Objects::digests(root.join(DIGESTS), owners());
     rooted(&store, "digests");
@@ -631,31 +632,16 @@ fn topics(root: &Path) {
     let round = || "round:default/0".parse().expect("a target");
     let topic = |name: &str| Topic::new(name).expect("a topic");
     for event in [
-        prodrome_core::tags::membership::added::<Topics>(
-            round(),
-            topic("travel"),
-            at(16, 0),
-            owner(),
-        ),
-        prodrome_core::tags::membership::added::<Topics>(
-            round(),
-            topic("taxes"),
-            at(16, 1),
-            owner(),
-        ),
-        prodrome_core::tags::membership::removed::<Topics>(
-            round(),
-            topic("taxes"),
-            at(16, 2),
-            owner(),
-        ),
+        prodrome_tags::membership::added::<Topics>(round(), topic("travel"), at(16, 0), owner()),
+        prodrome_tags::membership::added::<Topics>(round(), topic("taxes"), at(16, 1), owner()),
+        prodrome_tags::membership::removed::<Topics>(round(), topic("taxes"), at(16, 2), owner()),
     ] {
         topics.memberships.append(event).expect("appends");
     }
     topics
         .aliases
         .append(
-            prodrome_core::tags::alias::aliased::<Topics>(
+            prodrome_tags::alias::aliased::<Topics>(
                 topic("travel"),
                 topic("trips"),
                 at(16, 3),
@@ -735,7 +721,7 @@ fn records_are_the_derived_heads(root: &Path) {
     stores(root, &mut found);
     assert!(!found.is_empty(), "stores were written");
     for store in found {
-        let recorded = prodrome_core::dag::Heads::parse(
+        let recorded = prodrome_dag::dag::Heads::parse(
             &std::fs::read_to_string(store.join(".heads"))
                 .unwrap_or_else(|_| panic!("{} holds a record", store.display())),
         )
@@ -1180,7 +1166,7 @@ fn lines_for_a_tab() {
         .expect("objects")
         .into_iter()
         .map(|(hash, object)| {
-            serde_json::json!({"hash": hash.as_str(), "text": prodrome_core::event::canonical_envelope(&object)})
+            serde_json::json!({"hash": hash.as_str(), "text": prodrome_data::event::canonical_envelope(&object)})
         })
         .collect();
     let keys: serde_json::Map<String, serde_json::Value> =
@@ -1320,9 +1306,7 @@ fn digest_nodes_at_scale() {
     }
     let reading = digests.reads().read().expect("reads");
     let low = inner(&reading, |node| {
-        node.children()
-            .iter()
-            .all(prodrome_core::digest::Node::is_leaf)
+        node.children().iter().all(prodrome_digest::Node::is_leaf)
     });
     let again: Vec<Hash> = low.into_iter().step_by(3).collect();
     summarise(&again, &reading);
@@ -1381,12 +1365,12 @@ fn digest_nodes_at_scale() {
 /// The name of every inner node of `reading`'s tree that `keep` keeps.
 fn inner(
     reading: &suzatary_digest::secretary::digest::Digest,
-    keep: impl Fn(&prodrome_core::digest::Node<suzatary_digest::secretary::digest_label::Label>) -> bool,
+    keep: impl Fn(&prodrome_digest::Node<suzatary_digest::secretary::digest_label::Label>) -> bool,
 ) -> Vec<Hash> {
     let mut kept = Vec::new();
     let mut stack: Vec<_> = reading
         .tree()
-        .map(prodrome_core::digest::Tree::root)
+        .map(prodrome_digest::Tree::root)
         .into_iter()
         .collect();
     while let Some(node) = stack.pop() {
@@ -1668,12 +1652,12 @@ fn said_through(lines: &'static Lines, dir: &Path) -> impl Fn(u32) {
 }
 
 /// The heads a fresh handle derives from the files, with no record to read.
-fn derived(dir: &Path) -> prodrome_core::dag::Heads {
+fn derived(dir: &Path) -> prodrome_dag::dag::Heads {
     let fresh = lines_at(dir).0;
-    let held = prodrome_core::store::Replica::held(fresh.inner()).expect("held");
+    let held = prodrome_store::store::Replica::held(fresh.inner()).expect("held");
     let recorded = std::fs::read(dir.join(LINES).join(".heads")).ok();
     let _ = std::fs::remove_file(dir.join(LINES).join(".heads"));
-    let heads = prodrome_core::store::Replica::heads(lines_at(dir).0.inner()).expect("heads");
+    let heads = prodrome_store::store::Replica::heads(lines_at(dir).0.inner()).expect("heads");
     if let Some(bytes) = recorded {
         std::fs::write(dir.join(LINES).join(".heads"), bytes).expect("restored");
     }
@@ -1692,7 +1676,7 @@ fn the_lines_store_records_the_derived_heads() {
     let push_other = said_through(other, dir.path());
     let root = dir.path().join(LINES);
     let record = || {
-        prodrome_core::dag::Heads::parse(
+        prodrome_dag::dag::Heads::parse(
             &std::fs::read_to_string(root.join(".heads")).expect("a record"),
         )
         .expect("it parses")
@@ -1722,7 +1706,7 @@ fn the_lines_store_records_the_derived_heads() {
     );
     assert_eq!(record(), derived(dir.path()), "a husk keeps every name");
     assert_eq!(
-        prodrome_core::store::Replica::heads(reader.inner()).expect("heads"),
+        prodrome_store::store::Replica::heads(reader.inner()).expect("heads"),
         record()
     );
     assert_eq!(
@@ -1774,7 +1758,7 @@ fn stale(dir: &Path) -> bool {
         .inner()
         .verify()
         .iter()
-        .any(|finding| matches!(finding, prodrome_core::dag::Finding::StaleHeads { .. }))
+        .any(|finding| matches!(finding, prodrome_dag::dag::Finding::StaleHeads { .. }))
 }
 
 /// The lines of one conversation, as events, and the print of the genesis they rest on: a store
@@ -1794,8 +1778,8 @@ fn script() -> &'static Script {
         let mut events = Vec::new();
         for (name, object) in writer.objects().expect("reads") {
             match object {
-                prodrome_core::event::Envelope::Change(change) => events.push(change.event),
-                prodrome_core::event::Envelope::Genesis(_) => {
+                prodrome_data::event::Envelope::Change(change) => events.push(change.event),
+                prodrome_data::event::Envelope::Genesis(_) => {
                     let file = format!("{}.py", name.as_str());
                     let bytes = std::fs::read(dir.path().join(LINES).join("objects").join(&file))
                         .expect("the genesis");
@@ -1869,13 +1853,13 @@ fn parents(root: &Path, name: &Hash) -> BTreeSet<Hash> {
         .expect("reads")
         .pop()
     {
-        Some(Some(print)) => match prodrome_core::event::parse_envelope::<LineEvent>(
-            prodrome_core::store::Replica::schema(fresh.inner()),
+        Some(Some(print)) => match prodrome_data::event::parse_envelope::<LineEvent>(
+            prodrome_store::store::Replica::schema(fresh.inner()),
             &print,
         )
         .expect("an object")
         {
-            prodrome_core::event::Envelope::Change(change) => change.deps.into_iter().collect(),
+            prodrome_data::event::Envelope::Change(change) => change.deps.into_iter().collect(),
             other => panic!("not a line: {}", other.name()),
         },
         missing => panic!("no file for {name:?}: {missing:?}"),
@@ -2162,14 +2146,14 @@ fn another_door_reads_as_the_recorded_heads_until_they_are_recorded_again() {
         !by_a_door(dir.path(), elsewhere.path(), 2).is_empty(),
         "the other door brought objects in"
     );
-    let heads = || prodrome_core::store::Replica::heads(reader.inner()).expect("heads");
+    let heads = || prodrome_store::store::Replica::heads(reader.inner()).expect("heads");
     assert_eq!(heads(), recorded, "the older heads, read with no listing");
     assert!(
         reader
             .inner()
             .verify()
             .iter()
-            .any(|finding| matches!(finding, prodrome_core::dag::Finding::StaleHeads { .. })),
+            .any(|finding| matches!(finding, prodrome_dag::dag::Finding::StaleHeads { .. })),
         "verify reports the stale record"
     );
     let now = derived(dir.path());
@@ -2211,13 +2195,13 @@ fn a_post_whose_print_does_not_hash_to_its_name_is_refused() {
         .find(|(name, _)| !held.objects().contains_key(*name))
         .map(|(name, object)| (name.clone(), object.clone()))
         .expect("a line this store does not hold");
-    let prodrome_core::event::Envelope::Change(change) = &whole else {
+    let prodrome_data::event::Envelope::Change(change) = &whole else {
         panic!("a line is a change");
     };
-    let husk = prodrome_core::store::HuskObject::of(change)
+    let husk = prodrome_data::husk::HuskObject::of(change)
         .expect("a line with words has a husk")
         .print();
-    let other = prodrome_core::event::canonical_envelope(
+    let other = prodrome_data::event::canonical_envelope(
         held.objects().values().next().expect("an object"),
     );
     for (print, reads_as) in [(husk, "its husk"), (other, "another whole")] {
@@ -2238,7 +2222,7 @@ fn a_post_whose_print_does_not_hash_to_its_name_is_refused() {
     store
         .accept(&[(
             name.clone(),
-            prodrome_core::event::canonical_envelope(&whole),
+            prodrome_data::event::canonical_envelope(&whole),
         )])
         .expect("the whole is taken");
     assert!(

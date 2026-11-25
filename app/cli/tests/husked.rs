@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use proptest::prelude::*;
 
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope};
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
@@ -36,8 +36,8 @@ fn stores_at(root: &Path) -> ConversationStores {
     )
 }
 
-fn at(minute: u32) -> prodrome_core::literal::Datetime {
-    prodrome_core::literal::Datetime::new(2026, 10, 9, 9, minute, 0, 0).expect("an instant")
+fn at(minute: u32) -> prodrome_data::literal::Datetime {
+    prodrome_data::literal::Datetime::new(2026, 10, 9, 9, minute, 0, 0).expect("an instant")
 }
 
 fn said(k: u32) -> Entry {
@@ -173,10 +173,10 @@ fn a_pruned_store_reads_as_it_did_and_a_second_prune_writes_nothing() {
         .expect("reads")
         .into_iter()
         .find_map(|(name, object)| match object {
-            prodrome_core::event::Envelope::Change(change)
-                if prodrome_core::store::Husking::holds_sealed(&change.event) =>
+            prodrome_data::event::Envelope::Change(change)
+                if prodrome_data::husk::Husking::holds_sealed(&change.event) =>
             {
-                Some((name, prodrome_core::store::HuskObject::of(&change)?))
+                Some((name, prodrome_data::husk::HuskObject::of(&change)?))
             }
             _ => None,
         })
@@ -318,7 +318,7 @@ fn chains_written(
     let held = stores_at(root);
     let conversations = held.conversations();
     let second = |n: usize| {
-        prodrome_core::literal::Datetime::new(
+        prodrome_data::literal::Datetime::new(
             2026,
             10,
             9,

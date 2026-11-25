@@ -3232,9 +3232,9 @@ const PLAN: &str = "base = 1\n\n[[release]]\ntodo = \"alpha\"\nmajor = 1\nminor 
 /// The deployment a release reads, under `data`: the roadmap store in a clone of `roadmap.git` with
 /// its plan, the upkeep chain `ops`, the lists doors 1 and 2 read, and the instance naming them.
 fn a_release_deployment(data: &Path) -> PathBuf {
-    use prodrome_core::fpl;
+    use prodrome_term::fpl;
     use suzatary_record::record::{EventStore, GENESIS, MarkupSource, mk_authored};
-    let at = prodrome_core::literal::Datetime::new(2026, 9, 1, 9, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 9, 1, 9, 0, 0, 0).expect("an instant");
     let todo = |id: &str, actor: &str, spec| {
         mk_authored(
             id,
@@ -3256,7 +3256,7 @@ fn a_release_deployment(data: &Path) -> PathBuf {
         .expect("a record")
     };
     let roadmap = data.join("roadmap");
-    let store = EventStore::new(roadmap.clone(), prodrome_core::policy::Untrusted::none());
+    let store = EventStore::new(roadmap.clone(), prodrome_data::policy::Untrusted::none());
     let items = ["alpha", "bravo", "calendarlinks"];
     let mut terms = vec![fpl::mk_flat(0.6).expect("a term")];
     terms.extend(
@@ -3274,13 +3274,13 @@ fn a_release_deployment(data: &Path) -> PathBuf {
             .iter()
             .map(|i| todo(i, "adalogin", fpl::mk_flat(0.7).expect("a term"))),
     );
-    events.push(prodrome_core::event::mk_completed("alpha", at, "adalogin", "").expect("an event"));
+    events.push(prodrome_todo::event::mk_completed("alpha", at, "adalogin", "").expect("an event"));
     for event in events {
         suzatary_store::store::append_to(&store, GENESIS, event).expect("appends");
     }
     let ops = EventStore::new(
         data.join("events-ops"),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     );
     suzatary_store::store::append_to(
         &ops,
@@ -3462,7 +3462,7 @@ fn shipped(data: &Path, rev: &str) -> usize {
 fn completions(data: &Path, dir: &str, todo: &str) -> Vec<(String, String)> {
     suzatary_record::record::EventStore::new(
         data.join(dir),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     )
     .events()
     .expect("the store reads")
@@ -4134,7 +4134,7 @@ fn roadmap_push_refuses_a_range_door_2_refuses() {
     let filed = || -> Vec<String> {
         suzatary_record::record::EventStore::new(
             data.join("events-ops"),
-            prodrome_core::policy::Untrusted::none(),
+            prodrome_data::policy::Untrusted::none(),
         )
         .events()
         .expect("the upkeep chain reads")
@@ -4203,10 +4203,10 @@ fn roadmap_push_records_a_join_and_commits_the_store_s_own_gitignore() {
     let roadmap = data.join("roadmap");
     before_the_mark(&roadmap);
     let elsewhere = published_roadmap(&data, "elsewhere");
-    let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 9, 0, 0, 0).expect("an instant");
-    suzatary_record::record::EventStore::new(&elsewhere, prodrome_core::policy::Untrusted::none())
+    let at = prodrome_data::literal::Datetime::new(2026, 9, 2, 9, 0, 0, 0).expect("an instant");
+    suzatary_record::record::EventStore::new(&elsewhere, prodrome_data::policy::Untrusted::none())
         .append(
-            prodrome_core::event::mk_completed("calendarlinks", at, "ada", "").expect("an event"),
+            prodrome_todo::event::mk_completed("calendarlinks", at, "ada", "").expect("an event"),
         )
         .expect("appended elsewhere");
     let drawn = Command::new(drawing(&data))
@@ -4242,7 +4242,7 @@ fn roadmap_push_records_a_join_and_commits_the_store_s_own_gitignore() {
     };
     let out = push();
     assert!(out.status.success(), "{}", text(&out.stderr));
-    let recorded = prodrome_core::dag::Heads::parse(
+    let recorded = prodrome_dag::dag::Heads::parse(
         &std::fs::read_to_string(roadmap.join(".heads")).expect("a record"),
     )
     .expect("parses");
@@ -4782,7 +4782,7 @@ impl Train {
     fn nightly_todos_in(data: &Path, events: &str) -> std::collections::BTreeMap<String, String> {
         suzatary_record::record::EventStore::new(
             data.join(events),
-            prodrome_core::policy::Untrusted::none(),
+            prodrome_data::policy::Untrusted::none(),
         )
         .events()
         .expect("the chain reads")

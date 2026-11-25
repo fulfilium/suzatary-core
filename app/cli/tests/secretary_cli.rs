@@ -500,7 +500,7 @@ fn conversation(
     let stores = instance.conversation_stores();
     let id = ConversationId::new(id).expect("a slug");
     let at = |minute: u32| {
-        prodrome_core::literal::Datetime::new(2026, 10, 20, 9, minute, 0, 0).expect("an instant")
+        prodrome_data::literal::Datetime::new(2026, 10, 20, 9, minute, 0, 0).expect("an instant")
     };
     let opened = Entry::Opened {
         at: at(0),
@@ -838,13 +838,13 @@ fn backfilled(name: &str) -> Instance {
     topics.begin().expect("begun");
     topics
         .memberships
-        .append(prodrome_core::tags::membership::added::<
+        .append(prodrome_tags::membership::added::<
             suzatary_topics::secretary::topics::reading::Topics,
         >(
             "round:default/0".parse::<Target>().expect("a target"),
             Topic::new("garden").expect("a topic"),
-            prodrome_core::literal::Datetime::new(2026, 10, 21, 9, 0, 0, 0).expect("an instant"),
-            prodrome_core::event::Actor::new("owner").expect("an actor"),
+            prodrome_data::literal::Datetime::new(2026, 10, 21, 9, 0, 0, 0).expect("an instant"),
+            prodrome_data::event::Actor::new("owner").expect("an actor"),
         ))
         .expect("written");
     instance
@@ -972,13 +972,13 @@ fn the_backfill_applies_the_plan_it_showed_once() {
 
     topics
         .memberships
-        .append(prodrome_core::tags::membership::added::<
+        .append(prodrome_tags::membership::added::<
             suzatary_topics::secretary::topics::reading::Topics,
         >(
             target("round:default/4"),
             topic("hedge"),
-            prodrome_core::literal::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant"),
-            prodrome_core::event::Actor::new("owner").expect("an actor"),
+            prodrome_data::literal::Datetime::new(2026, 10, 25, 9, 0, 0, 0).expect("an instant"),
+            prodrome_data::event::Actor::new("owner").expect("an actor"),
         ))
         .expect("written");
     let stale = held();
@@ -1020,7 +1020,7 @@ fn the_digest_census_prints_counts_and_no_word() {
             &Line::new("CENSUSWORDS summarised").expect("a line"),
             read.over(node).expect("children read"),
             suzatary_digest::model_name::ModelName::parse("joining").expect("a model"),
-            prodrome_core::literal::Datetime::new(2026, 10, 20, 10, 0, 0, 0).expect("an instant"),
+            prodrome_data::literal::Datetime::new(2026, 10, 20, 10, 0, 0, 0).expect("an instant"),
         )
         .expect("summarised");
     }
@@ -1056,7 +1056,7 @@ pub(crate) fn read_lines(
         .clone()
 }
 
-fn line_objects(instance: &Instance) -> Vec<(prodrome_core::event::Hash, String)> {
+fn line_objects(instance: &Instance) -> Vec<(prodrome_data::event::Hash, String)> {
     use suzatary_store::store::Reads as _;
     instance
         .conversation_stores()
@@ -1064,7 +1064,7 @@ fn line_objects(instance: &Instance) -> Vec<(prodrome_core::event::Hash, String)
         .objects()
         .expect("reads")
         .into_iter()
-        .map(|(name, object)| (name, prodrome_core::event::canonical_envelope(&object)))
+        .map(|(name, object)| (name, prodrome_data::event::canonical_envelope(&object)))
         .collect()
 }
 
@@ -1082,7 +1082,7 @@ pub(crate) fn migrated(
 /// missed a link's token and an SSN in them, the last of its words erased, then one line written
 /// under the current rules.
 pub(crate) fn written_before_the_rules(instance: &Instance) -> ConversationId {
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
     use suzatary_conversations::secretary::store::Entry;
     use suzatary_lines::secretary::line_event::LineEvent;
     use suzatary_memory::secretary::erasure::Erasure;
@@ -1092,7 +1092,7 @@ pub(crate) fn written_before_the_rules(instance: &Instance) -> ConversationId {
     let stores = instance.conversation_stores();
     let id = ConversationId::new("2026-10-25-1").expect("a slug");
     let at = |minute: u32| {
-        prodrome_core::literal::Datetime::new(2026, 10, 25, 9, minute, 0, 0).expect("an instant")
+        prodrome_data::literal::Datetime::new(2026, 10, 25, 9, minute, 0, 0).expect("an instant")
     };
     let secret = "reset at https://example.test/r?token=s3cret, SSN 123-45-6789";
     let entries = [
@@ -1211,7 +1211,7 @@ fn migrate_scrub_reseals_every_stale_slot_once() {
     let kept: std::collections::BTreeMap<_, _> = after.iter().cloned().collect();
     for (name, print) in &objects {
         let now = kept.get(name).expect("no name is let go");
-        let whole = prodrome_core::event::parse_envelope::<
+        let whole = prodrome_data::event::parse_envelope::<
             suzatary_lines::secretary::line_event::LineEvent,
         >(
             &suzatary_lines::secretary::line_event::LineVocabulary,
@@ -1219,8 +1219,8 @@ fn migrate_scrub_reseals_every_stale_slot_once() {
         )
         .expect("a line");
         let husk = match &whole {
-            prodrome_core::event::Envelope::Change(change) => {
-                prodrome_core::store::HuskObject::of(change).map(|husk| husk.print())
+            prodrome_data::event::Envelope::Change(change) => {
+                prodrome_data::husk::HuskObject::of(change).map(|husk| husk.print())
             }
             _ => None,
         };
@@ -1291,7 +1291,7 @@ fn migrate_scrub_stopped_and_run_again_reads_the_same() {
     let id = written_before_the_rules(&instance);
     let before = read_lines(&instance, &id);
     let stores = instance.conversation_stores();
-    let at = prodrome_core::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
     let appended =
         suzatary_lines::secretary::rescrub::reseal(stores.conversations(), at).expect("reseals");
     assert_eq!(appended, 3);
@@ -1346,7 +1346,7 @@ fn migrate_scrub_restored_without_the_reseals_keys_destroys_no_old_key() {
     let before = read_lines(&instance, &id);
     let vaulted = kept_keys(&instance);
     let stores = instance.conversation_stores();
-    let at = prodrome_core::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
     let appended =
         suzatary_lines::secretary::rescrub::reseal(stores.conversations(), at).expect("reseals");
     assert_eq!(appended, 3);

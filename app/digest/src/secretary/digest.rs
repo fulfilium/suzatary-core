@@ -16,7 +16,7 @@ use prodrome_data::fold::sole::{One, Only, Whole};
 use prodrome_data::literal::Datetime;
 use prodrome_data::schema::Schema as _;
 use prodrome_data::topo;
-use prodrome_digest::{self as digest, Cycle, Leaf, Measure as _, Tree, View};
+use prodrome_digest::{self as digest, Cycle, Leaf, Measure as _, Tree, View, Waters};
 
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::{Asking, Beside};
@@ -760,7 +760,7 @@ impl Digest {
     pub fn name(&self) -> ReadingName {
         let tree = self
             .tree()
-            .map(|tree| digest::read(tree, |node| self.summarized(node)));
+            .map(|tree| digest::read(tree, digest::Node::bytes, |node| self.summarized(node)));
         ReadingName::of(
             tree.iter()
                 .chain(
@@ -803,8 +803,14 @@ impl Digest {
     #[must_use]
     pub fn view(&self, budget: u64) -> Option<View> {
         VIEWS.with(|count| count.set(count.get() + 1));
-        self.tree()
-            .map(|tree| digest::view(tree, |node| self.summarized(node), budget))
+        self.tree().map(|tree| {
+            digest::view(
+                tree,
+                digest::Node::bytes,
+                |node| self.summarized(node),
+                Waters::at(budget),
+            )
+        })
     }
 
     /// The texts the history names: a summary's, live while its node is in the tree and the

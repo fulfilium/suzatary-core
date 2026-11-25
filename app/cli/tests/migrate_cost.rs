@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use std::collections::BTreeSet;
 
 use clap::Parser as _;
-use prodrome_core::event::{Envelope, Hash};
+use prodrome_data::event::{Envelope, Hash};
 use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_memory::secretary::locked_text::{KeyName, TextKey};
@@ -98,7 +98,7 @@ fn held_while(path: &std::path::Path, run: impl FnOnce()) -> Duration {
 fn migrate_cost() {
     let instance = stale_store("migrate-cost", SLOTS, 50, 0);
     let stores = instance.conversation_stores();
-    let at = prodrome_core::literal::Datetime::new(2026, 11, 20, 10, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 11, 20, 10, 0, 0, 0).expect("an instant");
     let (syncs, scrubs, opens) = (
         suzatary_os::durable::syncs(),
         suzatary_held::redact::scrubs(),
@@ -347,7 +347,7 @@ fn migrate_scrub_stopped_at_any_step_of_a_batch_and_run_again_reads_the_same() {
         };
         let lines = Interrupted::new(whole.lines, stop, None);
         let at =
-            prodrome_core::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
+            prodrome_data::literal::Datetime::new(2026, 10, 25, 10, 0, 0, 0).expect("an instant");
         let stopping = Conversations {
             keys: &keys,
             lines: &lines,
@@ -425,7 +425,7 @@ fn migrate_scrub_destroys_the_key_of_a_reseal_kept_without_its_parent() {
     let id = secretary_cli::written_before_the_rules(&instance);
     let before = secretary_cli::read_lines(&instance, &id);
     let at = |minute: u32| {
-        prodrome_core::literal::Datetime::new(2026, 10, 25, 10, minute, 0, 0).expect("an instant")
+        prodrome_data::literal::Datetime::new(2026, 10, 25, 10, minute, 0, 0).expect("an instant")
     };
     let reseals: Vec<(Hash, LineEvent)> = {
         let stores = instance.conversation_stores();
@@ -475,7 +475,7 @@ fn migrate_scrub_destroys_the_key_of_a_reseal_kept_without_its_parent() {
     );
 
     let stores = instance.conversation_stores();
-    let actor = prodrome_core::event::Actor::new("assistant").expect("an actor");
+    let actor = prodrome_data::event::Actor::new("assistant").expect("an actor");
     transcript::erase(
         stores.conversations(),
         &id,
@@ -527,7 +527,7 @@ fn migrate_scrub_scrubs_each_stale_slot_once() {
         );
 
         let at =
-            prodrome_core::literal::Datetime::new(2026, 11, 20, 10, 0, 0, 0).expect("an instant");
+            prodrome_data::literal::Datetime::new(2026, 11, 20, 10, 0, 0, 0).expect("an instant");
         let (scrubbed, opened) = (scrubs(), opens());
         let done = rescrub::run(stores.conversations(), at, rescrub::BATCH).expect("a run");
         assert_eq!(done.census, census, "one reading, the same store");
@@ -557,9 +557,9 @@ fn migrate_scrub_trusts_the_reading_under_the_lock() {
         .and_then(|line| line.keys().next())
         .expect("the first line's slot, stale")
         .clone();
-    let actor = prodrome_core::event::Actor::new("assistant").expect("an actor");
+    let actor = prodrome_data::event::Actor::new("assistant").expect("an actor");
     let at = |minute: u32| {
-        prodrome_core::literal::Datetime::new(2026, 10, 25, 10, minute, 0, 0).expect("an instant")
+        prodrome_data::literal::Datetime::new(2026, 10, 25, 10, minute, 0, 0).expect("an instant")
     };
     let erasure = LineEvent::erasure(
         id.clone(),
@@ -598,7 +598,7 @@ fn migrate_scrub_keeps_every_slot_through_a_file_that_does_not_read() {
     use suzatary_memory::secretary::erasure::Erasure;
 
     let at = |minute: u32| {
-        prodrome_core::literal::Datetime::new(2026, 10, 25, 11, minute, 0, 0).expect("an instant")
+        prodrome_data::literal::Datetime::new(2026, 10, 25, 11, minute, 0, 0).expect("an instant")
     };
     let files = |instance: &suzatary_cli::instance::Instance| {
         let mut files: Vec<std::path::PathBuf> =
@@ -652,7 +652,7 @@ fn migrate_scrub_keeps_every_slot_through_a_file_that_does_not_read() {
                     .and_then(|lines| lines.into_iter().find(|line| line.conversation() == &id))
                     .and_then(|line| line.keys().next().cloned());
                 if let Some(first) = first {
-                    let actor = prodrome_core::event::Actor::new("assistant").expect("an actor");
+                    let actor = prodrome_data::event::Actor::new("assistant").expect("an actor");
                     let _ = transcript::erase(
                         whole,
                         &id,
@@ -753,8 +753,8 @@ fn migrate_scrub_erasing_a_slot_whose_reseal_waits_empties_every_holder() {
         renders: whole.renders,
         forgot: std::sync::Mutex::new(Vec::new()),
     };
-    let actor = prodrome_core::event::Actor::new("assistant").expect("an actor");
-    let at = prodrome_core::literal::Datetime::new(2026, 10, 25, 12, 0, 0, 0).expect("an instant");
+    let actor = prodrome_data::event::Actor::new("assistant").expect("an actor");
+    let at = prodrome_data::literal::Datetime::new(2026, 10, 25, 12, 0, 0, 0).expect("an instant");
     let erased = transcript::erase(
         Conversations {
             renders: &recording,
@@ -805,7 +805,7 @@ fn no_key_opens_a_seal_of(instance: &suzatary_cli::instance::Instance, slot: &Ke
         std::fs::read_dir(instance.secretary.line_store().join("objects")).expect("the objects")
     {
         let print = std::fs::read_to_string(file.expect("a file").path()).expect("a print");
-        let Some(line) = prodrome_core::event::parse_envelope::<LineEvent>(&vocabulary, &print)
+        let Some(line) = prodrome_data::event::parse_envelope::<LineEvent>(&vocabulary, &print)
             .ok()
             .and_then(|object| object.event().cloned())
         else {

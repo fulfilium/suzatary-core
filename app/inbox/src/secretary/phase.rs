@@ -8,7 +8,7 @@
 //! conflict and never as a winner. A check stands only on the send it checks: that is its
 //! [`Phase::floor`], which the order cannot say and the append asks.
 
-use prodrome_core::fold::{Inflationary, Order};
+use prodrome_data::fold::{Inflationary, Order};
 use serde::Serialize;
 use ts_rs::TS;
 

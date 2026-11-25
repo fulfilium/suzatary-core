@@ -1465,7 +1465,7 @@ fn public_tree_guard_incremental_and_full_checks_agree() {
 #[test]
 #[allow(clippy::too_many_lines)]
 fn door_2_admits_a_picture_by_drawing_the_store_again() {
-    use prodrome_core::literal::Datetime;
+    use prodrome_data::literal::Datetime;
     use suzatary_record::record::{MarkupSource, mk_authored};
     let scratch = Scratch::new("door-2");
     let instance = throwaway_deployment(&scratch);
@@ -1498,7 +1498,7 @@ fn door_2_admits_a_picture_by_drawing_the_store_again() {
             "todo",
             at,
             MarkupSource::from_chain(body),
-            prodrome_core::fpl::mk_flat(0.4).expect("a price"),
+            prodrome_term::fpl::mk_flat(0.4).expect("a price"),
             Vec::new(),
             "",
             "",
@@ -1510,9 +1510,9 @@ fn door_2_admits_a_picture_by_drawing_the_store_again() {
         )
         .expect("a record");
         suzatary_store::store::append_to(
-            &prodrome_core::store::EventStore::new(
+            &prodrome_store::store::EventStore::new(
                 &roadmap,
-                prodrome_core::policy::Untrusted::none(),
+                prodrome_data::policy::Untrusted::none(),
             ),
             suzatary_record::record::GENESIS,
             record,

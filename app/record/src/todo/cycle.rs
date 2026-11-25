@@ -2,8 +2,8 @@
 //! after.
 
 use chrono::Duration;
-use prodrome_core::fpl;
-use prodrome_core::term::{CurvePoint, Term};
+use prodrome_term::fpl;
+use prodrome_term::term::{CurvePoint, Term};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 

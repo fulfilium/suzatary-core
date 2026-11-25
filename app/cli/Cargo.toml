@@ -67,7 +67,14 @@ suzatary-os.workspace = true
 suzatary-tooling.workspace = true
 # The plugin host: `suzatary plugin sync` runs the `[[plugins]]` sources.
 suzatary-plugin.workspace = true
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_dag.workspace = true
+prodrome_declared.workspace = true
+prodrome_store.workspace = true
+prodrome_term.workspace = true
+prodrome_todo.workspace = true
+# The fixture's alone: its chain's topic memberships.
+prodrome_tags = { workspace = true, optional = true }
 clap = { version = "4", features = ["derive"] }
 # THE AGENT'S TOOLS, over stdio (§8.4).
 rmcp.workspace = true
@@ -101,7 +108,7 @@ rustix = { version = "1", features = ["process"] }
 # that sets an environment variable could reach, and removal is checkable.
 [features]
 default = []
-fixture = ["suzatary-secretary/fixture", "suzatary-io-access/fixture", "suzatary-server/fixture"]
+fixture = ["suzatary-secretary/fixture", "suzatary-io-access/fixture", "suzatary-server/fixture", "dep:prodrome_tags"]
 
 # THE TWO TEST TARGETS THAT ARE NOT ABOUT THIS CRATE. `tests/guards.rs` live-fires the
 # repository's containment scripts with `git` against throwaway repositories, which a build
@@ -127,6 +134,9 @@ path = "tests/plugin.rs"
 test = false
 
 [dev-dependencies]
+prodrome_tags.workspace = true
+prodrome_fpl.workspace = true
+prodrome_reading.workspace = true
 # Programs a test makes and runs, never executing a file its process wrote.
 suzatary-testkit = { path = "../testkit" }
 # Inert effects the fakes fill a record with.

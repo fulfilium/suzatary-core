@@ -1,8 +1,8 @@
 //! A decay toward a date.
 
 use chrono::{Duration, NaiveDate};
-use prodrome_core::fpl;
-use prodrome_core::term::Term;
+use prodrome_term::fpl;
+use prodrome_term::term::Term;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 

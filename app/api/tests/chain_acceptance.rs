@@ -5,15 +5,15 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{
-    Actor, Hash, canonical_envelope, mk_completed, mk_created, mk_sealed, mk_woven, seal_hash,
-};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::sign::{KeyAdded, Secret};
-use prodrome_core::store::frontier::{Frontiers, KEPT, Since};
-use prodrome_core::store::{MemoryStore, Replica as _};
+use prodrome_dag::dag::Dag;
+use prodrome_dag::sign::Secret;
+use prodrome_data::event::{Actor, Hash, canonical_envelope, mk_sealed, mk_woven, seal_hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_data::sign::KeyAdded;
+use prodrome_store::store::frontier::{Frontiers, KEPT, Since};
+use prodrome_store::store::{MemoryStore, Replica as _};
+use prodrome_todo::event::{mk_completed, mk_created};
 use suzatary_api::routes;
 use suzatary_base::capability::{Rejected, RenderError, Typeset};
 use suzatary_base::escape::Escaped;
@@ -132,7 +132,7 @@ fn posts(count: usize, per: usize) -> Vec<std::time::Duration> {
     tab.receive(
         dag.tips(),
         &|name| prints.get(name).map(|print| print.clone().into_bytes()),
-        prodrome_core::store::Sender::Stranger,
+        prodrome_data::husk::Sender::Stranger,
     )
     .expect("received");
     let policy = chain(&root);
@@ -242,7 +242,7 @@ fn a_posted_record_is_rendered_before_the_chain_holds_it() {
         Secret::new(&"cd".repeat(32)).expect("a seed"),
     );
     let genesis: Envelope = Envelope::Genesis(
-        prodrome_core::genesis::mk_genesis("life", &"ef".repeat(16)).expect("a genesis"),
+        prodrome_data::genesis::mk_genesis("life", &"ef".repeat(16)).expect("a genesis"),
     );
     let added = Envelope::KeyAdded(KeyAdded {
         genesis: seal_hash(&genesis),
@@ -255,7 +255,7 @@ fn a_posted_record_is_rendered_before_the_chain_holds_it() {
         .accept(&[&genesis, &added, &registered].map(|o| (seal_hash(o), canonical_envelope(o))))
         .expect("held");
     let record = Envelope::Change(
-        prodrome_core::change::mk_change(
+        prodrome_data::change::mk_change(
             seal_hash(&genesis),
             Vec::new(),
             mk_authored(
@@ -265,7 +265,7 @@ fn a_posted_record_is_rendered_before_the_chain_holds_it() {
                 "todo",
                 at(0),
                 MarkupSource::escaped("Renew the passport"),
-                prodrome_core::fpl::mk_absent(),
+                prodrome_term::fpl::mk_absent(),
                 Vec::new(),
                 "",
                 "",

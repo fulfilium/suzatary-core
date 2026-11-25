@@ -50,7 +50,7 @@ pub fn run(path: &Path, args: &Args) -> anyhow::Result<()> {
 #[derive(Debug)]
 pub struct Tapped {
     /// The name the box keeps the tap's record under, which names the root key.
-    pub request: prodrome_core::event::Hash,
+    pub request: prodrome_data::event::Hash,
     /// The conversation as the box answers after the tap.
     pub conversation: serde_json::Value,
 }

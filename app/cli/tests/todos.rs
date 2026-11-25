@@ -5,8 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
-use prodrome_core::fpl;
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
+use prodrome_term::fpl;
 use suzatary_record::record::{EventStore, mk_authored};
 use suzatary_store::store::Reads as _;
 
@@ -25,7 +25,7 @@ fn at(day: u32) -> Datetime {
 pub(crate) fn a_chain(root: &Path) {
     let store = EventStore::new(
         root.join("events"),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     );
     suzatary_store::store::append_to(
         &store,
@@ -83,7 +83,7 @@ pub(crate) fn an_instance(root: &Path) -> PathBuf {
 }
 
 /// [`an_instance`], declaring `key` its root.
-pub(crate) fn a_signing_instance(root: &Path, key: &prodrome_core::sign::PublicKey) -> PathBuf {
+pub(crate) fn a_signing_instance(root: &Path, key: &prodrome_data::sign::PublicKey) -> PathBuf {
     let path = root.join("instance.toml");
     std::fs::write(
         &path,
@@ -200,10 +200,10 @@ pub(crate) fn signing(
 
 pub(crate) fn objects(
     root: &Path,
-) -> Vec<prodrome_core::event::Envelope<suzatary_record::record::TodoEvent>> {
+) -> Vec<prodrome_data::event::Envelope<suzatary_record::record::TodoEvent>> {
     suzatary_io_chains::objects::Objects::chain(EventStore::new(
         root.join("events"),
-        prodrome_core::policy::Untrusted::none(),
+        prodrome_data::policy::Untrusted::none(),
     ))
     .objects()
     .expect("the chain reads")
@@ -218,7 +218,7 @@ pub(crate) fn objects(
 fn a_box_whose_keys_do_not_resolve_reads_and_refuses_each_write_saying_why() {
     let root = scratch("keys-missing");
     a_chain(&root);
-    let key = prodrome_core::sign::Secret::new(&"9".repeat(64)).expect("a seed");
+    let key = prodrome_dag::sign::Secret::new(&"9".repeat(64)).expect("a seed");
     let instance = a_signing_instance(&root, &key.public());
     let before = objects(&root).len();
 
@@ -246,12 +246,12 @@ fn a_box_whose_keys_do_not_resolve_reads_and_refuses_each_write_saying_why() {
 /// write recorded as the untrusted agent is the agent key's, the only actor it is registered for.
 #[test]
 fn each_write_is_signed_by_the_key_its_actor_owns() {
-    use prodrome_core::event::Envelope;
+    use prodrome_data::event::Envelope;
     let root = scratch("keys-per-actor");
     a_chain(&root);
     let (own, agent) = ("9".repeat(64), "8".repeat(64));
     let public = |seed: &str| {
-        prodrome_core::sign::Secret::new(seed)
+        prodrome_dag::sign::Secret::new(seed)
             .expect("a seed")
             .public()
     };
@@ -272,7 +272,7 @@ fn each_write_is_signed_by_the_key_its_actor_owns() {
                             if event.todo().as_str() == todo
                     ) =>
                 {
-                    Some(prodrome_core::event::seal_hash(&Envelope::Change(
+                    Some(prodrome_data::event::seal_hash(&Envelope::Change(
                         change.clone(),
                     )))
                 }
@@ -309,7 +309,7 @@ type Lifecycle =
         Datetime,
         &str,
         &str,
-    ) -> Result<suzatary_record::record::TodoEvent, prodrome_core::literal::ProdromeError>;
+    ) -> Result<suzatary_record::record::TodoEvent, prodrome_data::literal::ProdromeError>;
 
 /// One step of a generated history: a todo authored at a flat price, or a lifecycle event.
 #[derive(Debug, Clone)]
@@ -323,9 +323,9 @@ const IDS: [&str; 3] = ["permit", "taxes", "garden"];
 fn step() -> impl proptest::strategy::Strategy<Value = (usize, &'static str, Step)> {
     use proptest::prelude::*;
     let lifecycle: [Lifecycle; 3] = [
-        prodrome_core::event::mk_completed,
-        prodrome_core::event::mk_cancelled,
-        prodrome_core::event::mk_reopened,
+        prodrome_todo::event::mk_completed,
+        prodrome_todo::event::mk_cancelled,
+        prodrome_todo::event::mk_reopened,
     ];
     let step = prop_oneof![
         (1u32..100, "[a-z]{1,12}( [a-z]{1,12}){0,3}")
@@ -368,7 +368,7 @@ proptest::proptest! {
     ) {
         let root = scratch("by-path");
         let events = root.join("events");
-        let store = EventStore::new(&events, prodrome_core::policy::Untrusted::none());
+        let store = EventStore::new(&events, prodrome_data::policy::Untrusted::none());
         for (day, (id, actor, step)) in (1..).zip(&steps) {
             let (todo, when) = (IDS[*id], at(day));
             let event = match step {

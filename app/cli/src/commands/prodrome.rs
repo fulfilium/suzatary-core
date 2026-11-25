@@ -78,7 +78,7 @@ fn texts(objects: &[std::path::PathBuf]) -> anyhow::Result<()> {
     for path in objects {
         let literal =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        let envelope = prodrome_core::event::parse_envelope(
+        let envelope = prodrome_data::event::parse_envelope(
             &suzatary_record::record::TodoVocabulary::default(),
             &literal,
         )
@@ -112,7 +112,7 @@ fn texts(objects: &[std::path::PathBuf]) -> anyhow::Result<()> {
 /// names the store's derived files exactly: `flake.lock` beside them is committed, and a public
 /// store's `_site`, where its Pages workflow draws it.
 fn init(dir: &Path, charter: Charter) -> anyhow::Result<()> {
-    let begun = !super::chain_at(dir.to_owned(), prodrome_core::policy::Untrusted::none())
+    let begun = !super::chain_at(dir.to_owned(), prodrome_data::policy::Untrusted::none())
         .tips()?
         .is_empty();
     if (begun || dir.join(charter::FILE).exists()) && Charter::read(dir)? != charter {

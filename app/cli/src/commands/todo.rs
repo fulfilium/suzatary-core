@@ -5,8 +5,9 @@ use std::path::Path;
 
 use anyhow::{Context, bail};
 use clap::Subcommand;
-use prodrome_core::event::{Actor, TodoId, mk_cancelled, mk_completed, mk_reopened, mk_tended};
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::{Actor, TodoId};
+use prodrome_data::policy::Untrusted;
+use prodrome_todo::event::{mk_cancelled, mk_completed, mk_reopened, mk_tended};
 use suzatary_base::capability::Clock;
 use suzatary_io_local::clock::SystemClock;
 use suzatary_record::todo;
@@ -623,7 +624,7 @@ fn appended(
 
 fn show(
     (read, name): &(Read, ChainName),
-    at: prodrome_core::literal::Datetime,
+    at: prodrome_data::literal::Datetime,
     id: &str,
 ) -> anyhow::Result<()> {
     let set = read.set(at);
@@ -701,10 +702,10 @@ fn shown_as(id: &str, chain: Option<&str>) -> anyhow::Result<Named> {
 type Build =
     fn(
         &str,
-        prodrome_core::literal::Datetime,
+        prodrome_data::literal::Datetime,
         &str,
         &str,
-    ) -> Result<suzatary_record::record::TodoEvent, prodrome_core::literal::ProdromeError>;
+    ) -> Result<suzatary_record::record::TodoEvent, prodrome_data::literal::ProdromeError>;
 
 /// A trusted lifecycle event, binding at once; an id no event mentions is refused as a typo.
 fn lifecycle(

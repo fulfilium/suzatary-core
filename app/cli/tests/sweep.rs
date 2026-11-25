@@ -9,8 +9,8 @@ use crate::common;
 use std::sync::Arc;
 
 use common::{FakeCorpus, FakeMessage, FakeModel, Fakes};
-use prodrome_core::event::mk_completed;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::policy::Untrusted;
+use prodrome_todo::event::mk_completed;
 use suzatary_base::capability::Datetime;
 use suzatary_conversations::secretary::model;
 use suzatary_inbox::secretary::changes::Act;
@@ -518,7 +518,7 @@ fn a_swept_completion_is_applied_through_the_real_tap_route() {
         other => panic!("expected a changeset, got {other:?}"),
     }
 
-    let id = today_of(prodrome_core::fpl::instant_of(common::now()).date());
+    let id = today_of(prodrome_data::instant::instant_of(common::now()).date());
 
     let base = common::start(Arc::new(caps), dep, Vec::new());
 

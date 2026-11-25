@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::bail;
-use prodrome_core::schema::Schema;
+use prodrome_data::schema::Schema;
 use suzatary_io_chains::objects::Objects;
 use suzatary_io_chains::plugin_store::PluginStore;
 use suzatary_store::store::Reads as _;
@@ -24,8 +24,8 @@ pub enum Opened {
 impl Opened {
     fn takes(self, kind: Kind) -> bool {
         match (self, kind.doors()) {
-            (Opened::Every, _) | (Opened::Alone, prodrome_core::store::Doors::Alone) => true,
-            (Opened::Alone, prodrome_core::store::Doors::Shared) => false,
+            (Opened::Every, _) | (Opened::Alone, prodrome_store::store::Doors::Alone) => true,
+            (Opened::Alone, prodrome_store::store::Doors::Shared) => false,
         }
     }
 }
@@ -45,7 +45,7 @@ pub(crate) fn run(path: &Path, at: &StoreAt, opened: Opened) -> anyhow::Result<(
                 );
             }
             let store =
-                super::super::chain_at(dir.to_owned(), prodrome_core::policy::Untrusted::none());
+                super::super::chain_at(dir.to_owned(), prodrome_data::policy::Untrusted::none());
             let unread = store
                 .excluded()
                 .map_err(|refused| anyhow::anyhow!("{refused}"))?;
@@ -100,7 +100,7 @@ fn recorded(kind: Kind, root: &Path) -> anyhow::Result<String> {
     match kind {
         Kind::Chain => heads(&super::super::chain_at(
             root.to_owned(),
-            prodrome_core::policy::Untrusted::none(),
+            prodrome_data::policy::Untrusted::none(),
         )),
         Kind::Inbox => {
             heads(&Objects::<suzatary_inbox::secretary::inbox_event::InboxEvent>::open(root))
@@ -170,7 +170,7 @@ mod tests {
         let chain = dir.path().join("events");
         let begun = suzatary_record::record::EventStore::new(
             &chain,
-            prodrome_core::policy::Untrusted::none(),
+            prodrome_data::policy::Untrusted::none(),
         );
         begun
             .init(suzatary_record::record::GENESIS)
@@ -231,7 +231,7 @@ mod tests {
             line("life")
         );
         assert_eq!(said.len(), 5);
-        let recorded = prodrome_core::dag::Heads::parse(
+        let recorded = prodrome_dag::dag::Heads::parse(
             &std::fs::read_to_string(chain.join(".heads")).expect("a record"),
         )
         .expect("parses");

@@ -12,8 +12,8 @@
 use std::collections::HashMap;
 use std::{env, fs};
 
-use prodrome_core::fpl::{instant_of, iso};
-use prodrome_core::literal::{Open, Value, parse_literal};
+use prodrome_data::instant::{instant_of, iso};
+use prodrome_data::literal::{Open, Value, parse_literal};
 use serde_json::json;
 
 fn field<'a>(value: &'a Value, name: &str) -> &'a Value {

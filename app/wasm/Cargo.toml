@@ -16,7 +16,13 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_memo.workspace = true
+prodrome_dag.workspace = true
+prodrome_term.workspace = true
+prodrome_fpl.workspace = true
+prodrome_todo.workspace = true
+prodrome_reading.workspace = true
 prodrome-wasm-exports.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true

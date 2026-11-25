@@ -12,11 +12,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
 use chrono::{Duration, NaiveDate};
-use prodrome_core::event::{Hash, mk_cancelled, mk_completed, mk_reopened, mk_spec_revised};
-use prodrome_core::fpl::{self};
-use prodrome_core::payload::Payload as _;
-use prodrome_core::policy::{Policy, Untrusted};
-use prodrome_core::term::{Term, TermF};
+use prodrome_dag::policy::Policy;
+use prodrome_data::event::Hash;
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::fpl::{self};
+use prodrome_term::term::{Term, TermF};
+use prodrome_todo::event::{mk_cancelled, mk_completed, mk_reopened, mk_spec_revised};
+use prodrome_todo::payload::Payload as _;
 use regex::Regex;
 use suzatary_record::record::{
     Authored, MarkupSource, Record, Source, SubTodo, TodoEvent, is_absent, mk_authored, mk_source,
@@ -840,7 +842,7 @@ fn respecified(
             .payload
             .category
             .as_ref()
-            .map_or("", prodrome_core::event::Name::as_str),
+            .map_or("", prodrome_data::event::Name::as_str),
         before.payload.waiting_on.as_str(),
         before.payload.detail.clone(),
         before.payload.source.clone(),
@@ -1127,7 +1129,7 @@ mod tests {
             zone: suzatary_base::zone::Zone::UTC,
         }
     }
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
     use suzatary_base::capability::Parses;
 
     use super::*;
@@ -1456,7 +1458,7 @@ mod tests {
     }
 
     fn created(id: &str, day: u32) -> TodoEvent {
-        prodrome_core::event::mk_created(id, at(day), "ada", "", "").expect("valid")
+        prodrome_todo::event::mk_created(id, at(day), "ada", "", "").expect("valid")
     }
 
     fn completed(id: &str, day: u32) -> TodoEvent {
@@ -1469,7 +1471,7 @@ mod tests {
 
     #[test]
     fn a_pass_cannot_be_undone_because_the_tendings_only_grow() {
-        let pass = prodrome_core::event::mk_tended("alpha", at(2), "ada", "").expect("valid");
+        let pass = prodrome_todo::event::mk_tended("alpha", at(2), "ada", "").expect("valid");
         let stream = [(hash_of(0), created("alpha", 1)), (hash_of(1), pass)];
         let refusal = undo(&stream, "alpha", at(3), "ada", &untrusted()).unwrap_err();
         assert!(
@@ -1738,7 +1740,7 @@ mod tests {
     }
 
     fn reading_of(events: &[TodoEvent], t: Datetime, policy: &Untrusted, id: &str) -> Reading {
-        let todo = prodrome_core::event::TodoId::new(id).expect("valid");
+        let todo = prodrome_data::event::TodoId::new(id).expect("valid");
         let believed = suzatary_signatures::believed::Believed::of(
             suzatary_signatures::believed::Preview::chain(events).nodes(),
             t,

@@ -7,10 +7,10 @@
 
 use std::collections::BTreeMap;
 
-use prodrome_core::change::mk_change;
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::literal::Datetime;
-use prodrome_core::schema::Schema as _;
+use prodrome_data::change::mk_change;
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::schema::Schema as _;
 use suzatary_conversations::secretary::store::{Entry, Namer, Title};
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::line_shape::LineShape;
@@ -77,7 +77,7 @@ type Ordering = dyn Fn(&[Node<'_, Hash, Datetime, LineWriter>]) -> Order;
 
 /// Each conversation's lines as the order reads them.
 fn by_conversation(
-    nodes: &[prodrome_core::registers::Node<LineEvent>],
+    nodes: &[prodrome_dag::registers::Node<LineEvent>],
 ) -> BTreeMap<String, Vec<Held<'_>>> {
     let mut by: BTreeMap<String, Vec<_>> = BTreeMap::new();
     for node in nodes {
@@ -305,10 +305,10 @@ fn written(steps: &[Step]) -> InMemory {
                     .map(|i| held[i.index(held.len())].clone())
                     .collect();
                 // A tab writes over lines it holds as heads: none of them is beneath another.
-                let dag: prodrome_core::dag::Dag<LineEvent> = objects.iter().cloned().collect();
+                let dag: prodrome_dag::dag::Dag<LineEvent> = objects.iter().cloned().collect();
                 let beneath =
                     dag.closure(parents.iter().flat_map(|parent| {
-                        prodrome_core::event::parents_of(&dag.objects()[parent])
+                        prodrome_data::event::parents_of(&dag.objects()[parent])
                     }));
                 parents.retain(|parent| !beneath.contains(parent));
                 parents.sort();

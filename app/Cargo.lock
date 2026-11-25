@@ -3184,17 +3184,20 @@ dependencies = [
 [[package]]
 name = "prodrome-core"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
- "chrono",
  "prodrome-dag",
  "prodrome-data",
  "prodrome-declared",
  "prodrome-digest",
+ "prodrome-fpl",
  "prodrome-memo",
  "prodrome-nest",
+ "prodrome-reading",
  "prodrome-store",
  "prodrome-tags",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "sha2",
  "thiserror",
@@ -3203,7 +3206,7 @@ dependencies = [
 [[package]]
 name = "prodrome-dag"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "ed25519-dalek",
  "prodrome-data",
@@ -3213,7 +3216,7 @@ dependencies = [
 [[package]]
 name = "prodrome-data"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -3226,7 +3229,7 @@ dependencies = [
 [[package]]
 name = "prodrome-declared"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "prodrome-data",
  "thiserror",
@@ -3235,7 +3238,7 @@ dependencies = [
 [[package]]
 name = "prodrome-derive"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3245,16 +3248,27 @@ dependencies = [
 [[package]]
 name = "prodrome-digest"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "prodrome-data",
  "prodrome-memo",
 ]
 
 [[package]]
+name = "prodrome-fpl"
+version = "0.9.0"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+dependencies = [
+ "chrono",
+ "prodrome-data",
+ "prodrome-term",
+ "thiserror",
+]
+
+[[package]]
 name = "prodrome-memo"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "memchr",
  "prodrome-data",
@@ -3265,7 +3279,7 @@ dependencies = [
 [[package]]
 name = "prodrome-nest"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "prodrome-dag",
  "prodrome-data",
@@ -3273,9 +3287,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "prodrome-reading"
+version = "0.9.0"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+dependencies = [
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-fpl",
+ "prodrome-term",
+ "prodrome-todo",
+]
+
+[[package]]
 name = "prodrome-store"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "prodrome-dag",
  "prodrome-data",
@@ -3286,7 +3312,7 @@ dependencies = [
 [[package]]
 name = "prodrome-tags"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "prodrome-dag",
  "prodrome-data",
@@ -3294,9 +3320,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "prodrome-term"
+version = "0.9.0"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+dependencies = [
+ "chrono",
+ "prodrome-data",
+ "thiserror",
+]
+
+[[package]]
+name = "prodrome-todo"
+version = "0.9.0"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+dependencies = [
+ "prodrome-data",
+ "prodrome-term",
+]
+
+[[package]]
 name = "prodrome-typst-wasm"
 version = "0.1.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3308,7 +3353,7 @@ dependencies = [
 [[package]]
 name = "prodrome-wasm-exports"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=39c408f59f266c67c32fbe94630ea464e3470da4#39c408f59f266c67c32fbe94630ea464e3470da4"
+source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 dependencies = [
  "prodrome-core",
  "serde",
@@ -4246,7 +4291,15 @@ dependencies = [
  "clap",
  "flate2",
  "hex",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-declared",
+ "prodrome-fpl",
+ "prodrome-reading",
+ "prodrome-store",
+ "prodrome-tags",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "regex",
  "rmcp",
@@ -4314,7 +4367,15 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "hex",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-fpl",
+ "prodrome-memo",
+ "prodrome-reading",
+ "prodrome-store",
+ "prodrome-tags",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "regex",
  "serde",
@@ -4352,7 +4413,11 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "hex",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-fpl",
+ "prodrome-memo",
+ "prodrome-term",
  "proptest",
  "regex",
  "schemars",
@@ -4371,8 +4436,9 @@ name = "suzatary-cards"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "prodrome-core",
  "prodrome-data",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "serde",
  "serde_json",
@@ -4544,7 +4610,12 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "hex",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-fpl",
+ "prodrome-reading",
+ "prodrome-term",
+ "prodrome-todo",
  "prodrome-wasm-exports",
  "proptest",
  "schemars",
@@ -4606,6 +4677,16 @@ dependencies = [
  "chrono",
  "hex",
  "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-declared",
+ "prodrome-digest",
+ "prodrome-memo",
+ "prodrome-reading",
+ "prodrome-store",
+ "prodrome-tags",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "serde",
  "serde_json",
@@ -4842,9 +4923,9 @@ version = "0.0.0"
 dependencies = [
  "chacha20poly1305",
  "hex",
- "prodrome-core",
  "prodrome-dag",
  "prodrome-data",
+ "prodrome-store",
  "proptest",
  "serde",
  "serde_json",
@@ -4904,9 +4985,10 @@ dependencies = [
 name = "suzatary-plan"
 version = "0.0.0"
 dependencies = [
- "prodrome-core",
  "prodrome-dag",
  "prodrome-data",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "serde",
  "suzatary-base",
@@ -4968,7 +5050,12 @@ name = "suzatary-record"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-reading",
+ "prodrome-store",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "serde",
  "serde_json",
@@ -4984,7 +5071,10 @@ name = "suzatary-release"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "serde",
  "suzatary-record",
@@ -5006,7 +5096,12 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "hex",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-digest",
+ "prodrome-fpl",
+ "prodrome-reading",
+ "prodrome-todo",
  "proptest",
  "regex",
  "schemars",
@@ -5049,10 +5144,12 @@ dependencies = [
  "axum-server",
  "chrono",
  "hex",
- "prodrome-core",
+ "prodrome-dag",
  "prodrome-data",
  "prodrome-memo",
  "prodrome-store",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "rustls",
  "serde",
@@ -5123,7 +5220,12 @@ dependencies = [
  "chrono",
  "hex",
  "hmac",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-fpl",
+ "prodrome-memo",
+ "prodrome-reading",
+ "prodrome-term",
  "proptest",
  "serde",
  "serde_json",
@@ -5162,10 +5264,15 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "hex",
- "prodrome-core",
+ "prodrome-dag",
  "prodrome-data",
  "prodrome-declared",
+ "prodrome-digest",
+ "prodrome-fpl",
+ "prodrome-memo",
  "prodrome-store",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "serde_json",
  "sha2",
@@ -5202,7 +5309,14 @@ name = "suzatary-todo"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-fpl",
+ "prodrome-memo",
+ "prodrome-reading",
+ "prodrome-store",
+ "prodrome-term",
+ "prodrome-todo",
  "proptest",
  "regex",
  "schemars",
@@ -5289,7 +5403,13 @@ dependencies = [
 name = "suzatary-wasm"
 version = "0.0.0"
 dependencies = [
- "prodrome-core",
+ "prodrome-dag",
+ "prodrome-data",
+ "prodrome-fpl",
+ "prodrome-memo",
+ "prodrome-reading",
+ "prodrome-term",
+ "prodrome-todo",
  "prodrome-wasm-exports",
  "serde",
  "serde_json",

@@ -7,10 +7,11 @@ use crate::common;
 use std::sync::Arc;
 
 use common::Fakes;
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Envelope, Hash, canonical_envelope, mk_completed, seal_hash};
-use prodrome_core::sign::Checks;
-use prodrome_core::sign::{Registrar, Secret};
+use prodrome_dag::dag::Dag;
+use prodrome_dag::sign::Checks;
+use prodrome_dag::sign::{Registrar, Secret};
+use prodrome_data::event::{Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_todo::event::mk_completed;
 use suzatary_inbox::secretary::inbox;
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::signatures::{BoxKeys, Enrolment, KEPT_CHECKS, Trust};
@@ -85,7 +86,7 @@ fn signing_over(
 
 /// A tab's act, signed by `key`: the two prints a tab posts.
 fn act(fakes: &Fakes, key: &Secret, todo: &str) -> (Hash, Vec<String>) {
-    let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant");
+    let at = prodrome_data::literal::Datetime::new(2026, 9, 2, 11, 0, 0, 0).expect("an instant");
     let change = common::written(
         &fakes.chain,
         mk_completed(todo, at, "ada", "").expect("an event"),
@@ -538,7 +539,7 @@ fn a_key_trusted_at_the_terminal_withdraws_its_card() {
             &fakes.inbox,
             &fakes.chain,
             &keys().root().public(),
-            prodrome_core::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
+            prodrome_data::literal::Datetime::new(2026, 9, 2, 12, 0, 0, 0).expect("an instant"),
         )
         .expect("withdrawn")
         .len()
@@ -1196,7 +1197,7 @@ fn the_door_s_reading_by_chain_size() {
     let roots = || Registrar::Roots([keys().root().public()].into_iter().collect());
     let write = |n: u32| {
         let todo = common::CAST.todos.all()[n as usize % 6].id;
-        let at = prodrome_core::literal::Datetime::new(2026, 9, 2, 11, n / 60 % 60, n % 60, 0)
+        let at = prodrome_data::literal::Datetime::new(2026, 9, 2, 11, n / 60 % 60, n % 60, 0)
             .expect("an instant");
         let change = common::written(
             &fakes.chain,

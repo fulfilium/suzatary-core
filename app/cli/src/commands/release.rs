@@ -7,10 +7,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use clap::Subcommand;
-use prodrome_core::event::{TodoEvent, TodoId};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::term::Term;
+use prodrome_data::event::TodoId;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_term::term::Term;
+use prodrome_todo::event::TodoEvent;
 use suzatary_base::capability::Clock;
 use suzatary_base::escape::markup_text;
 use suzatary_io_local::clock::SystemClock;
@@ -425,7 +426,7 @@ fn writer(
     let writer = Instance::writer_of(
         dir,
         &instance.signers(),
-        &prodrome_core::event::Actor::new(actor.as_str()).map_err(|e| anyhow::anyhow!("{e}"))?,
+        &prodrome_data::event::Actor::new(actor.as_str()).map_err(|e| anyhow::anyhow!("{e}"))?,
         crate::commands::door::Opened::AtTerminal,
     );
     Ok((writer, actor))
@@ -534,7 +535,7 @@ fn complete(
                 Place::Roadmap => format!("the release {}", noted.release),
                 Place::Upkeep => by_todo.get(todo.as_str()).cloned().unwrap_or_default(),
             };
-            let event = prodrome_core::event::mk_completed(todo.as_str(), now, &actor, &note)
+            let event = prodrome_todo::event::mk_completed(todo.as_str(), now, &actor, &note)
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             writer
                 .append(event)

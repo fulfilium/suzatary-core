@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use prodrome_core::policy::Untrusted;
+use prodrome_data::policy::Untrusted;
 use suzatary_record::record::{EventStore, TodoEvent};
 use suzatary_store::store::Only;
 

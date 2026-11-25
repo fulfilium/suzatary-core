@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use prodrome_core::sign::{PublicKey, Secret};
+use prodrome_dag::sign::Secret;
+use prodrome_data::sign::PublicKey;
 
 use super::Custody;
 use suzatary_base::capability;

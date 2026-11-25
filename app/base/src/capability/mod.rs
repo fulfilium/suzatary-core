@@ -32,7 +32,7 @@ pub use typeset::{Diagnostic, Rejected, Typeset, parsed};
 pub use whois::{Peer, Whois, WhoisError};
 
 /// The instant a [`Clock`] hands back: the Prodrome's own literal, data and never an order.
-pub type Datetime = prodrome_core::literal::Datetime;
+pub type Datetime = prodrome_data::literal::Datetime;
 
 /// A Tailscale login; only [`Login::from_whois`] mints one, so loopback cannot act.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

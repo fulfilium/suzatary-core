@@ -1,5 +1,5 @@
 //! A pull names what its replica holds by the frontier the box's last answer named
-//! (`prodrome_core::store::frontier`, the Prodrome's law 47). Over random histories of a topic
+//! (`prodrome_store::store::frontier`, the Prodrome's law 47). Over random histories of a topic
 //! store, written by other devices and by the tab itself, the tab pulling in pieces it may stop
 //! short of, posting its own writes, and the box losing every frontier it recorded:
 //!
@@ -16,14 +16,14 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::genesis::mk_genesis;
-use prodrome_core::literal::Datetime;
-use prodrome_core::schema::Schema as _;
-use prodrome_core::store::{MemoryStore, Replica as _};
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::genesis::mk_genesis;
+use prodrome_data::literal::Datetime;
+use prodrome_data::schema::Schema as _;
+use prodrome_store::store::{MemoryStore, Replica as _};
 use proptest::prelude::*;
 
-use prodrome_core::store::frontier::{Frontiers, Reached, Since, Token};
+use prodrome_store::store::frontier::{Frontiers, Reached, Since, Token};
 use suzatary_api::routes::{self, Books, Cut, Posted};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
@@ -68,7 +68,7 @@ impl Device {
             .receive(
                 [name_of].into(),
                 &|_| Some(print.clone().into_bytes()),
-                prodrome_core::store::Sender::Stranger,
+                prodrome_data::husk::Sender::Stranger,
             )
             .expect("begun");
         Self {
@@ -141,7 +141,7 @@ impl Device {
             .receive(
                 signed.keys().cloned().collect(),
                 &|name| signed.get(name).map(|print| print.clone().into_bytes()),
-                prodrome_core::store::Sender::Stranger,
+                prodrome_data::husk::Sender::Stranger,
             )
             .expect("the device keeps its signatures");
         changes
@@ -166,7 +166,7 @@ impl Device {
             .receive(
                 prints.keys().cloned().collect(),
                 &|name| prints.get(name).cloned(),
-                prodrome_core::store::Sender::Stranger,
+                prodrome_data::husk::Sender::Stranger,
             )
             .expect("taken");
     }
@@ -192,7 +192,7 @@ impl TheBox {
             chain: suzatary_stores::stores::phone_trusted(&["ada", "tab"]),
             store,
             epochs: Epochs::remembered(),
-            frontiers: Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+            frontiers: Frontiers::remembered(prodrome_store::store::frontier::KEPT),
             held_before: vec![vec![genesis()]],
         }
     }
@@ -342,12 +342,12 @@ impl Tab {
     ) -> Result<(), TestCaseError> {
         let token = Token::parse(&frontier.digest).expect("a token");
         let objects = the_box.store.objects().expect("reads");
-        let dag: prodrome_core::dag::Dag<MembershipEvent> = objects.into_iter().collect();
+        let dag: prodrome_dag::dag::Dag<MembershipEvent> = objects.into_iter().collect();
         let lacking = the_box
             .frontiers
             .answer(KEY, &Since::Frontier(token), &dag)
             .expect("reads");
-        let reached: BTreeSet<prodrome_core::event::Hash> = match lacking.reached() {
+        let reached: BTreeSet<prodrome_data::event::Hash> = match lacking.reached() {
             Reached::Everything => dag.objects().keys().cloned().collect(),
             Reached::Known(reached) => reached.iter().cloned().collect(),
             Reached::Unknown => {
@@ -442,7 +442,7 @@ proptest! {
                 Step::Pull { budget, pieces } => {
                     tab.pull(&the_box, *budget, *pieces)?;
                 }
-                Step::Forget => the_box.frontiers = Frontiers::remembered(prodrome_core::store::frontier::KEPT),
+                Step::Forget => the_box.frontiers = Frontiers::remembered(prodrome_store::store::frontier::KEPT),
                 Step::GoBack(n) => the_box.go_back(*n),
             }
         }

@@ -19,12 +19,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_dag::registers::{Node, Stamp, fold};
+use prodrome_dag::registers::{Node, fold};
 use prodrome_data::event::{Actor, Hash};
 use prodrome_data::fold::sole::{One, Only};
 use prodrome_data::fold::{Order, Product as _};
 use prodrome_data::literal::Datetime;
 use prodrome_data::policy::Everything;
+use prodrome_data::stamp::Stamp;
 
 use crate::secretary::memory::{FactId, Kind, Origin};
 use crate::secretary::memory_event::{LifeRegister, MemoryEvent, Said};

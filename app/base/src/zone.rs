@@ -5,7 +5,7 @@
 
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, Offset as _, TimeZone as _};
 use chrono_tz::Tz;
-use prodrome_core::literal::Datetime;
+use prodrome_data::literal::Datetime;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
@@ -126,7 +126,7 @@ pub struct Moment {
 impl Moment {
     #[must_use]
     pub fn today(self) -> NaiveDate {
-        self.zone.day(prodrome_core::fpl::instant_of(self.at))
+        self.zone.day(prodrome_data::instant::instant_of(self.at))
     }
 }
 

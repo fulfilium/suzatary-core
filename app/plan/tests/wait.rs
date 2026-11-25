@@ -2,7 +2,7 @@
 //! moves the one store the rule picks, or says why it moves none; a chain's name moves that chain
 //! alone; and no followed store changes which of this deployment's own chains a name moves.
 
-use prodrome_core::event::{Hash, TodoId};
+use prodrome_data::event::{Hash, TodoId};
 use proptest::prelude::*;
 use suzatary_base::chains::ChainName;
 use suzatary_base::reference::{GenesisPrefix, GlobalTodo, Reference, TodoRef};

@@ -470,7 +470,7 @@ pub fn next(session: &Session, seen: &[Seen]) -> Option<Step> {
 }
 
 // The literal of each is its text, as an inbox act stores it.
-prodrome_core::text_literal!(
+prodrome_data::text_literal!(
     Task => |task| String::from(task.clone()),
 );
 

@@ -83,7 +83,7 @@ pub fn propose_persistent(
     let zone = deployment.zone;
     let categories: Vec<&str> = deployment.categories.keys().map(String::as_str).collect();
     let caps = &bound.caps;
-    let now = prodrome_core::fpl::instant_of(caps.clock.now());
+    let now = prodrome_data::instant::instant_of(caps.clock.now());
     let healths = caps
         .health
         .healths()
@@ -158,7 +158,7 @@ mod tests {
         ) -> Result<suzatary_health::health::Healths<SourceKey>, suzatary_store::store::StoreError>
         {
             use suzatary_base::capability::Clock as _;
-            let now = prodrome_core::fpl::instant_of(suzatary_base::capability::Nothing.now());
+            let now = prodrome_data::instant::instant_of(suzatary_base::capability::Nothing.now());
             let row = |ok| suzatary_mail::mail::sync_report::SyncReport {
                 unheld: None,
                 synced: vec![suzatary_mail::mail::sync_report::AccountSync {
@@ -193,7 +193,7 @@ mod tests {
         use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
         let policy = |name: &str| ChainPolicy {
             name: ChainName::new(name).expect("a slug"),
-            untrusted: prodrome_core::policy::Untrusted::of([]),
+            untrusted: prodrome_data::policy::Untrusted::of([]),
             roster: std::collections::BTreeSet::new(),
             root: suzatary_connect::cast::keys::root(),
             naming: suzatary_base::chains::Naming::AsActs,

@@ -12,7 +12,13 @@ name = "suzatary_todo"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_memo.workspace = true
+prodrome_dag.workspace = true
+prodrome_term.workspace = true
+prodrome_fpl.workspace = true
+prodrome_todo.workspace = true
+prodrome_reading.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-store.workspace = true
@@ -29,6 +35,7 @@ regex.workspace = true
 nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing"]
 
 [dev-dependencies]
+prodrome_store.workspace = true
 suzatary-todo = { path = ".", features = ["nothing"] }
 # Not `suzatary-testkit`: the wire and the vectors build these from the core library alone.
 tempfile = "3"

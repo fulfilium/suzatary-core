@@ -7,9 +7,9 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use prodrome_core::event::{Actor, Envelope, canonical_envelope};
-use prodrome_core::literal::Datetime;
-use prodrome_core::store::frontier::{Frontiers, KEPT, Since};
+use prodrome_data::event::{Actor, Envelope, canonical_envelope};
+use prodrome_data::literal::Datetime;
+use prodrome_store::store::frontier::{Frontiers, KEPT, Since};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_api::sync::Holding;
 use suzatary_base::capability::Entropy;
@@ -128,7 +128,7 @@ fn the_tab_s_own_line_is_the_line_the_box_serves() {
     let (boxed, box_keys) =
         LineEvent::write(DEFAULT.clone(), ada, 1, &entry, &Fixed(AtomicU8::new(9)))
             .expect("a line");
-    let envelope: Envelope<LineEvent> = prodrome_core::event::parse_envelope(
+    let envelope: Envelope<LineEvent> = prodrome_data::event::parse_envelope(
         &suzatary_lines::secretary::line_event::LineVocabulary,
         print,
     )
@@ -269,7 +269,7 @@ fn acceptance_measured(lines: &InMemory, shape: &str) {
             let keys: BTreeMap<String, Vec<String>> =
                 [(name.as_str().to_owned(), own.keys().into_values().collect())].into();
             let slot_keys = SlotKeys::parse(&keys).expect("the keys parse");
-            let keep = |taken: &[prodrome_core::event::Hash]| {
+            let keep = |taken: &[prodrome_data::event::Hash]| {
                 for name in taken {
                     for key in slot_keys.of(name) {
                         lines.keys.set(&key.name(), key)?;
@@ -330,7 +330,7 @@ fn acceptance_measured(lines: &InMemory, shape: &str) {
                 let held = lines.lines.objects().expect("held");
                 let count = held.len();
                 if with_dag {
-                    let dag: prodrome_core::dag::Dag<LineEvent> = held.into_iter().collect();
+                    let dag: prodrome_dag::dag::Dag<LineEvent> = held.into_iter().collect();
                     std::hint::black_box(dag);
                 }
                 (started.elapsed(), count)
@@ -421,7 +421,7 @@ fn a_posted_key_never_opens_erased_words() {
     )]
     .into();
     let slot_keys = SlotKeys::parse(&keys).expect("the keys parse");
-    let keep = |taken: &[prodrome_core::event::Hash]| {
+    let keep = |taken: &[prodrome_data::event::Hash]| {
         for taken in taken {
             for key in slot_keys.of(taken) {
                 lines.keys.set(&key.name(), key)?;
@@ -490,11 +490,11 @@ fn medians(steps: &[suzatary_lines::parts::Parts]) -> String {
 pub(crate) struct OnADevice;
 
 impl suzatary_lines::secretary::lines_rule::World for OnADevice {
-    fn now(&self) -> prodrome_core::literal::Datetime {
-        prodrome_core::literal::Datetime::new(2026, 11, 17, 9, 1, 0, 0).expect("an instant")
+    fn now(&self) -> prodrome_data::literal::Datetime {
+        prodrome_data::literal::Datetime::new(2026, 11, 17, 9, 1, 0, 0).expect("an instant")
     }
 
-    fn seat(&self, _: &prodrome_core::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
+    fn seat(&self, _: &prodrome_data::sign::PublicKey) -> suzatary_signatures::signatures::Seat {
         suzatary_signatures::signatures::Seat::Device
     }
 
@@ -570,7 +570,7 @@ fn a_tab_s_question_reads_as_the_box_s_and_holds_no_number_it_was_typed_with() {
     let (boxed, box_keys) =
         LineEvent::write(DEFAULT.clone(), ada, 1, &entry, &Fixed(AtomicU8::new(11)))
             .expect("a line");
-    let envelope: Envelope<LineEvent> = prodrome_core::event::parse_envelope(
+    let envelope: Envelope<LineEvent> = prodrome_data::event::parse_envelope(
         &suzatary_lines::secretary::line_event::LineVocabulary,
         own.print(),
     )
@@ -672,7 +672,7 @@ fn an_own_turn_reads_its_words_after_the_skeleton_names_it() {
         .nodes
         .iter()
         .filter(|n| n.hash != owned[0].node.name().as_str())
-        .map(|n| prodrome_core::event::Hash::new(n.hash.clone()).expect("a name"))
+        .map(|n| prodrome_data::event::Hash::new(n.hash.clone()).expect("a name"))
         .collect();
     tab.piece(
         served,
@@ -889,7 +889,7 @@ fn full_post_measured(lines: &InMemory, shape: &str) {
         keys.insert(name.as_str().to_owned(), own.keys().into_values().collect());
     }
     let slot_keys = SlotKeys::parse(&keys).expect("the keys parse");
-    let keep = |_: &[prodrome_core::event::Hash]| Ok(());
+    let keep = |_: &[prodrome_data::event::Hash]| Ok(());
     let started = std::time::Instant::now();
     let (receipt, parts) = suzatary_lines::parts::scoped(|| {
         routes::receive_changes(
@@ -935,7 +935,7 @@ fn full_post_measured(lines: &InMemory, shape: &str) {
 fn names(
     rulings: Vec<(&OwnLine, suzatary_lines::secretary::held_replica::Ruling)>,
 ) -> Vec<(
-    prodrome_core::event::Hash,
+    prodrome_data::event::Hash,
     suzatary_lines::secretary::held_replica::Ruling,
 )> {
     rulings
@@ -1174,7 +1174,7 @@ fn a_refused_topic_is_one_whose_opening_this_device_wrote() {
             &Fixed(AtomicU8::new(41)),
         )
         .expect("sealed");
-    let never = |name: &prodrome_core::event::Hash| {
+    let never = |name: &prodrome_data::event::Hash| {
         (
             name.clone(),
             Answer::Refused {
@@ -1311,7 +1311,7 @@ fn a_tab_that_missed_a_let_go_never_posts_it_again() {
     assert_eq!(released.refused, acted, "let go as refused, by name");
     // The second reads the row, which no longer holds it, and the acts, as a seal does.
     let _ = second.acted(&acted);
-    let posts = |tab: &HeldReplica| -> Vec<prodrome_core::event::Hash> {
+    let posts = |tab: &HeldReplica| -> Vec<prodrome_data::event::Hash> {
         tab.unsent(
             Fit {
                 most: 1000,
@@ -1411,7 +1411,7 @@ proptest::proptest! {
         );
         let prints: BTreeMap<_, _> = tab.own().iter().map(|own| (own.node.name().clone(), own.node.print().to_owned())).collect();
         let told: BTreeSet<String> = chain.iter().zip(&told).filter(|(_, t)| **t).map(|(name, _)| prints[name].clone()).collect();
-        let acted: BTreeSet<prodrome_core::event::Hash> = chain.iter().zip(&acted).filter(|(_, a)| **a).map(|(name, _)| name.clone()).collect();
+        let acted: BTreeSet<prodrome_data::event::Hash> = chain.iter().zip(&acted).filter(|(_, a)| **a).map(|(name, _)| name.clone()).collect();
         let _ = tab.acted(&acted);
         let going = tab.releasable(&told).prints;
         let held_back: BTreeSet<_> = tab.own().refusals().into_iter().map(|(own, _, _)| own.name().clone()).collect();
@@ -1570,9 +1570,9 @@ fn two_tabs(
     let ada = Actor::new("ada").expect("an actor");
     let mut tabs = [pulled(), pulled()];
     let mut row: Writes<OwnLine> = Writes::default();
-    let mut acted_row: BTreeSet<prodrome_core::event::Hash> = BTreeSet::new();
+    let mut acted_row: BTreeSet<prodrome_data::event::Hash> = BTreeSet::new();
     let mut told: BTreeSet<String> = BTreeSet::new();
-    let mut let_go: BTreeSet<prodrome_core::event::Hash> = BTreeSet::new();
+    let mut let_go: BTreeSet<prodrome_data::event::Hash> = BTreeSet::new();
     let mut sealed: Vec<OwnLine> = Vec::new();
     let fit = Fit {
         most: 1000,
@@ -1588,11 +1588,11 @@ fn two_tabs(
     };
     let read = |tab: &mut HeldReplica,
                 row: &Writes<OwnLine>,
-                acted_row: &BTreeSet<prodrome_core::event::Hash>| {
+                acted_row: &BTreeSet<prodrome_data::event::Hash>| {
         let _ = tab.take_own(&row.iter().cloned().collect::<Vec<_>>());
         let _ = tab.acted(acted_row);
     };
-    let held = || -> BTreeSet<prodrome_core::event::Hash> {
+    let held = || -> BTreeSet<prodrome_data::event::Hash> {
         lines
             .lines
             .objects()
@@ -1785,7 +1785,7 @@ fn two_tabs(
         }
     }
     // Every line sealed whose parents the box holds rests on no parent beneath another.
-    let dag: prodrome_core::dag::Dag<LineEvent> =
+    let dag: prodrome_dag::dag::Dag<LineEvent> =
         lines.lines.objects().expect("held").into_iter().collect();
     for line in &sealed {
         let parents = line.rests_on();

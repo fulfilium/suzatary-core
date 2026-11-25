@@ -32,13 +32,18 @@ suzatary-digest.workspace = true
 suzatary-conversations = { workspace = true, optional = true }
 suzatary-connect = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
-prodrome_core = { workspace = true, optional = true }
+prodrome_todo = { workspace = true, optional = true }
 
 [features]
 # The in-memory stores, test support; never in the shipped build.
-nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-inbox/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing", "suzatary-digest/nothing", "suzatary-conversations/nothing", "suzatary-connect/nothing", "dep:chrono", "dep:prodrome_core"]
+nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-todo/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-health/nothing", "suzatary-triage/nothing", "suzatary-inbox/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing", "suzatary-digest/nothing", "suzatary-conversations/nothing", "suzatary-connect/nothing", "dep:chrono", "dep:prodrome_todo"]
 
 [dev-dependencies]
+prodrome_dag.workspace = true
+prodrome_memo.workspace = true
+prodrome_digest.workspace = true
+prodrome_term.workspace = true
+prodrome_fpl.workspace = true
 suzatary-stores = { path = ".", features = ["nothing"] }
 suzatary-mail = { workspace = true, features = ["nothing"] }
 suzatary-google = { workspace = true, features = ["nothing"] }

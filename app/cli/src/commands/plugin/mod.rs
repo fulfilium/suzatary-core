@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use clap::{Args as ClapArgs, Subcommand};
-use prodrome_core::declared::Declared;
-use prodrome_core::fpl::instant_of;
+use prodrome_data::instant::instant_of;
+use prodrome_declared::Declared;
 use suzatary_base::capability::Clock as _;
 use suzatary_google::calendar::{Occurrence, learn_kept};
 use suzatary_health::health::plugin::CredentialName;

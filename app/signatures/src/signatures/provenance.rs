@@ -1,4 +1,4 @@
-use prodrome_core::sign::PublicKey;
+use prodrome_data::sign::PublicKey;
 
 use super::Unproven;
 

@@ -1,9 +1,9 @@
 //! The topics as a page reads and writes them; the box plans with the same functions, so a tab
 //! writing offline writes what the box would write holding the same objects.
 
-use prodrome_core::event::{Actor, canonical};
-use prodrome_core::fpl::datetime_of;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::{Actor, canonical};
+use prodrome_data::instant::datetime_of;
+use prodrome_data::literal::Datetime;
 use prodrome_wasm_exports::wire::parse_instant;
 use suzatary_base::topic_target::Target;
 use suzatary_topics::secretary::topics::provenance::Owner;

@@ -233,12 +233,12 @@ fn named_span(line: &str) -> Option<std::ops::Range<usize>> {
 }
 
 /// The name of the log's line at each position.
-fn log(reading: &Reading) -> Vec<prodrome_core::event::Hash> {
+fn log(reading: &Reading) -> Vec<prodrome_data::event::Hash> {
     let mut at = Vec::new();
     let mut stack: Vec<_> = reading
         .digest()
         .tree()
-        .map(prodrome_core::digest::Tree::root)
+        .map(prodrome_digest::Tree::root)
         .into_iter()
         .collect();
     while let Some(node) = stack.pop() {
@@ -347,12 +347,12 @@ proptest! {
             }
         }
         prop_assert!(covered.iter().all(|n| *n <= 1), "a line named twice: {}", told);
-        let lines_of_a: Vec<&prodrome_core::event::Hash> = read.lines().iter().map(|written| &written.name).collect();
+        let lines_of_a: Vec<&prodrome_data::event::Hash> = read.lines().iter().map(|written| &written.name).collect();
         let from = window
             .first()
             .and_then(|first| read.line_of(first))
             .unwrap_or(lines_of_a.len());
-        let sent: BTreeSet<&prodrome_core::event::Hash> = lines_of_a[from..].iter().copied().collect();
+        let sent: BTreeSet<&prodrome_data::event::Hash> = lines_of_a[from..].iter().copied().collect();
         for span in told.lines().filter_map(named_span) {
             prop_assert!(
                 !span.clone().all(|at| sent.contains(&log[at])),
@@ -445,7 +445,7 @@ fn a_retracted_summary_is_in_no_later_call() {
     let mut stack: Vec<_> = read
         .digest()
         .tree()
-        .map(prodrome_core::digest::Tree::root)
+        .map(prodrome_digest::Tree::root)
         .into_iter()
         .collect();
     let held = memories.hold().expect("held");

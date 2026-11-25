@@ -38,8 +38,8 @@ pub use words;
 /// What [`words!`] expands to name, so its caller needs no crate of its own for it.
 #[doc(hidden)]
 pub mod expansion {
-    pub use prodrome_core::literal::{Value, codec::word};
-    pub use prodrome_core::word_literal;
+    pub use prodrome_data::literal::{Value, codec::word};
+    pub use prodrome_data::word_literal;
     pub use serde;
 }
 

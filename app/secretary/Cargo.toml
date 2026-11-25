@@ -12,7 +12,10 @@ name = "suzatary_secretary"
 path = "src/lib.rs"
 
 [dependencies]
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_fpl.workspace = true
+prodrome_todo.workspace = true
+prodrome_reading.workspace = true
 suzatary-base.workspace = true
 suzatary-record.workspace = true
 suzatary-store.workspace = true
@@ -40,7 +43,7 @@ serde_json.workspace = true
 schemars.workspace = true
 # The sweep reads a code out of a message (`secretary::sweep::candidates`).
 regex.workspace = true
-# A window's arithmetic, on `prodrome::fpl::Instant`: the chrono prodrome-core takes.
+# A window's arithmetic, on `prodrome_term::fpl::Instant`: the chrono prodrome-term takes.
 chrono.workspace = true
 # The hashes prodrome-core uses.
 sha2.workspace = true
@@ -53,6 +56,8 @@ nothing = ["suzatary-base/nothing", "suzatary-record/nothing", "suzatary-store/n
 fixture = ["suzatary-conversations/fixture", "suzatary-lines/fixture"]
 
 [dev-dependencies]
+prodrome_dag.workspace = true
+prodrome_digest.workspace = true
 suzatary-secretary = { path = ".", features = ["nothing"] }
 suzatary-testkit = { path = "../testkit" }
 # The call a turn sends, as the provider reads it, for the cache law.

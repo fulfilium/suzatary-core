@@ -491,7 +491,7 @@ fn a_stopped_round_ends_on_the_stop() {
     let caps = Fakes::new("round-end-stopped").model(FakeModel::saying([WEATHER]));
     said_first(&caps);
     let halt = Halt::new();
-    let ada = prodrome_core::event::Actor::new("ada").expect("an actor");
+    let ada = prodrome_data::event::Actor::new("ada").expect("an actor");
     halt.stop(ada.clone());
     let ran = std::sync::Mutex::new(Vec::new());
     let closed = round_under(
@@ -571,7 +571,7 @@ proptest::proptest! {
         said_first(&caps);
         let halt = Halt::new();
         if stopped {
-            halt.stop(prodrome_core::event::Actor::new("ada").expect("an actor"));
+            halt.stop(prodrome_data::event::Actor::new("ada").expect("an actor"));
         }
         let ran = std::sync::Mutex::new(Vec::new());
         let closed = round_under(&caps, bound, &ran, &halt, suzatary_secretary::conversation::round::LOAD_NOTHING)

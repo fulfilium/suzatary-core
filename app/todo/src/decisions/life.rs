@@ -1,4 +1,4 @@
-use prodrome_core::fold::{Inflationary, Order};
+use prodrome_data::fold::{Inflationary, Order};
 
 /// Where a decision stands, as its life register orders it: a two-point chain, stated below
 /// withdrawn. Declared inflationary, so the store refuses a restatement of a withdrawn decision:

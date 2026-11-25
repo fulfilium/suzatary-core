@@ -7,15 +7,14 @@
 //! nothing but `alpha`'s own history does.
 
 use chrono::Duration;
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{
-    Actor, Envelope, Hash, mk_cancelled, mk_completed, mk_reopened, mk_sealed, mk_spec_revised,
-    seal_hash,
-};
-use prodrome_core::fpl::{instant_of, mk_after, mk_decay, mk_flat, mk_offset, mk_ref, mk_ref_in};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::term::Term;
+use prodrome_dag::dag::Dag;
+use prodrome_data::event::{Actor, Envelope, Hash, mk_sealed, seal_hash};
+use prodrome_data::instant::instant_of;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_term::fpl::{mk_after, mk_decay, mk_flat, mk_offset, mk_ref, mk_ref_in};
+use prodrome_term::term::Term;
+use prodrome_todo::event::{mk_cancelled, mk_completed, mk_reopened, mk_spec_revised};
 use proptest::prelude::*;
 
 use suzatary_base::chains::ChainName;
@@ -32,7 +31,7 @@ use suzatary_todo::wire::todo::Fulfillment;
 
 fn at(hour: i64) -> Datetime {
     let base = Datetime::new(2026, 10, 4, 0, 0, 0, 0).expect("an instant");
-    prodrome_core::fpl::datetime_of(instant_of(base) + Duration::hours(hour)).expect("in range")
+    prodrome_data::instant::datetime_of(instant_of(base) + Duration::hours(hour)).expect("in range")
 }
 
 /// What a todo's price may refer to.
@@ -229,7 +228,7 @@ fn two_geneses() -> Vec<(Hash, Envelope<TodoEvent>)> {
         .into_iter()
         .map(|label| {
             let genesis: Envelope<TodoEvent> = Envelope::Genesis(
-                prodrome_core::genesis::mk_genesis(label, &"0".repeat(32)).expect("a genesis"),
+                prodrome_data::genesis::mk_genesis(label, &"0".repeat(32)).expect("a genesis"),
             );
             (seal_hash(&genesis), genesis)
         })

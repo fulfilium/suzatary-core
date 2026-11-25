@@ -5,9 +5,8 @@ use crate::common;
 use std::sync::Arc;
 
 use common::Fakes;
-use prodrome_core::event::{
-    Hash, canonical_envelope, mk_completed, mk_created, mk_reopened, mk_sealed, seal_hash,
-};
+use prodrome_data::event::{Hash, canonical_envelope, mk_sealed, seal_hash};
+use prodrome_todo::event::{mk_completed, mk_created, mk_reopened};
 use suzatary_record::record::Envelope;
 use suzatary_store::store::Reads as _;
 
@@ -41,8 +40,8 @@ fn events(caps: &Fakes) -> Vec<suzatary_record::record::TodoEvent> {
 }
 
 /// An instant the fixture's clock already believes, so a claim is not future-dated.
-fn at(minute: u32) -> prodrome_core::literal::Datetime {
-    prodrome_core::literal::Datetime::new(2026, 9, 2, 11, minute, 0, 0).expect("a real instant")
+fn at(minute: u32) -> prodrome_data::literal::Datetime {
+    prodrome_data::literal::Datetime::new(2026, 9, 2, 11, minute, 0, 0).expect("a real instant")
 }
 
 fn sealed(prev: Option<&Hash>, event: suzatary_record::record::TodoEvent) -> Envelope {
@@ -237,7 +236,7 @@ fn a_sealed_act_from_a_phone_lands_on_the_chain() {
 /// object that answers.
 #[test]
 fn a_change_a_phone_appended_lands_through_adoption() {
-    use prodrome_core::store::{MemoryStore, Replica as _};
+    use prodrome_store::store::{MemoryStore, Replica as _};
     let (base, caps) = writer("sync-change");
     let held = caps.chain.objects().expect("reads");
     let prints: std::collections::BTreeMap<Hash, String> = held
@@ -248,7 +247,7 @@ fn a_change_a_phone_appended_lands_through_adoption() {
     tab.receive(
         caps.chain.tips().expect("tips").into_iter().collect(),
         &|name| prints.get(name).map(|print| print.clone().into_bytes()),
-        prodrome_core::store::Sender::Stranger,
+        prodrome_data::husk::Sender::Stranger,
     )
     .expect("the box's objects verify");
     let name = tab
@@ -453,7 +452,7 @@ fn divergence_leaves_both_heads_and_the_box_writes_nothing() {
 #[test]
 fn the_phones_at_is_stored_as_the_phone_claimed_it() {
     let (base, caps) = writer("sync-at");
-    let claimed = prodrome_core::literal::Datetime::new(2031, 1, 2, 3, 4, 5, 0).expect("real");
+    let claimed = prodrome_data::literal::Datetime::new(2031, 1, 2, 3, 4, 5, 0).expect("real");
     let object = common::written(
         &caps.chain,
         mk_completed("file-permit", claimed, "ada", "").expect("valid"),
@@ -614,7 +613,7 @@ fn author_hands_back_an_event_and_writes_nothing() {
     assert_eq!(events(&caps).len(), before);
     assert_eq!(caps.chain.tips().expect("derives"), heads);
 
-    let event: suzatary_record::record::TodoEvent = prodrome_core::event::parse_event(
+    let event: suzatary_record::record::TodoEvent = prodrome_data::event::parse_event(
         &suzatary_record::record::TodoVocabulary::default(),
         &print,
     )

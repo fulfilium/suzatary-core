@@ -6,16 +6,17 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::change::mk_change;
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{
-    Actor, Hash, canonical_envelope, mk_completed, mk_created, mk_sealed, mk_woven, parse_envelope,
-    seal_hash,
+use prodrome_dag::dag::Dag;
+use prodrome_dag::sign::Secret;
+use prodrome_data::change::mk_change;
+use prodrome_data::event::{
+    Actor, Hash, canonical_envelope, mk_sealed, mk_woven, parse_envelope, seal_hash,
 };
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::sign::{KeyAdded, Secret};
-use prodrome_core::store::{MemoryStore, Replica as _};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_data::sign::KeyAdded;
+use prodrome_store::store::{MemoryStore, Replica as _};
+use prodrome_todo::event::{mk_completed, mk_created};
 use proptest::prelude::*;
 use suzatary_api::sync::{Objects, Reason, receive};
 use suzatary_record::record::{Envelope, TodoEvent, TodoVocabulary};
@@ -101,7 +102,7 @@ fn adopted() -> Chain {
     tab.receive(
         dag.tips(),
         &|name| prints.get(name).map(|print| print.clone().into_bytes()),
-        prodrome_core::store::Sender::Stranger,
+        prodrome_data::husk::Sender::Stranger,
     )
     .expect("a closed set is received");
     Chain {

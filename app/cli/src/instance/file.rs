@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use suzatary_io_chains::conversations::ConversationStores;
 
 use anyhow::{Context, bail};
-use prodrome_core::event::Actor;
-use prodrome_core::sign::PublicKey;
+use prodrome_data::event::Actor;
+use prodrome_data::sign::PublicKey;
 use serde::{Deserialize, Serialize};
 use suzatary_base::capability::Login;
 use suzatary_base::chains::ChainName;

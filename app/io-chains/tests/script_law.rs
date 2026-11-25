@@ -7,17 +7,17 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{
-    Actor, Hash, mk_cancelled, mk_completed, mk_reopened, mk_spec_revised, mk_tended,
-};
-use prodrome_core::fpl;
 use prodrome_core::laws::Broken;
 use prodrome_core::laws::script::{self, Script, Who, a_script, an_honest_script};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::{Everything, Policy, Untrusted};
-use prodrome_core::schema::Schema;
-use prodrome_core::tags::{alias, membership};
-use prodrome_core::term::Term;
+use prodrome_dag::policy::Policy;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::{Everything, Untrusted};
+use prodrome_data::schema::Schema;
+use prodrome_tags::{alias, membership};
+use prodrome_term::fpl;
+use prodrome_term::term::Term;
+use prodrome_todo::event::{mk_cancelled, mk_completed, mk_reopened, mk_spec_revised, mk_tended};
 use proptest::prelude::*;
 use proptest::test_runner::{Config, TestCaseError};
 

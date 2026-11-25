@@ -2,11 +2,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::Hash;
-use prodrome_core::fold;
-use prodrome_core::fpl::{Candidates, Env, instant_of, iso};
-use prodrome_core::policy::Policy;
-use prodrome_core::registers;
+use prodrome_dag::policy::Policy;
+use prodrome_dag::registers;
+use prodrome_data::event::Hash;
+use prodrome_data::instant::{instant_of, iso};
+use prodrome_reading::fold;
+use prodrome_term::fpl::{Candidates, Env};
 use prodrome_wasm_exports::Read;
 use prodrome_wasm_exports::json;
 use prodrome_wasm_exports::wire::{

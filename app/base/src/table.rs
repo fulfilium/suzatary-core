@@ -1,9 +1,9 @@
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use prodrome_core::memo::{Cache, Finding, Key, Lookup, Lru};
+use prodrome_memo::{Cache, Finding, Key, Lookup, Lru};
 
 /// A tabulation of a pure function in memory: the Prodrome's
-/// [`memo::Cache`](prodrome_core::memo::Cache), at most `capacity` keys, the least recently used
+/// [`memo::Cache`](prodrome_memo::Cache), at most `capacity` keys, the least recently used
 /// dropped first.
 ///
 /// It means the function it tabulates (`memo f = f`): no entry is a source of truth.

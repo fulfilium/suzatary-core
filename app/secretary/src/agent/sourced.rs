@@ -1,6 +1,6 @@
 //! The message a todo came from, as a call spells it: four arguments, all or none.
 
-use prodrome_core::fpl;
+use prodrome_fpl::fpl;
 
 use suzatary_base::escape::escape_string;
 use suzatary_base::refusal::Refusal;

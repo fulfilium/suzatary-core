@@ -27,7 +27,11 @@ suzatary-lines.workspace = true
 suzatary-topics.workspace = true
 suzatary-digest.workspace = true
 suzatary-stores.workspace = true
-prodrome_core.workspace = true
+prodrome_data.workspace = true
+prodrome_dag.workspace = true
+prodrome_declared.workspace = true
+prodrome_store.workspace = true
+prodrome_todo.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -40,6 +44,11 @@ tracing.workspace = true
 workspace = true
 
 [dev-dependencies]
+prodrome_term.workspace = true
+prodrome_memo.workspace = true
+prodrome_tags.workspace = true
+prodrome_digest.workspace = true
+prodrome_reading.workspace = true
 suzatary-held.workspace = true
 suzatary-memory.workspace = true
 suzatary-mail.workspace = true

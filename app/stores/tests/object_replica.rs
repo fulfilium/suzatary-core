@@ -6,10 +6,10 @@
 
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::genesis::mk_genesis;
-use prodrome_core::literal::Datetime;
-use prodrome_core::store::{MemoryStore, Replica as _};
+use prodrome_data::event::{Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::genesis::mk_genesis;
+use prodrome_data::literal::Datetime;
+use prodrome_store::store::{MemoryStore, Replica as _};
 use proptest::prelude::*;
 
 use suzatary_base::conversation_id::ConversationId;
@@ -56,7 +56,7 @@ fn universe(n: u32) -> Vec<Object> {
         .collect()
 }
 
-fn begin<E: prodrome_core::schema::Schema>(store: &MemoryStore<E>) {
+fn begin<E: prodrome_data::schema::Schema>(store: &MemoryStore<E>) {
     let genesis: Envelope<E> =
         Envelope::Genesis(mk_genesis("topics", &"0".repeat(32)).expect("a genesis"));
     let print = canonical_envelope(&genesis).into_bytes();
@@ -65,7 +65,7 @@ fn begin<E: prodrome_core::schema::Schema>(store: &MemoryStore<E>) {
         .receive(
             [name].into(),
             &|_| Some(print.clone()),
-            prodrome_core::store::Sender::Stranger,
+            prodrome_data::husk::Sender::Stranger,
         )
         .expect("begins");
 }
@@ -476,7 +476,7 @@ fn written(n: usize) -> Vec<Object> {
     begin(&memberships);
     begin(&aliases);
     let owner = suzatary_topics::secretary::topics::provenance::Owner::new(
-        prodrome_core::event::Actor::new("ada").expect("an actor"),
+        prodrome_data::event::Actor::new("ada").expect("an actor"),
     )
     .expect("not the secretary");
     let topic = Topic::new("travel").expect("a topic");

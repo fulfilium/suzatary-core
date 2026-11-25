@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use prodrome_core::declared::{Declaration, Declared};
+use prodrome_declared::{Declaration, Declared};
 use suzatary_store::store::StoreError;
 
 use crate::objects::Objects;
@@ -163,7 +163,7 @@ impl PluginStore {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::parse_event;
+    use prodrome_data::event::parse_event;
     use suzatary_store::store::learn;
 
     use super::*;
@@ -344,7 +344,7 @@ mod tests {
         };
         drop(place.begin(&schema).expect("begins"));
         let warm = place.read().expect("reads").expect("a store");
-        assert_eq!(warm.inner().doors(), prodrome_core::store::Doors::Alone);
+        assert_eq!(warm.inner().doors(), prodrome_store::store::Doors::Alone);
         learn(&warm, vec![seen(10, "open")]).expect("learns");
         let other = place.read().expect("reads").expect("a store");
         learn(&other, vec![seen(11, "shut")]).expect("learns elsewhere");

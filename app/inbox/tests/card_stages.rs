@@ -24,8 +24,8 @@ fn a_repository_card_says_each_stage_in_its_own_words() {
         at(
             card.clone(),
             &Reading::One(Answer {
-                name: prodrome_core::event::Hash::new("a".repeat(64)).expect("hex"),
-                at: prodrome_core::literal::Datetime::new(2026, 9, 28, 9, 0, 0, 0)
+                name: prodrome_data::event::Hash::new("a".repeat(64)).expect("hex"),
+                at: prodrome_data::literal::Datetime::new(2026, 9, 28, 9, 0, 0, 0)
                     .expect("an instant"),
                 response: Responded::Tried { attempt: 1, tried },
             }),

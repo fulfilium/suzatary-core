@@ -46,7 +46,7 @@ impl Verb for Calendar {
             None => call
                 .deployment
                 .zone
-                .day(prodrome_core::fpl::instant_of(call.caps.clock.now())),
+                .day(prodrome_data::instant::instant_of(call.caps.clock.now())),
             Some(text) => NaiveDate::parse_from_str(text, "%Y-%m-%d").map_err(|_| {
                 Refusal::bad_request(format!("from must be YYYY-MM-DD, got {}", shown(text)))
             })?,

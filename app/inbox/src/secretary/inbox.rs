@@ -4,14 +4,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::{Actor, Envelope, Hash, TodoId, mk_sealed, seal_hash};
-use prodrome_core::fpl::{Env, FplError, link_in, mk_absent};
-use prodrome_core::literal::{Datetime, ProdromeError, Value};
-use prodrome_core::payload::spec_field;
-use prodrome_core::policy::Everything;
-use prodrome_core::registers::{Node, Stamp};
-use prodrome_core::term::{Term, TermF};
+use prodrome_dag::dag::Dag;
+use prodrome_dag::registers::Node;
+use prodrome_data::event::{Actor, Envelope, Hash, TodoId, mk_sealed, seal_hash};
+use prodrome_data::instant::FplError;
+use prodrome_data::literal::{Datetime, ProdromeError, Value};
+use prodrome_data::policy::Everything;
+use prodrome_data::stamp::Stamp;
+use prodrome_fpl::fpl::link_in;
+use prodrome_term::fpl::{Env, mk_absent};
+use prodrome_term::term::{Term, TermF};
+use prodrome_todo::payload::spec_field;
 
 use crate::content_id::ContentId;
 use crate::secretary::inbox_event::{InboxEvent, Said};
@@ -21,7 +24,7 @@ use crate::secretary::proposal::{Proposal, Reasons};
 use crate::secretary::proposer::Proposer;
 use crate::secretary::responded::{CheckFields, Done, Performed, Responded, Tried, Withdrawal};
 use crate::secretary::tapped::Tapped;
-use prodrome_core::literal::codec::{Constructor, Fields, Literal};
+use prodrome_data::literal::codec::{Constructor, Fields, Literal};
 use suzatary_base::reference::{ProposalRef, TodoRef};
 use suzatary_base::refusal::Refusal;
 use suzatary_health::health::plugin::PluginName;
@@ -37,7 +40,7 @@ pub fn value(
     let price = object.price.as_ref().ok()?;
     suzatary_todo::wire::todo::Fulfillment::of(
         link_in(price, &BTreeMap::new(), set.stores())
-            .map(|closed| prodrome_core::fpl::fulfillment(&closed, set.instant(), &Env::new())),
+            .map(|closed| prodrome_fpl::fpl::fulfillment(&closed, set.instant(), &Env::new())),
     )
 }
 
@@ -153,7 +156,7 @@ impl Asked {
                 PluginName::parse(&fields.get::<String>("plugin")?)
                     .map_err(|failed| invalid(failed.to_string()))?,
             ),
-            other => return Err(prodrome_core::literal::codec::no_arm("Asked", other)),
+            other => return Err(prodrome_data::literal::codec::no_arm("Asked", other)),
         };
         Ok(Asked {
             proposer,
@@ -189,7 +192,7 @@ pub(crate) enum Identity {
     Recurring { at: Datetime, proposal: Proposal },
 }
 
-pub(crate) const RECURRING: prodrome_core::literal::codec::Constructor =
+pub(crate) const RECURRING: prodrome_data::literal::codec::Constructor =
     ("Recurring", &["at", "act"]);
 
 impl Identity {
@@ -211,7 +214,7 @@ impl Literal for Identity {
     fn to_value(&self) -> Value {
         match self {
             Identity::Once(proposal) => proposal.to_value(),
-            Identity::Recurring { at, proposal } => prodrome_core::literal::codec::record(
+            Identity::Recurring { at, proposal } => prodrome_data::literal::codec::record(
                 RECURRING,
                 vec![at.to_value(), proposal.to_value()],
             ),
@@ -219,8 +222,8 @@ impl Literal for Identity {
     }
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
-        if prodrome_core::literal::codec::arm(value)? == RECURRING.0 {
-            let fields = prodrome_core::literal::codec::Fields::of(value, RECURRING)?;
+        if prodrome_data::literal::codec::arm(value)? == RECURRING.0 {
+            let fields = prodrome_data::literal::codec::Fields::of(value, RECURRING)?;
             Ok(Identity::Recurring {
                 at: fields.get("at")?,
                 proposal: fields.get("act")?,
@@ -272,7 +275,7 @@ impl ProposalId {
 }
 
 // By hand: its inner `TodoId` has no literal of its own.
-impl prodrome_core::literal::codec::Literal for ProposalId {
+impl prodrome_data::literal::codec::Literal for ProposalId {
     fn to_value(&self) -> Value {
         Value::str(self.as_str())
     }
@@ -403,7 +406,7 @@ fn answer(stream: &[Stamp<InboxEvent>], stamp: &Stamp<InboxEvent>) -> Option<Ans
 }
 
 fn object(id: &ProposalId, stream: &[Stamp<InboxEvent>]) -> Option<Object> {
-    let registers = prodrome_core::fold::read(stream, None, &Everything);
+    let registers = prodrome_dag::fold::read(stream, None, &Everything);
     let (at, asked) = registers
         .content
         .reading::<ContentRegister>()
@@ -413,7 +416,7 @@ fn object(id: &ProposalId, stream: &[Stamp<InboxEvent>]) -> Option<Object> {
             Said::Responded(_) => None,
         })?;
     // An asking is held, so no price here is an error.
-    let price = prodrome_core::fold::price::<InboxEvent>(&registers).and_then(|price| {
+    let price = prodrome_reading::fold::price::<InboxEvent>(&registers).and_then(|price| {
         price.ok_or_else(|| FplError("an asked proposal prices as nothing".to_owned()))
     });
     let answers = registers
@@ -447,7 +450,7 @@ fn object(id: &ProposalId, stream: &[Stamp<InboxEvent>]) -> Option<Object> {
 impl Fold {
     #[must_use]
     pub fn of(nodes: &[Node<InboxEvent>]) -> Self {
-        let folded = prodrome_core::registers::fold(nodes);
+        let folded = prodrome_dag::registers::fold(nodes);
         let mut fold = Self::default();
         for (id, stream) in folded.entities() {
             match object(id, stream) {
@@ -859,7 +862,7 @@ fn ending(object: &Object, ended: Performed) -> Step {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::event::Actor;
+    use prodrome_data::event::Actor;
 
     use super::*;
     use crate::secretary::proposal::Draft;
@@ -919,7 +922,7 @@ mod tests {
             attachments: Vec::new(),
         });
         assert_eq!(
-            prodrome_core::literal::print_literal(&proposal.to_value()),
+            prodrome_data::literal::print_literal(&proposal.to_value()),
             "Email(account='her@example.test', to=('counsel@example.test',), cc=(), \
              subject='Sent at once', body='Sending the documents today.', attachments=())"
         );
@@ -959,7 +962,7 @@ mod tests {
             .expect("records"),
         ];
         let text =
-            prodrome_core::literal::print_literal(&Proposal::Email(draft.clone()).to_value());
+            prodrome_data::literal::print_literal(&Proposal::Email(draft.clone()).to_value());
         assert!(
             text.contains("attachments=(Attached(source=FromMail("),
             "{text}"
@@ -1018,8 +1021,8 @@ mod tests {
     #[test]
     fn an_asked_event_prints_and_parses_back() {
         let event = asked_event(asked("a"));
-        let printed = prodrome_core::event::canonical(&event);
-        let back = prodrome_core::event::parse_event::<InboxEvent>(
+        let printed = prodrome_data::event::canonical(&event);
+        let back = prodrome_data::event::parse_event::<InboxEvent>(
             &crate::secretary::inbox_event::InboxVocabulary,
             &printed,
         )
@@ -1036,20 +1039,20 @@ mod tests {
             ..asked("a")
         };
         let event = asked_event(offered.clone());
-        let printed = prodrome_core::event::canonical(&event);
+        let printed = prodrome_data::event::canonical(&event);
         assert!(
             printed.starts_with("Offered(proposal=")
                 && printed.contains("actor='assistant', plugin='dueday', act=Email("),
             "{printed}"
         );
-        let back = prodrome_core::event::parse_event::<InboxEvent>(
+        let back = prodrome_data::event::parse_event::<InboxEvent>(
             &crate::secretary::inbox_event::InboxVocabulary,
             &printed,
         )
         .expect("it parses");
         assert_eq!(back, event);
         assert!(
-            prodrome_core::event::canonical(&asked_event(asked("a"))).starts_with("Asked("),
+            prodrome_data::event::canonical(&asked_event(asked("a"))).starts_with("Asked("),
             "the secretary's print is unchanged"
         );
         assert_eq!(
@@ -1069,9 +1072,9 @@ mod tests {
             ..asked("a")
         };
         let event = asked_event(noticed.clone());
-        let printed = prodrome_core::event::canonical(&event);
+        let printed = prodrome_data::event::canonical(&event);
         assert!(printed.starts_with("Noticed(proposal="), "{printed}");
-        let back = prodrome_core::event::parse_event::<InboxEvent>(
+        let back = prodrome_data::event::parse_event::<InboxEvent>(
             &crate::secretary::inbox_event::InboxVocabulary,
             &printed,
         )
@@ -1100,13 +1103,13 @@ mod tests {
             price: Price::unpriced(),
             ..asked("a")
         };
-        let printed = prodrome_core::event::canonical(&asked_event(unpriced));
+        let printed = prodrome_data::event::canonical(&asked_event(unpriced));
         assert!(printed.contains("serves=None, spec=None"), "{printed}");
         assert!(!printed.contains("Absent"), "{printed}");
         let InboxEvent {
             said: Said::Asked(back),
             ..
-        } = prodrome_core::event::parse_event::<InboxEvent>(
+        } = prodrome_data::event::parse_event::<InboxEvent>(
             &crate::secretary::inbox_event::InboxVocabulary,
             &printed,
         )
@@ -1246,7 +1249,7 @@ mod tests {
     #[test]
     fn a_price_serves_a_todo_or_is_its_own() {
         use crate::secretary::inbox_event::InboxVocabulary;
-        use prodrome_core::event::{canonical, parse_event};
+        use prodrome_data::event::{canonical, parse_event};
         let printed = canonical(&asked_event(asked("a")));
         assert!(
             printed.contains("serves='todo:life/reply', spec=None"),
@@ -1257,7 +1260,7 @@ mod tests {
         let mail = printed.replace("todo:life/reply", "mail:abcdef012345");
         assert!(parse_event::<InboxEvent>(&InboxVocabulary, &mail).is_err());
         let own = Asked {
-            price: Price::Own(prodrome_core::fpl::mk_flat(0.4).expect("a flat")),
+            price: Price::Own(prodrome_term::fpl::mk_flat(0.4).expect("a flat")),
             ..asked("a")
         };
         let event = asked_event(own);

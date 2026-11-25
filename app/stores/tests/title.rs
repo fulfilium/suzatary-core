@@ -1,6 +1,6 @@
 //! The title's laws, over the conversations held in core's memory.
 
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 use suzatary_base::capability::Clock;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::{Conversation, Model, Turn};

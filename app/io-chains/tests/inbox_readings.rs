@@ -4,10 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
-use prodrome_core::event::{mk_sealed, mk_spec_revised, seal_hash};
-use prodrome_core::fpl::mk_flat;
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Untrusted;
+use prodrome_data::event::{mk_sealed, seal_hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_term::fpl::mk_flat;
+use prodrome_todo::event::mk_spec_revised;
 use suzatary_base::chains::ChainName;
 use suzatary_inbox::secretary::inbox::{Fold, Object};
 use suzatary_inbox::secretary::inbox_event::Said;

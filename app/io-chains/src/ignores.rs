@@ -202,11 +202,11 @@ mod tests {
     /// reports, and bringing it ends that.
     #[test]
     fn a_brought_store_holds_what_the_prodrome_writes_and_verify_finds_nothing() {
-        use prodrome_core::store::EventStore;
+        use prodrome_store::store::EventStore;
         use suzatary_record::record::{GENESIS, TodoEvent};
         let dir = suzatary_testkit::scratch("ignores");
         let fresh = dir.path().join("fresh");
-        EventStore::<TodoEvent, _>::new(&fresh, prodrome_core::policy::Untrusted::none())
+        EventStore::<TodoEvent, _>::new(&fresh, prodrome_data::policy::Untrusted::none())
             .init(GENESIS)
             .expect("begins");
         assert_eq!(
@@ -215,14 +215,14 @@ mod tests {
         );
 
         let old = dir.path().join("old");
-        let store = EventStore::<TodoEvent, _>::new(&old, prodrome_core::policy::Untrusted::none());
+        let store = EventStore::<TodoEvent, _>::new(&old, prodrome_data::policy::Untrusted::none());
         store.init(GENESIS).expect("begins");
         std::fs::write(old.join(FILE), "/.heads\n").expect("the old form");
         assert!(
-            store.verify().iter().any(|finding| matches!(
-                finding,
-                prodrome_core::dag::Finding::Unignored(".writes")
-            )),
+            store
+                .verify()
+                .iter()
+                .any(|finding| matches!(finding, prodrome_dag::dag::Finding::Unignored(".writes"))),
             "{:?}",
             store.verify()
         );
@@ -234,7 +234,7 @@ mod tests {
 
         let bare = dir.path().join("bare");
         let store =
-            EventStore::<TodoEvent, _>::new(&bare, prodrome_core::policy::Untrusted::none());
+            EventStore::<TodoEvent, _>::new(&bare, prodrome_data::policy::Untrusted::none());
         store.init(GENESIS).expect("begins");
         std::fs::remove_file(bare.join(FILE)).expect("no .gitignore");
         store
@@ -243,10 +243,10 @@ mod tests {
         assert!(!bare.join(FILE).exists(), "the hold writes none");
         assert!(bare.join(".writes").exists());
         assert!(
-            store.verify().iter().any(|finding| matches!(
-                finding,
-                prodrome_core::dag::Finding::Unignored(".writes")
-            )),
+            store
+                .verify()
+                .iter()
+                .any(|finding| matches!(finding, prodrome_dag::dag::Finding::Unignored(".writes"))),
             "{:?}",
             store.verify()
         );

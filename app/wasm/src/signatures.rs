@@ -2,8 +2,9 @@
 //! readings of who wrote what, by the core's own `Trust`. The key never crosses: the tab signs
 //! with `WebCrypto` and hands over the signature, and this module checks and prints it.
 
-use prodrome_core::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
-use prodrome_core::sign::{PublicKey, Registrar, Signature, Signed};
+use prodrome_dag::sign::Registrar;
+use prodrome_data::event::{Actor, Envelope, Hash, canonical_envelope, seal_hash};
+use prodrome_data::sign::{PublicKey, Signature, Signed};
 use suzatary_api::wire::{
     Condition, Found, ObjectVerdict, ProvenanceRow, SignedObject, Verified, VerifiedPayload, Walk,
 };
@@ -103,7 +104,7 @@ impl Todos {
                             .get(name)
                             .and_then(|object| object.event())
                             .map(|event| {
-                                prodrome_core::dag::Finding::Unsigned {
+                                prodrome_dag::dag::Finding::Unsigned {
                                     object: name.clone(),
                                     actor: event.actor().clone(),
                                 }

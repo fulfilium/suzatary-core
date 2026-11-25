@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
-use prodrome_core::literal::{ProdromeError, Value};
+use prodrome_data::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
 
-use prodrome_core::literal::codec::{Constructor, Fields as Read, Literal, record};
+use prodrome_data::literal::codec::{Constructor, Fields as Read, Literal, record};
 
 use super::{DecisionId, NotADecision};
 

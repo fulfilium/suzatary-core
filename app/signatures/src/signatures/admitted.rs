@@ -1,4 +1,4 @@
-use prodrome_core::event::Actor;
+use prodrome_data::event::Actor;
 
 use suzatary_base::capability::Login;
 

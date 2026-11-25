@@ -1,5 +1,5 @@
-use prodrome_core::event::Actor;
-use prodrome_core::sign::{PublicKey, Signature, Signed};
+use prodrome_data::event::Actor;
+use prodrome_data::sign::{PublicKey, Signature, Signed};
 
 use super::{
     Keeper, Keeping, Requested, Trusting, Unproven, Unread, WINDOW_SECONDS, body_digest, is_nonce,

@@ -41,7 +41,7 @@ impl FromStr for Conversation {
 pub struct Asked {
     pub conversation: ConversationId,
     /// The question's line, which the root key signs.
-    pub line: prodrome_core::event::Hash,
+    pub line: prodrome_data::event::Hash,
     /// The secretary's words in the round, as the stored lines hold them.
     pub answer: String,
 }
@@ -129,7 +129,7 @@ pub fn ask(operator: &Operator, id: &ConversationId, text: &str) -> anyhow::Resu
 fn answered(
     operator: &Operator,
     id: &ConversationId,
-    line: &prodrome_core::event::Hash,
+    line: &prodrome_data::event::Hash,
 ) -> anyhow::Result<Option<String>> {
     let mut replica = operator.lines(id)?;
     let Some(read) = replica.lines.transcript(id) else {

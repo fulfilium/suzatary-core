@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::literal::Datetime;
 
 use super::{DecisionEvent, DecisionId, Draft, Ledger, Statement};
 use suzatary_base::capability::Typeset;

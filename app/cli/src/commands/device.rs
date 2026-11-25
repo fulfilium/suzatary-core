@@ -9,8 +9,8 @@ use std::path::Path;
 
 use anyhow::{Context, bail};
 use clap::Subcommand;
-use prodrome_core::event::Actor;
-use prodrome_core::sign::PublicKey;
+use prodrome_data::event::Actor;
+use prodrome_data::sign::PublicKey;
 use suzatary_mail::mail::dedup_key::DEDUP_KEY;
 use suzatary_signatures::signatures::{AGENT_KEY, BOX_KEY, BoxKeys, Keeping, Keyed, Trust};
 
@@ -163,7 +163,7 @@ fn revoke(instance: &Instance, key: &str, actor: Option<&str>) -> anyhow::Result
 
 /// The unsigned writes listed, private chain by private chain, and signed only when asked.
 fn sign_unsigned(instance: &Instance, yes: bool) -> anyhow::Result<()> {
-    use prodrome_core::fpl::{instant_of, iso};
+    use prodrome_data::instant::{instant_of, iso};
     let signers = signatures::Signers::Held(held_keys(instance)?);
     let root = instance.root();
     let mut listed = 0;
@@ -286,7 +286,7 @@ pub(crate) fn kept_or_minted(
     // In this order, so a store that fails on the agent's key has kept or minted the box's.
     let (boxed, agent, dedup) = (seed(BOX_KEY)?, seed(AGENT_KEY)?, seed(DEDUP_KEY)?);
     suzatary_mail::mail::dedup_key::DedupKey::of(&dedup)?;
-    let root = prodrome_core::sign::Secret::new(boxed.expose())
+    let root = prodrome_dag::sign::Secret::new(boxed.expose())
         .map_err(|_| anyhow::anyhow!("{BOX_KEY} is not a key's seed"))?
         .public();
     Ok(BoxKeys::of(&root, &boxed, &agent)?)
@@ -356,7 +356,7 @@ fn repair(chain: &ChainDir, keys: &BoxKeys) -> anyhow::Result<()> {
 fn list(instance: &Instance) -> anyhow::Result<()> {
     let registrar = instance.chains.first().policy.registrar();
     for chain in instance.keeping().iter() {
-        let dag: prodrome_core::dag::Dag<suzatary_record::record::TodoEvent> = store_of(chain)
+        let dag: prodrome_dag::dag::Dag<suzatary_record::record::TodoEvent> = store_of(chain)
             .objects()
             .with_context(|| format!("reading {}", chain.policy.name))?
             .into_iter()

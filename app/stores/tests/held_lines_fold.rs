@@ -1,8 +1,8 @@
 //! The held lines' laws, over the conversations held in core's memory.
 
-use prodrome_core::event::Hash;
-use prodrome_core::event::canonical_envelope;
-use prodrome_core::literal::Datetime;
+use prodrome_data::event::Hash;
+use prodrome_data::event::canonical_envelope;
+use prodrome_data::literal::Datetime;
 use std::collections::{BTreeMap, BTreeSet};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model;

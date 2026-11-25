@@ -1,13 +1,15 @@
 use std::collections::BTreeMap as Specs;
 
-use prodrome_core::event::{Envelope, Hash, mk_sealed, mk_spec_revised, seal_hash};
-use prodrome_core::fpl::{self, Env, link_in, mk_flat, mk_ref_in};
-use prodrome_core::literal::Datetime;
-use prodrome_core::term::Term;
+use prodrome_data::event::{Envelope, Hash, mk_sealed, seal_hash};
+use prodrome_data::literal::Datetime;
+use prodrome_fpl::fpl::{self, link_in};
+use prodrome_term::fpl::{Env, mk_flat, mk_ref_in};
+use prodrome_term::term::Term;
+use prodrome_todo::event::mk_spec_revised;
 
-use prodrome_core::dag::Dag;
-use prodrome_core::observe::{NextChange, Observation};
-use prodrome_core::policy::Untrusted;
+use prodrome_dag::dag::Dag;
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::observe::{NextChange, Observation};
 use suzatary_base::chains::ChainName;
 use suzatary_record::record::TodoEvent;
 use suzatary_signatures::chain_set::*;
@@ -55,7 +57,7 @@ fn two_geneses() -> Objects {
         .into_iter()
         .map(|label| {
             let genesis: Envelope<TodoEvent> = Envelope::Genesis(
-                prodrome_core::genesis::mk_genesis(label, &"0".repeat(32)).expect("a genesis"),
+                prodrome_data::genesis::mk_genesis(label, &"0".repeat(32)).expect("a genesis"),
             );
             (seal_hash(&genesis), genesis)
         })
@@ -129,7 +131,7 @@ fn each_chain_reads_under_its_own_policy() {
         through(&chains.set(at(3)), "life", "permit")
     };
     assert_eq!(read_under(&Untrusted::none()), Some(0.1));
-    let triage = prodrome_core::event::Actor::new("triage").expect("an actor");
+    let triage = prodrome_data::event::Actor::new("triage").expect("an actor");
     assert_eq!(read_under(&Untrusted::of([triage])), Some(0.3));
 }
 
@@ -238,7 +240,7 @@ fn a_policy_that_moved_is_a_new_reading() {
                 .expect("an event"),
         )
         .expect("appends");
-    let triage = prodrome_core::event::Actor::new("triage").expect("an actor");
+    let triage = prodrome_data::event::Actor::new("triage").expect("an actor");
     let policy = |untrusted: Untrusted| suzatary_base::chains::ChainPolicy {
         name: name("life"),
         untrusted,

@@ -187,21 +187,21 @@ scripts = []
 name = "base"
 path = "app/base"
 shape = "crate"
-depends = ["prodrome-core"]
+depends = ["prodrome-dag", "prodrome-data", "prodrome-fpl", "prodrome-memo", "prodrome-term"]
 scripts = []
 
 [[unit]]
 name = "record"
 path = "app/record"
 shape = "crate"
-depends = ["base", "prodrome-core"]
+depends = ["base", "prodrome-dag", "prodrome-data", "prodrome-reading", "prodrome-store", "prodrome-term", "prodrome-todo"]
 scripts = []
 
 [[unit]]
 name = "release"
 path = "app/release"
 shape = "crate"
-depends = ["prodrome-core", "record"]
+depends = ["prodrome-dag", "prodrome-data", "prodrome-term", "prodrome-todo", "record"]
 scripts = []
 
 [[unit]]
@@ -215,14 +215,14 @@ scripts = []
 name = "signatures"
 path = "app/signatures"
 shape = "crate"
-depends = ["base", "prodrome-core", "record", "store"]
+depends = ["base", "prodrome-dag", "prodrome-data", "prodrome-fpl", "prodrome-memo", "prodrome-reading", "prodrome-term", "record", "store"]
 scripts = []
 
 [[unit]]
 name = "todo"
 path = "app/todo"
 shape = "crate"
-depends = ["base", "prodrome-core", "record", "signatures", "store"]
+depends = ["base", "prodrome-dag", "prodrome-data", "prodrome-fpl", "prodrome-memo", "prodrome-reading", "prodrome-term", "prodrome-todo", "record", "signatures", "store"]
 scripts = []
 
 [[unit]]
@@ -292,7 +292,7 @@ scripts = []
 name = "inbox"
 path = "app/inbox"
 shape = "crate"
-depends = ["base", "connect", "google", "health", "held", "mail", "memory", "prodrome-core", "prodrome-wasm-exports", "record", "services", "signatures", "store", "todo", "triage"]
+depends = ["base", "connect", "google", "health", "held", "mail", "memory", "prodrome-dag", "prodrome-data", "prodrome-fpl", "prodrome-reading", "prodrome-term", "prodrome-todo", "prodrome-wasm-exports", "record", "services", "signatures", "store", "todo", "triage"]
 scripts = []
 
 [[unit]]
@@ -327,7 +327,7 @@ scripts = []
 name = "stores"
 path = "app/stores"
 shape = "crate"
-depends = ["base", "connect", "conversations", "digest", "health", "held", "inbox", "lines", "memory", "prodrome-core", "prodrome-data", "prodrome-declared", "prodrome-store", "record", "signatures", "store", "todo", "topics", "triage"]
+depends = ["base", "connect", "conversations", "digest", "health", "held", "inbox", "lines", "memory", "prodrome-data", "prodrome-declared", "prodrome-store", "prodrome-todo", "record", "signatures", "store", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]
@@ -341,14 +341,14 @@ scripts = []
 name = "secretary"
 path = "app/secretary"
 shape = "crate"
-depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-core", "record", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
+depends = ["base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "lines", "mail", "memory", "prodrome-data", "prodrome-fpl", "prodrome-reading", "prodrome-todo", "record", "services", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]
 name = "api"
 path = "app/api"
 shape = "crate"
-depends = ["base", "cards", "connect", "conversations", "held", "inbox", "lines", "mail", "prodrome-core", "record", "release", "signatures", "store", "stores", "todo", "topics", "triage"]
+depends = ["base", "cards", "connect", "conversations", "held", "inbox", "lines", "mail", "prodrome-dag", "prodrome-data", "prodrome-fpl", "prodrome-store", "prodrome-term", "prodrome-todo", "record", "release", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = ["scripts/wire.sh"]
 
 [[unit]]
@@ -390,7 +390,7 @@ scripts = []
 name = "io-chains"
 path = "app/io-chains"
 shape = "crate"
-depends = ["base", "conversations", "digest", "google", "io-access", "io-local", "lines", "os", "prodrome-core", "record", "signatures", "store", "stores", "todo", "topics", "triage"]
+depends = ["base", "conversations", "digest", "google", "io-access", "io-local", "lines", "os", "prodrome-dag", "prodrome-data", "prodrome-declared", "prodrome-store", "prodrome-todo", "record", "signatures", "store", "stores", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]
@@ -425,14 +425,14 @@ scripts = ["scripts/plugin-sync.sh"]
 name = "cli"
 path = "app/cli"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io-access", "io-chains", "io-local", "io-mail", "io-model", "io-sources", "io-typeset", "lines", "mail", "memory", "os", "plan", "plugin", "prodrome-core", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "tooling", "topics", "triage"]
+depends = ["api", "base", "cards", "connect", "conversations", "digest", "google", "health", "held", "inbox", "io-access", "io-chains", "io-local", "io-mail", "io-model", "io-sources", "io-typeset", "lines", "mail", "memory", "os", "plan", "plugin", "prodrome-dag", "prodrome-data", "prodrome-declared", "prodrome-store", "prodrome-tags", "prodrome-term", "prodrome-todo", "record", "release", "secretary", "server", "services", "signatures", "store", "stores", "todo", "tooling", "topics", "triage"]
 scripts = ["scripts/app-bin.sh", "scripts/app-build.sh", "scripts/merge-gate.sh"]
 
 [[unit]]
 name = "wasm"
 path = "app/wasm"
 shape = "crate"
-depends = ["api", "base", "connect", "conversations", "held", "inbox", "lines", "memory", "prodrome-core", "prodrome-wasm-exports", "record", "signatures", "store", "stores", "todo", "topics"]
+depends = ["api", "base", "connect", "conversations", "held", "inbox", "lines", "memory", "prodrome-dag", "prodrome-data", "prodrome-fpl", "prodrome-memo", "prodrome-reading", "prodrome-term", "prodrome-todo", "prodrome-wasm-exports", "record", "signatures", "store", "stores", "todo", "topics"]
 scripts = ["scripts/web-inputs.sh"]
 
 [[unit]]
@@ -517,14 +517,14 @@ scripts = ["scripts/build-web.sh", "scripts/web-dist.sh", "scripts/web-inputs.sh
 
 [[library]]
 source = "https://github.com/fulfilium/prodrome"
-rev = "39c408f59f266c67c32fbe94630ea464e3470da4"
+rev = "ed70e10048ad81bb1ba1c05005dea847186e1ce1"
 pinned_in = "app/Cargo.toml"
 
 [[library.external]]
 name = "prodrome-data"
 path = "data"
 shape = "crate"
-use = 22667
+use = 22905
 
 [[library.external]]
 name = "prodrome-memo"
@@ -564,21 +564,58 @@ use = 3796
 name = "prodrome-nest"
 path = "nest"
 shape = "crate"
-use = 4555
+use = 4388
 
 [[library.external]]
 name = "prodrome-digest"
 path = "digest"
 shape = "crate"
-use = 3142
+use = 4040
+
+[[library.external]]
+name = "prodrome-term"
+path = "term"
+shape = "crate"
+# Its `fpl` re-exports the data crate's `Instant`, `instant_of`, `datetime_of`, `iso`, `parse_iso` and `FplError`.
+# The library's own figure, by its `scripts/face.py --lines`, is 6,914.
+reexports = ["prodrome-data"]
+use = 7333
+
+[[library.external]]
+name = "prodrome-fpl"
+path = "fpl"
+shape = "crate"
+# Its `fpl` re-exports the term crate's `fpl`.
+# The library's own figure is 5,705.
+reexports = ["prodrome-term"]
+use = 7893
+
+[[library.external]]
+name = "prodrome-todo"
+path = "todo"
+shape = "crate"
+# Its `event` re-exports the data crate's.
+# The library's own figure is 5,043.
+reexports = ["prodrome-data"]
+use = 6367
+
+[[library.external]]
+name = "prodrome-reading"
+path = "reading"
+shape = "crate"
+# Its `fold` re-exports the DAG crate's, its `schema` the data crate's and its `todo` the todo crate's.
+# The library's own figure is 4,077.
+reexports = ["prodrome-data", "prodrome-dag", "prodrome-todo"]
+use = 5786
 
 [[library.external]]
 name = "prodrome-core"
 path = "core"
 shape = "crate"
-# Every item of the eight crates above is also at its old path in the core.
-reexports = ["prodrome-data", "prodrome-memo", "prodrome-dag", "prodrome-declared", "prodrome-store", "prodrome-tags", "prodrome-nest", "prodrome-digest"]
-use = 35418
+# Every item of the twelve crates above is also at its old path in the core.
+# The law kit, behind the feature `laws`, is the core's own; the library's figure for the face is 13,392.
+reexports = ["prodrome-data", "prodrome-memo", "prodrome-dag", "prodrome-declared", "prodrome-store", "prodrome-tags", "prodrome-nest", "prodrome-digest", "prodrome-term", "prodrome-fpl", "prodrome-todo", "prodrome-reading"]
+use = 11080
 
 [[library.external]]
 name = "prodrome-wasm-exports"

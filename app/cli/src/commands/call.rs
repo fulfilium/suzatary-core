@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use clap::Subcommand;
-use prodrome_core::event::{Actor, Hash};
-use prodrome_core::sign::Secret;
+use prodrome_dag::sign::Secret;
+use prodrome_data::event::{Actor, Hash};
 use suzatary_io_access::http::{Http as _, Method, Req, Ureq};
 use suzatary_lines::wire::lines as wire;
 use suzatary_server::gate::OPERATOR_HEADER;
@@ -134,8 +134,8 @@ impl Operator {
     }
 
     /// The operator's clock as it dates a line: the instant its requests are stamped with.
-    pub fn now(&self) -> anyhow::Result<prodrome_core::literal::Datetime> {
-        prodrome_core::fpl::datetime_of((self.wall)().naive_utc())
+    pub fn now(&self) -> anyhow::Result<prodrome_data::literal::Datetime> {
+        prodrome_data::instant::datetime_of((self.wall)().naive_utc())
             .map_err(|failed| anyhow::anyhow!("the operator's clock: {failed}"))
     }
 
@@ -209,11 +209,11 @@ impl Operator {
         own: &suzatary_lines::secretary::own_line::OwnLine,
     ) -> anyhow::Result<()> {
         let name = own.name();
-        let signature: prodrome_core::event::Envelope<
+        let signature: prodrome_data::event::Envelope<
             suzatary_lines::secretary::line_event::LineEvent,
-        > = prodrome_core::event::Envelope::Signed(self.key.sign(name));
+        > = prodrome_data::event::Envelope::Signed(self.key.sign(name));
         let posted = serde_json::json!({
-            "objects": [own.print(), prodrome_core::event::canonical_envelope(&signature)],
+            "objects": [own.print(), prodrome_data::event::canonical_envelope(&signature)],
             "keys": { name.as_str(): own.keys().into_values().collect::<Vec<_>>() },
         });
         let answered = self.request(

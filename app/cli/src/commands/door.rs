@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
-use prodrome_core::event::Actor;
-use prodrome_core::event::Hash;
-use prodrome_core::literal::Value;
+use prodrome_data::event::Actor;
+use prodrome_data::event::Hash;
+use prodrome_data::literal::Value;
 use suzatary_base::capability::{RenderError, Typeset};
 use suzatary_base::chains::ChainName;
 use suzatary_base::chains::ChainPolicy;

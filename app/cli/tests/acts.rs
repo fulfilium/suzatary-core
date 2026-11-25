@@ -51,7 +51,7 @@ fn authored_update(base: &str, update: &serde_json::Value) -> (String, String) {
         .as_str()
         .expect("an event print")
         .to_owned();
-    match prodrome_core::event::parse_event(
+    match prodrome_data::event::parse_event(
         &suzatary_record::record::TodoVocabulary::default(),
         &print,
     )
@@ -67,7 +67,7 @@ fn authored_update(base: &str, update: &serde_json::Value) -> (String, String) {
 
 /// Hand `print` to the box as a tab does: sealed and signed.
 fn post_authored(base: &str, fakes: &Fakes, print: &str) {
-    let event = prodrome_core::event::parse_event(
+    let event = prodrome_data::event::parse_event(
         &suzatary_record::record::TodoVocabulary::default(),
         print,
     )
@@ -152,7 +152,7 @@ fn a_sealed_completed_event_with_a_note_wakes_the_secretary_on_adoption() {
         [r#"{"say": "Noted — good to know it moved."}"#],
     );
 
-    let event = prodrome_core::event::mk_completed::<suzatary_record::record::Record>(
+    let event = prodrome_todo::event::mk_completed::<suzatary_record::record::Record>(
         "file-permit",
         common::now(),
         "ada",
@@ -194,7 +194,7 @@ fn a_sealed_completed_event_with_a_note_wakes_the_secretary_on_adoption() {
 fn a_sealed_completed_event_with_no_note_appends_nothing() {
     let (base, fakes) = writing("acts-sealed-blank", Vec::new());
 
-    let event = prodrome_core::event::mk_completed::<suzatary_record::record::Record>(
+    let event = prodrome_todo::event::mk_completed::<suzatary_record::record::Record>(
         "file-permit",
         common::now(),
         "ada",
@@ -351,7 +351,7 @@ fn a_note_on_his_own_todo_the_agent_claimed_done_stays_clean() {
     let (_, stamp, taint) = remember_after_a_note_on("acts-note-claimed", owners, &|fakes| {
         suzatary_store::store::Prodrome::append(
             &fakes.chain,
-            prodrome_core::event::mk_completed(owners, common::now(), "triage", "")
+            prodrome_todo::event::mk_completed(owners, common::now(), "triage", "")
                 .expect("an event"),
         )
         .expect("the agent's claim appends");

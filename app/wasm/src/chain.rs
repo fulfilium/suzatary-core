@@ -3,8 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use prodrome_core::event::{Hash, parse_envelope};
-use prodrome_core::fpl::instant_of;
+use prodrome_data::event::{Hash, parse_envelope};
+use prodrome_data::instant::instant_of;
 use suzatary_store::replica::held::Node as _;
 use suzatary_store::replica::objects::Object;
 use suzatary_store::replica::writes::{Answer, Refusal};
@@ -59,7 +59,7 @@ impl Chain {
                     Answer::Unsent | Answer::Refused { .. } | Answer::Taken | Answer::LetGo => None,
                 }),
         );
-        let schema = <Event as prodrome_core::schema::Schema>::Vocabulary::default();
+        let schema = <Event as prodrome_data::schema::Schema>::Vocabulary::default();
         let mut todos: BTreeMap<String, Unsent> = BTreeMap::new();
         let mut acts = Vec::new();
         for o in &untaken {
@@ -184,7 +184,7 @@ mod tests {
     /// The chain's genesis landed, as a pull of it leaves it.
     fn begun() -> Chain {
         let genesis = format!("Genesis(label='life', nonce='{}')", "0".repeat(32));
-        let schema = <Event as prodrome_core::schema::Schema>::Vocabulary::default();
+        let schema = <Event as prodrome_data::schema::Schema>::Vocabulary::default();
         let hash = Object::read::<Event>(&schema, genesis.clone())
             .name()
             .as_str()

@@ -13,14 +13,15 @@ mod read;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
 
-use prodrome_core::dag::Dag;
-use prodrome_core::event::Hash;
-use prodrome_core::fold;
-use prodrome_core::fpl::{self, Instant, Stores};
-use prodrome_core::literal::Datetime;
-use prodrome_core::observe::{self, NextChange, Observation};
-use prodrome_core::policy::Untrusted;
-use prodrome_core::registers::{self, Node};
+use prodrome_dag::dag::Dag;
+use prodrome_dag::registers::{self, Node};
+use prodrome_data::event::Hash;
+use prodrome_data::instant::Instant;
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_fpl::fpl::{self, Stores};
+use prodrome_fpl::observe::{self, NextChange, Observation};
+use prodrome_reading::fold;
 
 pub use read::Read;
 
@@ -244,7 +245,7 @@ impl<'a> ChainSet<'a> {
     /// own prices.
     pub fn entries(&self, name: &ChainName) -> Result<Vec<Entry>, NotAMember> {
         let held = self.held(name)?;
-        let mut rows = prodrome_core::view::entries(held.nodes, self.at, held.untrusted)
+        let mut rows = prodrome_reading::view::entries(held.nodes, self.at, held.untrusted)
             .map_err(|failed| NotAMember::Unread(name.clone(), failed.to_string()))?;
         let home = home_of(held.dag);
         let now = self.instant();
@@ -347,8 +348,8 @@ pub(crate) fn sooner(a: NextChange, b: NextChange) -> NextChange {
 
 #[cfg(test)]
 mod tests {
-    use prodrome_core::fpl;
-    use prodrome_core::literal::Datetime;
+    use prodrome_data::literal::Datetime;
+    use prodrome_fpl::fpl;
 
     use super::*;
 

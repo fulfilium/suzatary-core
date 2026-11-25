@@ -2,13 +2,14 @@
 //! release's `major.minor`, a function of the set of objects, monotone in the objects and in the
 //! instant, and moved by releases alone; and the step from one release to the next always climbs.
 
-use prodrome_core::event::{Actor, TodoId};
-use prodrome_core::event::{Hash, mk_cancelled, mk_completed, mk_reopened, mk_spec_revised};
-use prodrome_core::fpl::{self, mk_conj, mk_flat, mk_ref};
-use prodrome_core::literal::Datetime;
-use prodrome_core::policy::Policy;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::term::Term;
+use prodrome_dag::policy::Policy;
+use prodrome_data::event::Hash;
+use prodrome_data::event::{Actor, TodoId};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_term::fpl::{self, mk_conj, mk_flat, mk_ref};
+use prodrome_term::term::Term;
+use prodrome_todo::event::{mk_cancelled, mk_completed, mk_reopened, mk_spec_revised};
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 use suzatary_record::record::TodoEvent;
@@ -40,8 +41,8 @@ fn release(id: &str, major: u32, minor: u32) -> Release {
 }
 
 /// A genesis, as a store's first object is named.
-fn genesis() -> prodrome_core::event::Hash {
-    prodrome_core::event::Hash::new("a".repeat(64)).expect("an object's name")
+fn genesis() -> prodrome_data::event::Hash {
+    prodrome_data::event::Hash::new("a".repeat(64)).expect("an object's name")
 }
 
 /// 2.0, 2.1 and 3.0, in one store, from 1.
@@ -61,7 +62,7 @@ fn plan() -> Plan {
 const RELEASES: [&str; 3] = ["two", "twoone", "three"];
 const ITEMS: [&str; 6] = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"];
 
-fn composes(items: &[&str]) -> prodrome_core::term::Term {
+fn composes(items: &[&str]) -> prodrome_term::term::Term {
     let mut terms = vec![mk_flat(0.6).expect("a value")];
     terms.extend(
         items
@@ -150,7 +151,7 @@ fn bound(objects: &[(Hash, TodoEvent)]) -> Vec<&TodoEvent> {
 fn current(events: &[&TodoEvent], at: Datetime) -> BTreeMap<TodoId, Vec<Term>> {
     let mut specs: BTreeMap<TodoId, (Datetime, Vec<Term>)> = BTreeMap::new();
     for event in events {
-        if let prodrome_core::event::TodoEvent::SpecRevised(e) = event
+        if let prodrome_todo::event::TodoEvent::SpecRevised(e) = event
             && e.at <= at
         {
             let held = specs.entry(e.todo.clone()).or_insert((e.at, Vec::new()));
@@ -165,7 +166,7 @@ fn current(events: &[&TodoEvent], at: Datetime) -> BTreeMap<TodoId, Vec<Term>> {
     specs
         .into_iter()
         .map(|(todo, (_, mut candidates))| {
-            candidates.sort_by_key(prodrome_core::fpl::print_term);
+            candidates.sort_by_key(prodrome_term::fpl::print_term);
             (todo, candidates)
         })
         .collect()

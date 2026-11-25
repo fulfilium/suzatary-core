@@ -169,12 +169,12 @@ pub enum EntryState {
     Cancelled,
 }
 
-impl From<Option<prodrome_core::fpl::Outcome>> for EntryState {
-    fn from(outcome: Option<prodrome_core::fpl::Outcome>) -> Self {
+impl From<Option<prodrome_term::fpl::Outcome>> for EntryState {
+    fn from(outcome: Option<prodrome_term::fpl::Outcome>) -> Self {
         match outcome {
             None => EntryState::Open,
-            Some(prodrome_core::fpl::Outcome::Completed(_)) => EntryState::Completed,
-            Some(prodrome_core::fpl::Outcome::Cancelled(_)) => EntryState::Cancelled,
+            Some(prodrome_term::fpl::Outcome::Completed(_)) => EntryState::Completed,
+            Some(prodrome_term::fpl::Outcome::Cancelled(_)) => EntryState::Cancelled,
         }
     }
 }
@@ -190,12 +190,12 @@ pub enum ClaimedState {
     Cancelled,
 }
 
-impl From<Option<prodrome_core::fpl::Outcome>> for ClaimedState {
-    fn from(claim: Option<prodrome_core::fpl::Outcome>) -> Self {
+impl From<Option<prodrome_term::fpl::Outcome>> for ClaimedState {
+    fn from(claim: Option<prodrome_term::fpl::Outcome>) -> Self {
         match claim {
             None => ClaimedState::Agrees,
-            Some(prodrome_core::fpl::Outcome::Completed(_)) => ClaimedState::Completed,
-            Some(prodrome_core::fpl::Outcome::Cancelled(_)) => ClaimedState::Cancelled,
+            Some(prodrome_term::fpl::Outcome::Completed(_)) => ClaimedState::Completed,
+            Some(prodrome_term::fpl::Outcome::Cancelled(_)) => ClaimedState::Cancelled,
         }
     }
 }

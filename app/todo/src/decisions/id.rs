@@ -5,9 +5,9 @@ use super::NotADecision;
 /// A decision's name, the key every event about it carries: a todo id's shape, 3-64 lowercase
 /// letters and digits starting with a letter, so it prints inside any text unescaped.
 #[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, prodrome_core::literal::codec::Literal,
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, prodrome_data::literal::codec::Literal,
 )]
-#[literal(crate = prodrome_core, new = DecisionId::stored)]
+#[literal(crate = prodrome_data, new = DecisionId::stored)]
 pub struct DecisionId(String);
 
 impl DecisionId {
@@ -25,9 +25,9 @@ impl DecisionId {
         }
     }
 
-    fn stored(text: String) -> Result<Self, prodrome_core::literal::ProdromeError> {
+    fn stored(text: String) -> Result<Self, prodrome_data::literal::ProdromeError> {
         Self::new(text)
-            .map_err(|failed| prodrome_core::literal::ProdromeError::invalid(failed.to_string()))
+            .map_err(|failed| prodrome_data::literal::ProdromeError::invalid(failed.to_string()))
     }
 
     #[must_use]

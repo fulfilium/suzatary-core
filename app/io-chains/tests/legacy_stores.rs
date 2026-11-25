@@ -7,11 +7,12 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use prodrome_core::event::{Actor, Hash, TodoEvent, mk_completed, mk_reopened};
-use prodrome_core::literal::Datetime;
-use prodrome_core::payload::Payload;
-use prodrome_core::policy::Untrusted;
-use prodrome_core::schema::Schema;
+use prodrome_data::event::{Actor, Hash};
+use prodrome_data::literal::Datetime;
+use prodrome_data::policy::Untrusted;
+use prodrome_data::schema::Schema;
+use prodrome_todo::event::{TodoEvent, mk_completed, mk_reopened};
+use prodrome_todo::payload::Payload;
 use suzatary_io_chains::objects::Objects;
 use suzatary_record::record::{EventStore, Record};
 use suzatary_store::store::Prodrome;
@@ -40,8 +41,8 @@ fn after<E: Schema>(store: &dyn Prodrome<E>) -> Datetime {
         .map(E::at)
         .max()
         .expect("an event");
-    let day = prodrome_core::fpl::instant_of(last) + chrono::Duration::days(1);
-    prodrome_core::fpl::datetime_of(day).expect("an instant")
+    let day = prodrome_data::instant::instant_of(last) + chrono::Duration::days(1);
+    prodrome_data::instant::datetime_of(day).expect("an instant")
 }
 
 fn names(names: &[Hash]) -> String {
@@ -69,7 +70,7 @@ fn reading<P: Payload>(
         writeln!(out, "finding {finding}").expect("a string");
     }
     let nodes = store.nodes().expect("nodes");
-    for entry in prodrome_core::view::entries(&nodes, at, untrusted).expect("entries") {
+    for entry in prodrome_reading::view::entries(&nodes, at, untrusted).expect("entries") {
         let value = match entry.value() {
             Ok(Some(value)) => format!("{value:.9}"),
             Ok(None) => "absent".to_owned(),
