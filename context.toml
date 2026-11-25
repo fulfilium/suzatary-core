@@ -21,7 +21,7 @@ allowance = 2000
 
 [ratchet]
 # The repository's reading set in tokens, as the train's build recorded it.
-reading = 3297113
+reading = 3298989
 
 # The USE of each unit over `budget.use`, as the train's build recorded it; a unit back within the
 # budget leaves the table.
@@ -29,7 +29,7 @@ reading = 3297113
 cli = 49711
 inbox = 29397
 lines = 45181
-secretary = 28756
+secretary = 28769
 
 # Characters per token for each kind of file, measured with Claude's tokenizer by
 # `scripts/context.sh calibrate` over the files of `tokens.sample`.
