@@ -1,11 +1,8 @@
 /**
- * THE TYPST LIST, IN A BROWSER: the open list compiled in the tab by typst-wasm from a typed state
- * beside today's list.
- *
- * Laws: no horizontal overflow at 390 and 1280 px, a crafted title renders as its literal text, a long title takes
- * three lines beside a narrow mark and is whole in the open todo, the owner's markup renders while the agent's reads
- * as its source, scroll and focus survive a redraw that computes only what moved, Done completes through the existing
- * act path, and the core and typst-wasm compile while they stream.
+ * The open list compiled in the tab by typst-wasm from a typed state, beside today's list: no sideways overflow at 390
+ * and 1280 px, a crafted title renders as its literal text, a long title takes three lines and is whole in the open
+ * todo, the owner's markup renders while the agent's reads as its source, scroll and focus survive a redraw that
+ * computes only what moved, Done completes through the act path, and the core and typst-wasm compile while they stream.
  */
 
 import assert from "node:assert/strict";
@@ -55,7 +52,6 @@ async function add(title: string, id: string): Promise<void> {
   await app.page.waitFor(`document.querySelector('${row(id)}') !== null`, { timeout: 8000 });
 }
 
-// The Typst list's row for a todo, as an expression the page evaluates.
 const trow = (id: string): string =>
   `[...document.querySelectorAll(".typstframe .trow")].find((r) => r.querySelector('[data-intent="open todo:life/${id}"]') !== null)`;
 

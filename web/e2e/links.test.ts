@@ -1,21 +1,8 @@
 /**
- * A CONNECTION'S HEALTH AND ITS LINKS, END TO END (the first-setup audit's S6, S7, S8, S9, S13
- * and S17, `docs/AUDIT-SETUP-2026-10-17.md`).
- *
- * `scripts/web-e2e.sh` starts this file's server with `--settings --connections lapsed`: the Work calendar
- * declared with its link not stored, over a secret store of its own, the reference plugins
- * passed in `SUZATARY_PLUGINS` so a stored link is synced at its tap; and a Microsoft account
- * signed in to read and not to send.
- *
- * THREE SCENES, in order:
- *
- * 1. A link from an origin the calendar may not reach: the Allow card is drawn inside the
- *    link's own card on its line, and allowing it stores the link pasted once, which is checked
- *    at the tap; its host does not resolve, so the line says so in words and the box asks for
- *    the link again on the same line.
- * 2. A calendar added to the instance file by hand is drawn, and its link asked for, with no
- *    restart and no reload.
- * 3. The Microsoft account's consent to send is a card on its line, tapped like reading's.
+ * A connection's health and its links, on a server started with `--settings --connections lapsed`: a link from an
+ * origin the calendar may not reach gets its Allow card inside the link's own card, and allowing it stores the link
+ * pasted once, checked at the tap, whose unreachable host the line names in words. A calendar added to the instance
+ * file by hand is drawn with no restart or reload, and a Microsoft account's consent to send is a card on its line.
  */
 
 import assert from "node:assert/strict";

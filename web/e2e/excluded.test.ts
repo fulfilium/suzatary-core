@@ -1,13 +1,7 @@
 /**
- * A READING IS TOTAL OVER WHAT THIS DEVICE HOLDS (Prodrome SPEC law 44).
- *
- * The case that asked for it was the owner's phone: its inbox replica held a
- * card printed before `Remember` carried its `text`, and the conversations
- * page said "did not load" for the one print it could not parse. Here the
- * same print is put into the inbox this browser keeps, as the frames a pull
- * that brought it would have left, and the app is loaded again: the page
- * draws what it could read, and the shell's one line
- * says what was left out, opened to the name and why.
+ * A reading is total over what this device holds (Prodrome SPEC law 44): a print this device cannot parse, put into the
+ * inbox it keeps as the frames a pull would leave, is left out, the page draws what it could read, and the shell's one
+ * line names it and why. Copies an earlier build left that do not read are named with the reset that writes over them.
  */
 
 import assert from "node:assert/strict";
@@ -26,11 +20,7 @@ const UNREAD =
 /** The inbox's frames and snapshot this browser keeps, by their keys in the database's `replica` store. */
 const INBOX = `IDBKeyRange.bound("inbox/", "inbox/\\uffff")`;
 
-/**
- * The inbox this browser keeps, with a print of `template` in the store's own prodrome added as a pull that brought it
- * would add it: the core's frames of the box's answer holding it beside the rest, and of its landing, appended after the
- * last frame kept. The print's name is answered.
- */
+/** Adds a print of `template` to the inbox this browser keeps as a pull that brought it would, and answers its name. */
 function hold(template: string): Promise<string> {
   return app.page.evaluate<string>(`(async () => {
     const core = await import("/b/dev/prodrome.js");
@@ -86,10 +76,8 @@ function untilInbox(): Promise<void> {
 }
 
 /**
- * These copies spoiled, each a row of a store of the database by its key, from a document of the same origin that runs
- * no app, as a broken write or an older build would leave them: an earlier build's row of a chain as a row no build
- * reads; a snapshot of the stores of objects' form that does not read (`"unread"`); a snapshot of another form, as an
- * earlier build leaves it (`"earlier"`).
+ * Spoils these rows from a document of the same origin that runs no app, as a broken write or an older build leaves
+ * them: a chain row no build reads, a snapshot that does not read (`"unread"`), or one of an earlier form (`"earlier"`).
  */
 async function spoil(copies: readonly (readonly [string, string, ("row" | "unread" | "earlier")])[]): Promise<void> {
   await app.page.navigate(`${WRITE_BASE}/.well-known/assetlinks.json`);
@@ -176,12 +164,7 @@ app.scene("a chain's copy an earlier build kept that does not read is named, wit
   await untilReplica(app.page, "life");
 });
 
-/**
- * A reading that moves what is left out draws the line again, and a reader who opened it finds it open: the reset of
- * one chain's row moves it, and the other chain's reset is still there to tap. A part of a log that does not read in
- * this build's form is set aside, never deleted, and named with the reset that removes it; an earlier build's copy of a
- * store the box alone writes goes without a word, and the store is taken again from the box.
- */
+// An earlier build's copy of a store the box alone writes goes without a word, since the store is taken again from the box.
 app.scene("the line stays open while a reset moves it; a log that does not read is set aside and named, an earlier build's inbox goes unsaid", async () => {
   await app.open(WRITE_BASE);
   await untilInbox();

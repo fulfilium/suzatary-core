@@ -26,15 +26,13 @@ const listed = `document.querySelectorAll(".tree .row").length > 0`;
 
 app.scene("back after going to a todo is the list as it was left, and forward is the todo again", async () => {
   await app.page.viewport(PHONE[0], 520);
-  // The Inbox badge lands on its own time, so the list is read as it was left only once it has; what it counts is the
-  // cards the Inbox draws and its lines with no card, counted there first.
+  // The Inbox badge lands on its own time, so the list is read only once it has; it counts the Inbox's cards and cardless lines.
   await app.page.navigate(`${BASE}/#/inbox`);
   await app.page.waitFor(`document.querySelector('.inboxpage .proposals[data-box="Answered"]') !== null`);
   const waits = await app.page.evaluate<number>(`document.querySelectorAll(".inboxpage .batch, .inboxpage .proposal, .inboxpage .unplaced .problem").length`);
   const badge = waits === 0 ? "nothing waits on you" : `${waits} ${waits === 1 ? "waits" : "wait"} on you`;
   await app.page.navigate(`${BASE}/#/`);
-  // The deployment's categories are a reading too: the add sheet draws them once the box has said who reads. So is how
-  // far setup is, which this deployment has not finished: the first screen says so once the box has answered.
+  // The add sheet's categories and how far setup is are readings too, drawn once the box has answered.
   await app.page.waitFor(`${listed} && document.querySelector("#addsheet .chiprow button") !== null && document.querySelector(".inboxlink")?.textContent === ${JSON.stringify(badge)} && document.querySelector(".setupunfinished") !== null`);
   await openInPlace(app.page, todos.urgent.id);
   await reveal(app.page, todos.agents.id);

@@ -1,21 +1,10 @@
 /**
- * A STORE SEALED AGAIN IS READ FROM ITS RESEALS: the rescrub server holds a generated store whose lines were sealed
- * before lines recorded their rules and were never scrubbed (`suzatary-dev fixture-chain --lines … --sealed
- * unversioned`; 500 lines over 30 conversations by default, `SUZATARY_E2E_RESCRUB_LINES` and
- * `SUZATARY_E2E_RESCRUB_CONVERSATIONS` to change it). A tab loads it cold and warm, the box runs `secretary
- * migrate-scrub --apply` while the tab is closed, which seals every slot again and destroys the keys it replaced, and
- * the tab opens it again, hearing of the reseals in one pull.
- *
- * After that load the device holds the box's keys and no other: its own sweep destroyed each key a reseal replaced,
- * which it reads from the reseals' nodes. A device that took the reseals in an earlier pull and still holds a key they
- * replaced, as one whose purge was cut short does, drops it again on its next load, from the nodes it holds, while the
- * pull it makes lacks nothing and brings no key's name. A last warm load then scrubs nothing in the core's worker, which
- * the warm load before the migration did, and draws the stream within `DRAW_MS`. The count is the core module's own
- * (`scrubs`), read in the worker's scope from the module the worker loaded, so it holds whatever the fixture's size.
- *
- * As a measurement at the live shape: `SUZATARY_E2E_RESCRUB_LINES=6500 SUZATARY_E2E_RESCRUB_CONVERSATIONS=100
- * SUZATARY_LINES_RATE=6 SUZATARY_E2E_SCENE_MS=1800000 SUZATARY_LINESBENCH=<file> scripts/web-e2e.sh rescrub` writes
- * each warm load's draw time.
+ * A store whose lines were sealed before lines recorded their rules is sealed again by `secretary migrate-scrub
+ * --apply` while the tab is closed, and the tab, hearing of the reseals in one pull, ends holding the box's keys and no
+ * other. A device still holding a key a reseal replaced drops it on its next load from the nodes it holds, while its
+ * pull lacks nothing and names no key, and a last warm load scrubs nothing in the core's worker (the module's own
+ * `scrubs`) and draws the stream within `DRAW_MS`. `SUZATARY_E2E_RESCRUB_LINES` and `SUZATARY_E2E_RESCRUB_CONVERSATIONS`
+ * size the fixture, and `SUZATARY_LINESBENCH=<file>` writes each warm load's draw time.
  */
 
 import assert from "node:assert/strict"
@@ -104,8 +93,7 @@ app.scene("after migrate-scrub the device holds the box's keys and a warm load s
     // The tab is closed while the box runs the migration, so it hears of the reseals in one pull when it opens again.
     await app.page.navigate("about:blank")
     const before = boxKeys()
-    // The migration's own time, logged: it runs within one step's bound (`STEP_MS`), and costs about 7 ms a stale slot
-    // and 2 s of census on a fast machine, several times that on the box.
+    // The migration's own time, logged: it must run within one step's bound (`STEP_MS`).
     const migrating = Date.now()
     const said = atTheTerminal(["secretary", "migrate-scrub", "--apply"], INSTANCE)
     const migrated = Date.now() - migrating

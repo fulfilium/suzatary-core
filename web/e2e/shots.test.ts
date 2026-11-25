@@ -1,25 +1,8 @@
 /**
- * THE GALLERY: every destination, both widths, both themes, photographed.
- *
- * CLAUDE.md's rule stands — the browser tests are the UI's evidence and
- * screenshots are for the eye — so this file is not a substitute for an
- * assertion anywhere. What it is for is the other half of that sentence: a
- * design pass is judged by a person looking at it, and "open the app on your
- * phone" is a slow way to hand someone every screen in `SHOTS`.
- *
- * It still ASSERTS, because a photograph of a broken page is worse than no
- * photograph: each scene waits for the page's own landmark and fails if the
- * router put "No such page" there instead.
- *
- * A hash this build does not route is SKIPPED BY NAME rather than shot as a
- * 404, and that is not politeness — it is what lets the same file take the
- * BEFORE picture. Run against a checkout from before a destination existed, it
- * photographs everything else and says in one line which page it could not
- * find, so two galleries taken a day apart are comparable.
- *
- * The pictures go to `$SUZATARY_SHOTS` — outside the repo, like every other
- * screenshot this suite takes. A run with the variable unset still works and
- * still asserts; it just leaves the pictures in a temp directory nobody reads.
+ * The gallery: every destination at each width and theme, photographed for the eye, never a substitute for a scene's
+ * assertion; it asserts only that each page drew its own landmark rather than "No such page". A hash this build does not
+ * route is skipped by name rather than shot as a 404, so the same file takes the before picture. The pictures go to
+ * `$SUZATARY_SHOTS`, or else a temp directory.
  */
 
 import assert from "node:assert/strict";
@@ -36,39 +19,30 @@ const { todos } = cast.world;
 const OUT = process.env["SUZATARY_SHOTS"] ?? join(tmpdir(), "suzatary-shots");
 mkdirSync(OUT, { recursive: true });
 
-/** The secretary's stream, drawn from a reading of the stores. */
 const STREAM_READY = `document.querySelector(".column.secretarystream:not(.pagewaiting) .streamrounds") !== null`;
 
 /** The post a row's Done makes, held while its picture is taken; each run marks a todo of its own done. */
 let sendingRun = 0;
 let releaseSending: () => Promise<void> = async () => {};
 
-/** One screen worth a picture: where it lives, and what proves it drew. */
 interface Shot {
   readonly name: string;
   readonly hash: string;
   /** True once the page is drawn — not merely mounted. */
   readonly ready: string;
-  /** Which deployment to photograph it on. `BASE` unless the picture is about
-   * a state `BASE` deliberately does not hold — the Inbox is the one: it is
-   * empty there, and a gallery of an empty queue shows nothing of the queue. */
+  /** `BASE` unless the picture is about a state `BASE` deliberately does not hold, as the Inbox's queue. */
   readonly base?: string;
   /** Phone only: the sheet is photographed where a thumb opens it. */
   readonly phoneOnly?: boolean;
-  /** Something to press before the shutter — the sheet is transient furniture
-   * and no hash opens it. */
+  /** Something to press before the shutter: no hash opens a sheet. */
   readonly act?: (page: Page) => Promise<void>;
-  /** And something to undo afterwards. Whatever `act` opened is still open
-   * when the next shot arrives on the SAME hash: `renderNav` rebuilds the sheet
-   * closed on every route change, and navigating to the hash you are already on
-   * is not one. */
+  /** Whatever `act` opened is still open when the next shot arrives on the same hash, which is no route change. */
   readonly undo?: (page: Page) => Promise<void>;
 }
 
 /**
- * ⚠️ THE ORDER MATTERS, and only for one reason: `otherchain` picks the second chain,
- * and every page after it would then be about that chain, whose fixture holds no open work.
- * So it goes last, and its `undo` picks the first chain back.
+ * ⚠️ The order matters: `otherchain` picks the second chain, whose fixture holds no open work, so it goes last and its
+ * `undo` picks the first chain back.
  */
 const SHOTS: readonly Shot[] = [
   { name: "list", hash: "#/", ready: `document.querySelectorAll(".tree .row").length > 0` },
@@ -125,13 +99,10 @@ const SHOTS: readonly Shot[] = [
     name: "inbox",
     hash: "#/inbox",
     ready: `document.querySelector("#view h1") !== null`,
-    // The one picture taken somewhere else: `BASE`'s Inbox is empty on purpose
-    // (`destinations.test.ts` is the claim about that), and a queue is worth
-    // photographing with something in it.
+    // `BASE`'s Inbox is empty on purpose (`destinations.test.ts`), and a queue is worth photographing with something in it.
     base: PROPOSED_BASE,
   },
-  // THE INBOX AS THE OWNER MEETS IT (audit X2, X9, X10): the work first, every card closed, the box's own setup
-  // cards one closed row after it; then that row opened in place, and one card opened whole.
+  // The Inbox as the owner meets it, the box's own setup cards one closed row after the work; then that row and a card opened.
   {
     name: "inbox-write",
     hash: "#/inbox",
@@ -166,7 +137,7 @@ const SHOTS: readonly Shot[] = [
       await page.waitFor(`document.querySelector(".inboxpage .proposals > .proposal .proposaldetails").open === false`);
     },
   },
-  // DONE, ON ITS WAY (audit X1): the row says so, quietly, and nothing else on the page does.
+  // Done, on its way: the row says so, quietly, and nothing else on the page does.
   {
     name: "todos-sending",
     hash: "#/",
@@ -200,13 +171,8 @@ const SHOTS: readonly Shot[] = [
     },
   },
   {
-    // DEFER, AS A CURVE (`docs/APP.md` §4 item 4, `deferascurve`): the
-    // picture the design rests on — a line flat at 100% until the date and
-    // then exactly the term it deferred, which is what a deferral IS rather
-    // than a snoozed flag off to the side. `WRITE_BASE` because there is
-    // nothing to photograph on a chain that cannot move; the todo and the
-    // defer are authored HERE rather than baked into the fixture, so the
-    // picture is proof the write path draws what it claims to.
+    // A deferral as a curve, flat at 100% until the date and then the term it deferred, authored here so the picture
+    // proves the write path draws it.
     name: "deferred-graph",
     hash: "#/",
     ready: `document.querySelectorAll(".tree .row").length > 0`,
@@ -225,9 +191,7 @@ const SHOTS: readonly Shot[] = [
         await pickCategory(page, "home");
         await page.click(".addbtn");
         await page.waitFor(`document.querySelector('.tree .row[data-todo="${id}"]') !== null`, { timeout: 8000 });
-        // THE ROW IS THE REPLICA'S, drawn before the push: the todo page below
-        // asks the BOX, so it waits for the toast the list raises once
-        // the exchange is done, or it can open on a 404 that never redraws.
+        // The row is the replica's, drawn before the push, and the todo page asks the box: without the toast it can open on a 404.
         await page.waitFor(`document.getElementById("toast")?.textContent === "added ${id}"`, { timeout: 8000 });
       }
       await page.evaluate(`location.hash = "#/todo/${id}"`);
@@ -235,9 +199,7 @@ const SHOTS: readonly Shot[] = [
       await page.waitFor(`document.querySelector(".deferbox summary") !== null`, { timeout: 4000 });
       await page.click(".deferbox summary");
       await page.waitFor(`document.querySelector(".deferbox")?.open === true`, { timeout: 2000 });
-      // A defer to an already-deferred date replaces the outer deferral
-      // (`authoring::defer`'s own law), so re-running this shot against a
-      // chain that already carries the demo todo is harmless.
+      // A defer to an already-deferred date replaces the outer deferral (`authoring::defer`'s law), so a rerun is harmless.
       const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       await page.evaluate(`(() => {
         const node = document.querySelector(".deferbox input[type=date]");
@@ -252,11 +214,7 @@ const SHOTS: readonly Shot[] = [
       await page.waitFor(`document.querySelector(".curvebox .curveplot") !== null`, { timeout: 8000 });
     },
   },
-  // Drawn once the fetch has landed either way: two windows on a box with
-  // transcripts, the empty note on one without (CI), the problem line if the
-  // route refused. The fixture's `repo` is a temp dir, so no secretspec and no
-  // endpoint — the ceiling is simply absent here, which is a state the page
-  // has to draw honestly anyway.
+  // The fixture's `repo` is a temp dir, so no secretspec and no endpoint: the ceiling is absent here.
   { name: "about", hash: "#/about", ready: `document.querySelector(".aboutversion") !== null` },
   { name: "briefings", hash: "#/briefings", ready: `document.querySelector("#view .pagetitle")?.textContent === "Briefings"` },
   // What is connected, by group, as a writer sees it: Ask, the lines, a card on the line it is about, Change folded.
@@ -266,8 +224,7 @@ const SHOTS: readonly Shot[] = [
     ready: `document.querySelector(".settingsline") !== null && document.querySelector(".settingshere h2") !== null`,
     base: WRITE_BASE,
   },
-  // The stream (`docs/TOPICS-PLAN-2026-10-21.md` §0) on the deployment that
-  // holds conversations, and the default conversation itself.
+  // The stream on the deployment that holds conversations, and the default conversation itself.
   {
     name: "secretary",
     hash: "#/secretary",
@@ -279,11 +236,7 @@ const SHOTS: readonly Shot[] = [
     hash: "#/secretary/default",
     ready: `document.querySelector("#view .pagetitle") !== null`,
   },
-  /**
-   * THE MEMORY (`docs/CHAT-PLAN-2026-09-25.md` §3.6) with something in it:
-   * the fixture script's `remember my accountant and my answers` line has the
-   * secretary remember two facts, once, and the picture is the page they land on.
-   */
+  /** The fixture script's `remember my accountant and my answers` line has the secretary remember two facts, once. */
   {
     name: "memory",
     hash: "#/secretary/memory",
@@ -303,19 +256,7 @@ const SHOTS: readonly Shot[] = [
       await page.waitFor(`document.querySelectorAll(".memorypage .memorygroup").length > 1`, { timeout: 15000 });
     },
   },
-  /**
-   * A CONVERSATION WITH A REAL EXCHANGE ON IT — NOT MID-ANSWER, and that
-   * limit is measured rather than assumed: `say`'s own response draws the
-   * turn it just appended as `queued` before the worker has answered it
-   * (`serve::secretary::say`'s ordering), which is a deterministic fact about the
-   * WIRE (`web/e2e/secretary.test.ts` checks exactly that) — but the fixture
-   * model (`Scripted`) has no artificial delay, so the round and the live
-   * stream's redraw both finish, in practice, before a screenshot's own
-   * `waitFor` can ever catch the DOM in between. A gallery shot photographs
-   * what a `waitFor` can hold still for, so this settles for the turn and its
-   * answer both landed rather than reaching for a moment this fixture cannot
-   * hold open.
-   */
+  /** Not mid-answer: the fixture model (`Scripted`) has no delay, so no `waitFor` can catch the queued turn before its answer. */
   {
     name: "secretary-answering",
     hash: "#/secretary/default",
@@ -327,17 +268,14 @@ const SHOTS: readonly Shot[] = [
       );
       await page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
       await page.waitFor(`document.querySelector(".composebox") !== null`, { timeout: 8000 });
-      // A HEADING AND A PANEL (`docs/APP.md`, "typstanswers"), so the picture
-      // shows what a rendered answer actually looks like rather than a plain
-      // paragraph that happens to compile too.
+      // A heading and a panel, so the picture shows what a rendered answer looks like.
       await page.type(".composebox", "give me a rendered answer");
       await page.click(".composesend");
       await page.waitFor(`document.querySelectorAll(".turn-person").length > 0`, { timeout: 8000 });
       await page.waitFor(`document.querySelector(".answerblock.rich") !== null`, { timeout: 8000 });
     },
   },
-  // WHAT A PAGE SHOWS WHILE IT WAITS (the audit's X5): a page and a conversation, each held at the box until the
-  // placeholder is on screen, then let through.
+  // What a page shows while it waits: a page and a conversation, each held at the box until the placeholder is on screen.
   {
     name: "page-waiting",
     hash: "#/",
@@ -362,9 +300,7 @@ const SHOTS: readonly Shot[] = [
       );
       held = await page.holdRequests(["/api/"]);
       await page.evaluate(`location.hash = "#/secretary/${id}"`);
-      // The page's own transcript, never a panel's. The new conversation can also reach the page through the event
-      // stream opened before the hold, which no hold stops, and then it is drawn at once with no placeholder: the
-      // wait ends on whichever of the two the page draws.
+      // The event stream opened before the hold can draw the conversation at once with no placeholder, so either ends the wait.
       await page.waitFor(
         `(() => {
            const p = document.querySelector("#view .transcriptcontent .placeholder");
@@ -406,7 +342,7 @@ const SHOTS: readonly Shot[] = [
     },
     undo: release(`document.getElementById("syncing").hidden`),
   },
-  // The Typst list before the tab's Typst is here (X21): a fresh document, so Typst is fetched again and held.
+  // The Typst list before the tab's Typst is here: a fresh document, so Typst is fetched again and held.
   {
     name: "typst-waiting",
     hash: "#/",
@@ -419,7 +355,7 @@ const SHOTS: readonly Shot[] = [
     },
     undo: release(`document.querySelector(".typstframe .placeholder") === null`),
   },
-  // A slow answer on its way (X8): "Thinking · N s" beside Stop, the script answering once the shot is taken.
+  // A slow answer on its way: "Thinking · N s" beside Stop, the script answering once the shot is taken.
   {
     name: "conversation-thinking",
     hash: "#/secretary/default",
@@ -434,7 +370,7 @@ const SHOTS: readonly Shot[] = [
       await page.waitFor(`document.querySelector(".answerplace .answerstate") === null`, { timeout: 20000 });
     },
   },
-  // An answer at rest, then its menu open (X14).
+  // An answer at rest, then its menu open.
   {
     name: "answer-menu",
     hash: "#/secretary/default",
@@ -526,7 +462,6 @@ function release(drawn: string): (page: Page) => Promise<void> {
   };
 }
 
-/** A fresh conversation, asked `said`. */
 async function ask(page: Page, said: string): Promise<void> {
   const id = await page.evaluate<string>(
     opened("Gallery"),
@@ -537,33 +472,19 @@ async function ask(page: Page, said: string): Promise<void> {
   await page.click(".composesend");
 }
 
-/**
- * WAIT FOR THE PIXELS, not only for the DOM.
- *
- * A `waitFor` answers as soon as an element EXISTS, and chromium composites on
- * its own schedule — a scroller or a layer under a sheet can still be an
- * unpainted grey rectangle at that instant, which is a photograph of the
- * browser's plumbing rather than of this app. Two animation frames plus a beat
- * is the cheap fix, and this file is the one place in the suite where what the
- * screen LOOKS like is the deliverable.
- */
+/** A `waitFor` answers once an element exists and chromium composites on its own schedule, so this waits for the pixels. */
 const painted = async (page: Page): Promise<void> => {
   await page.evaluate(
     `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 150))))`,
   );
 };
 
-/** What the router puts on screen when it knows nothing about a hash. A build
- * without the Inbox lands here, and a picture of that is not a deliverable. */
+/** What the router puts on screen when it knows nothing about a hash. */
 const LOST = `document.querySelector("#view .pagetitle")?.textContent === "No such page"`;
 
 /**
- * Did the router recognise this hash? ⚠️ ASKED ONLY ONCE THE MOUNT HAS
- * SETTLED — `navigate` returns when the LOCATION is right, and the app's own
- * routing is a promise after that, so a bare read here would be answering
- * about the previous page. Waiting for "either this page's landmark or the
- * not-found title" is the condition that is true in both cases and in neither
- * before.
+ * ⚠️ Asked only once the mount has settled: `navigate` returns when the location is right and the app's routing is a
+ * promise after that, so a bare read would answer about the previous page.
  */
 const routed = async (page: Page, ready: string): Promise<boolean> => {
   await page.waitFor(`(${ready}) || (${LOST})`, { timeout: 20000 });
@@ -588,9 +509,7 @@ for (const [size, label] of [
         if (shot.base === WRITE_BASE) await app.trust();
         await app.page.navigate(`${shot.base ?? BASE}/${shot.hash}`);
         if (!(await routed(app.page, shot.ready))) {
-          // Not built yet on this branch. Say so once, loudly enough to read in
-          // the run's output, and go on — the rest of the gallery is still a
-          // gallery.
+          // Not built yet on this branch: said once, and the rest of the gallery goes on.
           console.log(`shots: ${shot.hash} is not routed in this build — no ${shot.name} picture`);
           continue;
         }
@@ -607,9 +526,7 @@ for (const [size, label] of [
         }
         taken += 1;
       }
-      // The scene's own claim, so this file is a test and not a script: it
-      // photographed something, and the last page it visited is one this app
-      // knows.
+      // The scene's own claim: it photographed something, and the last page it visited is one this app knows.
       assert.ok(taken > 0, "the gallery is empty — nothing this suite asked for was routed");
       assert.equal(await app.page.evaluate<boolean>(LOST), false);
     });

@@ -1,18 +1,8 @@
 /**
- * The keyboard, in a browser rather than as a function.
- *
- * `web/test/keys.test.ts` already pins what a key MEANS — including the
- * negative property that matters most, that a focused field yields nothing but
- * Escape — and `web/test/row.test.ts` what l and h do where the cursor stands.
- * What they cannot check is that the meaning is WIRED: that `j` reaches the
- * list's cursor, that the cursor is focus so a screen reader follows it, that
- * `/` lands the caret in the search field, and that ⌘K is the one chord this
- * app claims from the browser.
- *
- * The cursor is asserted through `document.activeElement`, because that is
- * what the app decided the cursor IS (`app/pages/src/todos.rs`: focus is the mark, so
- * Tab and `j` cannot disagree). A test that read a private variable would pass
- * while the ring was somewhere else.
+ * `web/test/keys.test.ts` pins what a key means; this file checks the meaning is wired in a browser: `j` reaches the
+ * list's cursor, `/` lands the caret in the search field, and Ctrl-K opens the palette. The cursor is asserted through
+ * `document.activeElement`, because focus is what the app made the cursor (`app/pages/src/todos.rs`), so a test that
+ * read a private variable would pass while the ring was elsewhere.
  */
 
 import assert from "node:assert/strict";
@@ -29,8 +19,7 @@ const app = await suite("keyboard");
 const cursor = (): Promise<string | null> =>
   app.page.evaluate<string | null>(`document.activeElement?.getAttribute("data-key") ?? null`);
 
-/** The cursor arrives at `key`. The page focuses it when it has drawn the move, so a move is waited for, never read
- * at once: a key the page never heard ends the wait, and a move drawn a frame late does not. */
+/** The page focuses the cursor once it has drawn the move, so a move is waited for, never read at once. */
 const arrives = (key: string): Promise<void> =>
   app.page.waitFor(`document.activeElement?.getAttribute("data-key") === ${JSON.stringify(key)}`);
 
@@ -60,8 +49,7 @@ app.scene("slash puts the caret in the search field, and the field then owns the
     assert.equal(await app.page.evaluate<string>(`document.querySelector(".search").value`), key);
     assert.equal(await app.page.evaluate<string>(`window.location.hash`), before, key);
     await app.page.press("Escape");
-    // AND PUT IT BACK: the search is part of the remembered filter, and the
-    // scenes below share this browser profile.
+    // Cleared, because the search is part of the remembered filter and the scenes below share this profile.
     await app.page.evaluate(`(() => {
       const field = document.querySelector(".search");
       field.value = "";
@@ -99,21 +87,8 @@ app.scene("Ctrl-K opens the palette and typing filters it", async () => {
   );
 });
 
-/**
- * SEARCH EVERYTHING (project chain `searcheverything`, docs/APP.md §4 item 6):
- * the palette's mail source, in a real browser.
- *
- * SINCE `fixturemailisolation` THE FIXTURE HAS ITS OWN MAIL. `suzatary-dev
- * fixture-chain` (`app/cli/tests/support/fixture.rs::mail_fixture`) builds a
- * notmuch database in the fixture's own temp directory and seeds it with two
- * synthetic messages, so `/api/mail/search` here answers from THAT database
- * and never this box's — the content is known ahead of time, so this scene
- * asserts on it directly rather than only on shape. `MAIL_ONE_SUBJECT`
- * (`cast.world.mail[0]`, from counsel) is deliberately about the same deed
- * the agent's todo is, so one query
- * matches a local row and a mail row together, exactly as it would on a real
- * corpus.
- */
+// The fixture's own notmuch database holds two synthetic messages, the first about the same deed as the agent's todo,
+// so one query matches a local row and a mail row together.
 app.scene("the mail group appears below the local rows without disturbing them", async () => {
   await app.open(BASE);
   await app.page.press("k", { ctrl: true });
@@ -131,7 +106,6 @@ app.scene("the mail group appears below the local rows without disturbing them",
     `[...document.querySelectorAll(".palgroup")].some((p) => p.textContent === "Mail")`,
     { timeout: 8000 },
   );
-  // The mail row is the SEEDED message, by name — not just "some label".
   assert.equal(
     await app.page.evaluate<string | null>(
       `[...document.querySelectorAll(".palrow")]
@@ -148,7 +122,7 @@ app.scene("the mail group appears below the local rows without disturbing them",
     ),
     counsel.email,
   );
-  // The local row is UNTOUCHED — the group is appended below it, not instead.
+  // The group is appended below the local row, not instead of it.
   assert.equal(
     await app.page.evaluate<string | null>(`document.querySelector(".palrow .palhint")?.textContent ?? null`),
     todos.agents.id,
@@ -156,10 +130,7 @@ app.scene("the mail group appears below the local rows without disturbing them",
   await app.page.press("Escape");
 });
 
-/** `MAIL_TWO_SUBJECT` matches nothing local, so this is one row, unambiguous
- * to open: the whole point is proving a mail row is a REAL destination, not
- * only a label the palette can draw, and that the message page draws what the
- * box answers for it. */
+// The second seeded subject matches nothing local, so its one row proves a mail row is a real destination.
 app.scene("a seeded mail result opens on Enter, and its page draws the message", async () => {
   await app.open(BASE);
   await app.page.press("k", { ctrl: true });

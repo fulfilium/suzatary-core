@@ -1,8 +1,6 @@
-// The one script the page names: it picks a build and imports that build's app, which draws the page (`app/loader.ts`
-// decides which). A start runs the build the worker last heard the box serve, answered from its cache with no wait on
-// the network, and the build of the worker itself when that one does not load, so a page runs offline. The box's first
-// read starts here too, while the app is on its way. Every file the app loads after resolves against its own URL, so a
-// page never asks for another build's file.
+// A start runs the build the worker last heard the box serve, from its cache with no wait on the network, else the
+// worker's own build, so a page runs offline; every later file resolves against its build's URL, so a page never asks
+// for another build's file.
 
 import shell from "./app/shell"
 import primed from "./app/primed"

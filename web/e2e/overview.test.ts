@@ -1,29 +1,9 @@
 /**
- * SETTINGS AS WHAT IS CONNECTED, END TO END (the guided setup's `overview`).
- *
- * The fixture is `--settings`: the model's token and one
- * calendar link on the `ics` plugin (`fixture.rs::SETTINGS_CALENDAR_LINK`),
- * a calendar that synced once and has since lost its link, each declared
- * over an ISOLATED `secretspec` store, one per `--settings` server
- * (`scripts/web-e2e.sh`), never this box's `pass`. Nothing stores either, so
- * each server's box files their cards by itself at start, with no model asked.
- *
- * THE PLAN'S SCENES 1, 8 AND 2, THEN TWO KEPT FROM THE PAGE BEFORE IT:
- *
- * 1. Only what is connected is drawn, grouped: no Notifications heading on a
- *    deployment with no channel, only its offer, and no key name anywhere on
- *    the page, its cards included, nor in `/api/overview`'s answer or a
- *    drawn card's row.
- * 8. A read-only login sees the lines and the cards, and no control at all.
- * 2. The calendar's line is failing and draws its fix card inline; storing
- *    the link from it makes the line healthy, and the CDP network log shows
- *    the value in the tap's request and nowhere else.
- * -  The answered card says what it stored in words on its conversation page.
- * -  At phone width, "Connect an account" offers a Google account first under Mail on the first
- *    screen, and its tap opens a conversation of its own already begun on that template.
- * -  A key revoked at the terminal is answered with the wipe, and the device
- *    deletes what it holds and comes back with a new key; a wipe a reload cut
- *    short is finished by the next load.
+ * Settings as what is connected, on `--settings` servers whose model token and calendar link are declared over an
+ * isolated `secretspec` store each, never this box's `pass`: only what is connected is drawn, no key name reaches the
+ * page, the overview's answer or a card's row, a read-only login sees no control, and storing the failing calendar's
+ * link heals its line with the value in the tap's request alone. A key revoked at the terminal is answered with the
+ * wipe, which the next load finishes if a reload cut it short.
  */
 
 import assert from "node:assert/strict";
@@ -51,10 +31,8 @@ const WIPING = "suzatary.wiping";
 const FIXTURE_VALUE = "https://calendar.example.test/private-fixture/basic.ics";
 
 const calendarLine = '.settingsline[data-line="credential:ics/work"]';
-/** The box's own card for the link, drawn on its line. */
 const boxCard = `${calendarLine} .proposal.proposal-act-secret[data-conversation="setup"]`;
 
-/** Open `#/settings` and wait until the calendar's line has drawn: it waits on `GET /api/overview` and `GET /api/me`. */
 // The page draws from the overview first and each line's cards once they arrive: a scene reads both.
 async function openSettings(base: string): Promise<void> {
   await app.page.navigate(`${base}/#/settings`);
@@ -193,8 +171,7 @@ app.scene("the answered card names the link on its conversation page, never the 
   assert.equal((await app.page.evaluate<string>(`document.body.textContent`)).includes(FIXTURE_VALUE), false, "never the value");
 });
 
-// THE CATALOG, ONE TAP EACH (`connectlist`): Settings names what the box can connect, a Google account first under
-// Mail, and a tap opens a conversation of its own already begun on that template, its first line naming the first step.
+// A tap on the catalog opens a conversation of its own already begun on that template.
 app.scene("Settings offers each account the box can connect, and a tap begins its setup conversation", async () => {
   await app.page.viewport(PHONE[0], PHONE[1]);
   await openSettings(WRITE_BASE);
@@ -225,10 +202,8 @@ app.scene("a key revoked at the terminal is answered with the wipe, and the devi
   await openSettings(WRITE_BASE);
   await app.page.waitFor(`${shown} === ${JSON.stringify(key)}`, { timeout: 15000 });
 
-  // A second tab of this device, open on the same replica, hears nothing from the box: its streams are held from the
-  // start (a held request takes none of the host's six connections, which the first tab's streams already fill), and
-  // every request once it has drawn. It is told of the wipe by the first tab's mark alone, and wipes too, so it never
-  // writes the revoked device's replica back.
+  // A second tab hears nothing from the box (a held stream takes none of the host's six connections), so it learns of
+  // the wipe by the first tab's mark alone and must wipe too, never writing the revoked device's replica back.
   const other = await app.tab();
   await other.holdRequests(["/events", "/stream"]);
   await other.navigate(`${WRITE_BASE}/#/settings`);

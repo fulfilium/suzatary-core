@@ -1,11 +1,5 @@
-/**
- * What a key means, and — more importantly — when it means nothing.
- *
- * The failure this suite exists to prevent is a letter eaten: someone typing a
- * todo body that contains "c" and watching a different todo get completed. So
- * the first properties are the negative ones — while a field has the keyboard,
- * only Escape is claimed, and a modified key is always the browser's.
- */
+// The failure this suite prevents is a letter eaten: someone typing a todo body that holds "c" and watching another todo
+// get completed.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -45,7 +39,6 @@ test("each key means its one action in the context it lands in, and an unbound k
     ["Enter", IDLE, { type: "open" }],
     ["l", IDLE, { type: "open" }],
     ["h", IDLE, { type: "close" }],
-    // c completes and x cancels, in the wire's own vocabulary.
     ["c", IDLE, { type: "act", name: "done" }],
     ["x", IDLE, { type: "act", name: "cancel" }],
     // Undo and redo are a separate kind from `act`; Shift alone is no chord `modified` reserves.
@@ -67,7 +60,6 @@ test("each key means its one action in the context it lands in, and an unbound k
 });
 
 test("an armed prefix swallows the key rather than firing the unprefixed one", () => {
-  // `g c` must not complete a todo. It is nothing, and the prefix is spent.
   assert.equal(keyAction("c", { ...IDLE, pending: "g" }), null);
 });
 

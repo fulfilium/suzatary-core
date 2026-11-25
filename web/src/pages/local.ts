@@ -27,10 +27,8 @@ import share from "../todo/share"
 
 export namespace local {
   type Kind = Local["type"]
-  // The generated answer, read-only all the way down as the tab's own values are.
   type Answer<K extends Kind> = text.Frozen<LocalAnswers[K]>
 
-  // Keyed by the `Local` as decoded.
   const watchers = lanes.watchers()
   const laneOf = (l: Local): lanes.Lane => watchers.laneOf(JSON.stringify(l))
   export const watching = (l: Local, lane: lanes.Lane): (() => void) => watchers.watch(JSON.stringify(l), lane)

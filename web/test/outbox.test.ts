@@ -1,6 +1,3 @@
-// What the shell says about acts the box has not taken: once per todo and state, an act on its way only once it is late,
-// and never an object's name.
-
 import { test } from "node:test"
 import assert from "node:assert/strict"
 

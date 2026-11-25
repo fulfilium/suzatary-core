@@ -1,13 +1,7 @@
 /**
- * A PROPOSED EMAIL CARRIES THE OWNER'S OWN FILE, AND THE TAP SENDS EXACTLY IT.
- *
- * The fixture's mail index holds `cast.world.notice`, a message from the
- * registry with a PDF. The scripted model proposes a reply attaching it; the
- * card lists the file before the tap; the tap's recorder
- * (`--smtp-fixture`) writes the multipart message `send.rs` built, whose
- * attachment is decoded here and compared byte for byte with the source. A
- * second proposal's file is changed on disk before the tap, and the tap
- * refuses with nothing recorded.
+ * A proposed email carries the owner's own file, and the tap sends exactly its
+ * bytes, as the tap's recorder (`--smtp-fixture`) writes them. A file changed
+ * on disk after it was proposed makes the tap refuse with nothing recorded.
  */
 
 import assert from "node:assert/strict";
@@ -30,7 +24,6 @@ mkdirSync(SHOTS, { recursive: true });
 
 const MESSAGE = join(MAIL, `${notice.mail.msgid}:2,S`);
 
-/** The recorded messages under `subject`, oldest first. */
 const recorded = (subject: string): Record<string, unknown>[] =>
   readFileSync(SENT, "utf8")
     .split("\n")
@@ -50,7 +43,6 @@ function part(mime: string, name: string): string {
   return atob(body.replace(/\s+/g, ""));
 }
 
-/** Open a fresh conversation over the route and say `said` in it. */
 async function converse(said: string): Promise<void> {
   await app.page.navigate(`${WRITE_BASE}/#/secretary/default`);
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
@@ -64,7 +56,6 @@ async function converse(said: string): Promise<void> {
   await app.page.waitFor(`document.querySelector(".proposal .proposalfile") !== null`, { timeout: 20000 });
 }
 
-/** Send, and confirm the question the card asks. */
 async function send(): Promise<string> {
   await app.page.click(".proposal .act-send");
   await app.page.waitFor(`document.querySelector(".proposalconfirm") !== null`, { timeout: 4000 });
@@ -78,8 +69,7 @@ app.scene("the card lists the attachment, and the tap sends exactly its bytes", 
   await app.resize(PHONE);
   await converse("reply with the approval notice attached");
 
-  // EVERY FILE IS ON THE CARD BEFORE THE TAP: its name, type and size, and a
-  // way to open where it comes from.
+  // Every file is on the card before the tap, with a way to open where it comes from.
   assert.equal(
     await app.page.evaluate<string>(`document.querySelector(".proposalfile .proposalfilename").textContent`),
     notice.file.name,

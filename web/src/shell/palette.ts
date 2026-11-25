@@ -1,6 +1,4 @@
-// ⌘K: every destination, todo, message and conversation in one ranked list. Local rows answer at once;
-// mail and conversations are appended below under a label, never reordering what is shown, and a
-// failed source draws one quiet row. "Ask the secretary" is built here, not in the pure `match.ts`.
+// Local rows answer at once; mail and conversations are appended below under a label, never reordering what is shown.
 
 import { mailSearch } from "../wire/api";
 import conversations from "../chat/conversations";
@@ -28,7 +26,6 @@ interface Command {
   readonly route?: Route;
 }
 
-/** An async `Hit`, drawn as a `Command` with no local `run` of its own. */
 function commandOfHit(hit: Hit): Command {
   return {
     kind: hit.kind,
@@ -133,7 +130,6 @@ export function openPalette(): void {
     spellcheck: "false",
   });
   const results = el("div", { class: "palettelist", role: "listbox", "aria-label": "results" });
-  // The conversations' reading is heard while the palette is open and let go when it closes.
   let unhear = (): void => {};
   const box = showOverlay(
     "palette",
@@ -148,19 +144,17 @@ export function openPalette(): void {
     () => unhear(),
   );
 
-  // Escape and a scrim click close the overlay from outside, so every async callback checks this first: this palette is
-  // open while its own field is on the page, whatever palette is open after it.
+  // Escape and a scrim click close the overlay from outside, so every async callback checks that its own field is still on the page.
   const stillOpen = (): boolean => field.isConnected;
 
   let shown: Command[] = [];
   let at = 0;
 
-  // Mail: the server's search, asked on every debounced keystroke; each answer is kept by the query it answers, and
-  // the field's query reads its own, so an answer landing late is a row of the table, never the one shown.
+  // Each mail answer is kept by the query it answers, so an answer landing late is a row of the table, never the one shown.
   const mail = new Map<string, Command[] | "failed">();
   let debounceHandle: ReturnType<typeof window.setTimeout> | undefined;
 
-  // Conversations: the replica's reading, heard while the palette is open, so one it takes in meanwhile is found.
+  // Heard while the palette is open, so a conversation the replica takes in meanwhile is found.
   const convos = conversations.rows;
 
   const sections = (): Section[] => {
@@ -253,7 +247,6 @@ export function openPalette(): void {
   });
 
   draw();
-  // The field takes the keyboard immediately.
   field.focus();
   box.scrollTop = 0;
 

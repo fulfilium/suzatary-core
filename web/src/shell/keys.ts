@@ -1,13 +1,10 @@
-// What a key means where it is pressed, a pure function of (key, context). A focused field keeps every key but
-// Escape, a modified key is the browser's except ⌘K, and `g` arms a destination the next key names.
+// A focused field keeps every key but Escape, and a modified key is the browser's except ⌘K.
 
 import type { Route } from "./route";
 import type { ActionName } from "../todo/todos";
 
 export type KeyAction =
-  /** Move the list's cursor by ±1. */
   | { readonly type: "move"; readonly by: number }
-  /** Open whatever the cursor is on. */
   | { readonly type: "open" }
   /** Close it again: the in-place todo, the fold, then up to the parent. */
   | { readonly type: "close" }

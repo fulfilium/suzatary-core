@@ -1,5 +1,3 @@
-// What the shell draws around the page: plain data made from App and the fold it dates, painted part by part.
-
 import app from "../app/app"
 import type aside from "../chat/aside"
 import nav from "./nav"
@@ -21,9 +19,7 @@ export namespace chrome {
     signing: Signing
     build: shell.Line
   }
-  // What the banner dates besides App: the fold on screen and what its readings of the objects it holds left out; the
-  // theme the More sheet offers; the door to the secretary of the drawing on screen (`tiles.Host.committed`), none
-  // where it draws the secretary; and the workspace the bar lights, the desk's focused one (`tiles.Host.workspace`).
+  // `door` is none where the drawing on screen draws the secretary; `workspace` is the desk's focused one.
   export type Seen = { fold: onscreen.Fold; excluded: excluded.Left; theme: Theme; door: aside.Door; workspace: Route }
   export type Live = { className: string; meaning: string }
   // What the page says of this browser's key: nothing, or why it only reads.

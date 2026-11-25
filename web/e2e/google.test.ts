@@ -1,29 +1,9 @@
 /**
- * CONNECT A GOOGLE ACCOUNT FROM SETTINGS, END TO END (`connectlist`, and the guided setup's stage 10,
- * `authcode`).
- *
- * `scripts/web-e2e.sh` starts this file's server with `--settings --connected google` and
- * `--google-fixture` aimed at `suzatary-dev fake-google`: every request the box makes to Google
- * reaches the fake, which checks the redirect, the S256 challenge and that a code is redeemed
- * once, and signs in the account each consent names. The fixture's own account is a Gmail
- * account read through lieer (`sync = "gmail"`).
- *
- * ONE SCENE, as a person who never read the code would walk it. Settings lists "A Google account"
- * first under Mail; its tap opens a conversation of its own, whose first line names each step;
- * the reply with an address makes the secretary file the Connect card; its tap writes the
- * account; on Settings, the box asks for its Google Cloud client once, whose card takes the
- * downloaded file in its write-only field; then for the account's sign-in, whose button goes to Google through the box;
- * the fake consents and sends the browser back to the box's callback, which keeps the grant, reads
- * the account's calendars at once and lands on the Inbox; Settings then says the account synced.
- * The CDP log shows the client's secret only in the tap that carried it, and the grant in no answer.
- *
- * Then the lieer account, from a calendar card that lacks its grant (`connectonetap`): one tap on the
- * card's button goes to the fake's consent for its calendars and back to the card, which the
- * callback performed again: the event written, a grant for the calendars alone kept, and the
- * account's sync as it was. Then its move from Settings: the same tap and reply change nothing
- * until its sign-in with Google is kept and has read its mail through the fake's Gmail profile;
- * its Settings line reads as before, lieer's, with the sign-in card on it. Then its sync moves,
- * with no second mail account and no second client card.
+ * Connecting a Google account from Settings against `suzatary-dev fake-google`, which checks the redirect, the S256
+ * challenge and that a code is redeemed once: the box asks once for its client, and the sign-in goes to Google through
+ * the box and keeps the grant, with the client's secret in the tap alone and the grant in no answer. A lieer account's
+ * calendar card then connects its calendars in one tap, and its move from Settings changes nothing until its grant is
+ * kept and has read its mail.
  */
 
 import assert from "node:assert/strict";
@@ -57,16 +37,10 @@ const client = (redirect: string): string =>
 const stored = (): string => (existsSync(STORE) ? readFileSync(STORE, "utf8") : "");
 const instance = (): string => readFileSync(INSTANCE, "utf8");
 
-/** The selector of a waiting card of `kind` the box filed, as Settings draws it on its line. */
 const cardOf = (kind: string): string => `.settingsbody .proposal.proposal-act-${kind}[data-conversation="setup"]:not(.proposal-acted)`;
 
-/** The account's line on Settings. */
 const lineOf = (account: string): string => `.settingsline[data-line="account:${account}"]`;
 
-/**
- * Settings' Google offer, tapped, and the conversation of its own it opens, answered with `account`; its Connect card
- * tapped there, and Settings opened again, where the box's next cards stand on their lines.
- */
 async function begin(account: string, client: "none" | "kept"): Promise<void> {
   await app.page.navigate(`${GOOGLE}/#/settings`);
   const google = `.settingsoffers[data-group="mail"] .settingsoffer-google`;
@@ -98,7 +72,6 @@ async function begin(account: string, client: "none" | "kept"): Promise<void> {
   await app.page.navigate(`${GOOGLE}/#/settings`);
 }
 
-/** The account's sign-in card tapped and followed to the fake Google and back, which keeps its grant; the card says so. */
 async function signIn(account: string): Promise<void> {
   const signIn = cardOf("google_sign_in");
   await app.page.waitFor(`document.querySelector('${signIn} .act-sign_in') !== null`, { timeout: 20000 });
@@ -112,10 +85,8 @@ async function signIn(account: string): Promise<void> {
   assert.ok(href.startsWith(`${GOOGLE}/api/oauth/google/consent/`), `the button is the box's own path: ${href}`);
   assert.ok(FAKE !== "" && !href.startsWith(FAKE), "the page never holds Google's own link");
 
-  // The fake consents at once and sends the browser back to the box's callback, which keeps the grant, reads the
-  // calendars and lands on the Inbox. Only the box's two Google routes are captured: the Inbox it lands on opens its
-  // event streams under /api/, and a stream never ends for the capture to stop. The page leaving is already at the
-  // Inbox, complete, so the wait asks for a document without its mark.
+  // Only the box's Google routes are captured, since the Inbox the callback lands on opens event streams that never end;
+  // the page leaving is already at the Inbox, complete, so the wait asks for a document without its mark.
   const back = await app.page.captureNetwork(["/api/oauth/google/"]);
   await app.page.evaluate(`(() => { window.__e2eLeaving = true; location.href = ${JSON.stringify(href)}; return true; })()`);
   await app.page.waitFor(
@@ -129,7 +100,6 @@ async function signIn(account: string): Promise<void> {
   assert.ok(row?.outcome.includes(`signed ${account} in with Google`), row?.outcome);
 }
 
-/** Settings' line for `account`, once it says the account is signed in with Google and its calendars synced. */
 async function healthy(account: string): Promise<void> {
   await app.page.navigate(`${GOOGLE}/#/settings`);
   const line = lineOf(account);
@@ -150,7 +120,7 @@ app.scene("a Google account connects from Settings in one walk, and a calendar c
   await begin(FRESH, "none");
   assert.match(instance(), /email = "ada@example\.test"[^[]*sync = "google"/, "the tap wrote the account");
 
-  // The box's Google Cloud client, asked for once, on Settings: its words are the steps in Google's console.
+  // The box's Google Cloud client is asked for once, its words the steps in Google's console.
   const clientCard = cardOf("google_client");
   await app.page.waitFor(`document.querySelector('${clientCard} .proposalsecretfield input') !== null`, { timeout: 20000 });
   const said = await app.page.evaluate<string>(`document.querySelector('${clientCard}').textContent`);
@@ -174,10 +144,7 @@ app.scene("a Google account connects from Settings in one walk, and a calendar c
   assert.ok(stored().includes(`GOOGLE_GRANT_ADA_AT_EXAMPLE_TEST=mail,calendar ${REFRESH}`), "the grant is kept under the account's name, with the parts Google granted");
   await healthy(FRESH);
 
-  // The lieer account, from a calendar card that lacks its grant: one tap on the card's button and Google's Allow
-  // (the fake consents at once). The box keeps a grant for the calendars alone, writes the event under the button's
-  // tap, and lands back on the card, which says it was added. No conversation opens, no address is typed, the client
-  // is not asked for again, and the account's mail stays lieer's.
+  // The lieer account, from a calendar card that lacks its grant: one tap keeps a grant for the calendars alone.
   const accounts = (): number => instance().split("[[mail.accounts]]").length - 1;
   const before = accounts();
   await app.page.navigate(`${GOOGLE}/#/secretary/default`);
@@ -215,8 +182,7 @@ app.scene("a Google account connects from Settings in one walk, and a calendar c
   assert.match(stored(), /GOOGLE_GRANT_HER_AT_EXAMPLE_INVALID=calendar /, "a grant for the calendars alone");
   assert.match(instance(), /email = "her@example\.invalid"[^[]*sync = "gmail"/, "a calendar fix leaves its sync as it was");
 
-  // The lieer account: the same walk, which moves it only once its grant is kept and has read its mail. Until then its
-  // Settings line reads as before, lieer's, with the sign-in card on it; the client is not asked for again.
+  // The lieer account's move from Settings changes nothing until its grant is kept and has read its mail.
   const lieer = lineOf(LIEER);
   const lineSays = `[...document.querySelectorAll('${lieer} .settingsmeta, ${lieer} .settingshealth')].map((p) => p.textContent).join(" | ")`;
   await app.page.navigate(`${GOOGLE}/#/settings`);

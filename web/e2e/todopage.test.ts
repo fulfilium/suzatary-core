@@ -1,10 +1,7 @@
 /**
- * A todo's page on a phone: nothing on it is wider than the screen.
- *
- * The history shows each `Authored` record's fields as the chain printed them
- * — a spec is a constructor literal hundreds of characters long, with no
- * space to break at — and it is evidence, so it stays. What it may not do is
- * widen the page: a long value wraps, a literal scrolls in its own box.
+ * A todo's page on a phone is no wider than the screen: the history shows each `Authored` record's fields as the chain
+ * printed them, a spec being a literal hundreds of characters long with no space to break at, so a long value wraps and
+ * a literal scrolls in its own box.
  */
 
 import assert from "node:assert/strict";
@@ -24,7 +21,6 @@ async function openPage(): Promise<void> {
   );
 }
 
-/** The page with its history opened, as a person opens it. */
 async function openHistory(): Promise<void> {
   await openPage();
   if (!(await app.page.evaluate<boolean>(`document.querySelector(".todoview .history").open`))) await app.page.click(".todoview .history > summary");

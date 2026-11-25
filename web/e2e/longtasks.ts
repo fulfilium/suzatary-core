@@ -1,6 +1,7 @@
 /**
  * The page's long tasks and its painter's steps, as the bigstore scene and the openprof bench wait on them: a phase is
- * over once what it waits for is drawn and the page has run no long task and no painter's step for `QUIET_MS`.
+ * over once what it waits for is drawn and the page has run no long task and no painter's step for `QUIET_MS`, so a
+ * later slice or placing is counted in the phase it belongs to.
  */
 
 import marks from "../src/chat/marks";

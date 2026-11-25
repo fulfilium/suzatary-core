@@ -1,9 +1,8 @@
 /**
- * THE START, MEASURED: a first visit (no worker, no HTTP cache) and a start under the worker, each at CPU throttling 4
- * over DevTools' Fast 4G, several runs, the median. Each run says when the first API request left, when app.js had
- * arrived, when the app said it started and when the list drew its first row, all from the navigation's start; the
- * numbers go to `$SUZATARY_BOOTBENCH` when it is set, and the scene's assertions are only that every start drew. No
- * gate runs it: `scripts/web-e2e.sh bootbench` does, by name.
+ * Measures a first visit (no worker, no HTTP cache) and a start under the worker, at CPU throttling 4 over DevTools'
+ * Fast 4G, the median of several runs: the first API request, app.js's arrival, the app's start and the list's first
+ * row, from the navigation's start. Its only assertion is that every start drew, and no gate runs it:
+ * `scripts/web-e2e.sh bootbench` does, by name.
  */
 
 import assert from "node:assert/strict";

@@ -1,29 +1,10 @@
 /**
- * A SECRET, ASKED FOR IN THE INBOX: a card whose act is `kind: "secret"` — the standing proposal
- * `app/cli/tests/support/fixture.rs::a_secret_ask` seeds directly through the
- * real conversation store rather than driving the scripted model — over
- * the write server's own isolated `secretspec` store (`scripts/web-e2e.sh`
- * gives each `--settings` server one).
- *
- * It asks for `SECRET_ASK_KEY`, the coding routine's token, which the write
- * server's `[coding]` declares and its Settings line reads, because the whole
- * point of this scene is that the secretary's card and the box's own card on
- * the Settings line are the SAME tap. Not the model's credential: only its
- * sign-in card asks for that, never a Secret card. The key MAY already resolve when this scene starts, and the
- * assertions below never depend on it starting unset: `overview.test.ts`
- * checks the fresh-start transition, on the calendar's link.
- *
- * ONE SCENE: the card shows the sentence and a masked field, Store over an
- * empty field or spaces alone sends nothing, and tapping it does what any proposal's
- * tap does in the Inbox (`inbox.test.ts`'s own "tapping a proposal … drops
- * the count" scene) — SETTLES THE DECISION, so the card leaves the Inbox
- * entirely rather than sitting there re-drawn as `Acted`. The rendering rule this
- * card obeys once answered — "stored", and no field — is checked instead on
- * the CONVERSATION page, which draws every proposal whatever its state
- * (`proposal.ts`'s own header: "ONE implementation, mounted in two places").
- * The Settings page then lists the same name as resolving, and the captured
- * network (`cdp.ts`'s `captureNetwork`) shows the value in exactly ONE
- * request body — the tap — and in no response body anywhere in the scene.
+ * A secret asked for in the Inbox: the card the fixture's `a_secret_ask` seeds asks for the coding routine's token over
+ * the write server's isolated `secretspec` store, because the scene proves the secretary's card and the box's card on
+ * the Settings line are the same tap. The card names the key in words over a masked field, Store over an empty field
+ * sends nothing, and the tap settles the decision with the value in exactly one request and no response; the key may
+ * already resolve when the scene starts (`overview.test.ts` checks the fresh start). The model's credential is asked
+ * for only by its sign-in card, never by a Secret card.
  */
 
 import assert from "node:assert/strict";
@@ -32,15 +13,12 @@ import { WRITE_BASE, suite } from "./harness";
 
 const app = await suite("tapsecret");
 
-/** The name the card asks for — named once by the shell as `E2E_SETTINGS_KEY`, read here rather
- * than duplicated. */
+/** Named once, by the shell, as `E2E_SETTINGS_KEY`. */
 const SETTINGS_KEY = process.env["E2E_SETTINGS_KEY"] ?? "SUZATARY_ROUTINE_TOKEN";
 /** The template's words for it, which the card says instead of the name. */
 const SETTINGS_LABEL = "the coding routine's token";
 
-/** A fixture value — never a real one, and never the literal another scene
- * types, so a screenshot or a log line naming one is never mistaken for the
- * other. */
+/** Never a real value, nor the literal another scene types, so a log line naming one is never taken for the other. */
 const FIXTURE_VALUE = "fixture-secretask-value";
 
 const CARD = '.inboxpage .proposal.proposal-act-secret[data-conversation="secretask"]';
@@ -54,8 +32,6 @@ async function openInbox(): Promise<void> {
 app.scene("the Inbox asks for a declared secret, and Store performs the same tap the box's card does", async () => {
   await openInbox();
 
-  // THE HEAD NAMES THE KEY IN WORDS ("Store the coding routine's token"), and so does the field's label; the stored name is
-  // nowhere on the card.
   assert.match(
     await app.page.evaluate<string>(`document.querySelector('${CARD} .proposalact').textContent`),
     new RegExp(SETTINGS_LABEL),
@@ -68,9 +44,7 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
   );
 
   const field = `${CARD} .proposalsecretfield input`;
-  // A TEXT FIELD THE STYLESHEET MASKS, never `type=password`, which a password
-  // manager takes for a sign-in and offers to keep; nothing fills, corrects or
-  // spell-checks it.
+  // A text field the stylesheet masks, never `type=password`, which a password manager takes for a sign-in and keeps.
   assert.deepEqual(
     await app.page.evaluate<string[]>(`(() => {
       const f = document.querySelector('${field}');
@@ -85,18 +59,14 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
   );
   assert.equal(await app.page.evaluate<string>(`document.querySelector('${field}').placeholder`), "Paste it here");
 
-  // NOTHING TYPED YET: ONE BUTTON, with no confirm step behind it.
   assert.equal(
     await app.page.evaluate<number>(`document.querySelectorAll('${CARD} .proposalsecretfield button').length`),
     1,
     "one button, not a two-step confirm",
   );
 
-  // ⚠️ THE CAPTURE STARTS BEFORE ANY TAP, so the request that carries the
-  // value is provably the one this scene drives, and the count of taps below
-  // is what proves that Store over an empty field, or over spaces alone, sent
-  // nothing: the browser holds the form back while the field holds no
-  // character other than a space.
+  // ⚠️ The capture starts before any tap, so its count proves Store over an empty field or spaces alone sent nothing:
+  // the browser holds the form back while the field holds no character other than a space.
   const stopCapture = await app.page.captureNetwork(["/tap"]);
   await app.page.click(`${CARD} .act-store`);
   await app.page.type(field, "   ");
@@ -105,9 +75,7 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
 
   await app.page.type(field, FIXTURE_VALUE);
   await app.page.click(`${CARD} .act-store`);
-  // SETTLING THE DECISION DROPS IT FROM THE INBOX — the same rule a
-  // changeset's tap obeys there (`inbox.test.ts`), never a `proposal-acted`
-  // card left sitting in a QUEUE OF OPEN DECISIONS.
+  // Settling the decision drops the card from the Inbox, which is a queue of open decisions.
   await app.page.waitFor(`document.querySelector('${CARD}') === null`, { timeout: 10000 });
 
   const traffic = await stopCapture();
@@ -127,10 +95,7 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
     );
   }
 
-  // THE CONVERSATION PAGE STILL DRAWS THE SAME CARD, ANSWERED: "stored",
-  // and no field left to type into again — `proposal.ts`'s one
-  // implementation, checked here rather than in the Inbox, which had
-  // already dropped the row above.
+  // The conversation page draws every proposal whatever its state, so the answered card is checked there.
   await app.page.navigate(`${WRITE_BASE}/#/secretary/secretask`);
   await app.page.waitFor(`document.querySelector('.proposal.proposal-acted') !== null`, {
     timeout: 15000,
@@ -146,8 +111,7 @@ app.scene("the Inbox asks for a declared secret, and Store performs the same tap
     "an acted secret card draws no field",
   );
 
-  // THE SETTINGS PAGE THEN LISTS THE SAME NAME AS SET — one route, one
-  // store, whichever surface asked for it (§3 rule 3).
+  // The Settings page then lists the same name as set: one route, one store, whichever surface asked.
   await app.page.navigate(`${WRITE_BASE}/#/settings`);
   await app.page.reload();
   await app.page.waitFor(

@@ -1,4 +1,3 @@
-// The address register's history: every place this tab has been, in order, and the pointer to the one it reads now.
 // Going somewhere writes past the pointer (what lay ahead is dropped); back and forward move the pointer and write
 // nothing, so the place read after a back is the place, and what was kept of it, before the going.
 

@@ -1,14 +1,9 @@
 /**
- * SETTINGS, DRAWN BY ITS RUST PROGRAM (docs/FRAMEWORK-PLAN-2026-11-02.md §6): the read-only fixture at phone width.
- *
- * - The first draw: a fresh document at `#/settings` until the first line of the overview stands in it, read from a
- *   mark an observer sets. The HTTP cache is warm after the first visit, as on a phone that has opened the app before;
- *   the first visit is reported apart, as the cold one.
- * - A keystroke: a browser whose key nobody trusted opens the pairing field and types into it; each keystroke's time
- *   is the input event's synchronous handling, and each `painter:step`'s bytes are what crossed back.
- *
- * Run alone: `SUZATARY_E2E_BROWSER_CPU=0.67 scripts/web-e2e.sh settingsbench`; `$SUZATARY_SETTINGSBENCH` names a file
- * for the numbers as JSON. Its only assertion is that the page drew.
+ * Measures Settings, drawn by its Rust program, on the read-only fixture at phone width: a fresh document's first draw
+ * until the overview's first line stands in it (the first visit cold, the rest over a warm HTTP cache), and each
+ * keystroke's synchronous handling in the pairing field with the bytes each `painter:step` sent back. Its only
+ * assertion is that the page drew, and no gate runs it: `SUZATARY_E2E_BROWSER_CPU=0.67 scripts/web-e2e.sh
+ * settingsbench` does, and `$SUZATARY_SETTINGSBENCH` names a file for the numbers.
  */
 
 import assert from "node:assert/strict";
@@ -24,9 +19,8 @@ const KEYS = 24;
 const LINES = `new MutationObserver((_, o) => { if (document.querySelector(".settingsline") !== null) { performance.mark("settings:lines"); o.disconnect(); } }).observe(document, { subtree: true, childList: true })`;
 const drawn = `(performance.getEntriesByName("settings:lines")[0]?.startTime ?? null)`;
 
-// Where the time went: when the program started (`page:draw` of `SettingsPage`: the module loaded, its chrome
-// painted), the module's load (`views:load`: the glue and the wasm fetched, compiled, instantiated and rehearsed) and the
-// first paint.
+// When the program started (`page:draw` of `SettingsPage`), the module's load (`views:load`: fetched, compiled,
+// instantiated and rehearsed) and the first paint.
 type Parts = { readonly frame: number; readonly load: number; readonly paint: number };
 const parts = `(() => {
   const at = (name, f) => performance.getEntriesByName(name).find(f);

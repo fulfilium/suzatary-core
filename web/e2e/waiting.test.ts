@@ -1,11 +1,7 @@
 /**
- * WHAT A PERSON SEES WHILE THE APP WAITS
- * (`docs/AUDIT-EXPERIENCE-2026-10-13.md` X5, X8, X14, X17, X21).
- *
- * Each scene holds what the page waits for and watches what the page draws: a
- * placeholder and never a sentence, turns above the composer, one field above
- * the conversations, and a column that clips nothing. Every wait is on the
- * page's own drawing.
+ * What a person sees while the app waits: each scene holds what the page waits for and watches what it draws, a
+ * placeholder and never a sentence, turns above the composer, one field above the conversations, and a column that
+ * clips nothing. Every wait is on the page's own drawing.
  */
 
 import assert from "node:assert/strict";
@@ -44,7 +40,7 @@ async function freshConversation(): Promise<string> {
   );
 }
 
-/** Hold what the Mail page asks the box, open it, and wait for the placeholder to show; the answer lets the box through. */
+/** Holds the Mail page's asks until its placeholder shows; the function it returns lets them through. */
 async function mailWaiting(): Promise<() => Promise<void>> {
   const release = await app.page.holdRequests(["/api/mail/"]);
   await app.page.evaluate(`location.hash = "#/mail"`);

@@ -1,9 +1,8 @@
 /**
- * THE TYPST LIST, MEASURED (the draw as one memoised fold): the
- * modules' and the bundle's bytes on a first visit's wire, time to first view, the page's redraw after an Open intent,
- * and the draw's first draw, one-row change and Open intent over 53 and 250 rows, at no throttling and at CPU
- * throttling 4 and 6, the median of ten runs each, printed and written to `$SUZATARY_SHOTS/typst-measure.json`. The
- * one assertion is that the draw was measured. No gate runs it: `scripts/web-e2e.sh typstmeasure` does, by name.
+ * Measures the Typst list: the modules' and the bundle's bytes on a first visit's wire, the time to first view, the
+ * page's redraw after an Open intent, and the draw's first draw, one-row change and Open intent over 53 and 250 rows,
+ * at CPU throttling 1, 4 and 6, the median of ten runs, written to `$SUZATARY_SHOTS/typst-measure.json`. Its one
+ * assertion is that the draw was measured, and no gate runs it: `scripts/web-e2e.sh typstmeasure` does, by name.
  */
 
 import assert from "node:assert/strict";
@@ -77,9 +76,7 @@ app.scene("measured: bytes, first view, and the draw's first, one-row and open r
     }
     const redraws = (await app.page.evaluate<{ duration: number; detail: Detail }[]>(entries("typst:draw"))).slice(before);
 
-    // The draw over the owner's list's length and the spike's, on a drawer of its own: a first draw over titles typst
-    // has never seen, a one-row change, an Open intent on a row never opened, and one alternating between two rows
-    // as the page's does, which after the first two finds the whole page in the cache.
+    // On a drawer of its own; an Open alternating between two rows, as the page's does, finds the page cached after two.
     const shapes: Record<string, unknown> = {};
     for (const n of SHAPES) {
       const firsts: Redraw[] = [];

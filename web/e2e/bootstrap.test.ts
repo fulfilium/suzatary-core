@@ -1,16 +1,8 @@
 /**
- * THE MODEL BOOTSTRAP, END TO END (the guided setup's stage 0): connecting the first model is
- * the one step no model guides, so the box asks for it itself.
- *
- * `scripts/web-e2e.sh` starts this file's server with `--model unanswered`: the register says
- * its model's last call failed, so the box files the "Connect a model" card at start, and its
- * `PATH` holds a fake `claude` that draws what `claude setup-token` draws. No real sign-in is
- * ever reached.
- *
- * ONE SCENE: Settings says no model answers and draws the card; Connect starts the sign-in,
- * whose link (the box's own reading of the CLI) is the code card's button; the code typed into
- * its field keeps the subscription's token, and the CDP log shows the code in the tap's request
- * alone and the token in no request or response.
+ * Connecting the first model is the one step no model guides, so the box files the "Connect a model" card itself; the
+ * server runs with `--model unanswered` and a fake `claude` on its `PATH`, so no real sign-in is ever reached. The
+ * scene proves the code typed into the code card travels in the tap's request alone, and the token in no request or
+ * response.
  */
 
 import assert from "node:assert/strict";

@@ -1,9 +1,8 @@
-// The page holds no replica of a chain: the core's worker owns every one. The law reads esbuild's metafile of the page's
+// The page holds no replica of a chain: the core's worker owns every one. The laws read esbuild's metafile of the page's
 // bundle, built as `scripts/build-web.sh` builds it from `main.ts` with every chunk it splits off, and of the worker's.
-// What it proves: no module the page loads is the worker's chains (`chainsync.ts`, which holds the earlier builds' row
-// decoder), its engines or a page-side replica, and the worker's bundle holds them; and no module the page loads but
-// `core.ts`, which declares them, constructs the core's `Chain` or `Chains` or calls a function that reads one. The page
-// does load the core, for the curves it draws, so the second half is what says it builds no chain of its own.
+// The first law keeps the worker's chains and engines out of the page's bundle; the second keeps every module but
+// `core.ts` from constructing a `Chain` or `Chains` or calling a function that reads one, which matters because the page
+// does load the core, for the curves it draws.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"

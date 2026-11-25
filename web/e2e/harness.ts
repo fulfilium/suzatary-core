@@ -1,26 +1,7 @@
 /**
- * What every browser test needs before it can assert anything: a browser, the
- * fixture server's address, and a screenshot when something goes wrong.
- *
- * `scripts/web-e2e.sh` starts THREE fixture servers and names them here.
- * `E2E_BASE` is gated to a login this deployment knows as a VIEWER and not an
- * actor, so its chain cannot change however hard a test tries — every
- * read-only file shares it, and the refusal file drives it on purpose.
- * `E2E_BASE_PROPOSED` is that same viewer over a deployment with a triage card
- * waiting, because an empty Inbox and a full one are two claims and one page.
- * `E2E_BASE_WRITE` is gated to the writer login and has a chain of its own,
- * so a completed todo in one file is never a missing card in another.
- *
- * ONE BROWSER PER FILE. node's test runner gives each file its own process, so
- * a `launch()` at the top of a file is one Chromium for that file's tests, torn
- * down by `after`. It also means each file has its own profile and therefore
- * its own `localStorage`, which the local-first tests depend on.
- *
- * A FAILURE LEAVES A PICTURE. Every scene is wrapped: an assertion that throws
- * gets the page captured to a file, and the path is appended to the message —
- * so a red CI log says where to look rather than "expected true to be false".
- * The document's HTML lands beside it (`.html`): a picture shows what is
- * visible, and a query also answers from what is not.
+ * What every browser test needs: a browser, the fixture servers' addresses, and a screenshot when a scene fails.
+ * One browser per file: node's test runner gives each file its own process, so each file has its own profile and its
+ * own `localStorage`, which the local-first tests depend on.
  */
 
 import assert from "node:assert/strict";
@@ -52,35 +33,24 @@ function required(name: string): string {
   return value;
 }
 
-/** The read side. Gated to a viewer who is not an actor, so the chain behind
- * it is immutable by construction rather than by convention. */
+/** The read side, gated to a viewer who is not an actor, so its chain cannot change. */
 export const BASE = required("E2E_BASE");
 
-/**
- * The same viewer login, over a deployment whose triage run left a CARD
- * waiting (§10.6).
- *
- * `BASE` deliberately has nothing waiting, because the EMPTY Inbox is a claim
- * too — and one page cannot be both. So the read-only Inbox is two servers
- * rather than one server whose state depends on which file ran first.
- */
+/** The same viewer over a deployment with a triage card waiting (§10.6), since `BASE`'s empty Inbox is a claim too. */
 export const PROPOSED_BASE = required("E2E_BASE_PROPOSED");
 
-/** The write side: its own chain, its own tip, safe to move. */
+/** The write side: its own chain, so a write in one file is never a missing card in another. */
 export const WRITE_BASE = required("E2E_BASE_WRITE");
 
 /**
- * The headers a write from a page carries, as the app's own door sends them: the CSRF half and
- * this build's write contract, as a JavaScript object literal for a page expression
- * (`headers: ${WRITE_HEADERS}`). A spec spells no write header of its own (`web-static.sh`), so
- * a contract the box raises reaches every scene at once.
+ * The headers a write from a page carries, as the app's own door sends them, as a JavaScript object literal; a spec
+ * spells no write header of its own (`web-static.sh`), so a contract the box raises reaches every scene at once.
  */
 export const WRITE_HEADERS = JSON.stringify(http.actRequest(null).headers);
 
 const SHOTS = process.env["SUZATARY_E2E_SHOTS"] ?? join(tmpdir(), "suzatary-e2e-shots");
 
-/** Phone. The width the app was designed at (CLAUDE.md: it is a todo app on a
- * phone), and under the 62rem breakpoint, so `#/todo/<id>` is a pushed screen. */
+/** Phone, under the 62rem breakpoint, so `#/todo/<id>` is a pushed screen. */
 export const PHONE: readonly [number, number] = [390, 844];
 
 /** Desktop, above 62rem: the same hash is the list with the detail pane. */
@@ -116,25 +86,9 @@ export interface Suite {
 const slug = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 /**
- * ⚠️ THE SERVER IS UP BEFORE IT IS SERVING (CI, 2026-09-10: the first scene
- * waited 15 s for a card and the list was still empty).
- *
- * `scripts/web-e2e.sh` already waits for warm MARKUP before it starts node, and
- * that is the right gate for the typst cache. It is not the whole of "ready":
- * `node --test` then launches a Chromium per file, and on a shared runner the
- * first of those can reach the app before the axum process has answered
- * anything at all — so the page mounts, asks for a fold, and the scene's
- * budget is spent on the server's cold start rather than on the app.
- *
- * So each file asks the box, from NODE, before it asks the browser: the tip
- * first (the cheapest route there is — it proves the process is listening and
- * the gate admits this peer) and then the FOLD, which is the answer the first
- * scene is actually waiting to see rendered. Once per base per file, memoised,
- * because the second scene's server is the first scene's.
- *
- * It is not a substitute for the page's own waits. A fold this side fetched is
- * evidence the box can answer, never evidence the app drew it — that claim is
- * the scene's, and it is still a `waitFor` over the DOM.
+ * ⚠️ The server is up before it is serving: on a shared runner a page can reach the app before axum has answered
+ * anything, so each file asks the tip and then the fold from node first, once per base. A fold fetched here is evidence
+ * the box can answer, never that the app drew it.
  */
 const answering = new Map<string, Promise<void>>();
 
@@ -144,8 +98,7 @@ async function reachable(url: string, until: number): Promise<void> {
     try {
       const response = await fetch(url);
       if (response.ok) {
-        // Drain it: an unread body holds the socket, and the point of asking
-        // was that the box can produce the whole answer.
+        // An unread body holds the socket.
         await response.text();
         return;
       }
@@ -171,14 +124,12 @@ function serving(base: string): Promise<void> {
 }
 
 /**
- * THIS BROWSER'S DEVICE KEY, TRUSTED AT THE BOX'S TERMINAL (SPEC law 42): the writer's server
- * signs, so a page that seals an act must hold a key its chain trusts. The key is minted in the
- * page the way `web/src/prodrome/signer.ts` mints it (non-extractable, the same database), and
- * `suzatary device trust` registers its public half, as the owner would for a first device.
+ * This browser's device key, trusted at the box's terminal (SPEC law 42): minted in the page as
+ * `web/src/prodrome/signer.ts` mints it (non-extractable, the same database), its public half registered by
+ * `suzatary device trust`.
  */
 export async function trustThisDevice(page: Page, base: string, instance?: string): Promise<string> {
-  // A file of the origin, not the app: the key is trusted before the app's first pull, so the
-  // replica it seals onto already says so.
+  // A file of the origin, not the app: the key is trusted before the app's first pull.
   await page.navigate(`${base}/manifest.webmanifest`);
   const key = await page.evaluate<string>(`(async () => {
     const request = (r) => new Promise((ok, no) => { r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
@@ -199,10 +150,8 @@ export async function trustThisDevice(page: Page, base: string, instance?: strin
 }
 
 /**
- * A write as the app sends it, for a page's own `evaluate`: the request stamped now, named by its
- * content and signed by this browser's device key, as `web/src/wire/http.ts` does, so a scene that asks a
- * route directly passes the box's door the way a tap does. An expression of a function of the
- * path and the body's text, answering the `fetch`'s promise.
+ * A write as the app sends it (`web/src/wire/http.ts`), stamped, named by its content and signed by this browser's
+ * device key: an expression of a function of the path and the body's text, answering the `fetch`'s promise.
  */
 export const SIGNED_POST = `(async (path, body) => {
   const request = (r) => new Promise((ok, no) => { r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
@@ -227,9 +176,8 @@ export const SIGNED_POST = `(async (path, body) => {
 })`;
 
 /**
- * A NEW CONVERSATION OPENED AS A TAB OPENS ONE, in the page: the app's own core module pulls the lines' skeleton, seals
- * an opening titled `title` as this device's actor, and the device's key signs it; the line goes to the lines with its
- * key beside it. No route opens a conversation. The expression answers the new conversation's id.
+ * A new conversation opened as a tab opens one, through the app's own core module and this device's key, since no
+ * route opens a conversation; the expression answers the new conversation's id.
  */
 export const opened = (title: string): string => `(async (title) => {
   // The build's files sit beside its app, which the page preloaded.
@@ -274,9 +222,8 @@ export const TOPIC_ROUNDS: readonly (readonly [string, readonly string[]])[] = [
 ];
 
 /**
- * THE TOPIC ROUNDS ON THE WRITER'S DEPLOYMENT, asked once: a conversation of their own, each question answered and
- * given its topics before the next is asked, so the bar reads garden 2, invoices 1, trip 1. Another file or scene
- * that ran first leaves them there, and nothing is asked again.
+ * The topic rounds on the writer's deployment, asked once, each answered and tagged before the next, so the bar reads
+ * garden 2, invoices 1, trip 1.
  */
 export async function topicRounds(page: Page): Promise<void> {
   await page.navigate(`${WRITE_BASE}/#/secretary/default`);
@@ -306,12 +253,11 @@ export async function topicRounds(page: Page): Promise<void> {
 /** How long node gives one scene (`scripts/web-e2e.sh` passes the same default to `--test-timeout`). */
 export const SCENE_MS = Number(process.env["SUZATARY_E2E_SCENE_MS"] ?? "300000");
 
-/** The longest one step of a scene may take, so a step that does not end fails naming itself before the scene's own
- * timeout ends the scene with no word of what it waited for. */
+/** The longest one step of a scene may take, so a stuck step fails naming itself before the scene's timeout does. */
 export const STEP_MS = SCENE_MS / 4;
 
-/** A verb of a deployment (the writer's, by default) run at the box's terminal, as the owner would run it. It blocks
- * the suite's process while it runs, so no timer of the scene's fires: it is killed after `STEP_MS` instead. */
+/** A verb run at the box's terminal (the writer's deployment by default); it blocks the process, so no scene timer
+ * fires and it is killed after `STEP_MS` instead. */
 export function atTheTerminal(args: readonly string[], instance = process.env["E2E_TRIAGE_INSTANCE"], env: Readonly<Record<string, string>> = {}): string {
   const bin = process.env["E2E_TRIAGE_BIN"];
   if (bin === undefined || instance === undefined) {
@@ -327,9 +273,8 @@ export function atTheTerminal(args: readonly string[], instance = process.env["E
   }
 }
 
-/** `text` asked in conversation `id` at the box's terminal (`suzatary secretary ask`), as another writer than this tab:
- * the operator's line, sealed and signed by the root key. It runs beside the scene, so a page goes on drawing while the
- * round runs; it settles once the round has ended. */
+/** `text` asked in conversation `id` at the box's terminal, as a writer other than this tab; it runs beside the scene
+ * and settles once the round has ended. */
 export function askAtTheTerminal(id: string, text: string, instance = process.env["E2E_TRIAGE_INSTANCE"]): Promise<string> {
   const bin = process.env["E2E_TRIAGE_BIN"];
   if (bin === undefined || instance === undefined) {
@@ -342,10 +287,7 @@ export function askAtTheTerminal(id: string, text: string, instance = process.en
   );
 }
 
-/**
- * `suzatary device pair` at the writer's box, run with that server's own state directory, where the server reads the
- * code it keeps: the code as the terminal printed it.
- */
+/** `suzatary device pair` at the writer's box, with that server's own state directory, where it reads the code. */
 export function pairAtTheBox(): string {
   const state = process.env["E2E_WRITE_STATE"];
   if (state === undefined) throw new Error("E2E_WRITE_STATE is unset — scripts/web-e2e.sh sets it");
@@ -355,8 +297,8 @@ export function pairAtTheBox(): string {
   return code;
 }
 
-/** What a file's scenes do to the servers: `Writes` trusts this browser's key on the writer's server first, which a
- * file that only reads (the live smoke, against a server whose writer is nobody) does not ask for. */
+/** What a file's scenes do to the servers: `Writes` trusts this browser's key on the writer's server first, which `Reads`
+ * skips for a file against a server whose writer is nobody (the live smoke), where trusting would fail. */
 export type Reach = "Reads" | "Writes"
 
 /** Two frames and a task: the tiles' host arranges a resized room in the frame after it hears it (`shell/tiles.ts`). */
@@ -364,11 +306,7 @@ export const SETTLED = `new Promise((done) => requestAnimationFrame(() => reques
 
 export async function suite(prefix: string, size: readonly [number, number] = PHONE, reach: Reach = "Writes"): Promise<Suite> {
   mkdirSync(SHOTS, { recursive: true });
-  // EVERY SERVER, BEFORE THE BROWSER. `open` waits too, but half the files
-  // navigate straight to a hash without it (the chain, the gallery),
-  // and those were exactly as exposed to a cold start. All of them are running
-  // by the time node begins, so asking costs one request each and closes the
-  // question for every scene in the file.
+  // Every server before the browser: half the files navigate straight to a hash without `open`.
   await Promise.all([serving(BASE), serving(PROPOSED_BASE), serving(WRITE_BASE)]);
   const browser: Browser = await launch();
   let failed = 0;
@@ -379,12 +317,10 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
   const page = browser.page;
   await page.viewport(size[0], size[1]);
   let journal: Promise<Journal> | null = null;
-  // Once per browser, before any scene: its profile, and so its key, lives as long as the suite,
-  // and every write the writer's box performs asks for a key it trusts.
+  // Once per browser: its profile, and so its key, lives as long as the suite.
   let trusted: Promise<string> | null = reach === "Writes" ? trustThisDevice(page, WRITE_BASE) : null;
   await trusted;
-  // Every scene runs under the box's Content-Security-Policy and must leave it unviolated: what a
-  // page is refused is kept per tab and origin, and read after the scene.
+  // Every scene must leave the box's Content-Security-Policy unviolated; refusals are kept per tab and read after it.
   await page.beforeEveryDocument(
     `addEventListener("securitypolicyviolation", (e) => { try { const k = "e2e.csp"; sessionStorage.setItem(k, JSON.stringify([...JSON.parse(sessionStorage.getItem(k) ?? "[]"), e.effectiveDirective + " " + e.blockedURI + " " + (e.sample ?? "")])) } catch {} })`,
   );
@@ -415,8 +351,7 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
             writeFileSync(path.replace(/\.png$/, ".html"), html);
             await page.screenshot(path);
           } catch {
-            // A browser that has already died cannot photograph itself; the
-            // original failure is the one worth reporting.
+            // A browser that has died cannot photograph itself; the original failure is the one to report.
           }
           try {
             const asked = probe === undefined ? null : await page.evaluate<unknown>(probe);
@@ -430,8 +365,7 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
               [`probe ${JSON.stringify(asked, null, 2)}`, `fetches [start ms, took ms, path] ${JSON.stringify(fetched)}`, ...lines].join("\n"),
             );
           } catch {
-            // A browser that has already died cannot photograph itself; the
-            // original failure is the one worth reporting.
+            // A browser that has died cannot photograph itself; the original failure is the one to report.
           }
           const said = error instanceof Error ? error.message : String(error);
           throw new Error(`${said}\n  screenshot: ${path}`);
@@ -444,8 +378,7 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
       await page.navigate(`${base}/${hash}`);
       // `SUZATARY_E2E_TRACE_REQUESTS=1` logs each signed request's stages to the console, which a failure's trace keeps.
       if (process.env["SUZATARY_E2E_TRACE_REQUESTS"] === "1") await page.evaluate(`localStorage.setItem("suzatary.debug.requests", "1")`);
-      // Lines, priced by the core in the tab: a fresh profile draws the fold's
-      // own rows first and the composed groups once the replica has pulled.
+      // A fresh profile draws the fold's own rows first and the composed groups once the replica has pulled.
       await page.waitFor(
         `document.querySelectorAll(".tree .row").length > 0 && (document.querySelector(".tree")?.getAttribute("data-at") ?? "") !== ""`,
       );
@@ -459,8 +392,7 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
   };
 }
 
-/** A todo added through the list's add sheet, its id once the box holds it open. The sheet is a phone's; at a desk the
- * form stands under the list, and its handle is the same button. */
+/** A todo added through the list's add sheet, its id once the box holds it open. */
 export async function addTodo(page: Page, body: string, category: string): Promise<string> {
   await page.click(".addsheet .pickerhandle");
   await page.waitFor(`document.querySelector(".addsheet.open") !== null`);
@@ -486,8 +418,7 @@ export async function shownTodos(page: Page): Promise<string[]> {
 /** A todo's line in the list, as a selector. */
 export const row = (todo: string): string => `.tree .row[data-todo="${todo}"]`;
 
-/** Unfold what hides a todo's line, the way a person looks for it: a Fine fold
- * nobody touched is closed, and a list that moved can put a line behind one. */
+/** Unfold what hides a todo's line: a Fine fold nobody touched is closed. */
 export async function reveal(page: Page, todo: string): Promise<void> {
   for (let tries = 0; tries < 6; tries += 1) {
     if (await page.evaluate<boolean>(`document.querySelector('${row(todo)}') !== null`)) return;
@@ -498,17 +429,15 @@ export async function reveal(page: Page, todo: string): Promise<void> {
   await page.waitFor(`document.querySelector('${row(todo)}') !== null`, { timeout: 4000 });
 }
 
-/** Lets the scripted model's running "take your time" round answer: it waits for this file or a Stop, never for
- * a time (`fixture.rs`, `Line.release`), so a scene sees the round running for as long as it looks. A scene that
- * stops the round writes none, since nothing would take it. */
+/** Lets the scripted model's running "take your time" round answer: it waits for this file or a Stop, never for a
+ * time (`fixture.rs`, `Line.release`). */
 export function releaseModel(): void {
   const file = process.env["E2E_MODEL_RELEASE"];
   if (file === undefined || file === "") throw new Error("E2E_MODEL_RELEASE is unset — scripts/web-e2e.sh sets it");
   writeFileSync(file, "");
 }
 
-/** Every todo the list holds, in its order, with every fold opened the way a person opens them: which folds start
- * open follows the groups' worth, which moves with the clock, so the lines in view are no list of what is held. */
+/** Every todo the list holds, in its order, with every fold opened: which folds start open moves with the clock. */
 export async function everyTodo(page: Page): Promise<string[]> {
   await page.waitFor(
     `(() => { const closed = [...document.querySelectorAll('.tree .grouphead[aria-expanded="false"], .tree .rowfold[aria-expanded="false"]')]; closed.forEach((b) => b.click()); return closed.length === 0 })()`,
@@ -537,8 +466,7 @@ export async function openInPlace(page: Page, todo: string): Promise<void> {
   await page.waitFor(open, { timeout: 8000 });
 }
 
-/** Mark a todo done from the list: open it in place, then its Done. The button
- * arrives with `GET /api/me`'s answer, not with the line. */
+/** Mark a todo done from the list; the Done button arrives with `GET /api/me`'s answer, not with the line. */
 export async function doneFromList(page: Page, todo: string): Promise<void> {
   await openInPlace(page, todo);
   await page.waitFor(`document.querySelector('.rowopen[data-todo="${todo}"] .act-done') !== null`, { timeout: 8000 });
@@ -552,21 +480,15 @@ export async function openTodo(page: Page, todo: string): Promise<void> {
   await page.waitFor(`window.location.hash === "#/todo/${todo}"`);
 }
 
-/**
- * `/api/fold`, fetched by the PAGE — so it goes through the same origin, the
- * same gate and the same peer the app's own reads do. A test that asked node
- * for it would be asking a different client a different question.
- */
+/** `/api/fold`, fetched by the page, so through the same gate and peer as the app's own reads. */
 export async function fold(page: Page): Promise<{ todo: string; state: string; value: Fulfillment | null }[]> {
   return page.evaluate(
     `fetch("/api/fold").then((response) => response.json()).then((body) => body.entries.map((entry) => ({ todo: entry.todo, state: entry.state, value: entry.value })))`,
   );
 }
 
-/**
- * WAIT UNTIL THIS BROWSER IS ACTUALLY A REPLICA of `chain`: the core's log of it holds a frame, which only a pull or an
- * act writes. Not "the database exists": the app's own open creates it whether or not anything was pulled.
- */
+/** Wait until the core's log of `chain` holds a frame, which only a pull or an act writes; the app's open creates the
+ * database whether or not anything was pulled. */
 export async function untilReplica(page: Page, chain = "life", timeout = 20000): Promise<void> {
   await page.waitFor(`${chainKept(chain)}.then((n) => n > 0)`, { timeout });
 }
@@ -587,17 +509,8 @@ export const chainKept = (chain: string): string => `indexedDB.databases().then(
   };
 }))`
 
-/**
- * SWITCH THE LIST, the way a reader does: open the More sheet and tap a chain.
- *
- * Through the UI rather than by writing `localStorage`, because what these
- * scenes are about is that the switch RE-ASKS everything — the fold, the
- * replica, the stream and `me` — and setting the value behind the app's back
- * would skip exactly the code under test.
- *
- * The picker names a chain as `said` in `web/src/app/chain.ts` does, and the pick it lights is
- * what says the switch landed.
- */
+/** Switch the list through the More sheet, never `localStorage`, since the switch re-asking everything is what is
+ * tested; the picker names a chain as `said` in `web/src/app/chain.ts` does. */
 export async function switchChain(page: Page, name: string): Promise<void> {
   const said = name === "life" ? "My todos" : name;
   await page.evaluate(
@@ -741,8 +654,7 @@ export const REPLICA_ROWS = `new Promise((ok, no) => {
 
 /**
  * What this file's scenes read beyond their imports, for the merge gate's key (`SUZATARY_E2E_READS`), written only when
- * every scene passed. A script `web/dist` does not hold is another build's (the shell scene deploys one), so it reads
- * every module.
+ * every scene passed; a script `web/dist` does not hold is another build's, so it reads every module.
  */
 function recordReads(fetched: ReadonlySet<string>): void {
   const dir = process.env["SUZATARY_E2E_READS"];

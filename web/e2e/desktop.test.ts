@@ -1,9 +1,7 @@
 /**
- * THE WIDE LAYOUT, AT DESKTOP SIZE: what the owner's browser at a desk sees, where the phone's tests do not look.
- *
- * More drops a sheet whose links a press reaches. The secretary's toggle keeps one place, open or closed, and a
- * hidden secretary stands in no tile. A list drawn alone scrolls the document; tiles drawn together each scroll themselves,
- * and the page under them fits the window.
+ * The wide layout at desktop size, where the phone's scenes do not look: More drops a sheet whose links a press
+ * reaches, the secretary's toggle keeps one place, and a hidden secretary stands in no tile. A list drawn alone scrolls
+ * the document; tiles drawn together each scroll themselves, and the page under them fits the window.
  */
 
 import assert from "node:assert/strict";
@@ -40,12 +38,7 @@ app.scene("More opens a sheet whose links are visible and take a press", async (
   assert.equal(await app.page.evaluate<string | null>(`${more}?.getAttribute("aria-expanded") ?? null`), "false", "the sheet closes on the place it opened");
 });
 
-/**
- * ONE GRID FOR EVERY PAGE (the 2026-10-13 audit, X4): the brand and the words stand in the same place on every page,
- * a todo beside the list is the wider of the two, and a secretary with nothing about the page in it stays hidden
- * behind its toggle until the person opens it. First in the file that touches the secretary, so the person has said
- * nothing yet.
- */
+// First in the file that touches the secretary, so the person has said nothing yet.
 app.scene("at 1440 px the header holds still across pages, the todo read is the widest column, and an unused secretary is hidden", async () => {
   await app.resize(WIDE);
   const brands: Box[] = [];
@@ -72,10 +65,7 @@ app.scene("at 1440 px the header holds still across pages, the todo read is the 
   await app.resize(DESKTOP);
 });
 
-/**
- * AT A MIDDLE WIDTH WITH THE SECRETARY OPEN the todo keeps its room: the secretary is the tile after it, and the list,
- * which no longer fits beside both, stands behind them under the Todos crumb; nothing is squeezed under its least.
- */
+// The list no longer fits beside the todo and the secretary, so it stands behind them rather than squeeze either.
 app.scene("at 1100 px with the secretary open, the todo stands beside it under the list's crumb, and hiding it brings the list back", async () => {
   await app.resize(MIDDLE);
   await app.page.navigate(`${BASE}/#/todo/${todos.flat.id}`);
@@ -110,8 +100,7 @@ app.scene("the secretary's doors keep their places, a hidden secretary stands in
   assert.deepEqual(await box("#view > .tile .hidesecretary"), hide, "and its Hide where it was");
   await app.page.click("#view > .tile .hidesecretary");
   await app.page.waitFor(`document.querySelector("#view .panelbody") === null`);
-  // A page about one thing: its door is the header's too, where it was, and the todo stands beside the secretary
-  // inside the window.
+  // A page about one thing: its door is the header's too, where it was.
   await app.page.evaluate(`location.hash = "#/todo/${todos.flat.id}"`);
   await app.page.waitFor(`document.querySelector("#view .todoview") !== null && !document.querySelector("#beside").hidden`);
   assert.deepEqual(await box("#beside"), door, "the door on a todo is where it is on the list");

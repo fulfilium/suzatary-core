@@ -1,16 +1,8 @@
 /**
- * A CONNECTION'S CARDS, END TO END (the guided setup's stage 4, scenes 4 and 6 of its §12).
- *
- * `scripts/web-e2e.sh` starts this file's server with `--settings --connected calendar`: the
- * fixture connected a calendar through the instance file's own editor, so the box asks for its
- * link as one of its own cards, and its removal stands as a card in the `connect` conversation,
- * as the setup agent will file it.
- *
- * THREE SCENES, in order. A link served from an origin the calendar may not reach is stored
- * nowhere: the CDP log shows it in the tap's request alone, the card the box files names only
- * the origin, and its Allow writes the origin into the instance file. Then Remove takes the
- * calendar's link out of the instance file, and the box's card asking for it leaves the Inbox.
- * Last, the secretary, asked to add a Family calendar, files a Connect card whose tap adds it.
+ * A connection's cards, on a server started with `--settings --connected calendar`: a link from an origin the calendar
+ * may not reach is stored nowhere and travels in the tap's request alone, the card the box files names only the origin,
+ * and its Allow writes the origin into the instance file. Remove takes the link out of the instance file and the box
+ * stops asking for it, and the secretary, asked to add a calendar, files a Connect card whose tap adds it.
  */
 
 import assert from "node:assert/strict";
@@ -94,8 +86,7 @@ app.scene("removing the calendar takes its link out of the instance file, and th
   await app.page.waitFor(`${linkCard} === -1`, { timeout: 20000 });
 });
 
-// THE SECRETARY ADDS WHAT SETTINGS OFFERS (audit S1): asked in a round of the owner's own words, it files a Connect
-// card from the box's catalog, and the tap writes the calendar into the instance file; the box then asks for its link.
+// The secretary files a Connect card from the box's catalog, and once its tap writes the calendar the box asks for its link.
 app.scene("asked to add a calendar, the secretary files a Connect card whose tap adds it", async () => {
   await app.page.navigate(`${CONNECT}/#/secretary/default`);
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });

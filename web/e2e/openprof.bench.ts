@@ -1,29 +1,10 @@
 /**
- * A PHASE OF THE BIGSTORE SCENE, TRACED: what the page's thread runs inside the longest task of a conversation opening,
- * or of the stream of conversations drawn, over the bigstore scene's store. `SUZATARY_OPENPROF_PHASE=opening` (the
- * default) traces from the hash change to `#/secretary/bulk-0` until its window is placed; `stream` traces from the hash
- * change to `#/secretary` until the stream's rounds are drawn, each visit a new document (the first `cold`, the device
- * holding nothing). Either ends once the page has run no long task and no painter's step for 1.5 s. Each phase is traced (`Page.trace`: the browser's timeline events, V8's CPU samples and the page's
- * User Timing, on the trace's clock), and the longest task of the page's thread is broken down by the timeline events'
- * own time, by each layout's dirty objects, and by the sampled functions read through the bundle's source maps. Each
- * opening also prints its ORDER: every task of the page's thread from the hash change to the window placed, with the
- * painter's steps, animation frames and layouts inside it, and the window it drew (turns, rounds, how many in view).
- * For the opening's largest layout it prints what that layout laid out (its roots as `tag#id.class`) and every task
- * of the page's thread between the window's placing and that layout, each timer firing among them with its timeout
- * and the function it called. The page takes a census of `body`'s and `main#view`'s children (tag, id, class,
- * `display`, descendants) at every long task and at the end.
- * No gate runs it: `SUZATARY_OPENPROF=<file> SUZATARY_OPENPROF_VISITS=12 SUZATARY_OPENPROF_RATE=<n>
- * scripts/web-e2e.sh openprof` does, by name. `SUZATARY_OPENPROF_CATEGORIES` adds trace categories, comma-separated:
- * `disabled-by-default-devtools.timeline.invalidationTracking` (what dirtied a layout),
- * `disabled-by-default-devtools.timeline.stack` (the script stack of each layout, timer and style recalculation),
- * `loading` and `blink`. Each one costs the page's thread time and can move the order it measures.
- * `SUZATARY_OPENPROF_PRESSURE=1` sends a critical memory-pressure notice once an opening settles and traces 2 s more:
- * the browser then drops caches it can rebuild. `SUZATARY_OPENPROF_LATE_FONT=<fragment of a font's URL>` holds that
- * font's request, with the cache off, until the opening settles. `SUZATARY_OPENPROF_NEW_DOCUMENT=1` loads each warm
- * opening's visit as a new document. Every `document.fonts` event of a visit is logged. `SUZATARY_E2E_JS_FLAGS` hands
- * V8 its switches (`--no-wasm-lazy-compilation`, say). Each visit also prints the longest task's time by kind (`kinds`:
- * script, compilation, layout, style, garbage collection, HTML parsing, painting) and how many functions the page's
- * thread compiled from the phase's start on (`compiled`: wasm and JavaScript).
+ * A phase of the bigstore scene, traced (`SUZATARY_OPENPROF_PHASE`: `opening`, the default, `stream` or `first`): the
+ * longest task of the page's thread, broken down by the timeline events' own time, each layout's dirty objects and the
+ * sampled functions read through the bundle's source maps, with the order of the phase's tasks. No gate runs it:
+ * `SUZATARY_OPENPROF=<file> SUZATARY_OPENPROF_VISITS=12 SUZATARY_OPENPROF_RATE=<n> scripts/web-e2e.sh openprof` does, by
+ * name; `SUZATARY_OPENPROF_CATEGORIES` adds trace categories, each costing the page's thread time and able to move the
+ * order it measures.
  */
 
 import assert from "node:assert/strict"
@@ -48,24 +29,19 @@ const PHASE: Phase = ((p: string): Phase => {
 })(process.env["SUZATARY_OPENPROF_PHASE"] ?? "opening")
 // Marked as the phase starts: the trace is read from it on.
 const OPEN = "openprof:open"
-// After an opening settles: a critical memory-pressure notice, and the trace kept for PRESSURE_MS more.
+// After an opening settles: a critical memory-pressure notice, so the browser drops caches it can rebuild, traced PRESSURE_MS more.
 const PRESSURE = process.env["SUZATARY_OPENPROF_PRESSURE"] === "1"
 const PRESSURE_MS = 2000
-// A font file (a fragment of its URL) whose request is held, with the cache off, from each visit's load until its
-// opening settles: the face then arrives after the window is drawn, as it does on a machine that needs it late.
+// A font file (a fragment of its URL) whose request is held, with the cache off, until the opening settles.
 const LATE_FONT = process.env["SUZATARY_OPENPROF_LATE_FONT"] ?? ""
-// Each warm visit a new document (a query of its own), or, by default, the same query again, which changes only the
-// fragment: then what one opening left in the document (a dropped font, say) meets the next opening.
+// By default each warm visit changes only the fragment, so what one opening left in the document meets the next.
 const NEW_DOCUMENT = process.env["SUZATARY_OPENPROF_NEW_DOCUMENT"] === "1"
-// A zone the device remembers before its first visit (`app/ownerzone.ts`), as a device that met the box in another zone
-// does: the box's own zone then arrives while the views module loads.
+// A zone the device remembers before its first visit (`app/ownerzone.ts`), so the box's own zone arrives while the views module loads.
 const REMEMBERED_ZONE = process.env["SUZATARY_OPENPROF_REMEMBERED_ZONE"] ?? ""
 // Each visit's whole trace, as `<TRACE>.<load>.json`, which DevTools' Performance panel opens.
 const TRACE = process.env["SUZATARY_OPENPROF_TRACE"] ?? ""
 
 const app = await suite("openprof", PHONE)
-
-// --- the trace ------------------------------------------------------------------
 
 type Frame = { readonly functionName?: string; readonly url?: string; readonly lineNumber?: number; readonly columnNumber?: number; readonly codeType?: string }
 type Node = { readonly id: number; readonly parent?: number; readonly callFrame: Frame }
@@ -100,9 +76,7 @@ const kindOf = (name: string): Kind =>
   : /FunctionCall|EvaluateScript|v8\.run|V8\.Execute|RunMicrotasks|FireAnimationFrame|EventDispatch|TimerFire|v8\.callFunction|TimerInstall|RequestAnimationFrame|v8\.evaluateModule/.test(name) || name.startsWith("FunctionCall") || name.startsWith("EvaluateScript") ? "script"
   : "other"
 
-// Functions the page's thread compiled from the phase's start on: each wasm function's first compilation (a lazy one)
-// and each JavaScript compilation, counted by its trace event, and the index of each wasm function compiled lazily
-// (`lazy`), which a build of the module that keeps its name section names.
+// Compilations from the phase's start on, by trace event, and each lazily compiled wasm function's index (`lazy`).
 type Compiled = { readonly wasm: number; readonly wasmMs: number; readonly js: number; readonly jsMs: number; readonly names: readonly (readonly [string, number])[]; readonly lazy: readonly number[] }
 const compiledOf = (events: readonly Ev[]): Compiled => {
   const from = openedAt(events)
@@ -315,8 +289,6 @@ const analyse = async (events: readonly Ev[]): Promise<Broken> => {
   }
 }
 
-// --- the scene ------------------------------------------------------------------
-
 // Which face each text of the page uses: elements holding words, by the first family of their font and its style, with
 // how many there are, how many of them are inside `.turns`, and the first classes among them.
 const FACES = `(() => {
@@ -439,8 +411,7 @@ const largestOf = async (events: readonly Ev[]): Promise<Largest | null> => {
 }
 const settle = async (until: string): Promise<void> => void (await settled(app.page, until, STEP_MS))
 
-// What a phase drew: an opening's turns and rounds, or the stream's rounds, how many of each meet the view, and the
-// elements under their box.
+// What a phase drew: an opening's turns and rounds, or the stream's rounds, and how many of each meet the view.
 type Shape = { readonly turns: number; readonly turnsInView: number; readonly rounds: number; readonly roundsInView: number; readonly elements: number; readonly scrollHeight: number; readonly clientHeight: number }
 const SHAPE = ((box: string, round: string): string => `(() => {
   const box = document.scrollingElement
@@ -468,8 +439,7 @@ type Opening = {
   readonly uses: { readonly before: unknown; readonly after: unknown }
   readonly compiled: Compiled
   readonly stepped: Steps
-  // The document's `views:load` in ms (the module fetched, compiled, instantiated and rehearsed), and each zone whose
-  // offsets a draw read itself (`page:offsets`) because the rehearsal worker had not told them.
+  // The document's `views:load` in ms, and each zone whose offsets a draw read itself because the rehearsal worker had not.
   readonly viewsLoad: readonly number[]
   readonly offsetsInDraw: readonly string[]
 } & Broken

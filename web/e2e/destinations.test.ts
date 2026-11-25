@@ -48,7 +48,6 @@ app.scene("the chain picker opens the OTHER chain's list, not the same list unde
   assert.match(said, /Nothing is open/, `the empty note should name the reason this list is empty: ${said}`);
   assert.equal(said.includes("filter"), false, "nobody narrowed a filter; do not tell them to widen one");
 
-  // The title names the chain the reader is on, and the pick outlives a reload.
   const title = `document.querySelector("#view .pagetitle")?.textContent`;
   await app.page.waitFor(`${title} === "suzatary"`);
   await app.page.reload();
@@ -85,7 +84,6 @@ app.scene("a page whose code arrives after the next tap is never drawn over it",
   assert.ok(!drawn.includes("Briefings"), `the page tapped away from was never drawn: ${JSON.stringify(drawn)}`);
 });
 
-/** Open the More sheet on whatever hash the reader is standing on. */
 const openMore = async (): Promise<void> => {
   await app.page.evaluate(
     `[...document.querySelectorAll(".tabbar .tab")].find((tab) => tab.textContent?.includes("More"))?.click()`,

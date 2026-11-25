@@ -200,8 +200,7 @@ export const forwarded = (route: Route): Route =>
     ? { type: "conversation", id: "default", refs: route.refs, ...(route.focus === true ? { focus: true } : {}) }
     : route
 
-// Where the tab is: a page's route, and the tiles it stands among where the bare route does not say them (the desk's
-// print after `~`, `viewtree::tiles::print`), else "". The route is the focused tile's, the tree's `*`.
+// `tree` is the desk's print after `~` (`viewtree::tiles::print`), "" where the bare route says the tiles; the route is the focused tile's.
 export type Address = { readonly route: Route; readonly tree: string };
 
 export const bare = (route: Route): Address => ({ route, tree: "" });
@@ -218,7 +217,6 @@ export function parseAddress(hash: string): Address {
   return cut !== -1 && NODE.test(tree) ? { route: parseRoute(hash.slice(0, cut)), tree } : bare(parseRoute(hash));
 }
 
-// The address of a forwarded route, at the tree's same place.
 export const forwardedAddress = (a: Address): Address => {
   const route = forwarded(a.route);
   return route === a.route ? a : { route, tree: a.tree };

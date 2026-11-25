@@ -39,8 +39,7 @@ app.scene("a device holding a line the box rewrote drops its copy at the later e
   await app.resize(PHONE)
   await trustThisDevice(app.page, EPOCH_BASE, EPOCH_INSTANCE)
   await app.open(EPOCH_BASE)
-  // The owner's own turn is enough to hold a line and its key: the scene is about the epoch, not the model's answer,
-  // whose round the gate's load made late (trains 95 to 97).
+  // The owner's own turn is enough to hold a line and its key: the scene is about the epoch, not the model's answer.
   const id = await converse("give me a rendered answer")
   await app.page.waitFor(`document.querySelector(".turn-person") !== null`, { timeout: 20000 })
   const box = await app.page.evaluate<{ epoch: number; nodes: { hash: string; header: { node: string; keys?: string[] } }[]; keys: Record<string, string>; rest: number }>(`fetch("/api/stores/lines/skeleton").then((r) => r.json())`)
@@ -94,6 +93,5 @@ app.scene("a device holding a line the box rewrote drops its copy at the later e
   assert.deepEqual(box.nodes.map((o) => o.hash).filter((n) => !after.nodes.includes(n)), [], "every line the box held before")
   assert.ok(after.generation > was.generation, "in the generation after, so no copy from before reaches it")
   assert.ok(after.keys.length > 0, "the keys taken again with the lines")
-  // The conversation reads again from the box's lines alone.
   await app.page.waitFor(`document.querySelector(".turn-person") !== null`, { timeout: 20000 })
 })

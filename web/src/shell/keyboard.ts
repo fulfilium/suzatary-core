@@ -1,5 +1,3 @@
-// The keyboard's shell: one listener, the `g` prefix, and the page listening; `keys.ts` decides what a key means.
-
 import { el } from "../view/dom";
 import type { KeyAction } from "./keys";
 import { SHORTCUTS, keyAction } from "./keys";
@@ -152,8 +150,7 @@ export function installKeyboard(): void {
     if (event.isComposing) return;
     // Enter on a focused button is that button's press.
     if (event.key === "Enter" && document.activeElement?.closest("button") != null) return;
-    // A page's keys act only where the focus is in its own tile, or in none: the focus in the secretary's region beside
-    // the list moves no cursor of the list.
+    // A page's keys act only where the focus is in its own tile, or in none, so the secretary beside the list moves no cursor of it.
     const tile = document.activeElement?.closest("#view > .tile") ?? null;
     const elsewhere = tile !== null && target.within !== undefined && !tile.contains(target.within);
     const action = keyAction(event.key, {

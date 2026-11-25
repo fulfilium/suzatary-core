@@ -57,10 +57,9 @@ export namespace program {
     })
   }).get
 
-  // The worker reads a zone's offsets (a zone's first read loads the browser's zone data: 100 ms at a CPU throttle of 4)
-  // and makes each function's first call, so V8 compiles it before a page's first input. It reads the zone the device
-  // holds as the load starts: where the box names another (a device that remembered none, UTC, or another), the first
-  // draw reads that zone's offsets itself, measured as `page:offsets`.
+  // The worker reads the offsets of the zone the device holds as the load starts (a zone's first read loads the
+  // browser's zone data) and makes each function's first call, so V8 compiles it before a page's first input; where the
+  // box names another zone, the first draw reads its offsets itself, measured as `page:offsets`.
   const offsets = new Map<string, readonly time.Offset[]>()
   const offsetsOf = (z: time.Zone): readonly time.Offset[] => {
     const known = offsets.get(z.name)
@@ -76,11 +75,10 @@ export namespace program {
   const whoOf = (a: app.App): Who => ({ me: app.actor(a), reach: app.reach(a) })
   const same = (w: Who, was: Who): boolean => w.me === was.me && app.sameReach(w.reach, was.reach)
 
-  // Where a page stands: whether what it opens is drawn beside it and whether it is drawn at all (each told again when
-  // it moves), where its `Go` and `Replace` go, a new entry of the history or the one the reader is at, and who lets
-  // it go when it asks (`Release`). A page in a tile opens from its tile; any other reads the address alone, is always
-  // drawn, and is let go by nobody.
   export type Shown = "Drawn" | "Hidden"
+  // Where a page stands: a page in a tile opens from its tile and is let go by its host, any other (`OVER`) reads the
+  // address alone, is always drawn and is let go by nobody; `go`'s "Went" is a new entry of the history, "Replaced" the
+  // one the reader is at.
   export type Placed = {
     readonly opens: () => Opens
     readonly shown: () => Shown
@@ -101,9 +99,8 @@ export namespace program {
     const w = whoOf(a)
     const key = a.who.type === "Writes" && (a.who.key.type === "Untrusted" || a.who.key.type === "Revoked") ? a.who.key.type === "Untrusted" ? "untrusted" : "revoked" : "not_the_key"
     return {
-      // A device whose only pointer is a finger is touched. Any other has keys: a mouse, a pen, a tablet's keyboard
-      // case with a trackpad (a fine pointer beside the finger), or no pointer at all. A keyboard with no trackpad
-      // cannot be seen from a page, so on a tablet it gets the Send button and Enter's new line.
+      // A device whose only pointer is a finger is touched; a keyboard with no trackpad cannot be seen from a page, so
+      // on a tablet it gets the Send button and Enter's new line.
       keys: window.matchMedia("(pointer: coarse)").matches && !window.matchMedia("(any-pointer: fine)").matches ? "Touch" : "Physical",
       opens: placed.opens(),
       gate: w.reach.type === "Writes" ? "writes" : w.me !== null ? "reads" : "views",
@@ -229,7 +226,6 @@ export namespace program {
     const layer = around.layer ?? null
     const glue = await module()
     return root => {
-      // A field the page drew, in its root or in its layer.
       const field = (name: string): Element | null => {
         const at = `[data-field="${CSS.escape(name)}"]`
         return root.querySelector(at) ?? layer?.querySelector(at) ?? null
@@ -256,10 +252,8 @@ export namespace program {
         })
         return () => ((gone = true), unheard())
       }
-      // Hidden, the program keeps running and what it asks of the screen waits; left with a write in flight, it keeps
-      // running until the write answers (`drain`).
       let life: drain.State = placed.shown() === "Hidden" ? drain.HIDDEN : drain.DRAWN
-      // What waits for the page to be drawn, the last of each: one scroll, one focus, the keys of each ask.
+      // What waits for the page to be drawn, the last of each (`drain.slot`).
       const waiting = new Map<string, [Out, (i: In) => void]>()
       // The keys the page holds, installed again when it is drawn again.
       let keys: KeyTarget | null = null
@@ -404,8 +398,8 @@ export namespace program {
       }
       // The painter draws into an empty root; the page before left its own.
       root.replaceChildren()
-      // Its parts, in ms: the flags printed (the context, its zone's offsets among it), the class made (the flags read and
-      // the first view drawn), and the first step painted with its effects handed out.
+      // Its parts, in ms: the flags printed, the class made (the flags read and the first view drawn), and the first step
+      // painted with its effects handed out.
       const t0 = performance.now()
       const flags = JSON.stringify({ ...args, context: context(placed), now: time.now() })
       const t1 = performance.now()
@@ -419,7 +413,6 @@ export namespace program {
       const told = (): void => running.send({ type: "Context", ...context(placed) })
       const unheard = heard(told, f => app.hear(whoOf, f, same))
       const unclocked = heard(told, f => http.heardClock(f))
-      // Drawn again, it takes its keys back and does what waited; hidden, it lets the keys go.
       const shown = (): void => {
         const now = placed.shown()
         if (now === "Hidden" && life.type === "Drawn") {

@@ -1,5 +1,4 @@
-// What the shell says, once and on any page, about this tab's acts the box has not taken: one refused, one waiting for
-// this device to be trusted, or one still on its way after a few seconds. In words, naming no object.
+// What the shell says, once and on any page, about this tab's acts the box has not taken, in words naming no object.
 
 import type { Unsent } from "../wire/generated/pages"
 

@@ -1,10 +1,7 @@
 /**
- * The rows before the reading. Todos draws from the box's fold as soon as it has it, priced by the core in its
- * worker, and moves to the reading of the objects this browser holds when that lands, without a row moving.
- *
- * PROVEN RATHER THAN TIMED: the replica's objects are held at the network, so the reading cannot be made; rows on
- * screen then are drawn from the box's fold and nothing else. Released, the reading lands (`data-at` is set) and the
- * same todos stand in the same order.
+ * Todos draws its rows from the box's fold, priced by the core in its worker, and moves to the reading of the objects
+ * this browser holds without a row moving. Proven rather than timed: the replica's objects are held at the network, so
+ * the rows on screen are the box's fold's, and once released the same todos stand in the same order.
  */
 
 import assert from "node:assert/strict";

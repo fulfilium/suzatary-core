@@ -1,9 +1,3 @@
-/**
- * THE LAWS, AS PROPERTIES — each `test` here is a law, its name the law's
- * statement. Random inputs from `gen.ts`, many seeds, the failing seed in the
- * message.
- */
-
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -11,8 +5,6 @@ import { readFileSync } from "node:fs";
 import { hrefOf, parseRoute } from "../src/shell/route";
 import { reconcile } from "../src/algebra/reconcile";
 import { forAll, keys, reshuffled, route } from "./gen";
-
-// --- The address ---------------------------------------------------------------
 
 test("law: a route survives print and parse (hrefOf then parseRoute)", () => {
   forAll(400, (r) => {
@@ -22,8 +14,8 @@ test("law: a route survives print and parse (hrefOf then parseRoute)", () => {
   });
 });
 
-// The one list of hashes both parsers read (`app/pages/tests/laws/route.rs` reads it too): hand-written cases, the
-// first a signed escape Rust once took, and strings drawn by Rust's generator.
+// The one list of hashes both parsers read (`app/pages/tests/laws/route.rs` reads it too): hand-written cases and
+// strings drawn by Rust's generator.
 test("law: every hash of the shared list prints as listed, as Rust's parser prints it", () => {
   const pairs = JSON.parse(readFileSync("app/pages/tests/hashes.json", "utf8")) as { hash: string; href: string }[];
   assert.ok(pairs.length > 100);
@@ -39,10 +31,7 @@ test("law: parsing is total — any hash yields a route, and an unknown one name
   });
 });
 
-// --- The reconciler ------------------------------------------------------------
-
-/** Apply a plan to a key list the way `dom` would: removals, then inserts and
- * moves before their anchor. */
+/** Apply a plan to a key list the way `dom` would: removals, then inserts and moves before their anchor. */
 function apply(oldKeys: readonly string[], plan: readonly ReturnType<typeof reconcile>[number][]): string[] {
   const out = [...oldKeys];
   for (const op of plan) {

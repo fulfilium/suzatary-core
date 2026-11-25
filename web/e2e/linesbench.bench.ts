@@ -1,10 +1,9 @@
 /**
- * THE LINES AT A PHONE'S SIZE, MEASURED: the `lines` server's store (`fixture-chain --lines`, about 6,000 with
- * `SUZATARY_E2E_LINES=6000`), read at CPU throttling 6, its main thread profiled through three passes: a first load on a new device until the prefetch holds
- * every line, a landing of one new line, and a load whose budget holds half the store, so its landing evicts. Each
- * pass says its longest busy run of the main thread and the functions of this app that ran in it, by the time each
- * was on the stack, read through the bundle's source maps. The numbers go to `$SUZATARY_LINESBENCH` when it is set;
- * the scene asserts only that each pass ended. No gate runs it: `scripts/web-e2e.sh linesbench` does, by name.
+ * Measures the lines at a phone's size: the `lines` server's store at CPU throttling 6, its main thread profiled
+ * through a first load on a new device until the prefetch holds every line, a landing of one new line, and a load whose
+ * budget holds half the store, so its landing evicts. Each pass gives its longest busy run and this app's functions in
+ * it, through the bundle's source maps; the scene asserts only that each pass ended, and no gate runs it:
+ * `scripts/web-e2e.sh linesbench` does, by name.
  */
 
 import assert from "node:assert/strict";
@@ -17,8 +16,6 @@ import { mapped } from "./sourcemap";
 const BULK = process.env["E2E_BASE_LINES"] ?? "";
 const app = await suite("linesbench", PHONE);
 const RATE = 6;
-
-// --- the profile ---------------------------------------------------------------
 
 type Busy = { readonly ms: number; readonly by: readonly (readonly [string, number])[] };
 // Each function of this app: the most of one busy run it was on the stack for, and its whole time on the stack.
@@ -90,8 +87,6 @@ const read = async (profile: CpuProfile, wallMs: number): Promise<Pass> => {
     .map(([f, ms]): readonly [string, number, number] => [f, Math.round(ms), Math.round(total.get(f) ?? 0)]);
   return { wallMs: Math.round(wallMs), busyMs: Math.round(busyMs), longest: { ms: Math.round(top.ms), by }, next: runs.slice(1, 6).map((r) => Math.round(r.ms)), most };
 };
-
-// --- what the device holds -----------------------------------------------------
 
 const ROWS = `(store) => new Promise((ok, no) => {
   const r = indexedDB.open("suzatary")

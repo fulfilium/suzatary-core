@@ -11,10 +11,8 @@ import viewstate from "../src/typst/state";
 export type Detail = Readonly<Record<string, number>>;
 export const entries = (name: string): string => `performance.getEntriesByName(${JSON.stringify(name)}).map((e) => ({ duration: e.duration, end: e.startTime + e.duration, detail: e.detail }))`;
 
-// The page's own draw over states a scene hands it (`typstbench.ts`), bundled for the browser here: the same
-// tree, fold, algebra, door and placement, on a host of its own. Evaluated, never imported from a `blob:`, which
-// the page's policy refuses as it should. Its modules are named as the dev build's, which the app's own resolve to
-// beside `app.js`.
+// `typstbench.ts` bundled for the browser, evaluated rather than imported from a `blob:`, which the page's policy
+// refuses; its modules are named as the dev build's.
 const BENCH = execFileSync(
   "esbuild",
   ["web/e2e/typstbench.ts", "--bundle", "--format=iife", "--global-name=typstbench", "--target=es2022", "--define:__DEV__=false", "--external:./typst.js", "--external:./prodrome.js", "--log-level=error"],

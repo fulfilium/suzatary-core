@@ -1,10 +1,3 @@
-/**
- * WHICH RUNNING PAGES A DRAWING KEEPS (`web/src/shell/keep.ts`): every running page is drawn, kept hidden or let go,
- * once; a page the drawing draws is drawn whatever else it holds; no more than the drawing's bound are hidden, and those
- * hidden are the ones drawn last; a page never mounted is let go; a page goes to the leaf it drew last before another
- * leaf of the same address.
- */
-
 import { test } from "node:test"
 import assert from "node:assert/strict"
 

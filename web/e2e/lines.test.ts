@@ -1,20 +1,7 @@
 /**
- * THE LINES, IN A TAB (decision `lockedwords`): the conversations are read from
- * `secretary-lines`, whose objects hold their words locked, with the keys the pull hands over
- * kept beside them in one row. Its claims, each a scene:
- *
- * 1. A conversation reads from the lines: the row holds the objects and the keys, and the
- *    objects hold no word of it in the clear.
- * 2. Erase on a turn draws it by its shape, with the box's sentence, and the device forgets
- *    the blocks its words were rendered to.
- * 3. Forgetting a fact erases what it caused and offers the rest on a card, which the tab's
- *    tap erases.
- * 4. A conversation the device prefetched reads with no network, and one it lacks says so.
- * 5. A warm load answers the stream from the core's snapshot and the frames after it, and reads no row; a snapshot of
- *    another form is passed over and the lines taken again; and once an erasure's key is let go no snapshot or frame
- *    holds it.
- * 6. A conversation the box opened after the device kept its snapshot draws on a warm load, opened at once or from the
- *    stream, and across a build update; and one another tab landed draws from the device with the box's lines held.
+ * The conversations are read in a tab from `secretary-lines`, whose objects hold their words locked, with the keys the
+ * pull hands over kept beside them (decision `lockedwords`). The device holds no word in the clear but its rendered
+ * blocks, and an erasure leaves no key or block of it on the device, in a snapshot, a frame or a closed tab's late write.
  */
 
 import assert from "node:assert/strict"
@@ -57,9 +44,8 @@ const held = (name: string, but: readonly string[] = []): string => `new Promise
 const boxLines = `fetch("/api/stores/lines/skeleton").then((r) => r.json()).then((a) => ({ names: a.nodes.map((n) => n.hash), keys: a.keys }))`
 type BoxLines = { readonly names: readonly string[]; readonly keys: Readonly<Record<string, string>> }
 
-/** `write(store)` run in one read-write transaction of the store `store` of the database `name`. It settles either way:
- * a database not made yet is never made here (the open's upgrade is aborted), and a missing store, a blocked open or a
- * throw fails it with what happened, so a scene never waits on a promise that cannot settle. */
+/** It never makes a database (the open's upgrade is aborted) and fails on a missing store, a blocked open or a throw, so a
+ * scene never waits on a promise that cannot settle. */
 const put = (name: string, store: string, write: string): string => `new Promise((done, fail) => {
   const r = indexedDB.open(${JSON.stringify(name)})
   r.onupgradeneeded = () => (r.transaction.abort(), fail("the database ${name} is not made yet"))
@@ -87,7 +73,6 @@ const made = (name: string, store: string): string =>
     r.onerror = () => ok(false)
   }))`
 
-/** The rows of the database `name`'s store `store`, as `[key, value]` pairs. */
 const rowsOf = (name: string, store: string): string =>
   `${held(name)}.then((all) => JSON.parse(all)[${JSON.stringify(store)}] ?? [])`
 
@@ -140,7 +125,6 @@ app.scene("Erase draws a turn by its shape and the device forgets the blocks its
   await converse("give me an answer to erase")
   await app.page.waitFor(`document.querySelector(".turn-model .answerblock") !== null`, { timeout: 20000 })
   await app.page.waitFor(`${held("suzatary")}.then((all) => all.includes("then erased"))`, { timeout: 15000 })
-  // The core's frames hold the answer's key.
   const keys = (await app.page.evaluate<BoxLines>(boxLines)).keys
   await app.page.waitFor(`${replicaHolds(keyBytes(keys, Object.keys(keys)))}.then((s) => s.holds.length > 0)`, { timeout: 15000 })
   await app.page.click(".turn-model .turnmorebutton")
@@ -204,16 +188,13 @@ app.scene("a conversation the box opened after the device kept its snapshot draw
     await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
     return app.page.evaluate<string>(opened(`Opened since ${n}`))
   }
-  // The page draws the conversation, and nothing says it does not exist.
   const drawn = async (id: string): Promise<void> => {
     await app.page.waitFor(`document.querySelector(".composebox") !== null && document.querySelector(".pagetitle")?.textContent.includes("Opened since")`, { timeout: 20000 })
     assert.equal(await app.page.evaluate<boolean>(`document.body.textContent.includes("no conversation named")`), false, `${id} is drawn`)
   }
-  // Opened at once.
   const first = await openedSince("1")
   await app.page.navigate(`${WRITE_BASE}/?warm1#/secretary/${first}`)
   await drawn(first)
-  // From the stream, whose answer the snapshot gave.
   const second = await openedSince("2")
   await app.page.navigate(`${WRITE_BASE}/?warm2#/secretary`)
   await app.page.waitFor(`document.querySelector(".streamround") !== null`, { timeout: 20000 })
@@ -238,8 +219,7 @@ app.scene("a conversation another tab landed draws from the device, with the box
     await app.page.navigate(`${WRITE_BASE}/api/about`)
     const held = await other.evaluate<number>(`${LANDED_ROW}.then((row) => row.nodes.length)`)
     const id = await other.evaluate<string>(opened("Opened in the other tab"))
-    // The other tab hears the box's heads move and lands the new line: the landed row the device keeps grows. (A tab in
-    // the background draws nothing, so its worker's landing is what is waited for; a piece's frame alone lands nothing.)
+    // A tab in the background draws nothing, so its worker's landing is waited for; a piece's frame alone lands nothing.
     await other.waitFor(`${LANDED_ROW}.then((row) => row.nodes.length > ${held})`, { timeout: 20000 })
     // This tab loads with the box's lines held, so it reads the conversation from what the other tab kept.
     const release = await app.page.holdRequests(["/api/stores/lines/skeleton"])
@@ -294,8 +274,7 @@ app.scene("a key a closed tab left on the device is forgotten with the blocks it
   const erased = Object.keys(keys).filter((k) => !(k in now))
   assert.ok(erased.length > 0, "the erased answer's key went")
   await app.page.waitFor(`${replicaHolds(keyBytes(keys, erased))}.then((s) => s.holds.length === 0)`, { timeout: 15000 })
-  // The closed tab's late write lands: its frames after the log, the key among them, its blocks in the cache, each also
-  // under the name an older build gave it, which no purge of this build computes.
+  // The closed tab's late write lands, each block also under the name an older build gave it, which no purge here computes.
   assert.ok(frames.length > 0, "the closed tab had frames")
   await write("suzatary", "replica", `(s) => ${JSON.stringify(frames)}.forEach(([, hex], i) => s.put(new Uint8Array(hex.match(/../g).map((b) => parseInt(b, 16))), "lines/log/" + String(900000000000 + i)))`)
   assert.ok((await app.page.evaluate<Holds>(replicaHolds(keyBytes(keys, erased)))).holds.length > 0, "the key is back on the device")
@@ -313,8 +292,7 @@ app.scene("the list draws and the badge is counted with no request for the lines
   // The lines' pulls, never their stream, which a capture would wait on forever.
   const LINES = ["/api/stores/lines/skeleton", "/api/stores/lines/content"]
   const ofLines = (url: string): boolean => LINES.some(l => url.includes(l))
-  // With no lines kept, so the pull this scene counts is a whole pull of the store: a row an earlier scene left
-  // would make it a 304 with no body, whatever order the files run in.
+  // With no lines kept, so the pull counted is whole: a row an earlier scene left would make it a 304 with no body.
   await app.open(WRITE_BASE)
   await write("suzatary", "replica", `(s) => s.clear()`)
   // Nor any content an earlier scene's page kept, so what the secretary reads is fetched by name.
@@ -338,9 +316,7 @@ app.scene("the list draws and the badge is counted with no request for the lines
   await app.page.evaluate(`void (location.hash = "#/secretary/default")`)
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 })
   await app.page.waitFor(`${REPLICA_ROWS}.then((rows) => rows.length > 0)`, { timeout: 20000 })
-  // Once the lines land, the page's placeholder gives way to its list.
   await app.page.waitFor(`document.querySelector(".chats .placeholder") === null`, { timeout: 15000 })
-  // The content is fetched by name once the skeleton names what the page reads.
   await app.page.waitFor(`${rowsOf("suzatary", "content")}.then((rows) => rows.length > 0)`, { timeout: 15000 })
   await app.page.cold(false)
 })
@@ -392,8 +368,7 @@ app.scene("a conversation the device prefetched reads with no network, and one i
   }
 })
 
-// A FRACTION IS A PIE: the line under the header draws a sync's share as the neutral pie, named in
-// words. The lines' content is held at the box, so the line stands while it is read.
+// The lines' content is held at the box, so the sync line stands while it is read.
 app.scene("a store's sync is drawn as a neutral pie, named in words", async () => {
   await app.open(WRITE_BASE)
   await write("suzatary", "replica", `(s) => s.clear()`)

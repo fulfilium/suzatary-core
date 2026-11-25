@@ -1,35 +1,14 @@
 /**
- * LARGE STORES DO NOT HOLD THE PAGE'S THREAD: the lines' server holds generated stores of the live shape
- * (`suzatary-dev fixture-chain`, as `scripts/web-e2e.sh` sets it: about 14,500 line objects over 100 conversations
- * with reseals, 730 inbox objects, 900 topic objects and 600 todos), and the core's worker pulls, keeps and reads every store, so
- * the stream, a conversation and a new line are drawn a slice to a painter's step, with no task on the page's thread
- * over 100 ms of that thread's processor time, cold (a device holding nothing) and warm (the same device loaded again).
- *
- * What one task may do is the page's code's to decide: the stream and a conversation draw their rounds a slice per
- * step, each slice's words within `slices::WORDS` (`app/pages/src/slices.rs`), and the reading before them is decoded
- * in a step that draws nothing. So a phase is judged by two counts a busy machine does not move: the bytes of patches
- * its largest step applied (`painter:step`'s detail), which grow with a slice on any machine, and the processor time
- * its heaviest task took on the page's thread, read from the browser's trace (`trace.ts`'s `tasksOf`), which another
- * process on the same core stretches on the clock and not on the processor. Each phase also records its longest task
- * on the clock (what a person waits) and the long tasks the browser reported; neither decides.
- *
- * The store's words are outside ASCII and hold digits, the text the scrub is slowest on. A warm load of the stream
- * reads the lines the device holds, which scrubs nothing, and draws it well within a read's bound while every request
- * to the box's API is held, so nothing it draws waits on the box. Loaded again with the box answering, as it does live,
- * the shell asks its own questions of the core's worker beside the page's, and the worker answers none of them while
- * the page's first stream is owed (`prodrome/lanes.ts`): the scene reads that order in the worker itself, and reports
- * the first draw.
- *
- * A phase ends once what it waits for is drawn whole (a conversation is marked `marks.PLACED` when its window is
- * drawn and placed) and the page has run no long task and no painter's step for a second and a half since
- * (`longtasks.ts`), so a later slice or placing is counted in the phase it belongs to.
- *
- * As a measurement: `SUZATARY_E2E_LINES=6000 SUZATARY_E2E_CONVERSATIONS=1500 SUZATARY_LINES_RATE=6
- * SUZATARY_E2E_SCENE_MS=1800000 SUZATARY_LINESBENCH=<file> scripts/web-e2e.sh bigstore` runs it at a 6x CPU throttle and writes each phase's
- * record. The throttle pauses the page's main thread, which stretches its tasks on the clock and not on the processor.
- * The boot's (from the document's start until the todo list draws) is the app's own, and reported.
- * `SUZATARY_E2E_BROWSER_CPU=0.67` gives the whole browser two thirds
- * of a core, its worker and its storage included, and each warm load of the last scene reports the worker's own phases.
+ * Over generated stores of the live shape (`suzatary-dev fixture-chain`, as `scripts/web-e2e.sh` sets it, its words
+ * outside ASCII and holding digits, the text the scrub is slowest on), the stream, a conversation and a new line are
+ * drawn a slice to a painter's step, cold and warm. A phase is judged by two counts a busy machine does not move, the
+ * bytes of patches its largest step applied and the processor time of its heaviest task on the page's thread; its time
+ * on the clock and the browser's long tasks are recorded and decide nothing, since a throttle pauses the page's main
+ * thread and stretches its tasks on the clock and not on the processor. The warm loads hold every request to the box's
+ * API, so a draw that completes waited on nothing from the box; the worker's order of answering is `prodrome/lanes.ts`'s.
+ * As a measurement, `SUZATARY_E2E_LINES=6000 SUZATARY_E2E_CONVERSATIONS=1500 SUZATARY_LINES_RATE=6
+ * SUZATARY_E2E_SCENE_MS=1800000 SUZATARY_LINESBENCH=<file> scripts/web-e2e.sh bigstore` runs it at a 6x CPU throttle
+ * and writes each phase's record.
  */
 
 import assert from "node:assert/strict"
@@ -62,8 +41,8 @@ const required = (name: string): string => {
 const LINES_BASE = required("E2E_BASE_LINES")
 const LINES_INSTANCE = required("E2E_LINES_INSTANCE")
 const RATE = Number(process.env["SUZATARY_LINES_RATE"] ?? "1")
-// The most bytes of patches one painter's step may apply while the stream, a conversation and a new line are drawn: a
-// slice's words come to at most `slices::WORDS` (8 KiB), and with their markup the store's largest slice is 21 KiB.
+// The most bytes of patches one painter's step may apply: a slice's words come to at most `slices::WORDS` (8 KiB),
+// and with their markup the store's largest slice is 21 KiB.
 const STEP_BYTES = 32 * 1024
 // The most processor time one task may take on the page's thread meanwhile, whatever it runs.
 const CPU_MS = 100
@@ -178,9 +157,8 @@ app.scene("a store of many lines is listed, opened and grown a slice to a step, 
   }
 })
 
-// The most layout objects one frame of the stream's slices lays out: a slice's rounds (their words within the page's
-// `slices::WORDS`, or one round alone) and what inserting them dirties around them. One of the store's rounds is 58;
-// two, the slice before words bounded it, were 91.
+// The most layout objects one frame of the stream's slices lays out: a slice's rounds and what inserting them
+// dirties; one of the store's rounds is 58.
 const SLICE_OBJECTS = 70
 // The wasm functions the page's thread compiles on their first call while the stream draws, at most: the rehearsal
 // worker compiles every one the stream's first readings reach (`web/src/pages/rehearse.ts`).
@@ -205,8 +183,7 @@ app.scene("a frame of the stream lays out one slice, and the rehearsal compiled 
     const drawn = measured(events, "page:draw").find(([, , d]) => (JSON.parse(d) as { readonly page?: string } | null)?.page === "SecretaryPage")
     assert.ok(drawn !== undefined, "the stream's page was drawn")
     const slices = measured(events, "painter:step").filter(([, , d]) => (JSON.parse(d) as { readonly step?: string } | null)?.step === `Answered {"type":"Slice"}`)
-    // What each slice's patches dirtied: the layouts of its frame after its step. A layout inside the step is a keeping
-    // step's (`run.start`), which reads the place before its patches and so lays out what an earlier step left.
+    // A layout inside a step is a keeping step's (`run.start`), which lays out what an earlier step left, so only those after count.
     const frames = slices.map(([, end]) => {
       const task = complete.find((t) => t.name === "RunTask" && t.ts <= end && end <= t.ts + (t.dur ?? 0))
       const after = complete.filter((e) => task !== undefined && e.ts >= end && e.ts + (e.dur ?? 0) <= task.ts + (task.dur ?? 0))
@@ -225,9 +202,8 @@ app.scene("a frame of the stream lays out one slice, and the rehearsal compiled 
   }
 })
 
-// A closed fold holds nothing in layout: under a closed <details>, no element but its summary has a box. Chromium keeps
-// a closed fold's content laid out behind a lock and lays all of it out at once when the lock is lifted (it does under
-// memory pressure), so the largest conversation's folds would cost one layout of every fold together.
+// Chromium keeps a closed fold's content laid out behind a lock and lays it all out at once when the lock is lifted
+// (it does under memory pressure), so under a closed <details> no element but its summary may have a box.
 const FOLDS = `(() => {
   const closed = [...document.querySelectorAll("details:not([open])")]
   const boxed = closed.flatMap((d) =>
@@ -257,9 +233,6 @@ const reads = (open: readonly string[]): string[] => open.filter((r) => r.includ
 
 // The conversations the stream drew rounds of, by their links.
 const DRAWN = `[...new Set([...document.querySelectorAll(".streamround .streammeta a")].map((a) => decodeURIComponent(/secretary\\/([^/?#&@]+)/.exec(a.getAttribute("href"))?.[1] ?? "")))]`
-// In the core's worker: how many prints its lines decoded, hashed and opened, and how many objects the device's skeleton
-// holds, in all and of the conversations `ids` and the structure every line rests on, which bounds what drawing their
-// rounds needs.
 // How many prints the core's worker decoded, hashed and opened, asked of the glue module it loaded.
 const DECODED = `import(new URL("prodrome.js", self.location.href).href).then((m) => ({ decoded: m.decodes(), hashed: m.hashes(), opened: m.opens() }))`
 
@@ -322,7 +295,6 @@ app.scene("a warm load of the conversations draws them from the device, with eve
 const fromStream = (marks: Readonly<Record<string, number>>): Readonly<Record<string, number>> =>
   Object.fromEntries(Object.entries(marks).map(([name, at]) => [name, Math.round(at - (marks["stream asked"] ?? 0))]))
 
-// How many warm loads the scene reads, each reported.
 const LOADS = 3
 
 app.scene("a warm load of the conversations answers the page's first stream before any question of the shell asked beside it", async () => {
@@ -354,7 +326,7 @@ app.scene("a warm load of the conversations answers the page's first stream befo
       await unobserve()
     }
   })()
-  // The one number each stage of docs/ONEOWNER-PLAN-2026-11-02.md reports, printed before any assertion can stop the scene.
+  // Printed before any assertion can stop the scene.
   const draws = loads.map((l) => l.draw.ms).sort((a, b) => a - b)
   console.log(`warm first draw ${draws[Math.floor(draws.length / 2)]} ms (median of ${LOADS} loads, cpu ${process.env["SUZATARY_E2E_BROWSER_CPU"] ?? "all"})`)
   for (const { draw, seen, phases } of loads) {

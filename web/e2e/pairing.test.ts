@@ -1,8 +1,8 @@
 /**
- * THE FIRST DEVICE, TRUSTED WITH THE BOX'S CODE: a browser whose key nobody trusted sees This device first in Settings,
- * is sent there from its own card, and types the code `suzatary device pair` printed. A wrong code is refused with the
- * tries left; the right one trusts this device, its card leaves the Inbox, and the code then trusts nothing else. A key
- * trusted at the terminal instead leaves no card behind either.
+ * A browser whose key nobody trusted sees This device first in Settings, is sent there from its own card, and types
+ * the code `suzatary device pair` printed: a wrong code is refused with the tries left, and the right one trusts this
+ * device, its card leaves the Inbox, and the code then trusts nothing else. A key trusted at the terminal instead
+ * leaves no card behind either.
  */
 
 import assert from "node:assert/strict";
@@ -42,7 +42,6 @@ app.scene("an untrusted device is trusted with the code from the box, its card l
     "This device stands before everything else while it is untrusted",
   );
 
-  // Its own card in the Inbox sends it to Settings, where the code is typed.
   await app.page.click(".settingshere .act-asktrust");
   await app.page.navigate(`${WRITE_BASE}/#/inbox`);
   const mine = `[...document.querySelectorAll(".proposal-act-device.proposal-standing")].find((c) => c.textContent.includes(${JSON.stringify(key)}))`;
@@ -65,14 +64,12 @@ app.scene("an untrusted device is trusted with the code from the box, its card l
   await app.page.waitFor(`(${toast}).includes("This device is trusted.")`, { timeout: 20000 });
   await app.page.waitFor(`(${keyLine}).includes("which the chain trusts")`, { timeout: 30000 });
 
-  // The card it asked for is no longer waiting.
   await app.page.navigate(`${WRITE_BASE}/#/inbox`);
   await app.page.waitFor(
     `[...document.querySelectorAll(".proposal-act-device.proposal-standing")].every((c) => !c.textContent.includes(${JSON.stringify(key)}))`,
     { timeout: 20000 },
   );
 
-  // The code is spent: typed again, it is refused in plain words.
   const again = await app.page.evaluate<{ status: number; error: string }>(
     `${SIGNED_POST}("/api/act/pair", JSON.stringify({ code: ${JSON.stringify(code)} })).then(async (r) => ({ status: r.status, error: (await r.json()).error }))`,
   );

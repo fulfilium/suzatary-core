@@ -1,10 +1,8 @@
 /**
- * A REPLICA OF MANY HEADS NAMES ITSELF IN ONE FRONTIER: the wide server's lines are 400 conversations of one line each
- * (`suzatary-dev fixture-chain --wide 400`), so a tab holding them holds 400 heads, which named one by one in a pull's
- * URL came to 26 kB and was refused with 431. The scene reads the list, reloads so the next pull asks from what the tab
- * holds, and finds every pull answered, each asking in under a kilobyte, and the list drawn again with no pull asking
- * from nothing. The list is the conversations' tile, which a conversation's address opens beside it at a desktop's
- * width: those conversations hold no round, and the stream at `#/secretary` draws only rounds.
+ * The wide server's lines are 400 conversations of one line each, so a tab holds 400 heads, which named one by one in
+ * a pull's URL are refused with 431; after a reload every pull asks from one frontier, in under a kilobyte, and is
+ * answered. The list read is the conversations' tile a conversation's address opens at a desktop's width, since those
+ * conversations hold no round for the stream to draw.
  */
 
 import assert from "node:assert/strict"

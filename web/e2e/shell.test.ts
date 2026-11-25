@@ -60,9 +60,8 @@ app.scene("a stamped build keeps its whole shell in the cache named by it, and n
   assert.equal(await app.page.evaluate<boolean>(`document.getElementById("updated").hidden`), true, "a device's first build is not news")
 })
 
-// THE API NEVER WAKES THE WORKER (Chromium's static routes, `shell.NETWORK`): a request the worker would only pass on
-// is matched to the network by the browser and never dispatched to it, so the page's calls cannot reach an older worker
-// as it gives way to a newer one. Resource Timing says which source a request was routed to.
+// Chromium's static routes (`shell.NETWORK`) send the API to the network without waking the worker, so the page's calls
+// cannot reach an older worker as it gives way to a newer one; Resource Timing says where a request was routed.
 app.scene("the API goes to the box without the worker, and a shell file and the build the box serves through it", async () => {
   await app.page.waitFor(controlledBy("e2e-1"), { timeout: 20000 })
   const routed = (path: string) =>
@@ -104,10 +103,8 @@ app.scene("a second visit takes the core and typst-wasm from the worker's caches
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`)
 })
 
-// AN OPEN TAB OF BUILD N, ONCE BUILD N+1 IS LIVE, STILL RUNS BUILD N: the box serves no file of a build it moved from,
-// so every file a page of N loads after the deploy (the Rust pages' module and its rehearsal worker among them) is
-// N's, from N's cache. A tab that lost one anyway (a cache the browser let go) moves to the box's build at the page it
-// asked for (`newbuild.lost`), and a page that cannot load is said in words, never drawn as the error.
+// The box serves no file of a build it moved from, so every file an open tab of the old build loads after the deploy is
+// from that build's cache; a tab that lost one moves to the box's build at the page it asked for (`newbuild.lost`).
 app.scene("a tab of an old build loads its Rust pages' module from its build's cache after a deploy, and draws them", async () => {
   await app.page.waitFor(controlledBy("e2e-1"), { timeout: 20000 })
   await app.page.evaluate(`(window.e2eMark = true)`)
@@ -146,7 +143,6 @@ app.scene("a page whose code will not load says so in words and offers to load i
   } finally {
     await app.page.resumeRequests()
   }
-  // Loaded again at the same address, the page draws, and its build's worker serves it once more.
   await app.page.evaluate(`(document.querySelector("#view .problem .retry").click(), true)`)
   await app.page.waitFor(`location.hash === "#/secretary" && document.querySelector("#view .secretarystream") !== null`, { timeout: 30000 })
   await app.page.navigate(`${SHELL}/#/`)
@@ -178,7 +174,6 @@ const reconnect = async (): Promise<void> => {
   await app.page.evaluate(`(window.dispatchEvent(new Event("online")), true)`)
 }
 const landedOn = (id: string) => `${controlledBy(id)} && document.readyState === "complete" && !(${marked})`
-// Waits for the page to run `id` under its worker; a page that did not says where it stands.
 const land = async (id: string): Promise<void> => {
   try {
     await app.page.waitFor(landedOn(id), { timeout: 30000 })
@@ -188,7 +183,6 @@ const land = async (id: string): Promise<void> => {
   }
 }
 
-// The app put away and taken out again.
 const resume = async (): Promise<void> => {
   await app.page.evaluate(shown("hidden"))
   await app.page.evaluate(shown("visible"))
@@ -397,9 +391,8 @@ app.scene("a tab whose build's worker a newer tab's worker took over still draws
   await app.page.evaluate(MARK)
   deploy("e2e-8")
   try {
-    // What a second tab starting on the box's new build does, done from this one: the fixture serves plain HTTP/1.1, so
-    // a second tab beside this one's open streams would wait on its six connections a host (the box serves HTTP/2).
-    // The new build's worker installs and claims every tab.
+    // Done from this tab, since over the fixture's HTTP/1.1 a second tab would wait on the six connections a host gets,
+    // which this one's streams hold; the new build's worker claims every tab.
     await app.page.evaluate(`navigator.serviceWorker.register(${JSON.stringify(shell.script("e2e-8"))}).then(() => true)`)
     await app.page.waitFor(controlledBy("e2e-8"), { timeout: 30000 })
     assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".typstpane") === null`), true, "the tab had not opened the page")

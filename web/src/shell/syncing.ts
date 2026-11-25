@@ -1,6 +1,3 @@
-// The line under the header while a store syncs: for each store, a neutral pie of the bytes come of the bytes its sync
-// needs, beside the same in words.
-
 import { el } from "../view/dom"
 import { percent } from "../view/format"
 import pie from "../view/pie"

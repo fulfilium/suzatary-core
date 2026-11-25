@@ -1,6 +1,5 @@
-// The page the app runs in, drawn by the app itself: `index.html` is the same file for every build (the worker keeps one
-// and serves it to whichever build boots), so it holds only the loader, and everything a build reads by name, the
-// stylesheets and every host element, is that build's own.
+// `index.html` is the same file for every build (the worker keeps one and serves it to whichever build boots), so it
+// holds only the loader, and the stylesheets and every host element are drawn here by the build's own code.
 
 import { el } from "../view/dom"
 
@@ -16,19 +15,15 @@ export namespace page {
       el("a", { class: "brand", href: "#/" }, "Suzatary"),
       // One bar of words: across the top on a wide screen, fixed to the foot on a phone (`shell/nav.ts`).
       el("nav", { id: "tabbar", class: "tabbar", "aria-label": "sections" }),
-      // The door that shows the secretary beside the page (`main.ts`), where it is not drawn; it hides itself. Before
-      // the live mark, so the mark stands at the header's end whether the door is drawn or not.
+      // Before the live mark, so the mark stands at the header's end whether this door is drawn or not.
       el("button", { id: "beside", type: "button", class: "secretarytoggle", "aria-label": "Show the secretary", hidden: true }, "Secretary"),
-      // Acts this browser has taken and not yet handed over, hidden at zero (`shell/pending.ts`).
       el("span", { id: "live", class: "live", title: "connecting…", "aria-label": "connecting…" }),
     ))
 
-  // The body's hosts, each filled by the module named beside it.
   const body = (): Node[] => [
     // The first thing Tab reaches: nine pages of navigation before the content is a page nobody reaches with a keyboard.
     el("a", { class: "skip", href: "#view" }, "Skip to the page"),
     header(),
-    // How far each store's sync has come, in bytes (`shell/syncing.ts`).
     bar("syncing", "syncbar"),
     // A refusal and a chain move are announced, not merely drawn: the only place the app says a write was refused.
     bar("toast", "toast"),

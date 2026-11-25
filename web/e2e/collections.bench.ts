@@ -1,12 +1,10 @@
 /**
- * THE COLLECTIONS A WARM LOAD RUNS, UNTRACED, over the bigstore scene's store at `SUZATARY_LINES_RATE` (default 3): each
- * warm visit loads the todo list (`boot`), moves to the stream, and loads the stream with every read of the box held.
- * Per phase: its longest task, each `page:draw` with its parts, and each collection V8 printed (`--trace-gc`, kept in
- * `SUZATARY_E2E_BROWSER_LOG`) by kind, pause, marking steps, heap before and after (MB) and reason, on the page's isolate
- * (the first its renderer prints) and the workers'. Run it under `stdbuf -oL`, so no line lands in a later phase.
- * `SUZATARY_COLLECTIONS_ALLOCATIONS=1` instead samples what the page's thread allocates (every 16 KiB, collected objects
- * included; no CPU sampling), by function. No gate runs it: `SUZATARY_COLLECTIONS=<file> SUZATARY_COLLECTIONS_VISITS=<n>
- * scripts/web-e2e.sh collections`.
+ * Measures the collections a warm load runs, untraced, over the bigstore scene's store at `SUZATARY_LINES_RATE`
+ * (default 3): per phase (the todo list, the move to the stream, a load of the stream with every read held), its longest
+ * task, each `page:draw` with its parts, and each collection V8 prints (`--trace-gc`) on the page's isolate and the
+ * workers'; `SUZATARY_COLLECTIONS_ALLOCATIONS=1` instead samples what the page's thread allocates, by function. Run it
+ * under `stdbuf -oL`, so no line lands in a later phase. No gate runs it: `SUZATARY_COLLECTIONS=<file>
+ * scripts/web-e2e.sh collections` does.
  */
 
 import { readFileSync, statSync, writeFileSync } from "node:fs"

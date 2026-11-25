@@ -1,12 +1,8 @@
 /**
- * HOW LONG A PAGE WAITS ON EACH WRITE (docs/LOCALWRITES-PLAN-2026-11-01.md §1): the box's answer to every write route a
- * page waits on today, timed against the lines' server (`bigstore`'s shape). A measurement, not a test: no gate runs it.
- *
- *   scripts/web-e2e.sh writewait
- *
- * It needs no page. It signs each request with `http.requestName` and `signer.sign`, as `web/src/wire/http.ts` does, with
- * a device key it makes here and trusts at the terminal, as `harness.trustThisDevice` does. Each write runs `RUNS` times;
- * it prints the median and the slowest in milliseconds, and writes them as JSON to `$SUZATARY_WRITEWAIT` when that is set.
+ * Measures how long a page waits on the box's answer to each write route, against the lines' server, signing each
+ * request as `web/src/wire/http.ts` does with a device key made here and trusted at the terminal. It prints each
+ * write's median and slowest of `RUNS` and writes them to `$SUZATARY_WRITEWAIT` when that is set; no gate runs it:
+ * `scripts/web-e2e.sh writewait` does, by name.
  */
 
 import { writeFileSync } from "node:fs"
@@ -67,7 +63,7 @@ const frontier = async (path: string): Promise<string> => ((await get(path)) as 
 const device = await keyed()
 atTheTerminal(["device", "trust", device.public], INSTANCE)
 
-// A tab opens, renames, says and stops by a line it seals (stage 2c, stage 3): no route is timed for any.
+// A tab opens, renames, says and stops by a line it seals, so no route is timed for any.
 const linesSince = await frontier("/api/stores/lines/skeleton")
 
 const results: Timed[] = [

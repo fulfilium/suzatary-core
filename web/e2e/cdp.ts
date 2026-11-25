@@ -1,31 +1,8 @@
 /**
- * A browser, driven, with no dependency.
- *
- * The frontend's unit tests run its pure modules under node. Everything a
- * browser actually does — a card that opens a todo, a key that moves a cursor,
- * a write that rolls back, a fold drawn from `localStorage` under a banner that
- * dates it — had no test at all until this file; the screenshots an agent took
- * and looked at were the UI's test suite, which is a test suite whose
- * instrument is an eye.
- *
- * The usual answer is Playwright or Puppeteer, and the usual answer is a
- * dependency tree in a repo that has no npm and does not want one
- * (`scripts/build-web.sh`: one esbuild bundle, no lockfile). It is also not
- * needed. Chromium speaks the DevTools Protocol over a WebSocket; node 24 has
- * a global `WebSocket`; the protocol is JSON in and JSON out. So the client is
- * this file, and the browser is a package in flake.nix beside typst.
- *
- * WHAT IT IS NOT. There is no auto-waiting, no locator algebra, no shadow-DOM
- * piercing, no network mocking beyond one blunt "fail these URLs". Everything
- * here exists because a test below needs it, which is why `waitFor` is a
- * polling loop over `evaluate` rather than a subscription to mutation events:
- * the app holds an SSE connection to `/events`, and an open stream means
- * Chromium's virtual-time budgets never expire, so REAL time and polling are
- * the honest way to wait. That is also why nothing here tries to be fast.
- *
- * READS GO THROUGH `evaluate`, and the assertions are the tests'. A helper
- * that returned "the visible text of the page" would be a second renderer to
- * disagree with; a test asks the DOM the question it means.
+ * A browser driven over the DevTools Protocol with no dependency: Chromium speaks it over a WebSocket and node has a
+ * global `WebSocket`. `waitFor` polls `evaluate` in real time because the app holds an SSE connection to `/events`,
+ * and an open stream means Chromium's virtual-time budgets never expire. Reads go through `evaluate`, and the
+ * assertions are the tests'.
  */
 
 import { spawn } from "node:child_process";
@@ -53,20 +30,14 @@ async function within<T>(promise: Promise<T>, ms: number, what: string): Promise
   return Promise.race([promise, late]).finally(() => clearTimeout(stop));
 }
 
-/**
- * The binary. `chromium` on PATH is the answer inside `nix develop .#triage`
- * and in CI, which is where this is meant to run; `SUZATARY_CHROMIUM` is for
- * driving it from somewhere else without editing anything.
- */
 function chromiumBinary(): string {
   return process.env["SUZATARY_CHROMIUM"] ?? "chromium";
 }
 
 /**
- * A slow device's whole CPU: `SUZATARY_E2E_BROWSER_CPU` cores (`0.67`, say) for the browser and every process it starts,
- * as a cgroup of its own, or none when unset. `Emulation.setCPUThrottlingRate` slows a page's main thread alone, and
- * Chromium refuses it for a worker, so only this slows the core's worker. A machine whose cgroups this user cannot write
- * refuses the run rather than measuring an unslowed browser.
+ * A slow device's whole CPU: `SUZATARY_E2E_BROWSER_CPU` cores for the browser and every process it starts, as a cgroup
+ * of its own; `Emulation.setCPUThrottlingRate` slows a page's main thread alone and Chromium refuses it for a worker.
+ * A machine whose cgroups this user cannot write refuses the run rather than measuring an unslowed browser.
  */
 function cpuCap(): string | null {
   const cores = process.env["SUZATARY_E2E_BROWSER_CPU"];
@@ -93,17 +64,10 @@ function cpuCap(): string | null {
 }
 
 /**
- * The flags, and why each one is here.
- *
- * `--headless=new` is the real browser without a window — the old headless was
- * a separate implementation, and a test that passed only in it would be
- * testing something nobody ships. `--no-sandbox` because the sandbox needs
- * kernel namespaces a CI container may not grant, and the page under test is
- * ours. `--disable-dev-shm-usage` because a CI container's /dev/shm is 64 MB
- * and a renderer that runs out of it dies with no error anyone can read.
- * `--font-render-hinting=none` keeps text metrics stable across machines;
- * nothing here compares pixels, but a hinted glyph can change a line count and
- * therefore a clamped card's height.
+ * The flags: `--headless=new` is the shipped browser (the old headless was a separate implementation); `--no-sandbox`
+ * because a CI container may not grant the kernel namespaces the sandbox needs; `--disable-dev-shm-usage` because a CI
+ * container's /dev/shm is 64 MB and a renderer that runs out of it dies silently; `--font-render-hinting=none` because
+ * a hinted glyph can change a line count and so a clamped card's height.
  */
 /** Whether the browser draws classic scrollbars, which take width from the page as on desktop Linux and Windows. The
  * suites hide them; a scene about the room a scrollbar leaves launches a browser of its own that shows them. */
@@ -119,18 +83,10 @@ function flags(profile: string, scrollbars: Scrollbars = "Hidden"): string[] {
     "--no-default-browser-check",
     "--disable-extensions",
     "--disable-background-networking",
-    // NO BACK/FORWARD CACHE (2026-09-16). The screenshot scenes walk three
-    // fixture origins in one tab, and the browser kept every outgoing document
-    // alive in its back/forward cache with its event streams open, so five to
-    // seven sockets per host stayed ESTABLISHED (measured with `ss` during a
-    // run) against a per-host limit of six, and every later request queued
-    // forever — even a bare `fetch` from the console, while the server
-    // answered the shell in under a millisecond. A scene is a sequence of
-    // pages somebody looks at; nothing in it goes Back. The app closes its
-    // streams on `pagehide` too, for the browsers that do keep a document.
+    // A document kept in the back/forward cache keeps its event streams open against Chromium's six sockets per host,
+    // and every later request queues forever.
     "--disable-features=BackForwardCache",
-    // A backgrounded renderer throttles its timers, and every wait in these
-    // tests is a real-time poll against a page that must keep running.
+    // A backgrounded renderer throttles its timers, and every wait here is a real-time poll.
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
@@ -138,11 +94,9 @@ function flags(profile: string, scrollbars: Scrollbars = "Hidden"): string[] {
     "--force-device-scale-factor=1",
     "--font-render-hinting=none",
     `--user-data-dir=${profile}`,
-    // 0: the kernel picks, and DevToolsActivePort in the profile says which —
-    // a fixed port is a collision between two runs on one box.
+    // 0: the kernel picks, and DevToolsActivePort in the profile says which, so two runs on one box never collide.
     "--remote-debugging-port=0",
-    // The fixture servers speak https with the repository's test certificate (scripts/web-e2e.sh):
-    // trusted by the hash of its key alone, so any other certificate still fails as it would.
+    // The fixture servers' test certificate is trusted by the hash of its key alone, so any other still fails.
     ...((process.env["SUZATARY_E2E_SPKI"] ?? "") === "" ? [] : [`--ignore-certificate-errors-spki-list=${process.env["SUZATARY_E2E_SPKI"]}`]),
     // V8's own switches for a measurement (`--no-wasm-lazy-compilation`, say); no scene sets it.
     ...((process.env["SUZATARY_E2E_JS_FLAGS"] ?? "") === "" ? [] : [`--js-flags=${process.env["SUZATARY_E2E_JS_FLAGS"]}`]),
@@ -216,8 +170,7 @@ class Connection {
     else found.push(listener);
   }
 
-  /** One command. `sessionId` is what makes a page command reach the page
-   * rather than the browser — flat attachment, so there is one socket. */
+  /** One command; `sessionId` makes a page command reach the page rather than the browser (flat attachment). */
   send(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<Record<string, unknown>> {
     if (this.closed !== "") return Promise.reject(new Error(`${this.closed} (${method})`));
     const id = this.next++;
@@ -256,8 +209,7 @@ interface KeySpec {
   readonly text?: string;
 }
 
-/** The named keys these tests press. A table rather than a lookup library:
- * every entry is here because a shortcut in `web/src/keys.ts` uses it. */
+/** The named keys these tests press, each because a shortcut in `web/src/keys.ts` uses it. */
 const NAMED: Record<string, KeySpec> = {
   Enter: { key: "Enter", code: "Enter", keyCode: 13, text: "\r" },
   Escape: { key: "Escape", code: "Escape", keyCode: 27 },
@@ -288,11 +240,7 @@ function keySpec(key: string): KeySpec {
 }
 
 export interface WaitOptions {
-  /** Milliseconds, defaulting to `WAIT_MS` — the machine's budget, not a
-   * number chosen here. Every wait in this suite is real time against a page
-   * holding an SSE connection, and a flaky timeout is a worse failure than a
-   * slow test. A scene that names its own number is naming a claim about that
-   * ONE wait; everything else follows the environment. */
+  /** Milliseconds, defaulting to `WAIT_MS`, the machine's budget. */
   readonly timeout?: number;
   readonly interval?: number;
 }
@@ -314,12 +262,8 @@ type Capture = { fragments: readonly string[]; answers: Map<string, Answer>; unr
 const NO_BODY = [204, 304];
 
 /**
- * One page, and the only handle the tests hold.
- *
- * Every method takes a CSS selector or a JavaScript EXPRESSION. Expressions,
- * not statements: `evaluate` hands the string to `Runtime.evaluate`, so a
- * multi-step read is written as an immediately-invoked arrow function, and
- * what comes back is whatever it returns by value.
+ * One page: every method takes a CSS selector or a JavaScript expression, never a statement, since `evaluate` hands
+ * the string to `Runtime.evaluate`.
  */
 /** A network as Chromium emulates it: each request waits `latency` ms and moves at the throughputs, in bytes a second. */
 export type Conditions = { readonly offline: boolean; readonly latency: number; readonly downloadThroughput: number; readonly uploadThroughput: number };
@@ -379,13 +323,11 @@ export class Page {
     return within(this.connection.send(method, params, this.session), ANSWER_MS, `the DevTools command ${method}`);
   }
 
-  /** Close this tab. */
   async close(): Promise<void> {
     await this.command("Page.close");
   }
 
-  /** CSS pixels the page believes it has. The app resolves its route against
-   * `window.innerWidth`, so this is what decides a pushed screen from a pane. */
+  /** CSS pixels the page believes it has; the app resolves its route against `window.innerWidth`. */
   async viewport(width: number, height: number): Promise<void> {
     await this.command("Emulation.setDeviceMetricsOverride", {
       width,
@@ -396,32 +338,10 @@ export class Page {
   }
 
   /**
-   * Go somewhere and wait until the page is there.
-   *
-   * Waiting on `Page.loadEventFired` looks like the obvious answer and is
-   * wrong: this app is a hash router, so most of its navigation is
-   * SAME-DOCUMENT and fires no load event at all, and a test that waited for
-   * one would hang on every `#/todo/<id>`. The condition that holds for both
-   * kinds is the one below — the location IS the one asked for, and the
-   * document is complete. A full navigation only publishes the new href when
-   * it commits, at which point `readyState` is "loading", so this cannot pass
-   * on the outgoing page.
-   *
-   * ⚠️ A FRAGMENT CHANGE IS MADE FROM INSIDE THE PAGE, NOT THROUGH THE
-   * PROTOCOL (2026-09-16). `Page.navigate` to a URL that differs from the
-   * current one only in its hash is a same-document navigation the browser
-   * process drives, and after one particular sequence — an act on the write
-   * fixture, a full load elsewhere, then a fragment `Page.navigate` — every
-   * request the page issued afterwards (`/api/about`, `/api/life/fold`) was
-   * called and never resolved, while the identical `fetch` from the console
-   * completed at once and the server answered the shell in under a
-   * millisecond. Reproduced in isolation four times; setting `location.hash`
-   * from inside the page instead worked every time. No user navigates this
-   * app through the devtools protocol, so the harness now changes a fragment
-   * the way a click does and keeps `Page.navigate` for real loads. This was
-   * the "shots flake under load" every agent reported this week: the four
-   * screenshot scenes are the ones that walk a dozen fragments in one
-   * document.
+   * Go somewhere and wait until the location is the one asked for and the document is complete: a hash route fires no
+   * load event, and a full navigation publishes its href only at commit, when `readyState` is "loading".
+   * ⚠️ A fragment change is made from inside the page, since after an act on the write fixture, a full load elsewhere,
+   * then a fragment-only `Page.navigate`, every later request of the page stayed unresolved.
    */
   /** A page of the app has run its startup (`main.ts`), or its loader has said why it could not: `boot.js` loads the
    * app after the document's own load, so a complete document is not yet an app listening for keys. */
@@ -438,15 +358,8 @@ export class Page {
     if (sameDocument) {
       await this.evaluate(`(() => { location.hash = ${JSON.stringify(there.hash)}; return true; })()`);
     } else {
-      // ⚠️ A CROSS-ORIGIN LOAD GOES THROUGH `about:blank` FIRST (2026-09-16).
-      // The screenshot scenes walk three fixture origins in one tab, and
-      // after enough switches every request to one of them hung — even a
-      // bare `fetch` from the console — while the server answered the shell
-      // in under a millisecond. The browser was keeping the outgoing
-      // documents alive with their event streams open, and the per-host
-      // connection pool filled with connections no page would ever release.
-      // Landing on `about:blank` between origins tears the old document down
-      // deterministically; a same-origin load replaces its document anyway.
+      // ⚠️ A cross-origin load goes through `about:blank` first, which tears the outgoing document and its event
+      // streams down, so the per-host connection pool cannot fill with connections no page will release.
       if (here.origin !== there.origin && here.origin !== "null") {
         await this.command("Page.navigate", { url: "about:blank" });
         await this.waitFor(`location.href === "about:blank"`, { timeout: 20000 });
@@ -460,9 +373,7 @@ export class Page {
     });
   }
 
-  /** A real reload. The sentinel is what tells a fresh document from the one
-   * that was already complete a moment ago — `location.href` cannot, because a
-   * reload does not change it. */
+  /** A real reload; the sentinel tells the fresh document from the old, since a reload does not change `location.href`. */
   async reload(): Promise<void> {
     await this.evaluate(`window.__e2eReloading = true`);
     await this.command("Page.reload", {});
@@ -471,11 +382,8 @@ export class Page {
     });
   }
 
-  /** A JavaScript expression, evaluated in the page, returned by value. A
-   * promise is awaited; a thrown error becomes a thrown error here, and so does
-   * a promise not settled within `timeout` (four wait budgets), naming the
-   * expression: a page promise that never settles fails the scene with what it
-   * waited for instead of holding it until the test's own timeout. */
+  /** A JavaScript expression evaluated in the page and returned by value; a throw, or a promise not settled within
+   * `timeout`, throws here naming the expression. */
   async evaluate<T>(expression: string, timeout = ANSWER_MS): Promise<T> {
     return this.evaluateIn<T>(this.session, expression, timeout);
   }
@@ -495,33 +403,12 @@ export class Page {
   }
 
   /**
-   * Poll until the expression is truthy. THE waiting primitive: see the file
-   * header for why it is a poll and not a subscription.
-   *
-   * ⚠️ THE EXPRESSION MAY BE A PROMISE, and it must be allowed to be — a wait
-   * for something the page has to ASK for (`fetch("/api/fold")…`,
-   * `indexedDB.databases()`) is the most useful kind there is. It used to be a
-   * bare `Boolean(<expr>)`, and `Boolean(aPromise)` is `true` for every promise
-   * ever made, so a promise-shaped wait returned on the FIRST poll and waited
-   * for nothing. Several scenes were passing that way, and passing loudly:
-   * every assertion after them still ran, just against whatever the page
-   * happened to hold at that instant.
-   *
-   * `Promise.resolve(…).then(Boolean)` fixes both shapes at once. `evaluate`
-   * sets `awaitPromise`, so a sync expression costs one microtask and an async
-   * one is finally awaited. A synchronous THROW still throws before
-   * `Promise.resolve` sees it, so the loop's catch is unchanged.
+   * Poll until the expression is truthy. ⚠️ The expression may be a promise: `Promise.resolve(…).then(Boolean)` awaits
+   * it, where a bare `Boolean(aPromise)` is true on the first poll.
    */
   async waitFor(expression: string, options: WaitOptions = {}): Promise<void> {
-    // A scene's own number is a claim about how long THAT wait takes relative
-    // to the others; `STRETCH` moves all of them onto this machine at once.
-    // FLOORED at a quarter of the budget (2026-09-14, project chain
-    // `e2edestinationsflake`): a busy box's budget can be several times the
-    // baseline, and the shortest scene-local waits — a 4 s toast — are
-    // exactly the ones a loaded box's own scheduling jitter eats, so a
-    // relative judgement that small is not trustworthy at any scale. The
-    // floor is on the BUDGET, not on the scene's own number, so an idle box
-    // (STRETCH 1) never sees it move.
+    // `STRETCH` moves every scene's own number onto this machine, and the stretched wait is then floored at a quarter of
+    // `WAIT_MS`, since a loaded box's jitter eats the shortest waits, so an idle box never sees a scene's own number move.
     const timeout = Math.max(
       Math.round((options.timeout ?? WAIT_MS) * STRETCH),
       Math.round(WAIT_MS / 4),
@@ -534,9 +421,7 @@ export class Page {
         if (await this.evaluate<boolean>(`Promise.resolve(${expression}).then(Boolean)`)) return;
         last = "it stayed false";
       } catch (error: unknown) {
-        // A navigation mid-poll destroys the context; that is a reason to try
-        // again, not to fail. A real error survives the timeout and is
-        // reported with the expression that caused it.
+        // A navigation mid-poll destroys the context, so a throw is retried until the timeout.
         last = error instanceof Error ? error.message : String(error);
       }
       if (Date.now() >= until) throw new Error(`waited ${timeout}ms for ${expression}\n  last: ${last}`);
@@ -544,10 +429,7 @@ export class Page {
     }
   }
 
-  /** The box of whatever `finder` evaluates to, after bringing it into view.
-   * `finder` is an expression yielding an Element, so a caller can reach a
-   * control the way a person does — "the chip that says home" — without the
-   * page having to grow an attribute for the test's benefit. */
+  /** The box of the Element `finder` evaluates to, after bringing it into view. */
   private async box(finder: string): Promise<{ x: number; y: number }> {
     const literal = JSON.stringify(finder);
     return this.evaluate(`(() => {
@@ -575,23 +457,12 @@ export class Page {
     })()`);
   }
 
-  /**
-   * A real mouse click at the element's centre — not `element.click()`.
-   *
-   * The difference matters here: a card is `role="link"` that CONTAINS
-   * buttons, and its handler asks what the click landed on
-   * (`card.ts::onControl`). Synthesising the DOM call would skip hit testing
-   * and pass through anything covering the target, which is exactly the bug a
-   * docked sheet over a list would cause.
-   */
+  /** A real mouse click at the element's centre, never `element.click()`, which would skip hit testing. */
   async click(selector: string): Promise<void> {
     await this.clickNode(`document.querySelector(${JSON.stringify(selector)})`);
   }
 
-  /** Click the first element matching `selector` whose visible text is `text`.
-   * The app labels its controls with words rather than ids — a category chip
-   * says "home" — and finding one by what it says is closer to what a person
-   * does than adding a hook to the page for the test to grab. */
+  /** Click the first element matching `selector` whose visible text is `text`. */
   async clickText(selector: string, text: string): Promise<void> {
     await this.clickNode(
       `[...document.querySelectorAll(${JSON.stringify(selector)})].find((node) => node.textContent.trim() === ${JSON.stringify(text)})`,
@@ -599,23 +470,9 @@ export class Page {
   }
 
   /**
-   * Click whatever an expression yields, once it is somewhere a finger could
-   * reach it.
-   *
-   * The box is retried, and required to HOLD STILL, because "not clickable
-   * yet" is a transient state in this app rather than an error: the add sheet
-   * slides up over 220ms. A control asked for its rectangle mid-transition is
-   * either off the bottom of the screen — which the box check catches — or, far
-   * worse, in a position it is about to leave, so the click lands on whatever
-   * has slid into that point by the time the events are dispatched. That is
-   * not hypothetical: it is what happened here, and the symptom was a test
-   * that chose the "Deadline" segment while asking for a category chip.
-   *
-   * So the wait is for the same rectangle twice, a frame or two apart, and the
-   * press then counts only where it lands on the thing (`pressAt`). It ends when
-   * the thing is actually hittable, actually still and actually pressed, and
-   * the failure it eventually reports is the real one — covered by what,
-   * hidden, never settled, or moved under every press.
+   * Click whatever an expression yields once its box holds still for two reads 90 ms apart, since a control in a
+   * transition (the add sheet slides up over 220ms) is in a position it is about to leave; the press counts only where
+   * it lands on the thing (`pressAt`).
    */
   async clickNode(finder: string, timeout = 5000): Promise<void> {
     const until = Date.now() + timeout;
@@ -643,17 +500,9 @@ export class Page {
 
   /**
    * One press at a point, which counts only if it lands on what `finder` yields, down and click alike: null when it
-   * did, else what it met.
-   *
-   * A box held still for 90 ms is not one held still until the press arrives: a banner the page draws above it or
-   * takes away (the stale bar, a card that needs the owner) moves it, and the press lands on whatever slid into that
-   * point; or it goes down on the node and comes up beside it, so its click reaches an ancestor; or the page draws the
-   * node again between the two, so the click goes to one no longer on the page and the window never hears it. So the
-   * page decides at the press itself. A guard in the capture phase lets the press go down only on the node, and lets
-   * its own click through only when that too lands inside the node; every other event of a missed press is
-   * swallowed, so it does nothing at all and is aimed again where the node is now. A press that landed is never
-   * repeated, and one that went down on a node the press itself took away, so that nothing is found where it was,
-   * landed.
+   * did, else what it met. A capture-phase guard swallows every event of a missed press, so it does nothing and is
+   * aimed again; a press that landed is never repeated, and one that went down on a node the press itself took away
+   * (nothing is found where it was) counts as landed.
    */
   private async pressAt(finder: string, x: number, y: number): Promise<string | null> {
     await this.evaluate(`(() => {
@@ -747,8 +596,7 @@ export class Page {
     })`);
   }
 
-  /** Focus a field and insert text, character events and all — so a page's
-   * `input` listeners run exactly as they do under a thumb. */
+  /** Focus a field and insert text, so a page's `input` listeners run as they do under a thumb. */
   async type(selector: string, text: string): Promise<void> {
     const literal = JSON.stringify(selector);
     await this.evaluate(`(() => {
@@ -767,8 +615,7 @@ export class Page {
       (modifiers.ctrl === true ? CTRL : 0) |
       (modifiers.meta === true ? META : 0) |
       (modifiers.shift === true ? SHIFT : 0);
-    // A modified key produces no character; sending one would type a letter
-    // into the field the chord was meant to escape.
+    // A modified key produces no character; sending one would type a letter into the field.
     const text = bits === 0 || bits === SHIFT ? spec.text : undefined;
     const base = { key: spec.key, code: spec.code, windowsVirtualKeyCode: spec.keyCode, modifiers: bits };
     await this.command("Input.dispatchKeyEvent", {
@@ -779,19 +626,7 @@ export class Page {
     await this.command("Input.dispatchKeyEvent", { ...base, type: "keyUp" });
   }
 
-  /**
-   * The network, held at arm's length.
-   *
-   * Two things need it and they are one mechanism. `failRequests` is a backend
-   * that is not there — the page keeps running on what it already has, which
-   * is what the local-first cache and its banner are about. `holdRequests` is
-   * a backend that has not ANSWERED YET, which is the only way to check
-   * optimism without a race: with the act's POST paused at the network the
-   * server has not seen it, so a card already gone from the list is gone
-   * because the app decided it was, and the fold still says otherwise. Polling
-   * for the gap between a click and a 5ms round trip is how a test comes out
-   * confident on a laptop and flaky in CI — measured, on the rollback scene.
-   */
+  /** Intercept what `fragments` name with `verdict`; holding a POST is the only race-free check of optimism. */
   private async intercept(fragments: readonly string[], verdict: Verdict, stage: Stage = "Request"): Promise<void> {
     this.answer = verdict;
     this.paused = { fragments, stage };
@@ -799,9 +634,8 @@ export class Page {
   }
 
   /**
-   * Pause what `intercept` and every running capture name, and nothing else: only what a scene names passes through
-   * this process, so a page's other reads never wait on it. One `Fetch.enable` holds both sets, since each replaces the
-   * last.
+   * Pause what `intercept` and every running capture name, and nothing else, so a page's other reads never wait on this
+   * process; one `Fetch.enable` holds both sets, since each replaces the last.
    */
   private async fetchWhat(): Promise<void> {
     this.listen();
@@ -831,8 +665,7 @@ export class Page {
     const status = Number(params["responseStatusCode"] ?? 0);
     const headers = Array.isArray(params["responseHeaders"]) ? (params["responseHeaders"] as { name?: string; value?: string }[]) : [];
     const streamed = headers.some((h) => h.name?.toLowerCase() === "content-type" && (h.value ?? "").startsWith("text/event-stream"));
-    // A redirect's body is never the page's (Chromium keeps none to give): what the page follows is
-    // its Location, so that is the answer read, and a value it carried is still seen.
+    // Chromium keeps no body for a redirect, so its Location is the answer read.
     const location = headers.find((h) => h.name?.toLowerCase() === "location")?.value ?? "";
     const answer: Answer =
       "responseErrorReason" in params || NO_BODY.includes(status)
@@ -893,10 +726,8 @@ export class Page {
   }
 
   /**
-   * Intercept nothing new, and keep the domain enabled. `Fetch.disable` abandons a response the
-   * interceptor holds whose `requestPaused` has not reached this process yet: the request never
-   * finishes (a lost-tap scene's Inbox reload hung on one for good). Enabled, the late event still
-   * arrives and is let through.
+   * Intercept nothing new, and keep the domain enabled: `Fetch.disable` abandons a held response whose `requestPaused`
+   * has not reached this process yet, and that request never finishes.
    */
   private async narrow(): Promise<void> {
     this.answer = null;
@@ -904,10 +735,7 @@ export class Page {
     await this.fetchWhat();
   }
 
-  /**
-   * Let every request whose URL contains one of these reach the box, and fail its answer on the way
-   * back: the act happened and the page never hears of it.
-   */
+  /** Let every request whose URL contains one of these reach the box, and fail its answer on the way back. */
   async loseResponses(fragments: readonly string[]): Promise<void> {
     await this.intercept(fragments, "lose", "Response");
   }
@@ -928,12 +756,7 @@ export class Page {
     await this.intercept(fragments, "fail");
   }
 
-  /**
-   * Put the network back. `holdRequests` returns its own undo because a held
-   * request has to be let through by hand; a FAILED one is over, so undoing
-   * `failRequests` is just this — and the queue tests need it, because the
-   * whole thing they are about is what happens when a connection comes back.
-   */
+  /** Put the network back; `holdRequests` returns its own undo, since a held request is let through by hand. */
   async resumeRequests(): Promise<void> {
     await this.narrow();
   }
@@ -954,8 +777,7 @@ export class Page {
     return [...this.heldAt];
   }
 
-  /** Pause every request whose URL contains one of these. The returned
-   * function lets them all through and stops intercepting. */
+  /** Pause every request whose URL contains one of these; the returned function lets them through and stops. */
   async holdRequests(fragments: readonly string[]): Promise<() => Promise<void>> {
     await this.intercept(fragments, "hold");
     return async () => {
@@ -972,21 +794,10 @@ export class Page {
   }
 
   /**
-   * RECORD EVERY REQUEST AND RESPONSE BODY MATCHING ONE OF `fragments`: each
-   * request over the `Network` domain, each answer's body over `Fetch`, paused
-   * at its headers, where Chromium holds the whole body before the page reads
-   * any of it, and let through. `Network.getResponseBody` cannot be asked: a
-   * response the page has read whole can still end as `net::ERR_ABORTED`, its
-   * body then gone ("No data found for resource"), and an answer read as
-   * nothing passes a scene that asserts no answer carried a secret. A body
-   * that cannot be read fails the capture by its URL, and `stop` waits for
-   * no more of that request than its headers; a request that got no answer
-   * has none. `stop` waits for every other request to end and returns them.
-   *
-   * This is the "not only the DOM" half of a scene like settings' secret
-   * write: the DOM only ever shows what the page CHOSE to render, and a
-   * route that leaked a value into a field nobody points at would still
-   * pass a DOM-only assertion.
+   * Record every request and response body matching one of `fragments`, each answer's body read over `Fetch` paused at
+   * its headers, since `Network.getResponseBody` loses the body of a response that ends as `net::ERR_ABORTED`, and an
+   * answer read as nothing would pass a scene that asserts no answer carried a secret. A body that cannot be read fails
+   * the capture by its URL; `stop` waits for every other request to end and returns them.
    */
   async captureNetwork(
     fragments: readonly string[],
@@ -1009,8 +820,7 @@ export class Page {
         | undefined;
       const url = request?.url ?? "";
       if (!running || session !== this.session || typeof requestId !== "string" || !matches(url)) return;
-      // A redirect's next hop comes under the same id, and the request still ends once: the entry `stop` may already
-      // be waiting on is the one that hears it.
+      // A redirect's next hop comes under the same id, and the request still ends once.
       const held = byId.get(requestId);
       if (held !== undefined) {
         held.url = url;
@@ -1021,8 +831,7 @@ export class Page {
         resolve = done;
       });
       byId.set(requestId, { url, requestId, requestBody: request?.postData ?? "", finished, resolve });
-      // A body over CDP's inline threshold arrives as `hasPostData` with no
-      // `postData` — `Network.getRequestPostData` is the fetch for it.
+      // A body over CDP's inline threshold arrives as `hasPostData` with no `postData`.
       if (request?.hasPostData === true && (request.postData ?? "") === "") {
         void this.command("Network.getRequestPostData", { requestId })
           .then((result) => {
@@ -1059,18 +868,8 @@ export class Page {
     };
   }
 
-  /**
-   * WHICH THEME THE PAGE BELIEVES THE READER'S MACHINE ASKED FOR.
-   *
-   * The stylesheet's dark half is behind `prefers-color-scheme`, which is the
-   * machine's setting and not somewhere a page can be navigated — so a scene
-   * that wants to see the dark palette emulates the media feature rather than
-   * clicking something. `null` hands the browser's own answer back.
-   *
-   * The app's OWN override (the More sheet's theme row) writes `data-theme` on
-   * the root instead, and that one is clickable. The two are the same question
-   * asked of two different authorities, which is why both are worth a picture.
-   */
+  /** Which theme the page believes the machine asked for, by emulating `prefers-color-scheme`; `null` hands the browser's
+   * own answer back. */
   async colorScheme(scheme: "light" | "dark" | null): Promise<void> {
     await this.command("Emulation.setEmulatedMedia", {
       features: scheme === null ? [] : [{ name: "prefers-color-scheme", value: scheme }],
@@ -1198,7 +997,7 @@ export class Page {
   /**
    * Everything the page said and fetched from now on, each line stamped with milliseconds since the journal began:
    * a request sent, its status, its end (or failure), a console line, and whatever `mark` a scene adds between its
-   * steps. A scene that failed under load reads it beside its DOM, so the order of what happened is evidence.
+   * steps.
    */
   async journal(): Promise<Journal> {
     const t0 = Date.now();
@@ -1406,8 +1205,7 @@ export class Page {
     await Promise.all([...this.workers.keys()].map((w) => this.toWorker(w)));
   }
 
-  /** A full-page PNG at `path`. The picture is the deliverable when the reader
-   * is a person; the assertions above are the deliverable when it is CI. */
+  /** A full-page PNG at `path`. */
   async screenshot(path: string): Promise<void> {
     const result = await this.command("Page.captureScreenshot", { format: "png" });
     writeFileSync(path, String(result["data"]), "base64");
@@ -1478,8 +1276,7 @@ export interface Browser {
   close: () => Promise<void>;
 }
 
-/** Where chromium wrote the port it chose. Two lines: the port, then the
- * browser target's path. */
+/** Where chromium wrote the port it chose: two lines, the port, then the browser target's path. */
 async function devtoolsUrl(profile: string, child: ChildProcess, stderr: () => string): Promise<string> {
   const file = join(profile, "DevToolsActivePort");
   // Scaled like every other wait: a cold runner starts a browser slowly too.
@@ -1499,7 +1296,6 @@ async function devtoolsUrl(profile: string, child: ChildProcess, stderr: () => s
   }
 }
 
-/** Launch one browser with one page attached. */
 export async function launch(scrollbars: Scrollbars = "Hidden"): Promise<Browser> {
   const profile = mkdtempSync(join(tmpdir(), "suzatary-e2e-profile-"));
   const group = cpuCap();
@@ -1576,22 +1372,9 @@ export async function launch(scrollbars: Scrollbars = "Hidden"): Promise<Browser
 }
 
 /**
- * ⚠️ A SIGNAL IS A REQUEST, NOT AN EVENT (CI, 2026-09-10: `ENOTEMPTY,
- * Directory not empty: …/suzatary-e2e-profile-…`).
- *
- * `child.kill` returns as soon as the signal is DELIVERED, and Chromium is a
- * tree — a browser process, a zygote, a renderer per tab, a crashpad handler —
- * each of which may still be flushing a Leveldb file into the profile when the
- * parent has already gone. Removing the directory in the same tick therefore
- * races children that are still creating entries inside it, and `rm -rf` on a
- * directory being written into fails with ENOTEMPTY rather than with anything
- * that names the cause. It passed on this box for weeks and failed on a loaded
- * runner, which is what a race looks like.
- *
- * So: wait for the process this file spawned to be REAPED, then remove. `exit`
- * fires for a killed child too, and a child that has already exited will never
- * fire it again — hence the `exitCode`/`signalCode` check before subscribing,
- * and a bounded wait so a wedged process cannot hang the suite's teardown.
+ * ⚠️ `child.kill` returns once the signal is delivered while Chromium's process tree may still be writing the profile,
+ * so the profile is removed only after the spawned process is reaped, within a bound so a wedged one cannot hang
+ * teardown; `exit` never fires again for a child that has already exited.
  */
 async function gone(child: ChildProcess, timeout = Math.round(5000 * STRETCH)): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
@@ -1606,11 +1389,8 @@ async function gone(child: ChildProcess, timeout = Math.round(5000 * STRETCH)): 
 }
 
 /**
- * And remove with RETRIES, because the grandchildren are not ours to wait for:
- * a crashpad handler is re-parented to init and this process never learns when
- * it is done. A few attempts a beat apart covers the flush; a profile that
- * still will not go is a temp directory, so saying so and moving on is better
- * than failing a green suite on its own cleanup.
+ * Remove with retries, since a crashpad handler is re-parented to init and never waited for; a profile that will not
+ * go is a temp directory, left with a warning rather than failing a green suite.
  */
 async function discard(profile: string, attempts = 5): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {

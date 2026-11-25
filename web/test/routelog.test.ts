@@ -1,6 +1,3 @@
-// The address register's log: going writes past the pointer, back and forward move it, and a place read again is the
-// place as it was left.
-
 import { test } from "node:test"
 import assert from "node:assert/strict"
 

@@ -1,5 +1,4 @@
-// The one line saying what this device could not read, objects and chains alike, opened to each name and why. Nothing is left out silently,
-// and nothing left out fails a page: the page draws what could be read, and this says what could not.
+// Nothing is left out silently, and nothing left out fails a page: the page draws what could be read, and this line says what could not.
 
 import { el } from "../view/dom"
 import disclosure from "../view/disclosure"

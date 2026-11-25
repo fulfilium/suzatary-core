@@ -1,6 +1,3 @@
-// The shell: what the tab hears becomes an `app.Event`, and after each one the shell is drawn from `App` —
-// the chrome around the page, and the page `pages.table` mounts for its screen.
-
 import { me, reportPushToken, waitingCount } from "./wire/api";
 import storesync from "./prodrome/storesync";
 import intentsync from "./prodrome/intentsync";
@@ -71,8 +68,7 @@ const chromeNow = (): secretary.Chrome => (wide.matches ? "Wide" : "Phone");
 // The talk about the page in view, as heard since the page was arrived at.
 let heard: { readonly about: string; readonly talk: secretary.Heard; readonly unhear: () => void } | null = null;
 const heardTalk = (about: string): secretary.Heard => (heard?.about === about ? heard.talk : "Unheard");
-// The reference the page in view names itself by, where it does (`data-about` beside `data-for`, its own address): a
-// message names its row's hash, whatever id its address used.
+// The reference the page in view names itself by (`data-about` beside `data-for`): a message names its row's hash, whatever id its address used.
 let named: { readonly for: string; readonly about: string } | null = null;
 const namedFor = (route: Route): string | null => (named !== null && named.for === hrefOf(route) ? named.about : null);
 const said = (route: Route): secretary.Said => secretary.of(route, chromeNow(), app.now().chain, presses.get(), heardTalk, namedFor(route));
@@ -82,8 +78,8 @@ const host = tiles.install(byId("view"), byId("layers"), desk, {
   release: (key) => void hide(key),
 });
 
-// The talk the say on the page in view reads, asked anew at each arrival and heard as it moves; none is asked where a
-// press or the page decides. Only an answer that moves it tells the desk.
+// The talk the say on the page in view reads, asked anew at each arrival and heard as it moves; only an answer that
+// moves it tells the desk.
 const listen = (arrived: boolean): void => {
   const asks = said(app.route(app.now())).asks;
   if (!arrived && (heard?.about ?? null) === asks) return;
@@ -112,9 +108,9 @@ new MutationObserver(() => {
   void host.dock();
 }).observe(byId("view"), { subtree: true, childList: true, attributes: true, attributeFilter: ["data-about", "data-for"] });
 
-// Where the keyboard goes once a press's own move has ended: into the secretary's region after a show, to the header's
-// door after a hide. It is that press's alone: called once the press has begun its move, it ends unfound when another
-// press or another move (a link followed meanwhile) begins before that move ends, and is spent once it ends.
+// The keyboard goes to the secretary's region after a show and to the header's door after a hide, but only if no other
+// press or move (a link followed meanwhile) began before that press's own move ended; it is called once the press has
+// begun its move, and spent when that move ends.
 let pressed = 0;
 const focusAfter = async (to: "Secretary" | "Door"): Promise<void> => {
   const mine = ++pressed;
@@ -127,9 +123,8 @@ const focusAfter = async (to: "Secretary" | "Door"): Promise<void> => {
   target?.focus({ preventScroll: to === "Door" });
 };
 
-// Show, from the header's door once no move is in flight, for the page the drawing committed: its press, and, where the
-// room holds the secretary only behind the page, the tree focused there, a new entry of the history. Beside the page,
-// no entry: the address names the secretary only where it has the focus.
+// Where the room holds the secretary only behind the page, a show is a new history entry; beside the page, none: the
+// address names the secretary only where it has the focus.
 const show = async (): Promise<void> => {
   await host.idle();
   const c = host.committed();
@@ -143,9 +138,8 @@ const show = async (): Promise<void> => {
 };
 byId("beside").addEventListener("click", () => void show());
 
-// Hide, the secretary's own, once no move is in flight: the press on the page it is about, then, where it has the
-// focus, the page before it, as a close goes: Back where that page is the entry before (the show that made it), else in
-// its place. Either way Back never shows it again. Unfocused beside the page, no entry.
+// Where the secretary has the focus, a hide goes to the page before it as a close goes (Back where that page is the
+// entry before, else in its place), so Back never shows it again; unfocused beside the page, no entry.
 const hide = async (key: number): Promise<void> => {
   await host.idle();
   const c = host.committed();

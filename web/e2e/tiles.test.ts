@@ -1,13 +1,8 @@
 /**
- * THE TILES AND THE WINDOW (docs/TILEDLAYOUT-PLAN-2026-11-22.md §13). The arrangement asks the room the tiles stand in
- * (the window less the body's gutters); the chrome asks the window. Tiles stand side by side exactly where the room holds
- * their least widths, at every width and text size, the secretary's tile among them, and no tile is drawn under its least. The
- * host draws what the desk answers and nothing else: the same drawing changes nothing on the page, a tile kept across
- * a move keeps its element, its focus and where its page stood on the screen, and a write in flight when its tile goes
- * still lands.
- *
- * `SUZATARY_SHOTS` (or a temp directory) receives the pictures of the last scene: the list, a todo beside it and Back,
- * at 390, 988, 1,100 (with the secretary open), 1,440 and 1,920 px; and the pictures of the scenes after it.
+ * The arrangement asks the room the tiles stand in (the window less the body's gutters) and the chrome asks the window:
+ * tiles stand side by side exactly where the room holds their least widths, at every width and text size. A tile kept
+ * across a move keeps its element, its focus and where its page stood, and a write in flight when its tile goes still
+ * lands; `SUZATARY_SHOTS` (or a temp directory) receives the pictures of the last scenes.
  */
 
 import assert from "node:assert/strict";
@@ -31,7 +26,6 @@ const listed = `document.querySelectorAll(".tree .row").length > 0`;
 const todoDrawn = `document.querySelector(".tile .todoview .todobody") !== null`;
 const beside = `document.querySelector("#view.tiled .tile .todospane") !== null && ${todoDrawn}`;
 
-// What the window shows, read in one go: the chrome's rule, the room, the tiles' boxes, and every bar's edge.
 type Box = { top: number; bottom: number };
 type Seen = {
   wide: boolean;
@@ -46,7 +40,6 @@ type Seen = {
   scrolls: boolean;
   sideways: boolean;
   inner: { w: number; h: number };
-  // Whether the header's door is drawn.
   door: boolean;
 };
 const SEEN = `(() => {
@@ -75,20 +68,16 @@ const units = (s: Seen): number => (s.room * 16) / s.root;
 const { list, divider: gap, column, beside: aside } = tokens.measure;
 const TWO = list + gap + column;
 
-// How many tiles a todo opened from the list draws in a room of `w`, the secretary hidden and shown, from each width on,
-// until the next: the list beside the todo from 824 px, which the todo and the secretary take from 856 px, and all three
-// from 1,200 px (the least widths of `tokens.typ` and two dividers).
+// How many tiles a todo opened from the list draws from each room width on, the secretary hidden and shown.
 const TILES: { readonly [K in "hidden" | "shown"]: readonly (readonly [number, number])[] } = {
   hidden: [[0, 1], [list + gap + column, 2]],
   shown: [[0, 1], [list + gap + column, 2], [list + gap + column + gap + aside, 3]],
 };
 const tilesFor = (w: number, open: boolean): number => (TILES[open ? "shown" : "hidden"].filter(([from]) => w >= from).pop() ?? [0, 1])[1];
 
-// THE LAW: no tile is ever under a bar, in either chrome. Tiles stand exactly where the room holds their least widths
-// and the dividers between; each at least its least width; under the header, above the bar at the foot and the add
-// sheet's handle, inside the window; the page does not scroll while they stand, and never sideways.
+// The law: tiles stand exactly where the room holds their least widths and dividers, none under a bar in either chrome.
 // The header's door is hidden exactly where the secretary is drawn, on a todo at every width and on the list under the
-// wide chrome; never both.
+// wide chrome.
 const agree = (s: Seen, where: string, open = false): void => {
   assert.equal(s.tiles.length, tilesFor(units(s), open), `${where}: a room of ${units(s)} px draws ${s.tiles.length} tile(s)`);
   const drawn = s.tiles.some((t) => t.cls === "aside");
@@ -97,9 +86,7 @@ const agree = (s: Seen, where: string, open = false): void => {
   stand(s, where);
 };
 
-// The part of the law that holds for any tiles (a page read as a column, `other`, among them): each at least its least
-// width, under the header, above every bar and the window's foot; the page never scrolls sideways,
-// nor at all while tiles stand together.
+// The part of the law that holds for any tiles, a page read as a column (`other`) among them.
 const stand = (s: Seen, where: string): void => {
   const least = { list, todo: column, aside, other: column };
   assert.equal(s.sideways, false, `${where}: the page scrolls sideways`);
@@ -121,14 +108,12 @@ const seen = (): Promise<Seen> => app.page.evaluate<Seen>(SEEN);
 // Whether the room at a window of `w` px (16 px text, the secretary hidden, no scrollbar) holds two tiles.
 const twoAt = (w: number): boolean => w - 2 * tokens.measure.gutter >= TWO;
 
-// The one door that shows the secretary, the header's, at every width; and the secretary's own Hide, wherever it is
-// drawn.
+// The one door that shows the secretary, the header's, at every width.
 const door = `"#beside"`;
 const drawnAside = `document.querySelector("#view > .tile .panelbody") !== null`;
-// A door is drawn and the secretary is not.
 const offered = `!(${drawnAside}) && document.querySelector("#beside:not([hidden])") !== null`;
 const pressDoor = async (page = app.page): Promise<void> => page.click(await page.evaluate<string>(door));
-// A document loaded anew at `hash`, this tab's presses let go: a scene of the secretary's starts from no say of another.
+// This tab's presses let go, so a scene of the secretary's starts from no say of another.
 let loads = 0;
 const fresh = async (hash: string, size: readonly [number, number]): Promise<void> => {
   await app.resize(size);
@@ -161,7 +146,6 @@ app.scene("from 840 to 1010 px, with the secretary open and hidden, at the brows
       assert.equal(s.root, text, "the browser's text size is the root's");
       agree(s, `${px(w)} px at ${text} px text`);
     }
-    // Open, the secretary is a tile like any other, from the width where it fits beside the todo.
     await panelOpen(true);
     for (let w = 880; w <= 1010; w += 1) {
       await app.resize([px(w), 800]);
@@ -215,7 +199,6 @@ app.scene("at 1100 px with the secretary open, the todo stands beside it, and at
     assert.deepEqual(s.tiles.map((t) => t.cls).slice(-2), ["todo", "aside"], `${w} px: the secretary stands after the todo`);
     await panelOpen(false);
   }
-  // Hidden again, the list comes back beside the todo at 1100 px.
   await app.resize([1100, 800]);
   await app.page.waitFor(beside, { timeout: 20000 });
   agree(await seen(), "1100 px, the secretary hidden");
@@ -300,8 +283,7 @@ app.scene("at 1440 px the row clicked stays under the pointer when its todo open
   await app.page.click(`.tree .row[data-todo="${pick}"] .rowmain`);
   await app.page.waitFor(`location.hash === "#/todo/${pick}" && ${beside}`, { timeout: 20000 });
   assert.equal(await app.page.evaluate<number>(at), before, "the clicked row moved when its todo opened beside it");
-  // A click that focuses nothing (a button in Safari, a tap), then a click inside the todo: what anchors the list is
-  // what the person sees, not what has the keyboard.
+  // A click that focuses nothing (a button in Safari, a tap): what anchors the list is what the person sees, not the keyboard.
   await app.page.evaluate(`document.activeElement?.blur()`);
   await app.page.click(".tile .todoview .todobody");
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".todospane").contains(document.activeElement)`), false, "the list has the keyboard");
@@ -353,7 +335,6 @@ app.scene("a write in flight when its tile goes still lands, and says so", async
   await app.page.click(`${row(other)} .rowmain`);
   await app.page.waitFor(`location.hash === "#/todo/${other}" && document.querySelector(".tile .todoview") !== null`, { timeout: 20000 });
   await release();
-  // The print answers a program whose tile is gone: it seals the deferral, and says so.
   await app.page.waitFor(`document.getElementById("toast")?.textContent?.includes("deferred") === true`, { timeout: 15000 });
   await app.page.waitFor(`fetch("/api/fold").then((r) => r.json()).then((b) => b.entries.find((e) => e.todo === "${id}")?.value === 1)`, { timeout: 15000 });
   await app.resize(PHONE);
@@ -376,9 +357,7 @@ app.scene("the notice of a write made from a scrolled list is in view, with its 
   await app.resize(PHONE);
 });
 
-// What stands where at each window width, with the secretary hidden and (where the room holds it beside the todo) open,
-// and how wide,
-// printed as a table: a todo opened from the list, which obeys the law, then a message opened from that todo.
+// Printed as a table: a todo opened from the list, then a message opened from that todo.
 app.scene("at 390 to 1,920 px, with the secretary hidden and open, the tiles obey the law; their widths are printed", async () => {
   const rows: string[] = [];
   for (const w of [390, 768, 900, 988, 1024, 1100, 1280, 1440, 1920]) {
@@ -446,7 +425,6 @@ app.scene("pictures of the list, a todo and Back at 390, 988, 1100 with the secr
   await app.resize(PHONE);
 });
 
-// The tiles on screen, in the room's order: what each draws, and its box.
 type Shown = { what: string; x: number; w: number; scroll: number }[];
 const SHOWN = `[...document.querySelectorAll("#view > .tile")].map((t) => {
   const r = t.getBoundingClientRect();
@@ -509,7 +487,6 @@ app.scene("at a phone's width and under a phone's chrome, a message opened from 
       `${w} px: the crumbs name what is behind`,
     );
     await app.page.screenshot(join(OUT, `open-${w}-over.png`));
-    // The crumb just before is Back.
     await app.page.click(".tilelines .crumbs > button.back");
     await app.page.waitFor(`location.hash === "#/todo/${todos.agents.id}" && ${source} !== null`, { timeout: 20000 });
     assert.equal(await whats(), todo, `${w} px: Back is the todo`);
@@ -518,7 +495,6 @@ app.scene("at a phone's width and under a phone's chrome, a message opened from 
   await app.resize(PHONE);
 });
 
-// The divider between the list and the todo, read from the page.
 type Divider = { x: number; y: number; w: number; h: number; now: number; max: number; list: number; todo: number };
 const DIVIDER = `(() => {
   const d = document.querySelector(".tileline");
@@ -561,8 +537,7 @@ app.scene("a divider dragged with a mouse and with a finger snaps to its stops, 
     held(left, `${by} to the left`);
     await app.page.screenshot(join(OUT, `divider-1440-${by.toLowerCase()}.png`));
   }
-  // A tap steps it to the next stop, on its handle: 8 px beside the gap, at its middle, the pointer meets the handle, not
-  // the tile; a tap in the gap away from the handle steps nothing.
+  // 8 px beside the gap, at its middle, the pointer meets the handle, not the tile.
   const tapped = await divider();
   const nearby = [tapped.x + tapped.w + 8, tapped.y + tapped.h / 2] as const;
   assert.equal(await app.page.evaluate<boolean>(`document.elementFromPoint(${nearby[0]}, ${nearby[1]})?.classList.contains("tileline") === true`), true, "8 px beside the gap is the handle");
@@ -572,7 +547,6 @@ app.scene("a divider dragged with a mouse and with a finger snaps to its stops, 
   await app.page.drag([nearby], "Finger");
   await app.page.waitFor(`Number(document.querySelector(".tileline").getAttribute("aria-valuenow")) === ${tapped.now + 1}`);
   assert.match(await app.page.evaluate<string>(`document.querySelector(".tileline").getAttribute("aria-valuetext")`), /^The left page takes /);
-  // The keyboard: the arrows step it, Home and End take it to the ends.
   await app.page.evaluate(`document.querySelector(".tileline").focus()`);
   await app.page.press("Home");
   await app.page.waitFor(`document.querySelector(".tileline").getAttribute("aria-valuenow") === "0"`);
@@ -581,7 +555,7 @@ app.scene("a divider dragged with a mouse and with a finger snaps to its stops, 
   await app.page.press("End");
   await app.page.waitFor(`document.querySelector(".tileline").getAttribute("aria-valuenow") === "${first.max}"`);
   held(await divider(), "End");
-  // Under the phone's chrome a divider stands between the list and the todo too; at 1,920 px its stops are wider apart.
+  // Under the phone's chrome a divider stands between the list and the todo too.
   for (const w of [960, 1920]) {
     await app.resize([w, 900]);
     // The add sheet slides to its dock under the phone's chrome: the picture waits until it rests.
@@ -592,8 +566,7 @@ app.scene("a divider dragged with a mouse and with a finger snaps to its stops, 
   await app.resize([1440, 900]);
   await app.page.evaluate(SETTLED);
   assert.equal(await app.page.evaluate<boolean>(`document.activeElement === document.querySelector(".tileline")`), true, "the divider keeps the keyboard");
-  // A resize outlives the address: another todo opened beside the list, in the same room (no talk about it opens the
-  // secretary), stands at the same stop.
+  // A resize outlives the address: another todo in the same room (no talk about it opens the secretary) keeps the stop.
   const kept = await divider();
   await app.page.evaluate(`location.hash = "#/todo/${todos.high.id}"`);
   await app.page.waitFor(`location.hash === "#/todo/${todos.high.id}" && document.querySelector(".tile .todoview")?.textContent.includes("${todos.high.id}") === true`, { timeout: 20000 });
@@ -809,10 +782,8 @@ app.scene("every workspace's page and a todo kept behind a message on a phone: n
   await app.page.waitFor(`window.__pages[0].isConnected`, { timeout: 20000 });
 });
 
-// THE SECRETARY IS THE PINNED TILE (the note's §3 and §16): its toggle in the wide header shows and hides it, and a press
-// holds for its page in this tab at any width. Beside the todo where the room holds both; behind it where it does not,
-// as on a phone, one crumb away, and Back goes back to the todo. What was half typed in it survives its going behind and
-// every change of the window, and the same element comes back.
+// The secretary is the pinned tile: a press holds for its page in this tab at any width, beside the todo where the room
+// holds both and one crumb behind it where it does not, and what was half typed in it survives every move.
 const composer = `#view > .tile .panelbody .composebox`;
 app.scene("the secretary at 412, 960, 1,280 and 1,440 px, shown, behind and hidden, with Back, keeps a half-typed question", async () => {
   for (const w of [412, 960, 1280, 1440]) {
@@ -827,14 +798,12 @@ app.scene("the secretary at 412, 960, 1,280 and 1,440 px, shown, behind and hidd
     await app.resize([w, 900]);
     const alone = w - 2 * tokens.measure.gutter < column + gap + aside;
     if (alone) {
-      // Behind the todo, one crumb away.
       await app.page.waitFor(`${todoDrawn} && !window.__aside.isConnected && [...document.querySelectorAll(".tilelines .crumbafter")].some((c) => c.textContent.includes("Secretary"))`, { timeout: 20000 });
       await app.page.screenshot(join(OUT, `secretary-${w}-behind.png`));
       await app.page.clickText(".tilelines .crumbafter", "Secretary");
       await app.page.waitFor(`window.__aside.isConnected && document.querySelector("#view .todoview") === null`, { timeout: 20000 });
       await app.page.screenshot(join(OUT, `secretary-${w}-open.png`));
       assert.equal(await app.page.evaluate<string>(`document.querySelector("${composer}").value`), "half a question", `${w} px: what was typed is there`);
-      // Back is the todo, the secretary behind it again.
       await app.page.evaluate(`history.back()`);
       await app.page.waitFor(`location.hash === "#/todo/${todos.flat.id}" && ${todoDrawn} && !window.__aside.isConnected`, { timeout: 20000 });
     } else {
@@ -854,8 +823,7 @@ app.scene("the secretary at 412, 960, 1,280 and 1,440 px, shown, behind and hidd
   await app.resize(PHONE);
 });
 
-// What it says is about the page beside it: shown beside one todo it names that todo; a link to another opens beside
-// the list, where no press shows it, and shown there it says what it holds about the other.
+// A link to another todo opens beside the list, where no press shows the secretary, and shown there it speaks of the other.
 app.scene("the secretary beside a todo talks about that todo, and after an open, about the next", async () => {
   await app.resize([1440, 900]);
   await app.open(WRITE_BASE, `#/todo/${todos.flat.id}`);
@@ -879,9 +847,7 @@ app.scene("the secretary beside a todo talks about that todo, and after an open,
   await app.resize(PHONE);
 });
 
-// Fifty shows and hides of the secretary beside a todo: no node or listener is left behind. A hide lets its program go
-// with its leaf, and a show mounts it again from its address (a stream of its own and a window read), as a page
-// navigated to: measured below at a fourfold throttle, from the press to the conversation drawn.
+// A hide lets its program go with its leaf, and a show mounts it again from its address, as a page navigated to.
 app.scene("fifty shows and hides of the secretary at a desk leave no node or listener behind, and a show draws it at a fourfold throttle", async () => {
   await app.resize([1440, 900]);
   await app.page.navigate(`${WRITE_BASE}/#/todo/${todos.flat.id}`);
@@ -919,8 +885,7 @@ app.scene("fifty shows and hides of the secretary at a desk leave no node or lis
   await app.resize(PHONE);
 });
 
-// A divider's drag with the secretary pinned, at a CPU four times slower: each frame's length while the list's divider
-// is dragged across its stops, printed, and none past a long task.
+// Each frame's length while the divider is dragged across its stops at a fourfold throttle, printed, and none past a long task.
 app.scene("a divider dragged with the secretary pinned keeps its frames short at a fourfold CPU throttle", async () => {
   await app.resize([1440, 900]);
   await app.page.navigate(`${WRITE_BASE}/#/todo/${todos.flat.id}`);
@@ -948,15 +913,13 @@ app.scene("a divider dragged with the secretary pinned keeps its frames short at
   await app.resize(PHONE);
 });
 
-// A question sent from the secretary drawn in this page's tile, and its turn back in the transcript.
 const ask = async (page: typeof app.page, text: string): Promise<void> => {
   await page.type(composer, text);
   await page.click("#view > .tile .panelbody .composesend");
   await page.waitFor(`[...document.querySelectorAll("#view > .tile .panelbody .turn-person .turntext")].some((t) => t.textContent.includes(${JSON.stringify(text)}))`, { timeout: 20000 });
 };
 
-// THE TALK IS A READING (the note's §16): no program runs to learn it. A tab with no press on a todo the conversation
-// holds talk about draws the secretary beside it by that alone, and a move of the talk draws the same element again.
+// The talk is a reading: a tab with no press on a todo the conversation talks about draws the secretary beside it by that alone.
 app.scene("the secretary stands beside a todo by its talk alone, and stays the same element as the talk moves", async () => {
   await app.resize([1440, 900]);
   await app.open(WRITE_BASE, `#/todo/${todos.checklist.id}`);
@@ -964,8 +927,7 @@ app.scene("the secretary stands beside a todo by its talk alone, and stays the s
   await panelOpen(true);
   await ask(app.page, "is the checklist done");
   await panelOpen(false);
-  // Another tab holds no press, and has read the conversation whole on its own page: the talk alone shows the secretary
-  // beside the todo, and the answer arrives while the page stands.
+  // Another tab holds no press and has read the conversation whole, so the talk alone shows the secretary beside the todo.
   const other = await app.tab();
   try {
     await other.viewport(1440, 900);
@@ -985,8 +947,7 @@ app.scene("the secretary stands beside a todo by its talk alone, and stays the s
   await app.resize(PHONE);
 });
 
-// A LINK FOLLOWED IN THE SECRETARY IS FOLLOWED FROM THE PAGE BEFORE IT (§3, rule 5): beside the list, a todo named in
-// the conversation opens between the list and the secretary, and the list stays.
+// A link followed in the secretary is followed from the page before it, so the todo opens between the list and the secretary.
 app.scene("a todo opened from the secretary beside the list stands between them", async () => {
   await app.resize([1440, 900]);
   await app.open(WRITE_BASE, "#/");
@@ -1007,8 +968,7 @@ app.scene("a todo opened from the secretary beside the list stands between them"
   await app.resize(PHONE);
 });
 
-// THE SECRETARY COSTS A PERSON NO PAGE (§3, `MOST`): three pages of their own and the secretary held, a fourth opens
-// beside them, exactly as it does with the secretary hidden.
+// The secretary costs a person no page of `MOST`.
 app.scene("with three pages and the secretary held, a fourth opens beside them, as without it", async () => {
   await app.resize([2400, 900]);
   const three = `#/todo/${todos.agents.id}~|!(|(%2F,2%2Ftodo%2F${todos.flat.id},2*),,,,,,,)`;
@@ -1027,8 +987,7 @@ app.scene("with three pages and the secretary held, a fourth opens beside them, 
   await app.resize(PHONE);
 });
 
-// SHOW AND HIDE ON A PHONE, WITH THE HISTORY (§16): the header's door is the same act as at a desk, and shows it alone; Back is the todo with the secretary one crumb away; its own Hide goes back to the todo and closes
-// the crumb; Back then is the list, never the secretary; Forward redoes what Back undid.
+// On a phone the secretary's own Hide goes back to the todo and closes the crumb, so Back then is the list, never the secretary.
 app.scene("on a phone the secretary is shown alone and hidden, and Back and Forward cross both", async () => {
   await app.resize([412, 900]);
   await app.open(WRITE_BASE, "#/");
@@ -1050,7 +1009,6 @@ app.scene("on a phone the secretary is shown alone and hidden, and Back and Forw
   await app.page.waitFor(`location.hash === "#/" && ${listed} && !(${drawnAside})`, { timeout: 20000 });
   await app.page.evaluate(`history.forward()`);
   await app.page.waitFor(`location.hash === "${todo}" && ${todoDrawn} && !(${crumb})`, { timeout: 20000 });
-  // Shown again, and hidden, while the todo is drawn beside it on a wider window: no entry either way.
   await app.resize([960, 900]);
   const entries = await app.page.evaluate<number>(`history.length`);
   await panelOpen(true);
@@ -1062,8 +1020,6 @@ app.scene("on a phone the secretary is shown alone and hidden, and Back and Forw
   await app.resize(PHONE);
 });
 
-// FROM 900 TO 991 PX, a phone's chrome and the secretary drawn beside a todo: what is drawn can be hidden, by its own
-// control, and the header's door is hidden exactly while it is drawn.
 app.scene("from 900 to 991 px the secretary drawn beside a todo has its own Hide, and the header no door", async () => {
   await app.resize([960, 900]);
   await app.open(WRITE_BASE, `#/todo/${todos.flat.id}`);
@@ -1080,9 +1036,8 @@ app.scene("from 900 to 991 px the secretary drawn beside a todo has its own Hide
   await app.resize(PHONE);
 });
 
-// A PRESS DURING A MOVE ACTS ON THE PAGE THE MOVE DRAWS: a show pressed in the same task as the link that opens another
-// todo waits for that move to end, and is that todo's. The order is certain: both clicks are made before the move can
-// end; a scene whose move ended before the press fails rather than pressing late.
+// A show pressed in the same task as the link that opens another todo waits for that move to end, and is that todo's.
+// A scene whose move ended before the press fails rather than pressing late.
 app.scene("a show pressed during a move is the page's the move draws", async () => {
   await fresh(`#/todo/${todos.urgent.id}`, [1440, 900]);
   await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
@@ -1108,8 +1063,6 @@ app.scene("a show pressed during a move is the page's the move draws", async () 
   await app.resize(PHONE);
 });
 
-// A PAGE OF MANY THINGS UNDER A PHONE'S CHROME HAS NO SECRETARY (the review's B1): shown at a desk, the list keeps its
-// press, but at 412 and 960 px nothing stands beside it, no door is drawn and no crumb names it; wide again, it is back.
 app.scene("a list at 412 and 960 px has no secretary and no door, and keeps its press for the wide chrome", async () => {
   await fresh("#/", [1440, 900]);
   await app.page.waitFor(`${listed} && ${offered}`, { timeout: 20000 });
@@ -1125,9 +1078,7 @@ app.scene("a list at 412 and 960 px has no secretary and no door, and keeps its 
   await app.resize(PHONE);
 });
 
-// THE KEYBOARD ALONE (B2): the header's door pressed with Enter puts the focus on the secretary's region, from which Tab
-// reaches its composer; its Hide pressed with Enter puts the focus on the door, and Enter there shows it again. On a
-// todo with the list beside it, on a message, and on a phone, where the secretary is shown alone.
+// The door pressed with Enter focuses the secretary's region, from which Tab reaches its composer; its Hide focuses the door.
 const region = `document.activeElement?.matches("#view .panelbody") === true`;
 const byKeyboard = async (hash: string, size: readonly [number, number], ready: string): Promise<void> => {
   const where = `${hash} at ${size[0]} px`;
@@ -1136,8 +1087,7 @@ const byKeyboard = async (hash: string, size: readonly [number, number], ready: 
   await app.page.evaluate(`document.querySelector("#beside").focus()`);
   await app.page.press("Enter");
   await app.page.waitFor(`${drawnAside} && ${region}`, { timeout: 20000 });
-  // The region holds no key target: Enter and j there neither open nor move in the list beside it (W3). The list's
-  // cursor is the focus, so a key it took would take the focus from the region.
+  // The list's cursor is the focus, so a key the list took would take the focus from the region.
   const stood = await app.page.evaluate<string>(`location.hash`);
   for (const key of ["Enter", "j"]) {
     await app.page.press(key);
@@ -1165,10 +1115,8 @@ app.scene("show, type, hide and show again with the keyboard alone, the focus al
   await app.resize(PHONE);
 });
 
-// THE HEADER KEEPS ITS HEIGHT AND ITS MARKS: the door stands in the header's row as the brand does, so the header is as
-// tall with it as without it, the live mark stands where it stands without it, and the list's first line where it
-// stands with no door at all. At 150 percent text the door's width gives before the header overflows. Its tap area
-// is the header's whole height at its width, and a tap just under the header is the page's.
+// The door stands in the header's row as the brand does, so the header is as tall with it as without it, and at 150
+// percent text the door's width gives before the header overflows.
 app.scene("at 390 and 412 px, and at 150 percent text, the header is as tall with the door as without it, the live mark stays, and the door is tapped across the header", async () => {
   const measured = `(() => {
     const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
@@ -1197,8 +1145,7 @@ app.scene("at 390 and 412 px, and at 150 percent text, the header is as tall wit
     assert.equal(with_.header.h, without.header.h, `${where}: the header's height`);
     assert.deepEqual(with_.live, without.live, `${where}: the live mark's box`);
     if (w >= 1000) continue;
-    // The list, a page of many things, draws no door under a phone's chrome; its first line stands where the header
-    // without a door leaves it.
+    // The list, a page of many things, draws no door under a phone's chrome.
     await app.page.evaluate(`location.hash = "#/"`);
     await app.page.waitFor(`${listed} && document.querySelector("#beside").hidden`, { timeout: 20000 });
     await app.page.evaluate(SETTLED);
@@ -1216,8 +1163,7 @@ app.scene("at 390 and 412 px, and at 150 percent text, the header is as tall wit
   await app.resize(PHONE);
 });
 
-// ON A PHONE ITS HIDE STAYS UNDER THE APP'S HEADER, never beneath it (B3): the secretary alone scrolls the document, and
-// its Hide is the element at its own centre after a scroll, as it is when the conversation opens at its newest turn.
+// On a phone the secretary alone scrolls the document, and its Hide stays under the app's header, never beneath it.
 app.scene("on a phone the secretary's Hide is reachable after the conversation scrolls", async () => {
   await fresh("#/", [412, 900]);
   await app.page.waitFor(listed, { timeout: 20000 });
@@ -1236,8 +1182,8 @@ app.scene("on a phone the secretary's Hide is reachable after the conversation s
   await app.resize(PHONE);
 });
 
-// A HIDE PRESSED AS A LINK IN THE SECRETARY OPENS ANOTHER PAGE (B6) waits for that move and acts on the page it draws:
-// the link's entry stays, and Back returns to where the person was, the secretary.
+// A hide pressed while a link in the secretary opens another page waits for that move and acts on the page it draws:
+// the link's entry stays, so Back returns to the secretary.
 app.scene("on a phone a hide pressed with a link followed in the secretary keeps the link's entry", async () => {
   await fresh("#/", [412, 900]);
   await app.page.waitFor(listed, { timeout: 20000 });
@@ -1266,8 +1212,7 @@ app.scene("on a phone a hide pressed with a link followed in the secretary keeps
   await app.resize(PHONE);
 });
 
-// THE LIST ROW'S ASK IS ITS OWN PLACE: a line opened in place offers the secretary's own page about that todo, never
-// the secretary beside a page, whose one door is the header's.
+// A line opened in place offers the secretary's own page, never the secretary beside a page, whose one door is the header's.
 app.scene("the list row's Ask is the secretary's own page about the todo", async () => {
   await fresh("#/", [412, 900]);
   await app.page.waitFor(listed, { timeout: 20000 });
@@ -1277,11 +1222,10 @@ app.scene("the list row's Ask is the secretary's own page about the todo", async
   await app.resize(PHONE);
 });
 
-// THE SECRETARY ABOUT A MESSAGE, AT ITS OWN ADDRESS (B8), stands in the Mail workspace, the bar lit on Mail.
 app.scene("a bare secretary address about a message stands in the Mail workspace, and its Hide lands on the message", async () => {
   await fresh("#/aside/mail%3Aabcdef12", [1440, 900]);
   await app.page.waitFor(`${drawnAside} && document.querySelector(".tabbar [aria-current='page']")?.textContent.includes("Mail") === true`, { timeout: 20000 });
-  // Its Hide lands on the message it is about, never the Mail list (W2).
+  // Its Hide lands on the message it is about, never the Mail list.
   await app.page.click("#view > .tile .hidesecretary");
   await app.page.waitFor(`!(${drawnAside})`, { timeout: 20000 });
   await app.page.evaluate(SETTLED);

@@ -1,5 +1,3 @@
-// The palette's one result shape, and the pure adapters from mail and conversation rows into it.
-
 import type { ConversationRow } from "../wire/generated/wire";
 import type { MailRow } from "../wire/generated/wire";
 import type { Route } from "./route";
@@ -15,7 +13,7 @@ export interface Hit {
   readonly route: Route;
 }
 
-/** One mail message: the subject, the sender to tell same-subject messages apart, and its `#/mail/<id>` route. */
+/** The sender tells same-subject messages apart. */
 export function hitOfMail(row: MailRow): Hit {
   return {
     kind: "message",
@@ -26,8 +24,7 @@ export function hitOfMail(row: MailRow): Hit {
   };
 }
 
-/** One conversation whose title the device holds; `turns` is the subtitle, the one fact a title does not carry. A row
- * whose words have not landed has no title to match, so it is no hit until they do. */
+/** A row whose words have not landed has no title to match, so it is no hit until they do. */
 export function hitOfConversation(row: ConversationRow): Hit[] {
   if (row.words.held !== "read") return [];
   return [

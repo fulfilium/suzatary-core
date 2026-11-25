@@ -1,9 +1,8 @@
 /**
- * THE PAINTER'S LAWS, IN A BROWSER: `web/src/painter/painter.ts` and `run.ts` drive Settings' program from the module the
- * box serves, with a pure handler in place of the runtime's, over generated inputs (the overview, this device and what
- * waits held, the context), taps, typing and answers. After every step the painted DOM equals what a fresh
- * painter draws of the program's current view, node by node; a second run of the same steps paints the same DOM and
- * asks the same effects; and an input handed twice patches nothing the second time. `app/viewtree/tests/laws.rs` holds the same laws over generated views and a DOM kept as data.
+ * The painter's laws in a browser, driving Settings' program from the module the box serves over generated inputs,
+ * taps, typing and answers: after every step the painted DOM equals a fresh painter's draw of the current view, a
+ * second run of the same steps paints the same DOM and asks the same effects, and an input handed twice patches
+ * nothing. `app/viewtree/tests/laws.rs` holds the same laws over generated views and a DOM kept as data.
  */
 
 import assert from "node:assert/strict";

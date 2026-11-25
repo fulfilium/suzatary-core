@@ -1,30 +1,9 @@
 /**
- * Local-first, and the banner that makes it honest.
- *
- * The claim (`web/src/cache.ts`, `web/src/stale.ts`) is that the last fold is
- * kept in `localStorage`, drawn before the fetch, and — when the fetch fails —
- * left on screen under a line that DATES it. Every part of that is behaviour:
- * the pure tests can check what the cache holds and what sentence the banner
- * picks, and neither can check that a reload with no backend puts cards on the
- * screen instead of an empty page.
- *
- * WHY THE SERVER IS NOT KILLED, though that is the obvious way to write this.
- * A service worker for DATA was REJECTED here on purpose: a cache serving an
- * old chain silently would put a number on screen with no provenance. The
- * worker that exists keeps a STAMPED build's shell (`sw.ts`), and every
- * fixture here is a dev build, so with the server truly gone there is no app
- * at all — the document itself is a request — and "kill it and reload" would
- * test the browser's error page, not this design. What the design is about is an unreachable
- * BACKEND, so that is what this makes unreachable: every `/api/…` and `/events`
- * request fails at the network, which is exactly what the reader's phone sees
- * on a train, and the static bundle it already has keeps loading.
- *
- * TWO OFFLINES, and the difference is the point. A browser holding only the
- * last fold shows dated numbers and says so. A browser also holding the chain
- * (the core's replica of it, in its worker) folds it and shows this moment's
- * numbers, under a different sentence: what is uncertain then is the chain,
- * not the clock. Both are driven below, and the database is emptied for the
- * first, so neither passes by a race.
+ * The last fold is kept in `localStorage`, drawn before the fetch, and left under a line that dates it when the fetch
+ * fails; a browser also holding the chain folds it with the core and says so in another sentence. No service worker
+ * caches data, since an old chain served silently would show a number with no provenance, and every fixture is a dev
+ * build whose document is itself a request, so the server is not killed: `/api/…` and `/events` fail at the network
+ * while the bundle keeps loading. The database is emptied for the first offline, so neither passes by a race.
  */
 
 import assert from "node:assert/strict";
@@ -40,14 +19,7 @@ function heldObjects(): Promise<number> {
   return app.page.evaluate<number>(chainKept("life"));
 }
 
-/** Wait until this browser is holding the objects, and say HOW MANY — which is
- * why it is its own loop rather than a `waitFor`: the count is the assertion in
- * the scene below, not just the condition to stop on.
- *
- * (`waitFor` awaits a promise-shaped expression since the fix in `cdp.ts`. The
- * note that used to be here was the observation that it did not — worth
- * keeping the pointer: `Boolean(aPromise)` is `true` for every promise ever
- * made, and that made several waits elsewhere no waits at all.) */
+/** Its own loop rather than a `waitFor`, because the count it answers is the scene's assertion. */
 async function untilHeld(): Promise<number> {
   for (let waited = 0; waited < 30000; waited += 200) {
     const held = await heldObjects();
@@ -57,9 +29,8 @@ async function untilHeld(): Promise<number> {
   throw new Error("the objects were never cached");
 }
 
-// THE LIST ASKS THE BOX FOR ITS FOLD ONCE PER TAB, EVEN WHEN THE TAB'S OWN FOLD IS FRESH FIRST: only the box's fold
-// carries what the box rendered and is kept as the dated copy an offline reload draws, and a Rust page mounts once its
-// module loads, by when a warm tab's own fold is often fresh. The module is held until it is.
+// The list asks the box for its fold once per tab even when the tab's own fold is fresh first, since only the box's
+// fold is kept as the dated copy an offline reload draws.
 app.scene("a warm tab whose own fold is fresh before the list mounts still keeps the box's fold", async () => {
   await app.open(BASE);
   await app.page.waitFor(`window.localStorage.getItem("suzatary.fold.life") !== null`);
@@ -79,9 +50,8 @@ app.scene("a reload with no backend draws the cached fold under a dated banner",
   await app.open(BASE);
   const before = await shownTodos(app.page);
   await app.page.waitFor(`window.localStorage.getItem("suzatary.fold.life") !== null`);
-  // Emptied AFTER the caching has finished, under the running app: this scene is about the browser that has the fold
-  // and NOT the objects, and the next one is about the browser that has both. The core in the worker lets the database
-  // go when it is deleted, and whatever it writes after is a log that began again, which the next load reads as such.
+  // Emptied after the caching has finished, for a browser with the fold and not the objects; the worker's core lets the
+  // database go when it is deleted.
   await untilHeld();
   // The banner is down while the fold is fresh and the stream is up: a page that always said "stale" would say nothing.
   assert.equal(await app.page.evaluate<boolean>(`document.getElementById("stale").hidden`), true);
@@ -97,10 +67,7 @@ app.scene("a reload with no backend draws the cached fold under a dated banner",
   await app.page.reload();
 
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`, { timeout: 15000 });
-  // The same todos. With no objects the tab holds no functions, so each todo
-  // is its row's value, and a group of several is the core's conjunction of
-  // those values, priced in its worker: never an average, and never left
-  // without a number while the core answers.
+  // With no objects each todo is its row's value, and a group is the core's conjunction of them, never an average.
   assert.deepEqual(
     [...(await shownTodos(app.page))].sort(),
     [...before].sort(),
@@ -119,23 +86,20 @@ app.scene("a reload with no backend draws the cached fold under a dated banner",
     "someone told their data is old is owed the chance to ask again",
   );
 
-  // The live dot says the same thing in the header, and says it as words for a
-  // screen reader rather than only as a colour.
+  // The live dot says the same in words for a screen reader, not only as a colour.
   await app.page.waitFor(`document.getElementById("live").getAttribute("aria-label") === "no live updates"`, {
     timeout: 20000,
   });
 });
 
 app.scene("holding the objects, the same reload folds them here instead", async () => {
-  // The scene above left the network refused; this one has to fetch the chain
-  // before it can hold it.
+  // The scene above left the network refused; this one has to fetch the chain before it can hold it.
   await app.page.resumeRequests();
   await app.page.evaluate(
     `new Promise((resolve) => { const request = indexedDB.deleteDatabase("suzatary"); request.onsuccess = () => resolve(true); request.onerror = () => resolve(false); request.onblocked = () => resolve(false); })`,
   );
-  // A real reload, not a navigate to the URL already showing: the page left by
-  // the scene above has an EventSource that gave up, and the tip it never
-  // heard is exactly what tells `keepObjects` which chain to hold.
+  // A real reload: the page left above has an EventSource that gave up, and the tip it never heard tells `keepObjects`
+  // which chain to hold.
   await app.page.reload();
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`, { timeout: 15000 });
   await untilHeld();
@@ -147,17 +111,13 @@ app.scene("holding the objects, the same reload folds them here instead", async 
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 0`, { timeout: 20000 });
   await app.page.waitFor(`document.getElementById("stale").hidden === false`, { timeout: 20000 });
 
-  // THE DIFFERENT SENTENCE. Not "stale since 11:32": these numbers are this moment's, computed here by the same core,
-  // and what may have moved is elsewhere. It names no object (audit X1): the Chain page keeps those.
-  // WAITED FOR, not asserted at once: the banner honestly says "stale" while the core is still being fetched and the
-  // objects folded, and only then says this.
+  // Waited for, since the banner says "stale" until the core is fetched and the objects folded; it names no object,
+  // which the Chain page keeps.
   await app.page.waitFor(`/^Offline:/.test(document.querySelector(".stalewhat").textContent)`, { timeout: 30000 });
   const said = await app.page.evaluate<string>(`document.querySelector(".stalewhat").textContent`);
   assert.match(said, /^Offline: what you see is what this device holds/, said);
   assert.equal(/[0-9a-f]{8}/.test(said), false, said);
 
-  // And it is a LIST, not a sentence about one: the local fold produced the
-  // same todos the server's did, with a number on the open ones.
   const lines = await shownTodos(app.page);
   assert.ok(lines.length > 0, "the local fold drew no lines");
   // And holding the functions, the tab composes every group: no group is left without a value.

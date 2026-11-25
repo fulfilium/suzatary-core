@@ -1,10 +1,3 @@
-/**
- * A PAGE UNDRAWN (`web/src/pages/drain.ts`). Hidden, it keeps running: it hears its readings and writes, what it asks
- * of the screen waits until it is drawn again, and a move of the address is dropped. Left with a write in flight, the
- * write still lands: the box's print answers after the page is gone, the seal it asks for is still performed, its
- * answer still said, and only then is the program freed. Nothing else a gone page asks is performed.
- */
-
 import { test } from "node:test";
 import assert from "node:assert/strict";
 

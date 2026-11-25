@@ -1,8 +1,7 @@
-// The browser scenes reach into the device's IndexedDB by a store's name, in a string the type checker never reads. A
-// scene that names a store the database no longer creates throws inside an IndexedDB callback, so its promise never
-// settles and the scene hangs until its whole budget runs out. The law: every store a scene names is one the app's
-// databases hold at their current versions. A scene that builds an older database on purpose (`indexedDB.open` of
-// the app's database at a version) is the one it may name older stores in.
+// The scenes name IndexedDB stores in strings the type checker never reads, and a scene that names a store the database
+// does not create throws inside an IndexedDB callback, so its promise never settles and the scene hangs until its budget
+// runs out. A scene that builds an older database on purpose (`indexedDB.open` of the app's database at a version) may
+// name older stores.
 
 import { test } from "node:test"
 import assert from "node:assert/strict"

@@ -1,16 +1,8 @@
 /**
- * The list, and the todo page's body.
- *
- * This is the app's front door and the one screen that has to be right: the
- * open todos as one tree of lines, grouped by category, ASCENDING in value at
- * every level because low means urgent. A trusted body is typst's HTML and an
- * unconfirmed one is its source. What the viewer folds or filters is kept on
- * the device across a reload.
- *
- * The ordering and every group's value are checked against `/api/tree`
- * FETCHED BY THE PAGE rather than against numbers written down here: the page
- * builds its tree from the store with the core in the tab, and the claim is
- * that it builds the SAME tree the box does.
+ * The list is the open todos as one tree of lines, grouped by category, ascending in value at every level because low
+ * means urgent; a trusted body is typst's HTML and an unconfirmed one its source, and what the viewer folds or filters
+ * is kept across a reload. Order and values are checked against `/api/tree` fetched by the page, because the claim is
+ * that the core in the tab builds the same tree the box does.
  */
 
 import assert from "node:assert/strict";
@@ -99,7 +91,6 @@ app.scene("on a phone the first line starts in the top third, under one control 
   assert.equal(await app.page.evaluate<string>(`document.querySelector(".findsaid").textContent`), "", "the default filter says nothing");
   assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".filtersummary, .filterdrawer").length`), 0);
 
-  // The control lives in the title row and holds the search, the filters and the grouping.
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".pagehead .titlerow .findbtn") !== null`), true);
   await openFinder(app.page);
   assert.equal(
@@ -167,8 +158,7 @@ app.scene("the filter is remembered, and comes back parsed rather than trusted",
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length === 1`);
   assert.deepEqual(await shownTodos(app.page), [todos.agents.id]);
 
-  // A hand-edited value degrades to the default rather than breaking the page
-  // (`register.stored`, then the list's `Filter::of` in Rust), which is the property the remembered filter rests on.
+  // A hand-edited value degrades to the default rather than breaking the page (`register.stored`, then `Filter::of`).
   await app.page.evaluate(`localStorage.setItem("suzatary.ui.kept/todos.filter", "{not json")`);
   await app.page.reload();
   await app.page.waitFor(`document.querySelectorAll(".tree .row").length > 1`);
@@ -178,10 +168,7 @@ app.scene("the filter is remembered, and comes back parsed rather than trusted",
   );
 });
 
-/**
- * A SUBTODO FROM THE LIST: the add sheet opens under the line, the box authors the child and the
- * parent's revision, this replica seals both, and the child is drawn under its parent.
- */
+// The box authors the child and the parent's revision, and this replica seals both.
 app.scene("Add a subtodo puts the new todo under its parent", async () => {
   await app.open(WRITE_BASE);
   await openInPlace(app.page, todos.checklist.id);
@@ -204,11 +191,6 @@ app.scene("Add a subtodo puts the new todo under its parent", async () => {
   assert.equal(shown.indexOf(child), shown.indexOf(todos.checklist.id) + 1, "the child's line is right under its parent");
 });
 
-/**
- * THE THIRTY DAYS' DATES ARE SHORT AND NEVER TOUCH (docs/DESIGN-DECISIONS-2026-09-25.md
- * §F): on a phone every date the line shows is the locale's short day, and no
- * two labels' boxes overlap.
- */
 app.scene("at phone width the thirty days' dates are short and no two overlap", async () => {
   await app.resize(PHONE);
   await app.page.navigate(`${BASE}/#/todo/${todos.urgent.id}`);

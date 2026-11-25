@@ -1,9 +1,7 @@
-// A page's program as its host holds it: drawn, hidden (its tile kept behind another, or in a workspace not drawn), or
-// let go. A hidden program keeps running and hears its readings, so its page is current when it is drawn again; what it
-// asks of the screen (a focus, a scroll, the keys) waits until then, and a move of the address it asks is dropped,
-// since the person is reading another page. A program let go is undrawn for good: a write in flight is the person's,
-// not the page's, so it keeps running until each write has answered and each Undo it offered has expired, and performs
-// only what a write needs and what says how it went. A refusal is then a toast whatever page is on screen.
+// A page's program as its host holds it: drawn, hidden, or let go. A hidden program keeps running so its page is
+// current when drawn again, its screen asks wait, and a move of the address is dropped, since the person is reading
+// another page; a program let go keeps running until each write has answered and each Undo has expired, because a write
+// in flight is the person's, and a refusal is then a toast whatever page is on screen.
 
 import type { Effect } from "../wire/generated/pages"
 
@@ -25,7 +23,6 @@ export namespace drain {
 
   type Kind = Effect<unknown, unknown, unknown>["type"]
 
-  // The effects that carry a write to the box or the replica.
   const WRITES: ReadonlySet<Kind> = new Set<Kind>(["Post", "Act", "NewKey", "Endorse"])
 
   export const writes = (k: Kind): boolean => WRITES.has(k)
@@ -42,7 +39,6 @@ export namespace drain {
     Core: "Performs", Reset: "Performs", Mark: "Performs", Release: "Drops",
   }
 
-  // Let go, a program performs only what a write needs and what says how it went.
   const LEAVING: { readonly [K in Kind]: Verdict } = {
     Hold: "Drops", Again: "Drops", Rendered: "Drops", Get: "Drops", Post: "Performs", NewKey: "Performs",
     Watch: "Drops", Keep: "Drops", Listen: "Drops", Keys: "Drops", Sync: "Drops", Act: "Performs",
@@ -54,7 +50,6 @@ export namespace drain {
   // The place an effect that waits holds: one scroll, one focus, the keys of each ask, the last of each kept.
   export const slot = (e: Effect<unknown, unknown, unknown>): string => (e.type === "Keys" ? `Keys ${JSON.stringify(e.ask)}` : e.type)
 
-  // What a program in `s` does with an effect of kind `k`.
   export const verdict = (s: State, k: Kind): Verdict => {
     switch (s.type) {
       case "Drawn":

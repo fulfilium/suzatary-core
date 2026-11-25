@@ -1,10 +1,5 @@
 /**
- * The router's parser.
- *
- * The reason this exists as a function at all is the home route: under the old
- * `hash.startsWith(prefix)` test, `#/` matched every page, so the list could
- * not be the app's front door. The cases below pin that, and the spellings
- * other writers compose: the APK's widget, links and share sheet, and the
+ * The router's parser, over the spellings other writers compose: the APK's widget, links and share sheet, and the
  * box's notifications. Totality and the round trip are `laws.test.ts`'s.
  */
 
@@ -51,13 +46,8 @@ test("the secretary: the list and one conversation", () => {
 });
 
 /**
- * THE SHARE TARGET'S HASH (2026-09-10). Android's share sheet hands the app two
- * strings and `MainActivity` spells them into this fragment; it is the only
- * protocol between the two halves, so both directions are pinned here.
- *
- * The URL a browser shares is the interesting case: it holds `?`, `&`, `#`,
- * `=` and `/`, every one of which is structure in a hash that already has a
- * query in it. A round trip through `hrefOf` is the proof the escaping holds.
+ * Android's share sheet hands the app two strings and `MainActivity` spells them into this fragment, the only protocol
+ * between the two halves; a shared URL holds `?`, `&`, `#`, `=` and `/`, each structure in a hash with a query.
  */
 test("a shared text and title ride the hash, and round-trip", () => {
   assert.deepEqual(parseRoute("#/add"), { type: "add", text: "", title: "" });

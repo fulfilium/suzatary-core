@@ -1,13 +1,7 @@
 /**
- * A CODING SESSION'S CARD (`docs/CODINGSESSION-PLAN-2026-09-27.md` §2 rules
- * 3 to 5), over the conversation `app/cli/tests/support/fixture.rs`'s
- * `a_coding_session` seeds on the WRITE server: a tapped coding proposal whose
- * session was fired and then reported. Nothing is fired here; the fixture's
- * routine is unreachable by construction.
- *
- * ONE SCENE, in order, because each answer changes what the next can see: the
- * card shows the branch, the diff stat's total and the report whole; dropping
- * needs a reason and ends the session.
+ * A reported coding session's card, over the conversation the fixture's `a_coding_session` seeds on the write server:
+ * it shows the branch, the diff stat's total and the report whole, and dropping needs a reason and ends the session.
+ * Nothing is fired here; the fixture's routine is unreachable by construction.
  */
 
 import assert from "node:assert/strict";
@@ -46,8 +40,7 @@ app.scene("a reported session shows its report, then is dropped", async () => {
     0,
     "no reason, no drop",
   );
-  // THE DROP STEP AND ITS HALF-TYPED REASON OUTLIVE A REDRAW (2026-10-03: a settle redrew the card between "Drop"
-  // and its confirmation, and the step was gone): the page drawn again from nothing finds both.
+  // The drop step and its half-typed reason outlive a redraw: the page drawn again from nothing finds both.
   mark("type done");
   await app.page.type(`${SESSION} .dismissreason`, "done");
   mark("leave");

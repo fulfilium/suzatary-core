@@ -4,8 +4,7 @@
 import type { Undrawn } from "../wire/generated/pages"
 
 export namespace keep {
-  // What the rule reads of a running page: the leaf it drew last, whether it is its address's page, when it was last
-  // drawn, and whether its page has been mounted (a page made but overtaken before its mount draws nothing).
+  // A page made but overtaken before its mount draws nothing, so `mounted` decides whether it can be kept.
   export type Of<T> = {
     readonly key: (t: T) => number
     readonly same: (t: T, href: string) => boolean
@@ -13,12 +12,11 @@ export namespace keep {
     readonly mounted: (t: T) => boolean
   }
 
-  // A kept page under its leaf's key, with the leaf's address.
   export type Held<T> = ReadonlyMap<number, { readonly tile: T; readonly href: string }>
   export type Kept<T> = { readonly drawn: Held<T>; readonly hidden: Held<T>; readonly gone: readonly T[] }
 
-  // Each mounted page the drawing draws, then each it holds behind, matched by the leaf it drew last, else by its
-  // address; of those behind, the `bound` drawn last stay hidden. The rest are let go.
+  // Each mounted page the drawing draws is matched first, then each it holds behind, by the leaf it drew last else by
+  // its address; of those behind, the `keep` drawn last stay hidden, and the rest are let go.
   export const kept = <T>(
     live: readonly T[],
     at: { readonly tiles: readonly Undrawn[]; readonly behind: readonly Undrawn[]; readonly keep: number },

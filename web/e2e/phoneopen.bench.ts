@@ -1,10 +1,8 @@
 /**
- * WHAT A PHONE DOES ON OPENING ONE TODO, MEASURED: the list drawn and quiet at 412 px, a todo opened from it with a tap,
- * then three seconds for whatever the open starts. The bench says how many requests the page and its workers made for
- * the open, how many stream connections stand open before and after it, and how many page programs run, and how long
- * each answer of the talk took (`chat/talk.ts`'s `talk` measure). The first case opens the todo on a device that
- * holds the lines' skeleton and not their content (every content read held unanswered): the talk fetches nothing,
- * answers Quiet, and asks for no content. No gate runs it: `scripts/web-e2e.sh phoneopen` does, by name.
+ * Measures what a phone does on opening one todo from the list at 412 px: the requests the page and its workers make,
+ * the stream connections open before and after, the page programs running, and each answer of the talk
+ * (`chat/talk.ts`'s `talk` measure). Its first case holds the lines' skeleton and not their content, where the talk
+ * fetches nothing and answers Quiet; no gate runs it: `scripts/web-e2e.sh phoneopen` does, by name.
  */
 
 import assert from "node:assert/strict"

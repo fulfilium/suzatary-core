@@ -1,12 +1,7 @@
 /**
- * MEMORY, ABOUT, THE CALENDAR AND THE BRIEFINGS AS RUST PROGRAMS (`app/pages`), drawn from the box's answers in a
- * real browser. Mail, a message and a thread are `mail.test.ts`'s.
- *
- * The laws of each page (the view a pure function of its model, a patch applied equal to a fresh
- * draw) are `app/pages/tests/laws/`. What only a browser and a box can show is here: the module
- * loads, every runtime effect a page asks for is performed by `web/src/pages/program.ts`, the
- * painter draws what the program answers, and a click on a node the program drew comes back to
- * it as its message.
+ * Memory, About, the calendar and the briefings as Rust programs (`app/pages`), drawn from the box's answers. Their
+ * laws are `app/pages/tests/laws/`; here the module loads, every runtime effect a page asks is performed by
+ * `web/src/pages/program.ts`, and a click on a node the program drew comes back to it as its message.
  */
 
 import assert from "node:assert/strict";
@@ -15,8 +10,7 @@ import { BASE, suite } from "./harness";
 
 const app = await suite("programs");
 
-/** The page at `hash` drawn past its placeholder under `title`: a program mounts once its module is here, so the page
- * before it stands until then, and only the title it draws says it has. */
+/** A program mounts once its module is here, so only the title it draws says the page has drawn. */
 async function drawn(hash: string, title: string): Promise<void> {
   await app.page.navigate(`${BASE}/${hash}`);
   await app.page.waitFor(

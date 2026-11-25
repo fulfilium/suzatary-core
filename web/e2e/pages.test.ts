@@ -1,8 +1,7 @@
 /**
- * EVERY PAGE, AT PHONE WIDTH, DRAWS WHAT THE BOX ANSWERS AND NOTHING FAILS. The scene asks nothing of the data beyond
- * a todo to open, so it runs against the fixture's reader in the suite and against a copy of the owner's data tree in
- * the live half's smoke (`scripts/web-e2e.sh` with `SUZATARY_E2E_LIVE`), where it is the one scene: what the other
- * scenes prove of each page on the fixture, this proves the owner's real readings do not break.
+ * Every page at phone width draws what the box answers, with no problem and no exception. It asks nothing of the data
+ * beyond a todo to open, so it is also the one scene of the live half's smoke (`SUZATARY_E2E_LIVE`), over a copy of the
+ * owner's data tree, where it proves the owner's real readings do not break.
  */
 
 import assert from "node:assert/strict";
@@ -27,11 +26,9 @@ const PAGES = [
   "#/settings",
 ] as const;
 
-/** What says a destination has drawn past its placeholder: its title. */
 const TITLED = `document.querySelector("#view .pagetitle") !== null && document.querySelector("#view .pagewaiting") === null`;
 
-/** The page at `hash` drawn as `drawn` says, then what it shows that says it failed: a problem drawn in the view, or an
- * exception the page threw while it drew. */
+/** What the page at `hash` shows that says it failed: a problem drawn in the view, or an exception it threw. */
 async function failures(hash: string, thrown: () => string[], drawn = TITLED): Promise<string[]> {
   const before = thrown().length;
   await app.page.navigate(`${BASE}/${hash}`);

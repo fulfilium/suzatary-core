@@ -1,28 +1,7 @@
 /**
- * THE INBOX, END TO END.
- *
- * A DECISION IS A RECORD, and this file is the browser's own check of that:
- * the real `suzatary serve`, the real fold, a real triage card and a real
- * scripted proposal, so what these scenes read is what the page itself reads.
- *
- * THE SCENES:
- *
- * 1. A triage card appears in the Inbox, tagged as the triage agent's and
- *    drawn as its diff, and the chain has not moved.
- * 2. A viewer reads the Inbox and is offered nothing to press, and the tap
- *    route refuses it.
- * 3. A card is drawn closed, and asking Send opens it whole before the question.
- * 4. Tapping a CHANGESET proposal Confirms it and drops the count — a
- *    changeset, not an email, so it never touches the shared SMTP recorder
- *    `secretary.test.ts` asserts an exact count against.
- * 5. A reason being typed stays in its own card while the card above it goes.
- * 6. A send that failed with nothing sent stays in the Inbox with Try again,
- *    and trying again sends it once and completes it.
- * 7. A send that may have gone through stays in the Inbox with one answer,
- *    "I checked Sent"; a tap asked anyway answers with the record, and after
- *    the check it leaves and still sends nothing.
- * 8. A triage card and a changeset open on their one-line summary, the diff
- *    collapsed; tapping the triage card performs every act on it.
+ * The Inbox end to end over the real `suzatary serve`, the real fold, a real triage card and a real scripted proposal,
+ * so what these scenes read is what the page itself reads. A decision is a record: a card moves no chain until a tap, a
+ * viewer is offered nothing to press, and a failed or uncertain send stays in the Inbox and never sends twice.
  */
 
 import assert from "node:assert/strict";
@@ -40,14 +19,8 @@ const app = await suite("inbox");
 const ADDED = proposed.id;
 const CLOSED = proposed.id;
 
-/**
- * Open the Inbox and wait until it has drawn something — a card, or the empty
- * note.
- */
-// THE PAGE DRAWN AGAIN FROM NOTHING, IN THE SAME TAB, never a reload, so whatever a card shows after it came from what
-// the tab holds outside the drawing (a card's register), not from the old nodes. A page left for another workspace keeps
-// running behind it (the tiled layout's §6), so the scene comes back by an address of the Inbox the tab holds no page
-// of, one naming no card to open, and finds the old page let go.
+// Drawn again in the same tab, never a reload, so what a card shows after came from its register, not the old nodes.
+// A page left for another workspace keeps running behind it, so the scene comes back by an Inbox address the tab holds no page of.
 async function drawnAgain(base: string, card: string): Promise<void> {
   await app.page.evaluate(`window.__inbox = document.querySelector(".inboxpage")`);
   await app.page.navigate(`${base}/#/secretary`);
@@ -67,18 +40,14 @@ async function openInbox(base: string): Promise<void> {
   );
 }
 
-/** The waiting count the tab bar's own badge reports — `""` for none waiting,
- * never a number this page computed twice. */
+/** The waiting count the tab bar's own badge reports, `""` for none waiting. */
 const badge = (): Promise<string> =>
   app.page.evaluate<string | null>(`document.querySelector(".tabbar .tabbadge")?.textContent ?? null`).then(
     (found) => found ?? "",
   );
 
-/**
- * A FRESH DATED CONVERSATION, minted over the route rather than the UI — the
- * same shape `secretary.test.ts`'s own `freshConversation` is, kept here so
- * this file's scenes do not depend on that one's DOM.
- */
+/** A fresh dated conversation minted over the route, kept apart from `secretary.test.ts`'s own so this file's scenes
+ * do not depend on that one's DOM. */
 async function freshConversation(base: string): Promise<string> {
   await app.page.navigate(`${base}/#/secretary/default`);
   await app.page.waitFor(`document.querySelector(".pagetitle") !== null`, { timeout: 15000 });
@@ -87,8 +56,6 @@ async function freshConversation(base: string): Promise<string> {
   );
 }
 
-/** Open a fresh conversation and say something, waiting for the proposal at
- * `index` to land. */
 async function propose(base: string, said: string, index: number): Promise<string> {
   const id = await freshConversation(base);
   await app.page.navigate(`${base}/#/secretary/${id}`);
@@ -101,8 +68,7 @@ async function propose(base: string, said: string, index: number): Promise<strin
   return id;
 }
 
-/** RUN THE AGENT'S WRITER AGAIN, from node. `scripts/web-e2e.sh` names the
- * binary and the fixture's instance file; there is nothing here to fake. */
+/** The agent's writer run again: `scripts/web-e2e.sh` names the binary and the fixture's instance file. */
 function rerunTriage(...flags: string[]): { ran: boolean; refused: string } {
   const bin = process.env["E2E_TRIAGE_BIN"];
   const instance = process.env["E2E_TRIAGE_INSTANCE"];
@@ -113,9 +79,6 @@ function rerunTriage(...flags: string[]): { ran: boolean; refused: string } {
   return JSON.parse(said.trim()) as { ran: boolean; refused: string };
 }
 
-/** A route call over `fetch`, in the page — every route-level assertion below
- * asks the box directly rather than through a card, per this file's own note
- * on why scenes 3-5 do. */
 async function post(base: string, path: string, body: unknown): Promise<{ status: number; body: unknown }> {
   await app.page.navigate(`${base}/#/`);
   const said = await app.page.evaluate<string>(`(async () => {
@@ -132,7 +95,6 @@ app.scene("a triage card appears in the Inbox, tagged as the agent's and drawn a
   await openInbox(PROPOSED_BASE);
   await app.page.waitFor(`document.querySelector('${TRIAGE}') !== null`, { timeout: 10000 });
   assert.equal(await app.page.evaluate<string>(`document.querySelector('${TRIAGE} .proposaltag').textContent`), "Triage");
-  // ITS SUMMARY FIRST: the acts in one line.
   assert.equal(
     await app.page.evaluate<string>(`document.querySelector('${TRIAGE} .diffline').textContent`),
     `add ${proposed.id} · complete ${CLOSED}`,
@@ -144,7 +106,7 @@ app.scene("a triage card appears in the Inbox, tagged as the agent's and drawn a
   assert.match(text, new RegExp(proposed.body), "the body is shown in full");
   assert.match(text, /the rain did it/, "and so is the note on the completion");
 
-  // AND THE CHAIN HAS NOT MOVED. Nothing here is on it until a tap.
+  // Nothing here is on the chain until a tap.
   const entries = await fold(app.page);
   assert.equal(entries.find((entry) => entry.todo === ADDED), undefined, "the added todo is not on the chain");
   assert.equal(await badge(), "1", "one card is waiting, and the bar says so");
@@ -158,19 +120,13 @@ app.scene("a viewer reads the Inbox and is offered nothing to press", async () =
     0,
     "a login that cannot tap is not offered a button that taps",
   );
-  // …and the ROUTE refuses it, whatever the page drew.
+  // The route refuses it, whatever the page drew.
   const refused = await post(PROPOSED_BASE, "/api/secretary/conversations/triage/proposals/0/tap", {});
   assert.equal(refused.status, 403);
 });
 
-// EVERY SCENE FROM HERE SCOPES ITS QUERIES BY `[data-conversation="<id>"]`,
-// NEVER BY A BARE COUNT OF `.inboxpage .proposal`. Each `propose` mints its
-// own conversation, but WRITE_BASE is shared across this whole file's scenes
-// in the order node runs them (`--test-concurrency=1`, one server) — so a
-// scene that leaves its own decision standing must not be read by a LATER
-// scene's raw total, only by the row that names its own conversation.
-
-// ASKING YES OPENS THE CARD (audit X2): a card is drawn closed, and Send's question is asked with every field on screen.
+// Every scene from here scopes its queries by `[data-conversation="<id>"]`, never a bare count: `WRITE_BASE` is shared
+// across this file's scenes, so a decision one leaves standing must not be read by a later scene's total.
 app.scene("a card is drawn closed, and asking Send opens it whole before the question", async () => {
   const id = await propose(WRITE_BASE, "propose the reply opened by its question", 0);
   await openInbox(WRITE_BASE);
@@ -199,18 +155,14 @@ app.scene("a card is drawn closed, and asking Send opens it whole before the que
   assert.equal(gone, 200);
 });
 
-// A CHANGESET, NOT AN EMAIL: tapping Confirm applies real chain acts and never
-// touches `$SUZATARY_E2E_SENT`, which `secretary.test.ts` asserts an EXACT
-// count against — a second sender there would fail a test this file did not
-// touch. A tap is a tap whichever act it performs; this one just leaves the
-// shared fixture's one recorded-mail count alone.
+// A changeset, not an email, so it never touches `$SUZATARY_E2E_SENT`, whose exact count `secretary.test.ts` asserts.
 app.scene("tapping a proposal in the Inbox confirms it and drops the count", async () => {
   const id = await propose(WRITE_BASE, "propose an inbox tap test changeset", 0);
   await openInbox(WRITE_BASE);
   const row = `.inboxpage .proposal[data-conversation="${id}"]`;
   await app.page.click(`${row} .act-confirm`);
   await app.page.waitFor(`document.querySelector(".inboxpage .proposalconfirm") !== null`, { timeout: 4000 });
-  // THE CONFIRM STEP AND ITS NOTE OUTLIVE A REDRAW: they are the card's register, not its nodes.
+  // The confirm step and its note outlive a redraw: they are the card's register, not its nodes.
   await app.page.type(`${row} .noteline`, "applied from");
   await drawnAgain(WRITE_BASE, row);
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector('${row} .proposalconfirm') !== null`), true, "the confirm step survives");
@@ -262,10 +214,8 @@ app.scene("a reason being typed stays in its own card while the card above it go
   await app.page.waitFor(`document.querySelector('${card(below)}') === null`, { timeout: 15000 });
 });
 
-// THE RECORDER FAILS ON CUE: `--smtp-fixture <file>` reads `<file>.failures`
-// before each send and fails the next one as the first line says (`not_sent`
-// or `unknown`), recording nothing. The scenes below count their own subject
-// in the recorder rather than its lines, because it is shared.
+// `--smtp-fixture <file>` reads `<file>.failures` before each send and fails the next one as its first line says
+// (`not_sent` or `unknown`), recording nothing; the recorder is shared, so scenes count their own subject.
 const SENT = process.env["SUZATARY_E2E_SENT"] ?? "";
 
 const sentWith = (subject: string): number =>
@@ -301,7 +251,6 @@ async function decisionOf(conversation: string): Promise<string | undefined> {
   return proposals.find((p) => p.asked === `proposal:${conversation}/0`)?.state.kind;
 }
 
-/** Tap an answer on this card and confirm it. */
 async function answer(row: string, verb: string): Promise<void> {
   await app.page.click(`${row} .act-${verb}`);
   await app.page.waitFor(`document.querySelector('${row} .proposalconfirm') !== null`, { timeout: 4000 });
@@ -317,8 +266,6 @@ app.scene("a send that sent nothing offers Try again, and trying again sends it 
   await answer(row, "send");
   await app.page.waitFor(`document.querySelector('${row}.proposal-failed') !== null`, { timeout: 15000 });
 
-  // STILL WAITING, AND STILL ANSWERABLE: the card says what failed and offers
-  // the same send again, and the decision behind it is open.
   assert.match(
     await app.page.evaluate<string>(`document.querySelector('${row} .proposaloutcome').textContent`),
     /^Not sent, tried once: /,
@@ -346,7 +293,6 @@ app.scene("a send that may have gone stays until he checks Sent, and never sends
     timeout: 15000,
   });
 
-  // STILL IN FRONT OF HIM, with one answer: never Send again, never Dismiss.
   assert.equal(
     await app.page.evaluate<number>(`document.querySelectorAll('${row} .act-send, ${row} .act-dismiss').length`),
     0,
@@ -358,7 +304,6 @@ app.scene("a send that may have gone stays until he checks Sent, and never sends
   );
   assert.equal(await decisionOf(id), "open", "it waits on his check");
 
-  // A TAP ASKED ANYWAY ANSWERS WITH THE RECORD, AND THE RECORDER STAYS EMPTY.
   const tap = (): Promise<string> =>
     app.page.evaluate<string>(
       `${SIGNED_POST}("/api/secretary/conversations/${id}/proposals/0/tap", "{}").then(async (r) => r.status + " " + (await r.json()).proposals[0].state)`,
@@ -399,12 +344,10 @@ app.scene("a triage card and a changeset open on their summary, and a tap perfor
   const text = (selector: string): Promise<string> =>
     app.page.evaluate<string>(`document.querySelector('${selector}')?.textContent ?? ""`);
 
-  // THE TRIAGE CARD, FOLDED: the acts and the low price said, and Confirm offered.
   assert.equal(await text(`${card} .diffline`), `add ${HELD} · complete ${HELD}`);
   assert.equal(await text(`${card} .diffflag`), `At or under the 45% the review holds: ${HELD} at 40%`);
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector('${card} .proposaldetails').open`), false, "a card is drawn closed");
 
-  // THE CHANGESET, FOLDED: grouped by act, the low price said, and Confirm still offered.
   assert.equal(await text(`${changeset} .diffline`), "add 2 todos · complete e2esummaryone");
   assert.equal(await text(`${changeset} .diffflag`), "At or under the 45% the review holds: e2esummaryone at 40%");
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector('${changeset} .proposaldetails').open`), false, "a card is drawn closed");
@@ -414,7 +357,6 @@ app.scene("a triage card and a changeset open on their summary, and a tap perfor
   assert.equal(await app.page.evaluate<number>(`document.querySelectorAll('${changeset} .proposedobject').length`), 3);
   await shoot(changeset, "changeset-open");
 
-  // THE TAP PERFORMS THE WHOLE CARD: the todo is added and completed, as the owner.
   await app.page.click(`${card} .act-confirm`);
   await app.page.waitFor(`document.querySelector('${card} .proposalconfirm') !== null`, { timeout: 4000 });
   await app.page.click(`${card} .act-confirm.confirming`);

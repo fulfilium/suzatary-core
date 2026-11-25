@@ -1,18 +1,9 @@
 /**
- * A NEW DEVICE'S LIST BEFORE ITS FIRST SYNC ENDS (`docs/COLDSYNC-PLAN-2026-11-24.md`, stages 1 and 2): on the lines
- * server's generated store (the bigstore shape, `scripts/web-e2e.sh`) over a phone's network (`FAST_4G`), a device that
- * holds nothing opens `#/conversations`.
- *
- * 1. Each row is drawn from the skeleton before its words land ("Not on this device yet", its turns and when), and its
- *    words fill it in place: a row never moves for its words. While the skeleton still lands, a piece may end inside a
- *    conversation, whose row then grows by the next piece and moves by its last instant; every other row keeps its
- *    order. A row opens its conversation while the device still lacks most of the store's content.
- * 2. A search typed meanwhile says how many conversations it read of how many, never "nothing matches" while it has
- *    not read them all, and the count rises as content lands.
- * 3. A content answer the box refuses leaves rows waiting, and they fill once it answers again: the fetch behind the
- *    list is asked again after a wait that doubles.
- *
- * Each scene waits for the fact it needs; the throttle only makes the first sync long enough to act inside it.
+ * A device that holds nothing opens `#/conversations` on the lines server's generated store over a phone's network:
+ * each row is drawn from the skeleton before its words land and filled in place, a search typed meanwhile says how many
+ * conversations it read and never "nothing matches" before it read them all, and rows a refused content answer left
+ * waiting fill once the box answers again. Each scene waits for the fact it needs; the throttle only makes the first
+ * sync long enough to act inside it.
  */
 
 import assert from "node:assert/strict"

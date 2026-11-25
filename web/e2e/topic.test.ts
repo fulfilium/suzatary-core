@@ -1,10 +1,8 @@
 /**
- * A NEW TOPIC FROM THE SECRETARY PAGE, AT PHONE WIDTH: New topic opens a draft the box holds nothing of, the name
- * typed over the composer and the first message open the conversation in one send, and the answer reaches the page.
- * A draft left with nothing sent leaves no conversation behind, so no empty "New topic" stands on the box. A rename
- * closes on the box's answer, though the device is still taking its lines, as it is after an update moved their form.
- *
- * Its own file, so the conversations the box holds are only the ones its scene made.
+ * A new topic from the secretary page at phone width: the name typed over the composer and the first message open the
+ * conversation in one send, a draft left with nothing sent leaves no conversation on the box, and a rename closes on
+ * the box's answer though the device is still taking its lines. Its own file, so the conversations the box holds are
+ * only the ones its scenes made.
  */
 
 import assert from "node:assert/strict";
@@ -30,8 +28,7 @@ app.scene("a new topic is named, asked and answered, and a draft left unsent wri
   assert.deepEqual(topics(), before, "a draft left unsent opens no conversation");
 
   await app.page.click(".act-newtopic");
-  // The draft's own name field, shown and on the draft's route: a field left from another page cannot take focus, and
-  // the words would go to the composer that has it.
+  // The draft's own name field, shown: a field left from another page cannot take focus, so the words would go elsewhere.
   await app.page.waitFor(
     `location.hash === "#/secretary/new" && document.activeElement?.classList.contains("composebox") === true && (document.querySelector(".topicname")?.getClientRects().length ?? 0) > 0`,
     { timeout: 8000 },

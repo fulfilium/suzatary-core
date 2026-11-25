@@ -1,5 +1,4 @@
-// The banner that dates the fold on screen. A cache is honest only while the page says which moment its numbers are
-// from; a service worker for data was rejected for the same reason (`sw.ts` keeps only the shell).
+// A cache is honest only while the page says which moment its numbers are from, which is also why `sw.ts` keeps only the shell.
 
 import { el } from "../view/dom";
 import { when } from "../view/format";
@@ -8,9 +7,9 @@ import onscreen from "../app/store";
 import act from "../view/act";
 
 export namespace stale {
-  // Three ways to be unsure, three sentences: an old fold, a fresh one nobody can confirm (the stream is down), and one
-  // this browser folded itself while the stream is down. A fold of this browser's own while the stream is up says
-  // nothing: its numbers are this moment's, and an act it holds is marked on its own row.
+  // `Old` is an old fold, `Unheard` a fresh one nobody can confirm because the stream is down, and `Offline` one this
+  // browser folded itself while the stream is down; a fold of its own while the stream is up says nothing, since its
+  // numbers are this moment's and an act it holds is marked on its own row.
   export type Why = { type: "Offline" } | { type: "Unheard"; since: number } | { type: "Old"; since: number };
   export type Banner = { type: "Hidden" } | { type: "Shown"; why: Why };
 

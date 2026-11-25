@@ -1,7 +1,3 @@
-// The navigation, in words: the four a phone opens the app for, and More for the rest: the chain switcher, the owner's
-// other places, this app's own pages apart from them, and the theme. `nav.of(app, theme, workspace)` is the bar as a value;
-// `paint` puts it in the bar.
-
 import app from "../app/app";
 import { said } from "../app/chain";
 import { el } from "../view/dom";

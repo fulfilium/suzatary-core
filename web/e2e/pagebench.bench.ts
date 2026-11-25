@@ -1,10 +1,8 @@
 /**
- * EVERY PAGE'S DRAW, MEASURED: each page at CPU throttling 4 on the read-only fixture, until it has drawn and gone
- * quiet: opened in a fresh tab (a new document, from its navigation's start), and visited again inside a tab (from
- * the address moving to it), several runs each, the median and the spread. A draw is the frame's
- * `page:draw` User Timing measure and, on a page drawn by a Typst view, its `typst:draw` with the nodes it
- * computed; the numbers are written to `$SUZATARY_PAGEBENCH` when it is set (the stage's report), and the scene's
- * assertions are only that every page drew.
+ * Measures every page's draw at CPU throttling 4 on the read-only fixture, opened in a fresh tab and visited again
+ * inside one, the median and spread of several runs: a draw is the frame's `page:draw` measure and, on a Typst page,
+ * its `typst:draw`. The numbers go to `$SUZATARY_PAGEBENCH` when it is set, the scene asserts only that every page
+ * drew, and no gate runs it: `scripts/web-e2e.sh pagebench` does, by name.
  */
 
 import assert from "node:assert/strict";
@@ -51,10 +49,9 @@ type Visit = { readonly drawn: number; readonly draws: number; readonly drawMs: 
 const draws = (since: number): string =>
   `[...performance.getEntriesByName("page:draw"), ...performance.getEntriesByName("typst:draw")].filter((e) => e.startTime >= ${since}).map((e) => ({ name: e.name, start: e.startTime, duration: e.duration, detail: e.detail ?? {} }))`;
 
-// Opens `hash` in a fresh document and waits until a value is drawn and the page has gone quiet; times are from the
-// navigation's start, which is the document's time origin.
 const drawnBy = (name: string): string => (TYPST.has(name) ? `d.name === "typst:draw"` : `d.name === "page:draw" && d.detail.read === "Val"`);
 
+// A fresh document's times are from the navigation's start, which is its time origin.
 const fresh = async (name: string, hash: string): Promise<Visit> => {
   await app.page.navigate("about:blank");
   await app.page.navigate(`${BASE}/${hash}`);
@@ -78,7 +75,6 @@ const measured = (ds: readonly Draw[], t0: number): Visit => {
   };
 };
 
-// Moves the address to `hash` and waits until a value is drawn and the page has gone quiet.
 const visit = async (name: string, hash: string): Promise<Visit> => {
   // The time is taken before the address moves: the shell may draw the page inside the assignment.
   const t0 = await app.page.evaluate<number>(`((t) => ((location.hash = ${JSON.stringify(hash)}), t))(performance.now())`);

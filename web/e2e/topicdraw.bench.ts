@@ -1,18 +1,9 @@
 /**
- * FROM THE TAP TO THE TOPIC DRAWN, MEASURED: on the lines' server (`bigstore`'s shape), over a phone-class network, the
- * time from the tap on the topic sheet's write to the sheet closed, and to the round's new chip drawn. Each is timed in
- * the page, from the click to the first frame that shows it, so the browser's own channel to this script costs nothing.
- * A measurement, not a test: no gate runs it.
- *
- *   scripts/web-e2e.sh topicdraw
- *
- * It prints the median and the slowest of `SUZATARY_TOPICDRAW_RUNS` taps (default 7) in milliseconds, and writes them as
- * JSON to `$SUZATARY_TOPICDRAW` when that is set, with each step the app measures of a write: its duration, and for a
- * step of the page `<step>@`, when it began after the tap. A second scene times a rename's Enter to its title drawn, and
- * writes it to `$SUZATARY_RENAMEDRAW`; a third times Send to the question drawn and to its answer drawn, and then the
- * warm snapshot's rewrite once the lines are quiet, written to `$SUZATARY_SENDDRAW`; a fourth times Send in one tab to
- * the question drawn in a second tab of the device while no post of the lines reaches the box, written to
- * `$SUZATARY_SECONDTAB`.
+ * Measures, on the lines' server over a slow phone network, the tap on the topic sheet's write to the sheet closed and
+ * to the round's new chip drawn, timed in the page from the click to the first frame that shows it, so the script's
+ * channel costs nothing; further scenes time a rename's Enter to its title, Send to the question and its answer drawn,
+ * and Send in one tab to the question drawn in a second tab. No gate runs it: `scripts/web-e2e.sh topicdraw` does, and
+ * each scene writes its JSON to its own `$SUZATARY_*` file when that is set.
  */
 
 import assert from "node:assert/strict"
@@ -178,8 +169,7 @@ const sent = (said: string): string => `new Promise((done) => {
 })`
 
 // In the page: every measure from Send's click to the question drawn, by name: how long each took in all, and when the
-// first began after the click. Where a first Send's time goes: to the worker and back (`write:line`), to the move heard
-// (`moved:batched`, `page:heard`), to the reading (`ask:*`) and to the draw (`painter:step`, `page:draw`).
+// first began after the click.
 const sendSteps = (drawn: number): string => `(() => {
   const from = window.e2eTapped, until = from + ${drawn}
   const steps = {}
@@ -220,8 +210,7 @@ app.scene("measured: Send to the question drawn and to its answer drawn, over a 
     runs.push({ ...run, seal: await app.page.inWorker<Steps>("prodromework", SEAL_STEPS), page: await app.page.evaluate<Steps>(sendSteps(run.question)) })
   }
   await app.page.network(null)
-  // The warm snapshot, deleted by every row write, is written again once the lines are quiet (`linesync.QUIET_MS`):
-  // what that rewrite costs after a conversation, and its bytes.
+  // The warm snapshot, deleted by every row write, is written again once the lines are quiet (`linesync.QUIET_MS`).
   const compactions = await app.page.inWorker<number>("prodromework", `performance.getEntriesByName("compact:lines", "measure").length`)
   const quiet = Date.now()
   while ((await app.page.inWorker<number>("prodromework", `performance.getEntriesByName("compact:lines", "measure").length`)) === compactions && Date.now() - quiet < 120_000)

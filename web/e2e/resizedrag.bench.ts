@@ -1,12 +1,8 @@
 /**
- * DRAGS WITH A TODO OPEN (docs/TILEDLAYOUT-PLAN-2026-11-22.md §8.1: a resize must fit a frame), with a todo beside the
- * list. The window is narrowed from 1,440 px to 900 px and widened back, 8 px a step, one step a frame, so the tiles are
- * placed again at every step; and the divider between the list and the todo is dragged by a mouse, 8 px a frame, across
- * the room and back, so it snaps from stop to stop. The page's main thread runs `SUZATARY_RESIZEDRAG_RATE` times slower
- * (default 6, the slowest profile the scenes use). Each prints the frames' durations (median, 95th percentile,
- * slowest), how many were over a 60 Hz frame's budget, and the page's long animation frames. A measurement, not a test.
- *
- *   scripts/web-e2e.sh resizedrag
+ * Measures drags with a todo open beside the list: the window narrowed from 1,440 px to 900 px and back 8 px a frame,
+ * so the tiles are placed again at every step, and the divider dragged by a mouse 8 px a frame, with the main thread
+ * `SUZATARY_RESIZEDRAG_RATE` times slower (default 6). Each prints its frames' durations, how many were over a 60 Hz
+ * frame's budget, and the long animation frames; no gate runs it: `scripts/web-e2e.sh resizedrag` does, by name.
  */
 
 import { BASE, SETTLED, suite } from "./harness"
@@ -19,7 +15,6 @@ const app = await suite("resizedrag")
 
 const BUDGET = 1000 / 60
 
-// Opens a todo beside the list, throttles the page, and starts counting its frames.
 const ready = async (): Promise<void> => {
   await app.resize([1440, 900])
   await app.page.navigate(`${BASE}/#/todo/${todos.flat.id}`)
@@ -37,7 +32,6 @@ const ready = async (): Promise<void> => {
 
 const frame = (): Promise<unknown> => app.page.evaluate(`new Promise((done) => requestAnimationFrame(() => done()))`)
 
-// Stops counting, and prints what was counted.
 const told = async (what: string, steps: number): Promise<void> => {
   await app.page.evaluate(SETTLED)
   const { frames, long } = await app.page.evaluate<{ frames: number[]; long: number[] }>(`(window.__stop = true, { frames: window.__frames.slice(1), long: window.__long })`)

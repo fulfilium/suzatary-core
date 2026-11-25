@@ -1,22 +1,10 @@
 /**
- * A NEW DEVICE'S FIRST LOAD OF THE CONVERSATIONS, MEASURED: a browser that holds nothing opens `#/secretary` on the
- * `lines` server's generated store (the bigstore shape, `scripts/web-e2e.sh`) over a phone's network, and the bench
- * says where the time goes until the stream's first round is drawn and until the cold load ends (no read of the box's
- * API left open). It records every request the page and its workers make (`Page.wire`), with its bytes on the wire and
- * when it was sent, answered and ended; the worker's own measures (`http:decode`, `lines:piece`, `lines:kept`,
- * `content:admit`, `content:kept`) and marks; and, from the box's whole skeleton read after the load, how many of the
- * pulled bytes the conversations the first screen drew rest on.
- *
- * The network is Lighthouse's Fast 4G (`FAST_4G`: 165 ms a request, about 1.0 MB/s down and 170 KB/s up), what a phone
- * on a tailnet relay gets on a good day; `SUZATARY_COLDSYNC_NET=none` runs it at the box's own speed. Each pass is a
- * new profile's first visit. No gate runs it: `SUZATARY_COLDSYNC=<file> SUZATARY_COLDSYNC_PASSES=3 scripts/web-e2e.sh
- * coldsync` does, by name, and writes each pass's record and its table to `<file>`.
- *
- * `SUZATARY_COLDSYNC_PAGE=conversations` opens `#/conversations` instead and measures the list: drawn once every row
- * shows its words (the pinned row and at least one more, none "not on this device yet"), with when its first row was
- * drawn and how many content objects were pulled before it. `SUZATARY_COLDSYNC_SEARCH=<words>` types them into the
- * search once the list's first row is drawn. Each pass counts the page's readings of the list and of a search
- * (`ask:Conversations`, `ask:Search`) until the cold load ends.
+ * Measures a new device's first load of the conversations on the lines server's generated store over Lighthouse's
+ * Fast 4G (`SUZATARY_COLDSYNC_NET=none` for the box's own speed): every request the page and its workers make, the
+ * worker's measures and marks, and how many pulled bytes the first screen's conversations rest on, until the stream's
+ * first round is drawn (or, with `SUZATARY_COLDSYNC_PAGE=conversations`, every row of the list shows its words) and
+ * until no read of the box's API is left open. No gate runs it: `SUZATARY_COLDSYNC=<file> scripts/web-e2e.sh coldsync`
+ * does, by name, and writes each pass's record and table to `<file>`.
  */
 
 import assert from "node:assert/strict"
@@ -43,8 +31,7 @@ const MEASURED = SEARCH !== "" ? FOUND : PAGE === "conversations" ? LIST : BULK
 
 const app = await suite("coldsync", PHONE)
 
-// The lines server's log (`scripts/e2e-servers.sh`'s `launch`), beside its instance's directory: each skeleton piece the
-// box answered logs its parts' times (`suzatary::skeleton`).
+// The lines server's log (`scripts/e2e-servers.sh`'s `launch`), where each skeleton piece logs its parts' times.
 const BOX_LOG = join(dirname(dirname(LINES_INSTANCE)), "lines.log")
 const logged = (): string => readFileSync(BOX_LOG, "utf8")
 const piecesSince = (from: number): string[] =>
@@ -54,7 +41,6 @@ const piecesSince = (from: number): string[] =>
     .filter((l) => l.includes("skeleton piece"))
     .map((l) => l.replace(/^.*?skeleton piece/, "skeleton piece").replace(/\u001b\[[0-9;]*m/g, ""))
 
-// What a request is for, by its path.
 const route = (url: string): string => {
   const path = url.split("?")[0] ?? url
   if (path.startsWith("/api/stores/lines/skeleton")) return "lines skeleton"
@@ -130,7 +116,6 @@ type Measures = { readonly origin: number; readonly by: Record<string, { count: 
 // The conversations the stream drew rounds of, by their links.
 const DRAWN = `[...new Set([...document.querySelectorAll(".streamround .streammeta a")].map((a) => decodeURIComponent(/secretary\\/([^/?#&@]+)/.exec(a.getAttribute("href"))?.[1] ?? "")))]`
 
-// The box's whole skeleton, piece after piece, each node with its bytes as JSON and its content's size.
 const SKELETON = `(async () => {
   const nodes = []
   for (let since = ""; ; ) {
@@ -146,9 +131,8 @@ const SKELETON = `(async () => {
 // A node's bytes as JSON, those of the names it holds (its own, its parents', its keys'), and its content's size.
 type Node = { readonly conversation: string; readonly json: number; readonly names: number; readonly size: number }
 
-// Written into every document before its scripts: the instant the page's first row is drawn, and the instant what the
-// bench measures is.
-// And, until the page goes, the last instant a row of the list waited for its words.
+// Written into every document before its scripts: when the first row and what the bench measures are drawn, and the
+// last instant a row waited for its words.
 const DRAWN_AT = `(() => {
   const asks = (window.__asks = {})
   new PerformanceObserver((list) => {
@@ -260,7 +244,6 @@ const pass = async (n: number): Promise<Pass> => {
   }
 }
 
-// One pass as the table's rows.
 const table = (p: Pass): string => {
   const kb = (b: number): string => `${Math.round(b / 1000)} KB`
   const rows = Object.entries(p.routes)

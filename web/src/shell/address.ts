@@ -1,6 +1,5 @@
-// The one door between the address register and the browser's address bar: the only module that writes `location` or
-// `history`. Every entry this tab writes carries its place in the log, so the browser's own back and forward move the
-// log's pointer, and the hash it shows is always an address's print.
+// The only module that writes `location` or `history`: every entry carries its place in the log, so the browser's own
+// back and forward move the log's pointer, and the hash it shows is always an address's print.
 
 import app from "../app/app"
 import routelog from "./routelog"
@@ -36,7 +35,7 @@ export namespace address {
     mark(false)
   }
 
-  // To a page's own address, its workspace's tiles read from it: the bar's, the palette's, a key's.
+  // To a page's own address, its workspace's tiles read from it.
   export const go = (route: Route): void => went(bare(route))
   export const replace = (route: Route): void => replaced(bare(route))
 
@@ -47,8 +46,7 @@ export namespace address {
     window.history.back()
   }
 
-  // Out of the app, to a path the box serves as a document (a consent the box sends on): a document load, so the box
-  // answers it. What the page keeps is kept first, for the way back.
+  // A document load, so the box answers the path (a consent it sends on); what the page keeps is kept first, for the way back.
   export const leave = (href: string): void => {
     keep()
     window.location.assign(href)
