@@ -4,7 +4,7 @@ The laws of `web/` are its tests, and a test's name states its law:
 `web/test/*.test.ts` (node, over the seeded generator `web/test/gen.ts`, which
 prints the failing seed; `scripts/web-test.sh`), `web/e2e/` (a real browser,
 `scripts/web-e2e.sh`), and the Rust tests of what the tab draws and reads
-(`app/viewtree/tests`, `app/pages/tests`, `app/api/tests`, `app/cli/tests`).
+(`app/viewtree/tests`, `app/tiles/tests`, `app/pages/tests`, `app/api/tests`, `app/cli/tests`).
 This document holds what no test holds: where to start reading, the three
 doors, the laws no test checks, and the vectors. A new law is a new test, not
 a sentence here.

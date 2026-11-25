@@ -4,7 +4,6 @@
 use std::fmt;
 
 use super::node::Node;
-use super::open::MOST;
 use super::page::Pin;
 use super::tree::Tree;
 
@@ -15,32 +14,34 @@ pub enum Unfit {
     Root,
     /// A node below the root has one child.
     Single,
-    /// A workspace holds more than `MOST` free leaves.
+    /// A workspace holds more free leaves than the policy's `most`.
     Crowded,
     /// A workspace holds two pinned leaves, or one that is not its end: the last leaf, reached
     /// through the last child of each node.
     Pin,
 }
 
-/// `pin` reads a leaf's pin; `home` is the root the tree must keep the shape of.
+/// `pin` reads a leaf's pin; `home` is the root the tree must keep the shape of; `most` bounds a
+/// workspace's free leaves.
 pub(crate) fn check<L, H>(
     root: &Node<L>,
     home: &Node<H>,
     pin: &impl Fn(&L) -> Pin,
+    most: usize,
 ) -> Result<(), Unfit> {
     if root.axis != home.axis || root.fit != home.fit || root.len() != home.len() {
         return Err(Unfit::Root);
     }
-    root.parts().try_for_each(|w| workspace(&w.tree, pin))
+    root.parts().try_for_each(|w| workspace(&w.tree, pin, most))
 }
 
-fn workspace<L>(tree: &Tree<L>, pin: &impl Fn(&L) -> Pin) -> Result<(), Unfit> {
+fn workspace<L>(tree: &Tree<L>, pin: &impl Fn(&L) -> Pin, most: usize) -> Result<(), Unfit> {
     if !two_below(tree) {
         return Err(Unfit::Single);
     }
     let leaves = tree.leaves();
     let pinned = leaves.iter().filter(|l| pin(l) == Pin::Pinned).count();
-    if leaves.len() - pinned > MOST {
+    if leaves.len() - pinned > most {
         return Err(Unfit::Crowded);
     }
     let end_pinned = pin(tree.end().0) == Pin::Pinned;

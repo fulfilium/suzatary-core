@@ -1,13 +1,13 @@
-//! What a page declares about itself, which the tree reads and never computes.
+//! What a page declares about itself, which the tree reads and never computes, and its address.
 
 use std::num::NonZeroU32;
 
 use super::node::Share;
 use super::px::{Px, Rect};
 
-/// A page's address and its declarations.
+/// What a page declares to the layout, which the acts and `arrange` read and never compute.
 ///
-/// Contract: `parse(&p.print()) == Some(p)`, and pages of one kind have one pin.
+/// Contract: pages of one kind have one pin.
 pub trait Page: Clone + Eq {
     type Kind: Copy + Eq;
     /// An open of a page of the focused leaf's kind replaces that leaf.
@@ -18,13 +18,24 @@ pub trait Page: Clone + Eq {
     fn share(&self) -> Share;
     /// The shape of the pages it opens, which decides its tile's `Opens`.
     fn opens(&self) -> Shape;
-    /// The page a bare address of this one is opened from; a workspace's home answers itself.
-    /// Followed, it reaches a workspace's home within `MOST` steps; a bare address opens each
-    /// page on the way.
+}
+
+/// A page opened from another: what `follow` reads, and a bare address.
+pub trait Home: Page {
+    /// The page this one is opened from; a workspace's home answers itself. Followed, it reaches
+    /// a page that answers itself; a bare address and `follow` open each page on the way.
     #[must_use]
     fn home(&self) -> Self;
-    /// The leaf's address: the route's hash without `#`.
+}
+
+/// A page that has an address: what `print` and `parse` read.
+///
+/// Contract: `parse(&p.print()) == Some(p)`.
+pub trait Address: Home {
+    /// The leaf's address, which the tree's print escapes.
     fn print(&self) -> String;
+    /// `None` for a string that names no page; `tiles::parse` then reads the tree's head alone,
+    /// or the declared home.
     fn parse(s: &str) -> Option<Self>;
 }
 

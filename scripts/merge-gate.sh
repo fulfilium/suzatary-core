@@ -416,7 +416,7 @@ declare -A unit_shared=([web/test]="web/src/view/tokens.ts web/test/e2estores.te
 # A scene file's pass is keyed by its imports and what its tabs fetched (web/e2e/harness.ts,
 # SUZATARY_E2E_READS): a page fetches a chunk, or the pages' module (`scene_later`), when it runs it.
 observed=files:web/e2e
-scene_later=(app/pages app/viewtree)
+scene_later=(app/pages app/viewtree app/tiles)
 
 # The manifest goes right after the subcommand, never after a `--`, which would hand it to
 # clippy-driver instead of cargo.
@@ -621,7 +621,7 @@ live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/address app/base
   app/services app/google app/connect app/inbox app/conversations app/lines app/topics app/digest app/stores app/cards app/secretary app/api app/server app/os app/io-access app/io-local app/io-typeset app/io-chains app/io-model app/io-mail app/io-sources app/plugin app/plugin-ics/Cargo.toml app/plugin-ics/ics.schema
   app/plugin-fence/Cargo.toml app/wasm/Cargo.toml app/cli/Cargo.toml app/cli/src
   app/cli/tests/common app/cli/tests/this_box.rs app/cli/tests/all.rs app/cli/tests/live.rs
-  app/testkit app/script-guards/Cargo.toml app/viewtree/Cargo.toml app/pages/Cargo.toml app/tooling tokens.typ
+  app/testkit app/script-guards/Cargo.toml app/viewtree/Cargo.toml app/tiles/Cargo.toml app/pages/Cargo.toml app/tooling tokens.typ
   web/static/tokens.css
   web/static/style.css)
 for module in "${live_modules[@]}"; do live_reads+=("app/cli/tests/$module.rs"); done

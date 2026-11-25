@@ -13,11 +13,11 @@
 //! prints as before whether it stands or not.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
-use viewtree::tiles::{
-    self, Act, Arranged, At, Axis, Fit, Id, Leaf, Measures, Node, Page, Part, Pin, Px, Rect, Share,
-    Tiles, Tree, Unfit, Viewport,
+use tiles::{
+    Act, Arranged, At, Axis, Fit, Home, Id, Leaf, Measures, Node, Page, Part, Pin, Policy, Px,
+    Rect, RootRow, Share, Tiles, Tree, Unfit, Viewport,
 };
+use ts_rs::TS;
 
 use crate::measure;
 use crate::route::{Kind, Route};
@@ -123,7 +123,8 @@ pub struct Area {
     pub h: u32,
 }
 
-/// One tile alone scrolls the document; tiles drawn together each scroll themselves.
+/// One tile alone scrolls the document, so a phone's browser hides its address bar; tiles drawn
+/// together each scroll themselves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 pub enum Scroller {
     Document,
@@ -208,10 +209,11 @@ pub enum Along {
 }
 
 /// The arrangement's lengths, from the tokens. A crumb row below the root shows every crumb. The
-/// bar's band stands at the top (`foot` zero): the chrome places the bar, and the band is cut off
-/// before the host sees a rectangle. Every page's least height is zero, so a short window takes
-/// no tile away: every tile scrolls, and a tablet's keyboard must not unmount the list beside a
-/// todo. A node down (`Below`) brings a least height back.
+/// bar's band stands at the top on every viewport (`RootRow::Top`), a phone's too: the chrome
+/// places the bar, and the band is cut off before the host sees a rectangle. Every page's least
+/// height is zero, so a short window takes no tile away: every tile scrolls, and a tablet's
+/// keyboard must not unmount the list beside a todo. A node down (`Below`) brings a least height
+/// back.
 #[must_use]
 pub fn measures() -> Measures {
     Measures {
@@ -219,7 +221,7 @@ pub fn measures() -> Measures {
         row: Px(measure::TAP),
         crumb: Px(0),
         tall: Px(0),
-        foot: Px(0),
+        root_row: RootRow::Top,
     }
 }
 
@@ -239,7 +241,7 @@ impl Desk {
             rest.into_iter().map(part).collect(),
             0,
         );
-        Tiles::new(home).map(|tiles| Desk {
+        Tiles::new(home, Policy::default()).map(|tiles| Desk {
             tiles,
             resized: Vec::new(),
             dock: Dock::Absent,
@@ -302,7 +304,7 @@ impl Desk {
         match self.leaf(key) {
             Some(id) if page.home() != page && page.kind() != Kind::Aside => {
                 let focused = tiles::act(self.tiles.clone(), Act::Focus(id));
-                self.tiles = tiles::act(focused, Act::Open(page));
+                self.tiles = tiles::follow(focused, page);
             }
             Some(_) | None => return self.go(&page.href()),
         }
@@ -433,7 +435,7 @@ impl Desk {
             w: r.w.0,
             h: r.h.0,
         };
-        let scroll = if tiles.iter().any(|t| t.scroll == tiles::Scroller::Document) {
+        let scroll = if tiles.len() == 1 {
             Scroller::Document
         } else {
             Scroller::Tiles
@@ -452,7 +454,7 @@ impl Desk {
         Drawing {
             scroll,
             behind,
-            keep: Route::destinations().len() - 1 + tiles::MOST,
+            keep: Route::destinations().len() - 1 + usize::from(shown.policy().most().get()),
             pinned: self.pinned(&drawn),
             tiles: tiles
                 .into_iter()
@@ -516,7 +518,7 @@ impl Desk {
 /// The desk as the browser holds it: `drawing` answers JSON of `Drawing`.
 #[cfg(target_arch = "wasm32")]
 mod host {
-    use viewtree::tiles::{Px, Viewport};
+    use tiles::{Px, Viewport};
     use wasm_bindgen::prelude::wasm_bindgen;
 
     #[wasm_bindgen(js_name = Desk)]

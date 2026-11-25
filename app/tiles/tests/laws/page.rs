@@ -4,7 +4,7 @@
 
 use std::num::NonZeroU32;
 
-use viewtree::tiles::{Measures, Page, Pin, Px, Ratio, Shape, Share};
+use tiles::{Address, Home, Measures, Page, Pin, Px, Ratio, RootRow, Shape, Share};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -34,7 +34,7 @@ pub const MEASURES: Measures = Measures {
     row: Px(44),
     crumb: Px(72),
     tall: Px(320),
-    foot: Px(992),
+    root_row: RootRow::FootUnder(Px(992)),
 };
 
 impl Pg {
@@ -83,7 +83,9 @@ impl Page for Pg {
     fn opens(&self) -> Shape {
         self.opened().shape()
     }
+}
 
+impl Home for Pg {
     /// A slide is opened from its todo, which is opened from the first list: a chain of two.
     fn home(&self) -> Pg {
         match self.kind {
@@ -92,7 +94,9 @@ impl Page for Pg {
             Kind::List | Kind::Side | Kind::Slide => self.clone(),
         }
     }
+}
 
+impl Address for Pg {
     fn print(&self) -> String {
         let n = self.n;
         match self.kind {

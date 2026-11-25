@@ -138,7 +138,7 @@
         # manifest, or cargo cannot load the workspace.
         members = part: except: map (crate: ./app + "/${crate}${part}") (lib.subtractLists except [
           "cli" "os" "io-access" "io-local" "io-typeset" "io-chains" "io-model" "io-mail" "io-sources" "server" "plugin" "plugin-fence" "plugin-ics" "testkit" "script-guards"
-          "viewtree" "pages" "wasm" "tooling" ]);
+          "viewtree" "tiles" "pages" "wasm" "tooling" ]);
 
         # THE SOURCE IS `app/` AND THE FILES ITS TESTS READ: a `fileset`, so a briefing, a commit
         # or a document does not change this hash, and `target/` never reaches the store.
@@ -347,7 +347,7 @@
           pname = "suzatary-views-wasm";
           package = "suzatary-pages";
           name = "views";
-          crates = [ ./app/viewtree ./app/pages ];
+          crates = [ ./app/viewtree ./app/tiles ./app/pages ];
           description = "Suzatary's pages as Rust programs, with the JS glue the painter loads";
         };
         suzatary-views-wasm-deps = (viewsModule "optimised").deps;
@@ -456,7 +456,7 @@
           pname = "suzatary-pages-ts";
           src = lib.fileset.toSource {
             root = ./.;
-            fileset = lib.fileset.unions [ modelFiles ./app/viewtree ./app/pages ];
+            fileset = lib.fileset.unions [ modelFiles ./app/viewtree ./app/tiles ./app/pages ];
           };
           doCheck = false;
           doNotPostBuildInstallCargoBinaries = true;

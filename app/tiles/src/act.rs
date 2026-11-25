@@ -4,23 +4,22 @@ use super::Tiles;
 use super::hole::{Hole, Level, descend};
 use super::leaf::{Id, Leaf};
 use super::node::{Axis, Fit, Node, Part, Share};
-use super::open::{self, MOST};
+use super::open;
 use super::page::{Page, Pin};
 use super::tree::Tree;
 
+/// What a person or a host does to the tree, as data: `act` is the one function that applies it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Act<P> {
-    /// A page the focused workspace already shows takes the focus, and nothing else moves. Else,
-    /// where the focused leaf is on the page's `home` chain, each page of the chain after it opens
-    /// first, by this rule, and then the page: an open from a workspace's home of a page two steps
-    /// from it inserts two tiles, the tree the page's bare address reads as. Each page then opens
-    /// so: a page of the focused leaf's kind replaces it; a pinned page is held (`Hold`) and
-    /// focused, or replaces a focused pinned end; any other page goes beside (`open::beside`). An
-    /// open from a pinned leaf is the same open from the free leaf before it (`open::origin`).
+    /// A page the focused workspace already shows takes the focus, and nothing else moves. Else a
+    /// page of the focused leaf's kind replaces it; a pinned page is held (`Hold`) and focused, or
+    /// replaces a focused pinned end; any other page goes beside (`open::beside`). An open from a
+    /// pinned leaf is the same open from the free leaf before it (`open::origin`). `follow` opens
+    /// a page's `home` chain first, as its bare address reads.
     Open(P),
     /// The focused leaf becomes a node down with the page below it: the one act that makes a node
-    /// down. From a pinned leaf, it is made from the free leaf before it; a pinned page opens as
-    /// `Open` opens it.
+    /// down. From a pinned leaf, it is made from the free leaf before it. A pinned page opens as
+    /// `Open` opens it: one page; a chain is `follow`'s.
     Below(P),
     /// Removes the focused leaf; the neighbour before it takes the focus, else the one after. A
     /// node left with one child is replaced by it. A workspace's last free leaf stays, and so does
@@ -44,14 +43,16 @@ pub enum Act<P> {
     /// replaces a pinned end of another page, or stands after the workspace's children where the
     /// workspace is a node across that fits, and otherwise beside the whole workspace in a new
     /// node across; every other workspace lets its pinned end go, but one that is that
-    /// workspace's focused leaf, so one page is docked at a time. A pinned end that has the focus is the person's and stays, and a free page is not
-    /// held. `Release` after it is `Release`.
+    /// workspace's focused leaf, so one page is docked at a time. A pinned end that has the focus
+    /// is the person's and stays, and a free page is not held. `Release` after it is `Release`.
     Hold(P),
     /// Every workspace's pinned end let go, the focus where it stands; one that is its
     /// workspace's focused leaf stays.
     Release,
 }
 
+/// Where `Act::Move` swaps the focused child: before it (`Left`, `Up`) or after it, along the
+/// axis each names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dir {
     Left,
@@ -61,21 +62,17 @@ pub enum Dir {
 }
 
 /// Total, and keeps the tree well formed (`Tiles::check`). An open or a `Below` that would put
-/// more than `MOST` free tiles in the workspace opens here instead.
+/// more free tiles in the workspace than the policy's `most` opens here instead.
 pub fn act<P: Page>(tiles: Tiles<P>, act: Act<P>) -> Tiles<P> {
     match act {
         Act::Open(page) => opened(tiles, page),
         Act::Below(page) if page.pin() == Pin::Pinned => opened(tiles, page),
         Act::Below(page) => {
-            let tiles = Tiles {
-                root: open::origin(tiles.root),
-                ..tiles
-            };
             let opened = page.share();
-            let mut tiles = tiles;
+            let mut tiles = origin(tiles);
             let new = tiles.mint(page);
             Tiles {
-                root: open::bounded(tiles.root, new, |root, new| {
+                root: open::bounded(tiles.root, new, tiles.policy.bound(), |root, new| {
                     descend(root, |h| {
                         h.put(|leaf| open::wrap(Axis::Down, leaf, new, opened))
                     })
@@ -108,31 +105,26 @@ pub fn act<P: Page>(tiles: Tiles<P>, act: Act<P>) -> Tiles<P> {
     }
 }
 
-fn opened<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
+pub(crate) fn opened<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
     if let Some(id) = shown(&tiles, &page) {
         return Tiles {
             root: open::focus(tiles.root, id),
             ..tiles
         };
     }
-    let tiles = Tiles {
+    one(origin(tiles), page)
+}
+
+/// The tiles focused where an open from the focused leaf is made (`open::origin`).
+pub(crate) fn origin<P: Page>(tiles: Tiles<P>) -> Tiles<P> {
+    Tiles {
         root: open::origin(tiles.root),
         ..tiles
-    };
-    let chain = homes(&page);
-    match chain.iter().position(|c| c == tiles.focused().page()) {
-        Some(k) => chain[..k]
-            .iter()
-            .rev()
-            .cloned()
-            .chain(std::iter::once(page))
-            .fold(tiles, one),
-        None => one(tiles, page),
     }
 }
 
 /// The first leaf of the focused workspace that shows `page`.
-fn shown<P: Page>(tiles: &Tiles<P>, page: &P) -> Option<Id> {
+pub(crate) fn shown<P: Page>(tiles: &Tiles<P>, page: &P) -> Option<Id> {
     tiles
         .root
         .focus
@@ -144,7 +136,7 @@ fn shown<P: Page>(tiles: &Tiles<P>, page: &P) -> Option<Id> {
 }
 
 /// One page opened by the rule, from the focused leaf.
-fn one<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
+pub(crate) fn one<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
     if let Some(id) = shown(&tiles, &page) {
         return Tiles {
             root: open::focus(tiles.root, id),
@@ -160,27 +152,15 @@ fn one<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
             let share = page.share();
             let mut tiles = tiles;
             let new = tiles.mint(page);
+            let (most, beside) = (tiles.policy.bound(), tiles.policy.beside());
             Tiles {
-                root: open::bounded(tiles.root, new, |root, new| open::beside(root, new, share)),
+                root: open::bounded(tiles.root, new, most, |root, new| {
+                    open::beside(root, new, share, beside)
+                }),
                 ..tiles
             }
         }
     }
-}
-
-/// The pages `page` is opened from, nearest first, up to a workspace's home or `MOST` of them.
-pub(crate) fn homes<P: Page>(page: &P) -> Vec<P> {
-    let mut chain: Vec<P> = Vec::new();
-    let mut at = page.clone();
-    while chain.len() < MOST {
-        let home = at.home();
-        if home == at {
-            break;
-        }
-        chain.push(home.clone());
-        at = home;
-    }
-    chain
 }
 
 /// The focused leaf replaced by a fresh leaf of `page`.

@@ -1,8 +1,8 @@
 //! The design note's worked cases (§2, §5 and §8), with its numbers.
 
-use viewtree::tiles::{
-    Act, Arranged, At, Axis, Fit, Id, Leaf, Node, Page, Part, Px, Rect, Share, Tiles, Tree,
-    Viewport, act, arrange, parse, print,
+use tiles::{
+    Act, Address, Arranged, At, Axis, Fit, Id, Leaf, Node, Part, Policy, Px, Rect, Share, Tiles,
+    Tree, Viewport, act, arrange, follow, parse, print,
 };
 
 use super::page::{Kind, MEASURES as M, Pg, pg};
@@ -65,19 +65,19 @@ fn tile(a: &Arranged<Pg>, id: Id) -> Option<Rect> {
     a.tiles.iter().find(|t| t.id == id).map(|t| t.rect)
 }
 
-/// The rows below the root's, as crumbs: where each child stands, and the leaf it names.
 fn new(home: Node<Pg>) -> Tiles<Pg> {
-    Tiles::new(home).expect("the case's home is well formed")
+    Tiles::new(home, Policy::default()).expect("the case's home is well formed")
 }
 
 /// The root's row: the bar.
-fn bar(a: &Arranged<Pg>) -> &viewtree::tiles::Row<Pg> {
+fn bar(a: &Arranged<Pg>) -> &tiles::Row<Pg> {
     a.rows
         .iter()
         .find(|r| r.node.is_empty())
         .expect("the root draws its row")
 }
 
+/// The rows below the root's, as crumbs: where each child stands, and the leaf it names.
 fn crumbs(a: &Arranged<Pg>) -> Vec<Vec<(At, Id)>> {
     a.rows
         .iter()
@@ -273,7 +273,7 @@ fn shown(t: &Tiles<Pg>) -> Vec<Pg> {
 fn an_open_from_a_page_on_the_chain_opens_the_rest_of_the_chain_first() {
     let slide = pg(Kind::Slide, 1);
     // From the list, the slide's todo opens beside it and the slide after: the tree its bare address reads as.
-    let opened = act(home(), Act::Open(slide.clone()));
+    let opened = follow(home(), slide.clone());
     assert_eq!(
         shown(&opened),
         vec![list(), pg(Kind::Column, 1), slide.clone()]
@@ -281,8 +281,8 @@ fn an_open_from_a_page_on_the_chain_opens_the_rest_of_the_chain_first() {
     assert_eq!(shown(&parse(&slide.print(), &home())), shown(&opened));
     assert_eq!(print(&opened), slide.print());
     // From another todo, which is on no chain of the slide's, the slide opens beside it.
-    let other = act(home(), Act::Open(pg(Kind::Column, 2)));
-    let from_todo = act(other, Act::Open(slide.clone()));
+    let other = follow(home(), pg(Kind::Column, 2));
+    let from_todo = follow(other, slide.clone());
     assert_eq!(
         shown(&from_todo),
         vec![list(), pg(Kind::Column, 2), slide.clone()]
@@ -292,8 +292,8 @@ fn an_open_from_a_page_on_the_chain_opens_the_rest_of_the_chain_first() {
 
 #[test]
 fn the_1440_px_tree_prints_with_its_other_workspaces_left_out() {
-    let t = act(home(), Act::Open(todo()));
-    let t = act(t, Act::Open(side()));
+    let t = follow(home(), todo());
+    let t = follow(t, side());
     let t = act(t.clone(), Act::Focus(id(&t, &todo())));
     assert_eq!(
         print(&t),

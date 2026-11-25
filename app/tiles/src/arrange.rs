@@ -1,29 +1,16 @@
 //! The arrangement: a function of the tiles and the viewport alone.
 
 use super::apportion::apportion;
-use super::arranged::{Arranged, At, Crumb, Divider, Opens, Placed, Row, Scroller, Stop};
+use super::arranged::{Arranged, At, Crumb, Divider, Opens, Placed, Row, Stop};
 use super::leaf::{Id, Leaf};
+use super::measures::Measures;
 use super::node::{Axis, Node, Share};
 use super::open;
 use super::page::{Page, Pin, Shape};
+use super::policy::Policy;
 use super::px::{Edge, Px, Rect, Size, Viewport};
 use super::walk::{Drawn, walk};
 use super::{Tile, Tiles};
-
-/// The lengths the arrangement reads beside the pages' own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Measures {
-    /// Between two drawn children.
-    pub divider: Px,
-    /// A crumb row's height.
-    pub row: Px,
-    /// A crumb's width in its row; zero shows every crumb.
-    pub crumb: Px,
-    /// Every flowing page's least height.
-    pub tall: Px,
-    /// A viewport narrower than this draws the root's row at its foot, as a phone draws its bar.
-    pub foot: Px,
-}
 
 /// The drawn leaves (`walk`) laid out top down: a node with children behind gives its crumb row
 /// the top of its rectangle, and divides the rest along its axis among its drawn children
@@ -34,6 +21,7 @@ pub fn arrange<P: Page>(tiles: &Tiles<P>, at: Viewport, m: &Measures) -> Arrange
     let drawn = walk(&tiles.root, at, m);
     let cx = Cx {
         root: &tiles.root,
+        policy: tiles.policy,
         at,
         m,
     };
@@ -48,11 +36,8 @@ pub fn arrange<P: Page>(tiles: &Tiles<P>, at: Viewport, m: &Measures) -> Arrange
         w: at.w,
         h: at.h,
     };
-    let edge = if at.w < m.foot { Edge::Foot } else { Edge::Top };
+    let edge = m.root_row.edge(at);
     place(&drawn, whole, edge, &mut Vec::new(), &cx, &mut out);
-    if let [only] = out.tiles.as_mut_slice() {
-        only.scroll = Scroller::Document;
-    }
     out
 }
 
@@ -125,6 +110,7 @@ fn binds(sizes: &[Px], kids: &[(Px, u32)]) -> bool {
 
 struct Cx<'t, 'm, P> {
     root: &'t Node<Leaf<P>>,
+    policy: Policy,
     at: Viewport,
     m: &'m Measures,
 }
@@ -144,7 +130,6 @@ fn place<P: Page>(
             page: l.page().clone(),
             rect,
             fill: l.page().shape().fill(rect),
-            scroll: Scroller::Tile,
             opens: opens(cx, l),
         }),
         Drawn::Node { node, first, kids } => {
@@ -256,7 +241,7 @@ fn row<P: Clone>(
         .collect();
     let mut slots = 0;
     let mut room = rect.w;
-    while slots < crumbs.len() && (m.crumb == Px(0) || m.crumb <= room) {
+    while slots < crumbs.len() && m.crumb <= room {
         room = room - m.crumb;
         slots += 1;
     }
@@ -282,8 +267,9 @@ fn opens<P: Page>(cx: &Cx<'_, '_, P>, tile: &Leaf<P>) -> Opens {
     let id = tile.id();
     let probe = open::origin(open::focus(cx.root.map(&Probe::Tile), id));
     let ghost = Probe::Ghost(tile.page().opens());
-    let grown = open::bounded(probe, ghost, |root, ghost| {
-        open::beside(root, ghost, Share::One)
+    let (most, beside) = (cx.policy.bound(), cx.policy.beside());
+    let grown = open::bounded(probe, ghost, most, |root, ghost| {
+        open::beside(root, ghost, Share::One, beside)
     });
     let beside = walk(&grown, cx.at, cx.m)
         .leaves()

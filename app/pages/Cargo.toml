@@ -31,6 +31,7 @@ suzatary-inbox.workspace = true
 suzatary-api.workspace = true
 prodrome_data.workspace = true
 viewtree = { path = "../viewtree", features = ["host"] }
+tiles = { path = "../tiles" }
 serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true

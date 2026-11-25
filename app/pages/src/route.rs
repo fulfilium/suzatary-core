@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use viewtree::tiles::{Page, Pin, Px, Shape, Share};
+use tiles::{Address, Home, Page, Pin, Px, Shape, Share};
 
 use crate::measure;
 use crate::runtime::{component, search};
@@ -401,7 +401,9 @@ impl Page for Route {
             least: Px(measure::COLUMN),
         }
     }
+}
 
+impl Home for Route {
     fn home(&self) -> Route {
         let [
             todos,
@@ -428,7 +430,9 @@ impl Page for Route {
             Kind::About => about,
         }
     }
+}
 
+impl Address for Route {
     fn print(&self) -> String {
         let href = self.href();
         href.strip_prefix('#').unwrap_or(&href).to_owned()

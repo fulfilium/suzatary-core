@@ -6,20 +6,16 @@ use super::hole::{Hole, Level, descend};
 use super::leaf::Id;
 use super::node::{Axis, Fit, Node, Part, Share};
 use super::page::Pin;
+use super::policy::Beside;
 use super::tree::Tree;
 
-/// The most free tiles a workspace holds; its pinned end is not counted, so a docked page never
-/// costs a person a page. An open that would make more opens here.
-pub const MOST: usize = 4;
-
 /// Opens a page beside the focused leaf, in the leaf's node if that node fits and is not the
-/// root, else in a new node across that wraps the leaf. The page replaces the free children after
-/// the leaf, keeping the share of the first, or is inserted right after it, and takes the focus. A
-/// pinned leaf here stands alone in its workspace (`origin` moved off any other): the page goes
-/// before it.
-pub(crate) fn beside<L: Tile>(root: Node<L>, new: L, share: Share) -> Node<L> {
+/// root, else in a new node across that wraps the leaf. The page stands right after the leaf and
+/// takes the focus; `rule` says what becomes of the free children after it. A pinned leaf here
+/// stands alone in its workspace (`origin` moved off any other): the page goes before it.
+pub(crate) fn beside<L: Tile>(root: Node<L>, new: L, share: Share, rule: Beside) -> Node<L> {
     descend(root, |h| match (h.at, h.fit, h.leaf.pin()) {
-        (Level::Below, Fit::Fits, Pin::Free) => within(h, new, share),
+        (Level::Below, Fit::Fits, Pin::Free) => within(h, new, share, rule),
         (Level::Root, _, _)
         | (Level::Below, Fit::Never, _)
         | (Level::Below, Fit::Fits, Pin::Pinned) => {
@@ -28,7 +24,7 @@ pub(crate) fn beside<L: Tile>(root: Node<L>, new: L, share: Share) -> Node<L> {
     })
 }
 
-fn within<L: Tile>(h: Hole<L>, new: L, share: Share) -> Node<L> {
+fn within<L: Tile>(h: Hole<L>, new: L, share: Share, rule: Beside) -> Node<L> {
     let Hole {
         axis,
         fit,
@@ -38,8 +34,14 @@ fn within<L: Tile>(h: Hole<L>, new: L, share: Share) -> Node<L> {
         after,
         ..
     } = h;
-    let (pinned, free): (Vec<_>, Vec<_>) = after.into_iter().partition(pinned);
-    let share = free.first().map_or(share, |p| p.share);
+    let (after, share) = match rule {
+        Beside::Replace => {
+            let (pinned, free): (Vec<_>, Vec<_>) = after.into_iter().partition(pinned);
+            let share = free.first().map_or(share, |p| p.share);
+            (pinned, share)
+        }
+        Beside::Insert => (after, share),
+    };
     before.push(Part {
         share: s,
         tree: Tree::Leaf(leaf),
@@ -52,7 +54,7 @@ fn within<L: Tile>(h: Hole<L>, new: L, share: Share) -> Node<L> {
             share,
             tree: Tree::Leaf(new),
         }),
-        after: pinned,
+        after,
     }
 }
 
@@ -100,17 +102,18 @@ pub(crate) fn origin<L: Tile>(root: Node<L>) -> Node<L> {
     })
 }
 
-/// `grow` with `new`, unless it puts more than `MOST` free tiles in the workspace: then `new`
+/// `grow` with `new`, unless it puts more than `most` free tiles in the workspace: then `new`
 /// replaces the focused leaf. The act and the arrangement's probe open by this one rule.
 pub(crate) fn bounded<L: Tile + Clone>(
     root: Node<L>,
     new: L,
+    most: usize,
     grow: impl FnOnce(Node<L>, L) -> Node<L>,
 ) -> Node<L> {
     let was = free(&root);
     let grown = grow(root.clone(), new.clone());
     let now = free(&grown);
-    if now <= was || now <= MOST {
+    if now <= was || now <= most {
         grown
     } else {
         descend(root, |h| Hole { leaf: new, ..h }.put(Tree::Leaf))
@@ -182,7 +185,7 @@ pub(crate) fn along<L>(n: Node<L>, path: &[usize]) -> Node<L> {
         .0
 }
 
-/// The free leaves of the focused workspace: what `MOST` bounds.
+/// The free leaves of the focused workspace: what the policy's `most` bounds.
 pub(crate) fn free<L: Tile>(root: &Node<L>) -> usize {
     root.focus
         .tree

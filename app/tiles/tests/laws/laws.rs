@@ -5,8 +5,9 @@ use std::cell::Cell;
 
 use proptest::prelude::*;
 use proptest::test_runner::{FileFailurePersistence, TestRunner};
-use viewtree::tiles::{
-    Act, Fit, Leaf, Node, Page, Pin, Scroller, Share, Tiles, Tree, act, arrange, parse, print,
+use tiles::{
+    Act, Address, Beside, Fit, Home, Leaf, Node, Page, Pin, Share, Tiles, Tree, act, arrange,
+    follow, parse, print,
 };
 
 use super::check::{
@@ -14,7 +15,7 @@ use super::check::{
     region, screen, whole,
 };
 use super::page::Pg;
-use super::runs::{ids, page, run, states, viewport};
+use super::runs::{Made, ids, page, run, states, viewport};
 
 /// The count a law over runs affords in the suite; `PROPTEST_CASES` raises it for one run. A
 /// failing seed is kept beside this file.
@@ -206,9 +207,9 @@ proptest! {
                 if kids.len() < 2 {
                     continue;
                 }
-                let along = |r: viewtree::tiles::Rect, e: (u64, u64)| match n.axis {
-                    viewtree::tiles::Axis::Across => (u64::from(r.w.0), e.0),
-                    viewtree::tiles::Axis::Down => (u64::from(r.h.0), e.1),
+                let along = |r: tiles::Rect, e: (u64, u64)| match n.axis {
+                    tiles::Axis::Across => (u64::from(r.w.0), e.0),
+                    tiles::Axis::Down => (u64::from(r.h.0), e.1),
                 };
                 let mut lens = Vec::new();
                 for (i, tree, s) in &kids {
@@ -250,12 +251,12 @@ proptest! {
                 if origin.is_some_and(|o| o.kind() == page.opened().kind()) {
                     continue;
                 }
-                let opened = act(from.clone(), Act::Open(page.opened()));
+                let opened = follow(from.clone(), page.opened());
                 let before = ids(&from);
                 let new = ids(&opened).into_iter().find(|id| !before.contains(id));
                 let lit = drawn(&arrange(&opened, at, &m));
                 let together = lit.contains(&p.id) && new.is_some_and(|id| lit.contains(&id));
-                prop_assert_eq!(p.opens == viewtree::tiles::Opens::Beside, together);
+                prop_assert_eq!(p.opens == tiles::Opens::Beside, together);
             }
         }
     }
@@ -266,7 +267,7 @@ proptest! {
     #[test]
     fn an_open_keeps_the_pinned_leaves((home, _m, first, steps) in run(), p in page()) {
         for (_, _, t, _) in states(home, first, &steps) {
-            let opened = act(t.clone(), Act::Open(p.clone()));
+            let opened = follow(t.clone(), p.clone());
             let pinned = |ls: &[&Leaf<Pg>]| ls.iter().filter(|l| l.page().pin() == Pin::Pinned).map(|l| l.id()).collect::<Vec<_>>();
             let w = t.root().index();
             match p.pin() {
@@ -289,7 +290,7 @@ proptest! {
     }
 
     /// A workspace of one leaf arranges to one rectangle: the viewport less the root's row,
-    /// scrolling the document, with no divider and no row of its own.
+    /// with no divider and no row of its own.
     #[test]
     fn a_workspace_of_one_leaf_is_one_rectangle_under_the_bar((home, m, first, steps) in run()) {
         for (_, _, t, at) in states(home, first, &steps) {
@@ -301,7 +302,6 @@ proptest! {
             let bar = usize::from(t.root().len() > 1);
             prop_assert_eq!(a.tiles.len(), 1);
             prop_assert_eq!(a.tiles[0].id, leaf.id());
-            prop_assert_eq!(a.tiles[0].scroll, Scroller::Document);
             prop_assert!(a.dividers.is_empty());
             prop_assert_eq!(a.rows.len(), bar);
             prop_assert!(a.rows.iter().all(|r| r.node.is_empty()));
@@ -325,7 +325,7 @@ proptest! {
     }
 
     /// Every act keeps the tree well formed: the root's shape the home's, two children below the
-    /// root, at most `MOST` free tiles a workspace, a pinned leaf only as its workspace's end. Closing
+    /// root, at most the policy's `most` free tiles a workspace, a pinned leaf only as its workspace's end. Closing
     /// a workspace's last tile changes nothing.
     #[test]
     fn every_act_keeps_the_tree_well_formed((home, _m, first, steps) in run()) {
@@ -347,9 +347,9 @@ fn weight(s: Share) -> u32 {
 }
 
 /// An open of one page, which inserted a tile beside a free leaf, then `Close`, gives the tree
-/// back, the pinned ends let go on both sides; an open that opens a chain first (`Act::Open`) is
-/// left out. The law reaches its
-/// assertion in at least a third of its cases.
+/// back, the pinned ends let go on both sides; an open that opens a chain first (`follow`) is
+/// left out. The law reaches its assertion in at least a third of the opens made where the
+/// policy's bound leaves the workspace room for one more tile.
 #[test]
 fn open_then_close_is_the_identity_where_the_open_inserted() {
     let config = cases(256);
@@ -371,8 +371,15 @@ fn open_then_close_is_the_identity_where_the_open_inserted() {
             {
                 continue;
             }
+            let free = workspaces(&t)[t.root().index()]
+                .iter()
+                .filter(|l| l.page().pin() == Pin::Free)
+                .count();
+            if free >= usize::from(t.policy().most().get()) {
+                continue;
+            }
             tried.set(tried.get() + 1);
-            let opened = act(t.clone(), Act::Open(p.clone()));
+            let opened = follow(t.clone(), p.clone());
             let w = t.root().index();
             if workspaces(&opened)[w].len() == workspaces(&t)[w].len() + 1 {
                 reached.set(reached.get() + 1);
@@ -398,7 +405,7 @@ proptest! {
     /// thousands of nested nodes among them.
     #[test]
     fn parse_answers_a_well_formed_tree_for_any_string(
-        home in super::runs::home(),
+        (home, policy) in super::runs::home(),
         s in prop_oneof![
             "[|!()'*,~%:0-9a-z/ -]{0,60}",
             ".{0,40}",
@@ -406,7 +413,7 @@ proptest! {
             (1usize..3000).prop_map(|n| format!("list/0~|!({}*{}", "|(a,".repeat(n), ")".repeat(n + 1))),
         ],
     ) {
-        let t = Tiles::new(home).expect("the generated home is well formed");
+        let t = Tiles::new(home, policy).expect("the generated home is well formed");
         let back = parse(&s, &t);
         prop_assert_eq!(back.check(), Ok(()));
         prop_assert_eq!(print(&parse(&print(&back), &back)), print(&back));
@@ -434,7 +441,7 @@ fn chained(p: &super::page::Pg, from: &super::page::Pg) -> bool {
 
 /// The tree with every share One: what a resize may not change.
 fn unshared(n: &Node<Leaf<Pg>>) -> Node<Leaf<Pg>> {
-    let part = |p: &viewtree::tiles::Part<Leaf<Pg>>| viewtree::tiles::Part {
+    let part = |p: &tiles::Part<Leaf<Pg>>| tiles::Part {
         share: Share::One,
         tree: match &p.tree {
             Tree::Leaf(l) => Tree::Leaf(l.clone()),
@@ -457,7 +464,7 @@ proptest! {
     #[test]
     fn a_resize_changes_only_shares_and_twice_is_once((home, _m, first, steps) in run()) {
         for (was, a, now, _) in states(home, first, &steps) {
-            if let Some(r @ Act::Resize { .. }) = a {
+            if let Some(Made::Act(r @ Act::Resize { .. })) = a {
                 prop_assert_eq!(unshared(now.root()), unshared(was.root()));
                 prop_assert_eq!(&act(now.clone(), r), &now);
             }
@@ -472,9 +479,9 @@ proptest! {
         for (_, _, t, at) in states(home, first, &steps) {
             let a = arrange(&t, at, &m);
             for d in &a.dividers {
-                let along = |r: viewtree::tiles::Rect| match d.axis {
-                    viewtree::tiles::Axis::Across => r.x,
-                    viewtree::tiles::Axis::Down => r.y,
+                let along = |r: tiles::Rect| match d.axis {
+                    tiles::Axis::Across => r.x,
+                    tiles::Axis::Down => r.y,
                 };
                 prop_assert_eq!(d.stops.get(d.now).map(|s| s.at), Some(along(d.rect)));
                 prop_assert!(d.stops.windows(2).all(|w| w[0].at < w[1].at));
@@ -507,7 +514,7 @@ proptest! {
             let shown = t.root().focus.tree.leaves();
             let page = shown[i.index(shown.len())].page();
             let first = shown.iter().find(|l| l.page() == page).map(|l| l.id());
-            let opened = act(t.clone(), Act::Open(page.clone()));
+            let opened = follow(t.clone(), page.clone());
             prop_assert_eq!(Some(opened.focused().id()), first);
             prop_assert_eq!(first.map(|id| act(t.clone(), Act::Focus(id))), Some(opened));
         }
@@ -518,7 +525,7 @@ proptest! {
 fn chain(p: &Pg) -> Vec<Pg> {
     let mut c = Vec::new();
     let mut at = p.clone();
-    while c.len() < viewtree::tiles::MOST {
+    loop {
         let home = at.home();
         if home == at {
             break;
@@ -534,17 +541,19 @@ proptest! {
 
     /// From a workspace that is its chain's end alone, with the chain's pages down to the
     /// focused leaf opened from it, an open of a page not shown is the tree the page's bare
-    /// address reads as; closed as many times as it inserted tiles, it gives the tree back.
+    /// address reads as. Where the policy's bound holds the chain and the page, closed as many
+    /// times as it inserted tiles, it gives the tree back.
     #[test]
     fn an_open_from_a_leaf_on_the_chain_is_its_bare_address_and_closes_back(
         lists in 1u8..8,
         p in page(),
         from in 0usize..3,
+        policy in super::runs::policy(),
     ) {
         // Workspaces of one list each, the chains' end among them.
-        let part = |n: u8| viewtree::tiles::Part::new(Share::One, Tree::Leaf(super::page::pg(super::page::Kind::List, n)));
-        let home = Node::new(viewtree::tiles::Axis::Across, Fit::Never, part(0), (1..lists).map(part).collect(), 0);
-        let t = Tiles::new(home).expect("a home of lists is well formed");
+        let part = |n: u8| tiles::Part::new(Share::One, Tree::Leaf(super::page::pg(super::page::Kind::List, n)));
+        let home = Node::new(tiles::Axis::Across, Fit::Never, part(0), (1..lists).map(part).collect(), 0);
+        let t = Tiles::new(home, policy).expect("a home of lists is well formed");
         let c = chain(&p);
         let Some(end) = c.last() else {
             return Ok(());
@@ -555,18 +564,85 @@ proptest! {
         let id = workspaces(&t)[ws][0].id();
         let mut t = act(t, Act::Focus(id));
         for q in c.iter().rev().skip(1).take(from) {
-            t = act(t, Act::Open(q.clone()));
+            t = follow(t, q.clone());
         }
         let shown = |t: &Tiles<Pg>| workspaces(t)[ws].iter().map(|l| l.page().clone()).collect::<Vec<_>>();
         if shown(&t).contains(&p) {
             return Ok(());
         }
-        let opened = act(t.clone(), Act::Open(p.clone()));
+        let opened = follow(t.clone(), p.clone());
         prop_assert_eq!(shown(&opened), shown(&parse(&p.print(), &t)));
+        if usize::from(policy.most().get()) <= c.len() {
+            return Ok(());
+        }
         let mut closed = opened.clone();
         for _ in 0..shown(&opened).len() - shown(&t).len() {
             closed = act(closed, Act::Close);
         }
         prop_assert_eq!(pages(&closed), pages(&t));
     }
+}
+
+/// Under `Beside::Insert`, an open from a free leaf of a free page of another kind that the
+/// workspace does not show closes no tile where the policy's bound leaves room: every leaf stays,
+/// the page among them. At the bound the page replaces the focused leaf, and every other leaf
+/// stays. The law reaches the first case in at least an eighth of its runs, and the second in a
+/// twenty-fifth.
+#[test]
+fn an_open_that_inserts_closes_no_tile() {
+    let config = cases(256);
+    let total = config.cases;
+    let mut runner = TestRunner::new(config);
+    let (room, full) = (Cell::new(0u32), Cell::new(0u32));
+    let result = runner.run(&(run(), page()), |((home, _m, first, steps), p)| {
+        let (mut r, mut f) = (false, false);
+        for (_, _, t, _) in states(home, first, &steps) {
+            let w = &workspaces(&t)[t.root().index()];
+            let free = w.iter().filter(|l| l.page().pin() == Pin::Free).count();
+            let from = t.focused().page();
+            if t.policy().beside() != Beside::Insert
+                || from.pin() == Pin::Pinned
+                || from.kind() == p.kind()
+                || p.pin() == Pin::Pinned
+                || w.iter().any(|l| *l.page() == p)
+            {
+                continue;
+            }
+            let opened = act(t.clone(), Act::Open(p.clone()));
+            let now = ids(&opened);
+            let focused = t.focused().id();
+            prop_assert!(
+                opened
+                    .root()
+                    .focus
+                    .tree
+                    .leaves()
+                    .iter()
+                    .any(|l| *l.page() == p)
+            );
+            if free < usize::from(t.policy().most().get()) {
+                r = true;
+                prop_assert!(ids(&t).iter().all(|id| now.contains(id)));
+            } else {
+                f = true;
+                prop_assert!(!now.contains(&focused));
+                prop_assert!(
+                    ids(&t)
+                        .iter()
+                        .filter(|id| **id != focused)
+                        .all(|id| now.contains(id))
+                );
+            }
+        }
+        room.set(room.get() + u32::from(r));
+        full.set(full.get() + u32::from(f));
+        Ok(())
+    });
+    result.expect("an open that inserts closes no tile");
+    let (room, full) = (room.get(), full.get());
+    eprintln!("an insert: with room in {room} runs, at the bound in {full}, of {total}");
+    assert!(
+        room * 8 >= total && full * 25 >= total,
+        "{room} and {full} of {total}"
+    );
 }

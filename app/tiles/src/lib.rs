@@ -2,8 +2,10 @@
 //!
 //! `Tiles` holds the tree. Its root's children are the workspaces, and a node's children are a
 //! zipper on the focused one. `act` changes the tree and reads no viewport. `arrange` answers what
-//! is drawn where on a viewport. `print` and `parse` are the address. The page type `P` declares
-//! its kind, shape, pin and address through `Page`; nothing here names a page.
+//! is drawn where on a viewport. The page type `P` declares its kind, shape and pin through
+//! `Page`; a page with an address (`Address`) also has `print`, `parse` and `follow`. Nothing here
+//! names a page.
+#![forbid(unsafe_code)]
 
 mod act;
 mod address;
@@ -13,10 +15,13 @@ mod arranged;
 mod escape;
 mod form;
 mod hole;
+mod home;
 mod leaf;
+mod measures;
 mod node;
 mod open;
 mod page;
+mod policy;
 mod px;
 mod tree;
 mod walk;
@@ -26,13 +31,15 @@ use std::rc::Rc;
 
 pub use act::{Act, Dir, act};
 pub use address::{parse, print};
-pub use arrange::{Measures, arrange};
-pub use arranged::{Arranged, At, Crumb, Divider, Opens, Placed, Row, Scroller, Stop};
+pub use arrange::arrange;
+pub use arranged::{Arranged, At, Crumb, Divider, Opens, Placed, Row, Stop};
 pub use form::Unfit;
+pub use home::follow;
 pub use leaf::{Id, Leaf};
+pub use measures::{Measures, RootRow};
 pub use node::{Axis, Fit, Node, Part, Share};
-pub use open::MOST;
-pub use page::{Page, Pin, Ratio, Shape};
+pub use page::{Address, Home, Page, Pin, Ratio, Shape};
+pub use policy::{Beside, Policy};
 pub use px::{Px, Rect, Viewport};
 pub use tree::Tree;
 
@@ -41,26 +48,39 @@ pub use tree::Tree;
 pub struct Tiles<P> {
     pub(crate) root: Node<Leaf<P>>,
     pub(crate) home: Rc<Node<P>>,
+    pub(crate) policy: Policy,
     pub(crate) next: u64,
 }
 
 impl<P: Page> Tiles<P> {
-    /// The tiles of `home`, which is also what an address leaves out (`print`). Refused unless
-    /// `home` is well formed (`Unfit`).
-    pub fn new(home: Node<P>) -> Result<Tiles<P>, Unfit> {
-        form::check(&home, &home, &Page::pin)?;
+    /// The tiles of `home`, which is also what an address leaves out (`print`), grown by
+    /// `policy`. Refused unless `home` is well formed under it (`Unfit`).
+    pub fn new(home: Node<P>, policy: Policy) -> Result<Tiles<P>, Unfit> {
+        form::check(&home, &home, &Page::pin, policy.bound())?;
         let next = Cell::new(0);
         let root = mint(&home, &next);
         Ok(Tiles {
             root,
             home: Rc::new(home),
+            policy,
             next: next.get(),
         })
     }
 
     /// Whether the tree is well formed against its home; `new`, `act` and `parse` keep it so.
     pub fn check(&self) -> Result<(), Unfit> {
-        form::check(&self.root, &self.home, &|l: &Leaf<P>| l.page().pin())
+        form::check(
+            &self.root,
+            &self.home,
+            &|l: &Leaf<P>| l.page().pin(),
+            self.policy.bound(),
+        )
+    }
+
+    /// The policy this lineage grows by, as `new` took it.
+    #[must_use]
+    pub fn policy(&self) -> Policy {
+        self.policy
     }
 
     #[must_use]
@@ -73,13 +93,14 @@ impl<P: Page> Tiles<P> {
         self.root.focus.tree.focused()
     }
 
-    /// The declared home of the focused workspace: the page a bar names it by.
+    /// The declared home of the focused workspace: the page the root's crumb for it names.
     #[must_use]
     pub fn workspace(&self) -> P {
         let home = (*self.home).clone().select(self.root.index());
         home.focus.tree.focused().clone()
     }
 
+    /// The page of the leaf `id`; `None` where no leaf of these tiles has that id.
     pub fn page(&self, id: Id) -> Option<&P> {
         self.root
             .parts()
@@ -105,6 +126,7 @@ impl<P: Page> Tiles<P> {
         Tiles {
             root,
             home: Rc::clone(&self.home),
+            policy: self.policy,
             next: next.get(),
         }
     }

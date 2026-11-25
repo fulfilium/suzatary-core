@@ -1,7 +1,7 @@
 //! Which leaves are drawn: from the focused leaf up through its ancestors, adding what fits.
 
 use super::Tile;
-use super::arrange::Measures;
+use super::measures::Measures;
 use super::node::{Axis, Fit, Node};
 use super::px::{Px, Size, Viewport};
 use super::tree::Tree;

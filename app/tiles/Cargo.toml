@@ -1,0 +1,23 @@
+[package]
+name = "tiles"
+description = "One tree of pages, changed by acts and arranged for a viewport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+# Depends on nothing of the workspace it stands in, so it can leave it as it is.
+publish = false
+
+[lib]
+name = "tiles"
+path = "src/lib.rs"
+
+[dev-dependencies]
+proptest.workspace = true
+
+[[test]]
+name = "laws"
+path = "tests/laws/main.rs"
+
+[lints]
+workspace = true

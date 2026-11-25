@@ -22,16 +22,7 @@ pub struct Placed<P> {
     pub rect: Rect,
     /// Where the page stands in `rect`: all of it, or a paged leaf's centred page.
     pub fill: Rect,
-    pub scroll: Scroller,
     pub opens: Opens,
-}
-
-/// A tile drawn alone scrolls the document, so a phone's browser hides its address bar; tiles
-/// drawn together scroll themselves.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Scroller {
-    Document,
-    Tile,
 }
 
 /// Whether a page this tile opens would be drawn beside it, on this viewport.
@@ -71,7 +62,7 @@ pub struct Stop {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row<P> {
     pub rect: Rect,
-    /// The node's place: each child's index from the root down, empty for the root (the bar).
+    /// The node's place: each child's index from the root down, empty for the root.
     pub node: Vec<usize>,
     pub axis: Axis,
     pub shown: Vec<Crumb<P>>,

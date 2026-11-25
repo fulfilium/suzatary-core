@@ -6,7 +6,7 @@ use proptest::prelude::*;
 use proptest::sample::Index;
 use suzatary_pages::desk::{Desk, Dock, Pinned, share};
 use suzatary_pages::route::{Kind, Route};
-use viewtree::tiles::{self, Act, Dir, Leaf, Node, Page, Pin, Px, Tiles, Tree, Viewport};
+use tiles::{Act, Dir, Leaf, Node, Page, Pin, Px, Tiles, Tree, Viewport};
 
 /// The shell's say on the secretary.
 #[derive(Debug, Clone)]
@@ -135,7 +135,7 @@ fn typed() -> impl Strategy<Value = String> {
         let desk = Desk::new().expect("the destinations are a home");
         let t = acts.into_iter().fold(desk.tiles().clone(), |t, m| {
             let a = match m {
-                Made::Open(h) => Act::Open(Route::parse(&h)),
+                Made::Open(h) => return tiles::follow(t, Route::parse(&h)),
                 Made::Below(h) => Act::Below(Route::parse(&h)),
                 Made::Close => Act::Close,
                 Made::Focus(i) => {

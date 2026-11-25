@@ -578,7 +578,7 @@ moves the place, so a phone is the remote.
   recompiles no slide.
 
 Nothing else in the deck needed a concept that this application's pages lack, so the module's
-face above is generic as written.
+face above is generic as written. §17 supersedes this section on where the layout lives: it is a crate of its own.
 
 ### 8.1 Where the typesetter belongs, and where it does not
 
@@ -741,6 +741,12 @@ case the app has today is one of its instances.
   and keeps its own mutable layout state, updated by its own event handlers. A view that is a
   pure function of a model would then have two owners of the layout, one of which no law can
   read, so none fits. The layout is a small pure module of this repository's own (§8).
+- **Rust layout engines: `taffy`.** It computes CSS's flexbox, grid and block layout for a tree of
+  styled nodes, in floating point with a rounding pass after. Not reused: it has no rule that draws
+  the focused child and as many neighbours as fit, and it holds no focus, address or acts.
+- **Rust tile trees: `egui_tiles`.** A tree of panes in rows, columns, grids and tabs, with
+  children weighted by shares and resized by dragging. Not reused: it is bound to egui, which draws
+  the panes, and it has no narrow-screen collapse, no address and no stated laws.
 
 ## 12. How the figures were measured
 
@@ -991,3 +997,40 @@ What this part did not do, and where it goes:
   holding the sheet and its scrim in one stacking context, offset by `--covered`, which then belongs on the tile rather
   than on `.conversation` and `.panelbody` (two copies today).
 - **The container query inside a conversation, a kept page's clock, the heap's growth**: not started.
+
+## 17. The tiles as a library, stage 1
+
+Roadmap `tileslibrary`. §17 supersedes §8 on where the layout lives. The module of §8 is the crate
+`tiles` (`app/tiles`), which depends on nothing but the standard library. Its face is its root
+(`src/lib.rs`) and its `README.md`; `cargo run -p tiles --example notes` runs three panes that name
+no page of this application.
+
+- **What moved.** The sixteen files and their laws, with their history. `viewtree` holds no
+  layout, and `suzatary-pages` depends on both. The adapter §8 calls `Desked` is the desk
+  (`app/pages/src/desk.rs`), on the pages' side: the crate depends on no framework, and the
+  framework on no layout.
+- **Three traits.** `Page` is what the acts and `arrange` read. `Home: Page` is the page a page is
+  opened from: one act read it, `Open`, to open a page's chain first, and the chain exists so that
+  an open agrees with what the page's bare address reads as. So the chain is `follow`'s, and
+  `Act::Open` opens one page. `Address: Home` is the printed form. A page with a parent and no
+  string opens a chain without a `print`.
+- **The bound and the rule are data.** `MOST` became the policy's `most`, a `NonZeroU8` behind a
+  reader, so no host's bound makes the address reader recurse deeper than 256 nodes. The rule of
+  §3 became `Beside::Replace`, beside `Insert`. A record of data, not of functions: the rules the
+  crate can keep well formed are a closed set, which it interprets. Where the page goes and the
+  open from a pinned leaf stay fixed, because the laws of the pin rest on them. A chain is walked
+  whole, under a guard of the crate's own, so where a bare address lands does not depend on the
+  bound; the bound limits only the opens.
+- **No device in the face.** `foot` became `RootRow` (the root's row at the top, or at the foot
+  under a width). `Scroller` went: one tile alone scrolls the document, and the desk reads that from
+  the number of tiles drawn. A test keeps the first application's words out of the crate.
+- **The laws over generated policies.** Every law over runs draws a policy. Two were stated for the
+  first bound: the reach of `open_then_close_is_the_identity_where_the_open_inserted`, counted where
+  the bound leaves room, and the close-back half of the chain law, which holds where the bound
+  holds the chain.
+
+Stage 2, not started: shares as fine as a host wants; a leaf moved to any place; a layout kept and
+read back without the address grammar, as plain data, which reports a tree crowded under the
+reader's bound (`Unfit::Crowded`) and never reads it as something else, as `parse` does for a
+string; and the small TypeScript adapter that places a host's elements from an arrangement and
+keeps the hidden ones.

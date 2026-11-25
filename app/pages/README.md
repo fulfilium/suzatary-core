@@ -12,7 +12,7 @@ sums (`runtime`), compiled to wasm for the tab, where `web/src/painter` paints i
 
 ## Depends on
 
-The model crates whose wire it shows, up to `suzatary-api`, and `viewtree`.
+The model crates whose wire it shows, up to `suzatary-api`, `viewtree`, and `tiles` (the layout `desk` instantiates with `Route`).
 
 ## Develop
 

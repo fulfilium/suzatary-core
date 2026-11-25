@@ -1,7 +1,7 @@
 //! The address: the tree's print, which `parse` reads back as the same tree.
 //!
 //! ```text
-//! address := route [ "~" node ]
+//! address := head [ "~" node ]   (head: the focused page's print)
 //! node    := axis fit "(" part ("," part)* ")"
 //! part    := [share] [focus] tree
 //! tree    := "*" | leaf | node | ""
@@ -17,19 +17,18 @@
 //! equal to its declared home prints as `""`. Below the root a node has two parts or more.
 
 use super::Tiles;
-use super::act::{Act, act, homes};
 use super::escape::{escape, unescape};
 use super::form;
+use super::home::{follow, homes};
 use super::leaf::Leaf;
 use super::node::{Axis, Fit, Node, Part, Share};
-use super::open::MOST;
-use super::page::Page;
+use super::page::{Address, Page};
 use super::tree::Tree;
 
 /// The bare head when `parse` reads it back as these tiles: a workspace's home, or a home with
 /// the page's `home` chain opened from it. The whole tree otherwise.
 #[must_use]
-pub fn print<P: Page>(tiles: &Tiles<P>) -> String {
+pub fn print<P: Address>(tiles: &Tiles<P>) -> String {
     let head = tiles.focused().page().print();
     if same(&read(&head, tiles), tiles) {
         return head;
@@ -43,14 +42,14 @@ pub fn print<P: Page>(tiles: &Tiles<P>) -> String {
 /// that is malformed, or not well formed, reads as the whole string's page if the page reads it,
 /// else as its head alone; a head the page cannot read gives the declared home. A head alone is
 /// its page's workspace focused, at the end of the page's `home` chain, and the page opened from
-/// it (`Act::Open` opens the chain). Every id is minted fresh, after those of `tiles`: a host that keeps a live tile
-/// across an address matches the pages itself.
+/// it (`follow` opens the chain). Every id is minted fresh, after those of `tiles`: a host that
+/// keeps a live tile across an address matches the pages itself.
 #[must_use]
-pub fn parse<P: Page>(s: &str, tiles: &Tiles<P>) -> Tiles<P> {
+pub fn parse<P: Address>(s: &str, tiles: &Tiles<P>) -> Tiles<P> {
     read(s, tiles)
 }
 
-fn read<P: Page>(s: &str, lineage: &Tiles<P>) -> Tiles<P> {
+fn read<P: Address>(s: &str, lineage: &Tiles<P>) -> Tiles<P> {
     let (head, tail) = match s.rfind('~') {
         Some(k) => (&s[..k], Some(&s[k + 1..])),
         None => (s, None),
@@ -61,10 +60,11 @@ fn read<P: Page>(s: &str, lineage: &Tiles<P>) -> Tiles<P> {
             s: tail.as_bytes(),
             i: 0,
             slots: 0,
+            most: lineage.policy.bound(),
         };
         let (root, stars) = r.node(&page, Within::Root(&lineage.home))?;
         let read_whole = r.i == r.s.len() && stars == 1;
-        let formed = form::check(&root, &lineage.home, &Page::pin).is_ok();
+        let formed = form::check(&root, &lineage.home, &Page::pin, lineage.policy.bound()).is_ok();
         (read_whole && formed).then_some(root)
     });
     // A tail that starts as a node does is a tree, damaged or not; any other `~` is the page's own.
@@ -76,7 +76,7 @@ fn read<P: Page>(s: &str, lineage: &Tiles<P>) -> Tiles<P> {
     }
 }
 
-fn bare<P: Page>(head: &str, lineage: &Tiles<P>) -> Tiles<P> {
+fn bare<P: Address>(head: &str, lineage: &Tiles<P>) -> Tiles<P> {
     let tiles = lineage.grow(&lineage.home);
     let Some(page) = P::parse(head) else {
         return tiles;
@@ -93,10 +93,10 @@ fn bare<P: Page>(head: &str, lineage: &Tiles<P>) -> Tiles<P> {
         },
         None => tiles,
     };
-    act(tiles, Act::Open(page))
+    follow(tiles, page)
 }
 
-fn same<P: Page>(a: &Tiles<P>, b: &Tiles<P>) -> bool {
+fn same<P: Address>(a: &Tiles<P>, b: &Tiles<P>) -> bool {
     a.root.map(&Leaf::page) == b.root.map(&Leaf::page)
 }
 
@@ -106,7 +106,7 @@ enum Path {
     Off,
 }
 
-fn node<P: Page>(n: &Node<&P>, path: Path, home: Option<&Node<&P>>) -> String {
+fn node<P: Address>(n: &Node<&P>, path: Path, home: Option<&Node<&P>>) -> String {
     let mut s = String::from(match n.axis {
         Axis::Across => "|",
         Axis::Down => "-",
@@ -146,7 +146,7 @@ fn node<P: Page>(n: &Node<&P>, path: Path, home: Option<&Node<&P>>) -> String {
     s
 }
 
-fn tree<P: Page>(t: &Tree<&P>) -> String {
+fn tree<P: Address>(t: &Tree<&P>) -> String {
     match t {
         Tree::Leaf(p) => escape(&p.print()),
         Tree::Node(n) => node(n, Path::Off, None),
@@ -155,12 +155,13 @@ fn tree<P: Page>(t: &Tree<&P>) -> String {
 
 /// A reader of the tree's print. `slots` is the least number of leaves the workspace being read
 /// will hold: each node below the root holds two children or more, so entering one adds a leaf,
-/// and so does each child after its second. A read stops the moment it would pass `MOST` and one
-/// pinned leaf, so the nesting it reads is at most `MOST` nodes deep, whatever the string.
+/// and so does each child after its second. A read stops the moment it would pass `most` and one
+/// pinned leaf, so the nesting it reads is at most `most` nodes deep, whatever the string.
 struct Reader<'s> {
     s: &'s [u8],
     i: usize,
     slots: usize,
+    most: usize,
 }
 
 /// Where a node stands: the root, which keeps the home's children, or below it.
@@ -190,14 +191,14 @@ impl Reader<'_> {
         took
     }
 
-    /// One more leaf the workspace will hold; `None` past `MOST` and a pinned one.
+    /// One more leaf the workspace will hold; `None` past `most` and a pinned one.
     fn slot(&mut self) -> Option<()> {
         self.slots += 1;
-        (self.slots <= MOST + 1).then_some(())
+        (self.slots <= self.most.saturating_add(1)).then_some(())
     }
 
     /// A node, and how many `*` it holds.
-    fn node<P: Page>(&mut self, head: &P, within: Within<'_, P>) -> Option<(Node<P>, usize)> {
+    fn node<P: Address>(&mut self, head: &P, within: Within<'_, P>) -> Option<(Node<P>, usize)> {
         let axis = match self.peek()? {
             b'|' => Axis::Across,
             b'-' => Axis::Down,

@@ -103,8 +103,11 @@ its `README.md`.
 **viewtree** (`app/viewtree`). A page's view as data, the keyed diff and the patches a painter
 applies. It knows nothing of Suzatary. Start at `program.rs` and `patch.rs`.
 
+**tiles** (`app/tiles`). One tree of pages, changed by acts and arranged for a viewport: the
+layout every page stands in. It depends on nothing. Start at its `README.md`.
+
 **pages** (`app/pages`). The app's pages as `viewtree` programs, compiled to wasm for the tab.
-It depends on the model crates and viewtree. Start at `lib.rs` and `runtime.rs`.
+It depends on the model crates, viewtree and tiles; `desk.rs` holds the app's tiles. Start at `lib.rs` and `runtime.rs`.
 
 **web** (`web/`). The frontend: TypeScript, one esbuild bundle, no framework, no npm. It owns
 the shell (`src/app/`, `src/shell/`), the replicas' sync (`src/prodrome/`), the painter of the

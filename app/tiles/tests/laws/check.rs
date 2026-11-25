@@ -3,9 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use viewtree::tiles::{
-    Arranged, Axis, Fit, Id, Leaf, Measures, Node, Page, Rect, Shape, Tree, Viewport,
-};
+use tiles::{Arranged, Axis, Fit, Id, Leaf, Measures, Node, Page, Rect, Shape, Tree, Viewport};
 
 use super::page::Pg;
 
@@ -54,8 +52,8 @@ pub fn covers(rects: &[Rect], outer: Rect) -> Result<(), String> {
 
 pub fn screen(at: Viewport) -> Rect {
     Rect {
-        x: viewtree::tiles::Px(0),
-        y: viewtree::tiles::Px(0),
+        x: tiles::Px(0),
+        y: tiles::Px(0),
         w: at.w,
         h: at.h,
     }
@@ -77,7 +75,7 @@ fn bound(all: &[Rect]) -> Option<Rect> {
     let top = all.iter().map(|r| r.y.0).min()?;
     let right = all.iter().map(|r| r.x.0 + r.w.0).max()?;
     let bottom = all.iter().map(|r| r.y.0 + r.h.0).max()?;
-    let px = viewtree::tiles::Px;
+    let px = tiles::Px;
     Some(Rect {
         x: px(left),
         y: px(top),

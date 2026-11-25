@@ -8,7 +8,7 @@
 # program, which depends on no member, so `-p` builds it alone.
 [workspace]
 resolver = "3"
-members = ["address", "base", "record", "release", "store", "signatures", "todo", "plan", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "os", "io-access", "io-local", "io-typeset", "io-chains", "io-model", "io-mail", "io-sources", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "pages", "tooling"]
+members = ["address", "base", "record", "release", "store", "signatures", "todo", "plan", "held", "memory", "mail", "health", "triage", "services", "google", "connect", "inbox", "conversations", "lines", "topics", "digest", "stores", "cards", "secretary", "api", "server", "os", "io-access", "io-local", "io-typeset", "io-chains", "io-model", "io-mail", "io-sources", "cli", "wasm", "plugin", "plugin-fence", "plugin-ics", "testkit", "script-guards", "viewtree", "tiles", "pages", "tooling"]
 
 [workspace.package]
 # FIXED, NOT THE RELEASE: the binary reads `app/release.toml` at run time, and a version here

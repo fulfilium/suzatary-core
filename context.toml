@@ -446,10 +446,17 @@ depends = []
 scripts = []
 
 [[unit]]
+name = "tiles"
+path = "app/tiles"
+shape = "crate"
+depends = []
+scripts = []
+
+[[unit]]
 name = "pages"
 path = "app/pages"
 shape = "crate"
-depends = ["api", "base", "cards", "connect", "conversations", "health", "inbox", "lines", "mail", "memory", "prodrome-data", "record", "release", "todo", "topics", "triage", "viewtree"]
+depends = ["api", "base", "cards", "connect", "conversations", "health", "inbox", "lines", "mail", "memory", "prodrome-data", "record", "release", "tiles", "todo", "topics", "triage", "viewtree"]
 scripts = ["scripts/wire.sh", "scripts/web-inputs.sh"]
 
 [[unit]]

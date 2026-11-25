@@ -11,9 +11,6 @@ knows nothing of Suzatary.
 - `paint::Painter` keeps the last tree and answers the smallest list of `patch::Patch`es;
   `patch::encode` prints them as the bytes `web/src/painter` applies.
 - `viewtree::export!` makes a page class for the browser (the `host` feature).
-- `tiles` lays pages out as one tree. Implement `tiles::Page` on a page's address, start from
-  `Tiles::new(home)`, change the tree only with `act`, draw what `arrange` answers for a viewport,
-  and keep the address with `print` and `parse`.
 
 ## Depends on
 
@@ -22,5 +19,4 @@ Nothing of this repository; `serde` and `ts-rs` only with the `host` feature.
 ## Develop
 
 `cargo test -p viewtree`. The patch format is `src/patch.rs`, and the painter in
-`web/src/painter/painter.ts` reads it. The layout's laws run over sequences of acts
-(`tests/tiles/laws.rs`); after a change to `tiles`, run them once with `PROPTEST_CASES=20000`.
+`web/src/painter/painter.ts` reads it.

@@ -5,12 +5,12 @@
 use proptest::prelude::*;
 use suzatary_pages::desk::{Area, Desk, Drawing, Scroller, share};
 use suzatary_pages::route::Route;
-use viewtree::tiles::{self, Page, Px, Viewport};
+use tiles::{Address, Home, Policy, Px, Viewport};
 
-/// The end of `r`'s `home` chain, followed at most `MOST` steps.
+/// The end of `r`'s `home` chain, followed at most the default policy's `most` steps.
 fn end(r: &Route) -> Route {
     let mut at = r.clone();
-    for _ in 0..tiles::MOST {
+    for _ in 0..Policy::default().most().get() {
         let home = at.home();
         if home == at {
             break;
@@ -195,7 +195,7 @@ proptest! {
     fn a_printed_route_parses_back(h in hash()) {
         let r = Route::parse(&h);
         prop_assert_eq!(Route::parse(&r.href()), r.clone());
-        prop_assert_eq!(<Route as Page>::parse(&r.print()), Some(r));
+        prop_assert_eq!(<Route as Address>::parse(&r.print()), Some(r));
     }
 
     /// The layout's address of a bare hash is that bare hash: its tree has the route focused,
@@ -226,7 +226,7 @@ proptest! {
         prop_assert_eq!(pages(&desk), pages(&cold));
     }
 
-    /// Every route's `home` chain ends at one of the bar's destinations within `MOST` steps.
+    /// Every route's `home` chain ends at one of the bar's destinations within the default policy's `most` steps.
     #[test]
     fn every_chain_ends_at_a_destination(h in hash()) {
         let r = Route::parse(&h);

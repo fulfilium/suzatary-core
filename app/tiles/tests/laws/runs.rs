@@ -1,9 +1,12 @@
 //! Generated well-formed homes, runs of acts, measures (zeros and `u32::MAX` among them), and
 //! viewports from 0 px to a 2,560 px desktop.
 
+use std::num::NonZeroU8;
+
 use proptest::prelude::*;
-use viewtree::tiles::{
-    Act, Axis, Dir, Fit, Leaf, MOST, Measures, Node, Part, Px, Share, Tiles, Tree, Viewport, act,
+use tiles::{
+    Act, Axis, Beside, Dir, Fit, Leaf, Measures, Node, Part, Policy, Px, RootRow, Share, Tiles,
+    Tree, Viewport, act, follow,
 };
 
 use super::page::{Kind, MEASURES, Pg, pg};
@@ -83,19 +86,38 @@ fn pinned_end(tree: Tree<Pg>, n: u8) -> Tree<Pg> {
     }
 }
 
-/// A root of one to six workspaces of at most `MOST` tiles, a pinned end in some, mostly a
-/// `Never` node across as an application's would be.
-pub fn home() -> impl Strategy<Value = Node<Pg>> {
-    let ws =
-        (workspace(MOST), proptest::option::weighted(0.3, 0u8..4)).prop_map(|(t, pin)| match pin {
-            Some(n) => pinned_end(t, n),
-            None => t,
-        });
-    let root_fit = prop_oneof![4 => Just(Fit::Never), 1 => Just(Fit::Fits)];
-    node(
-        prop::collection::vec((share(), ws).prop_map(|(s, t)| Part::new(s, t)), 1..7),
-        root_fit,
-    )
+/// The default policy mostly; a bound of one to eight and either rule beside it otherwise.
+pub fn policy() -> impl Strategy<Value = Policy> {
+    let beside = prop_oneof![Just(Beside::Replace), Just(Beside::Insert)];
+    let most = (1u8..=8).prop_map(|n| NonZeroU8::new(n).expect("one to eight"));
+    prop_oneof![
+        1 => Just(Policy::default()),
+        2 => (most, beside).prop_map(|(most, beside)| Policy::default().with_most(most).with_beside(beside)),
+    ]
+}
+
+/// A home and the policy its tiles grow by.
+pub type Home = (Node<Pg>, Policy);
+
+/// A root of one to six workspaces of at most the policy's `most` tiles, a pinned end in some,
+/// mostly a `Never` node across as an application's would be.
+pub fn home() -> impl Strategy<Value = Home> {
+    policy().prop_flat_map(|policy| {
+        let ws = (
+            workspace(usize::from(policy.most().get())),
+            proptest::option::weighted(0.3, 0u8..4),
+        )
+            .prop_map(|(t, pin)| match pin {
+                Some(n) => pinned_end(t, n),
+                None => t,
+            });
+        let root_fit = prop_oneof![4 => Just(Fit::Never), 1 => Just(Fit::Fits)];
+        node(
+            prop::collection::vec((share(), ws).prop_map(|(s, t)| Part::new(s, t)), 1..7),
+            root_fit,
+        )
+        .prop_map(move |n| (n, policy))
+    })
 }
 
 pub fn viewport() -> impl Strategy<Value = Viewport> {
@@ -116,9 +138,16 @@ pub fn measures() -> impl Strategy<Value = Measures> {
         |usual: u32| prop_oneof![8 => Just(Px(usual)), 1 => Just(Px(0)), 1 => Just(Px(u32::MAX))];
     prop_oneof![
         3 => Just(MEASURES),
-        1 => (one(24), one(44), one(72), one(320), one(992)).prop_map(|(divider, row, crumb, tall, foot)| {
-            Measures { divider, row, crumb, tall, foot }
+        1 => (one(24), one(44), one(72), one(320), root_row()).prop_map(|(divider, row, crumb, tall, root_row)| {
+            Measures { divider, row, crumb, tall, root_row }
         }),
+    ]
+}
+
+fn root_row() -> impl Strategy<Value = RootRow> {
+    prop_oneof![
+        1 => Just(RootRow::Top),
+        4 => prop_oneof![8 => Just(Px(992)), 1 => Just(Px(0)), 1 => Just(Px(u32::MAX))].prop_map(RootRow::FootUnder),
     ]
 }
 
@@ -126,6 +155,7 @@ pub fn measures() -> impl Strategy<Value = Measures> {
 #[derive(Debug, Clone)]
 pub enum Step {
     Open(Pg),
+    Follow(Pg),
     Below(Pg),
     Close,
     Focus(prop::sample::Index),
@@ -145,7 +175,8 @@ pub fn step() -> impl Strategy<Value = Step> {
         Just(Dir::Down)
     ];
     prop_oneof![
-        4 => page().prop_map(Step::Open),
+        2 => page().prop_map(Step::Open),
+        2 => page().prop_map(Step::Follow),
         1 => page().prop_map(Step::Below),
         2 => Just(Step::Close),
         2 => any::<prop::sample::Index>().prop_map(Step::Focus),
@@ -156,7 +187,7 @@ pub fn step() -> impl Strategy<Value = Step> {
     ]
 }
 
-pub fn ids(tiles: &Tiles<Pg>) -> Vec<viewtree::tiles::Id> {
+pub fn ids(tiles: &Tiles<Pg>) -> Vec<tiles::Id> {
     tiles
         .root()
         .parts()
@@ -165,9 +196,30 @@ pub fn ids(tiles: &Tiles<Pg>) -> Vec<viewtree::tiles::Id> {
         .collect()
 }
 
-pub fn the_act(tiles: &Tiles<Pg>, step: &Step) -> Act<Pg> {
+/// What a run applies: an act, or a page followed, which `follow` opens with its chain.
+#[derive(Debug, Clone)]
+pub enum Made {
+    Act(Act<Pg>),
+    Follow(Pg),
+}
+
+pub fn made(tiles: &Tiles<Pg>, step: &Step) -> Made {
     match step {
-        Step::Open(p) => Act::Open(p.clone()),
+        Step::Follow(p) => Made::Follow(p.clone()),
+        Step::Open(_)
+        | Step::Below(_)
+        | Step::Close
+        | Step::Focus(_)
+        | Step::Move(_)
+        | Step::Resize(..)
+        | Step::Hold(_)
+        | Step::Release => Made::Act(the_act(tiles, step)),
+    }
+}
+
+fn the_act(tiles: &Tiles<Pg>, step: &Step) -> Act<Pg> {
+    match step {
+        Step::Open(p) | Step::Follow(p) => Act::Open(p.clone()),
         Step::Below(p) => Act::Below(p.clone()),
         Step::Close => Act::Close,
         Step::Focus(i) => {
@@ -189,8 +241,15 @@ pub fn the_act(tiles: &Tiles<Pg>, step: &Step) -> Act<Pg> {
     }
 }
 
+pub fn apply(t: Tiles<Pg>, m: Made) -> Tiles<Pg> {
+    match m {
+        Made::Act(a) => act(t, a),
+        Made::Follow(p) => follow(t, p),
+    }
+}
+
 /// A run: a home, the measures, then acts, each with the viewport the person saw after it.
-pub type Run = (Node<Pg>, Measures, Viewport, Vec<(Step, Viewport)>);
+pub type Run = (Home, Measures, Viewport, Vec<(Step, Viewport)>);
 
 pub fn run() -> impl Strategy<Value = Run> {
     (
@@ -202,16 +261,16 @@ pub fn run() -> impl Strategy<Value = Run> {
 }
 
 /// A state before an act, the act, the state after it, and the viewport it was seen on.
-pub type State = (Tiles<Pg>, Option<Act<Pg>>, Tiles<Pg>, Viewport);
+pub type State = (Tiles<Pg>, Option<Made>, Tiles<Pg>, Viewport);
 
 /// Every state of the run with the viewport it was seen on, and the act that led to it.
-pub fn states(home: Node<Pg>, first: Viewport, steps: &[(Step, Viewport)]) -> Vec<State> {
-    let start = Tiles::new(home).expect("the generated home is well formed");
+pub fn states((home, policy): Home, first: Viewport, steps: &[(Step, Viewport)]) -> Vec<State> {
+    let start = Tiles::new(home, policy).expect("the generated home is well formed");
     let mut out = vec![(start.clone(), None, start.clone(), first)];
     let mut now = start;
     for (s, at) in steps {
-        let a = the_act(&now, s);
-        let next = act(now.clone(), a.clone());
+        let a = made(&now, s);
+        let next = apply(now.clone(), a.clone());
         out.push((now, Some(a), next.clone(), *at));
         now = next;
     }

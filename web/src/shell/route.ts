@@ -200,7 +200,7 @@ export const forwarded = (route: Route): Route =>
     ? { type: "conversation", id: "default", refs: route.refs, ...(route.focus === true ? { focus: true } : {}) }
     : route
 
-// `tree` is the desk's print after `~` (`viewtree::tiles::print`), "" where the bare route says the tiles; the route is the focused tile's.
+// `tree` is the desk's print after `~` (`tiles::print`), "" where the bare route says the tiles; the route is the focused tile's.
 export type Address = { readonly route: Route; readonly tree: string };
 
 export const bare = (route: Route): Address => ({ route, tree: "" });
