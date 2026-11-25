@@ -40,6 +40,7 @@ pub enum Body {
 /// The most bytes one rendered or opened line holds; a longer one is cut and says so.
 pub const LINE_BYTES: usize = 4_096;
 
+/// The most bytes of the record a call is told, before it is cut to the newest lines that fit.
 pub const VIEW_BYTES: usize = 131_072;
 
 /// The view of `digest` under `budget` bytes: a part `shows` reads as its words, any other
@@ -59,11 +60,23 @@ pub fn view(
         .into_iter()
         .filter_map(|part| {
             let node = digest.node(&part.node)?;
-            let label = digest.label(node);
-            let body = shown_as(label, shows, || said(digest, entries, node))?;
-            Some(Shown { part, label, body })
+            shown_node(digest, entries, part, node, shows)
         })
         .collect()
+}
+
+/// One part of a view, `node`, as a reader that `shows` is shown it; the one rule every view of
+/// the digest shows a part by.
+pub(crate) fn shown_node(
+    digest: &Digest,
+    entries: &BTreeMap<&Hash, &Entry>,
+    part: Part,
+    node: &Node<Label>,
+    shows: fn(&Label) -> bool,
+) -> Option<Shown> {
+    let label = digest.label(node);
+    let body = shown_as(label, shows, || said(digest, entries, node))?;
+    Some(Shown { part, label, body })
 }
 
 /// What lies beneath the lines `handle` names (`first+lines`), a part `reads` admits as it is

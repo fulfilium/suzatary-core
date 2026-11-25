@@ -15,8 +15,10 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::topic_target::Target;
 use suzatary_conversations::secretary::model::{Conversation, Earlier, ToolCall, Turn};
 use suzatary_conversations::secretary::outcome::Outcome;
+use suzatary_conversations::secretary::queue::LONG_ANSWER;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_digest::secretary::memories::Memories;
+use suzatary_digest::secretary::record_steps::TAIL_BYTES;
 use suzatary_io_model::blocks::Blocks;
 use suzatary_io_model::model::stdin_for;
 use suzatary_io_model::prompt::{Reads, prompt_of};
@@ -98,15 +100,19 @@ enum Cause {
     First,
     /// A fact was remembered, so the facts and all after them are new.
     Facts,
-    /// The record changed: a summary came, a part closed, a line of any conversation landed.
+    /// The record before the mark changed: its frozen point stepped, a part merged, a summary
+    /// came late.
     Record,
     /// The window's start stepped: its oldest rounds left it for the record.
     Window,
+    /// A round closed and its blocks print another way as earlier ones: a long answer by its
+    /// marker.
+    Closed,
     /// Turns said since the call before: the conversation's own growth.
     New,
     /// The call before's entry stood more than the look-back before this call's mark.
     LookBack,
-    /// After the call's mark: the topics, the tail, what the CLI sends last.
+    /// After the call's mark: the record's newest parts, the topics, the tail, the CLI's last.
     After,
 }
 
@@ -207,7 +213,7 @@ impl Provider {
                     Some(Part::Facts) => Cause::Facts,
                     Some(_) if stepped => Cause::Window,
                     Some(Part::Record | Part::System | Part::Cli | Part::Head) => Cause::Record,
-                    Some(Part::Turn) if !grew => Cause::Window,
+                    Some(Part::Turn) if !grew => Cause::Closed,
                     Some(Part::Turn | Part::After | Part::Tail) | None
                         if block.part == Part::Turn && grew && turn >= was.len() =>
                     {
@@ -301,23 +307,44 @@ struct Life {
     /// Every this many turns, a round of five steps, a verb answering at each.
     steps: Option<usize>,
     remembers: Option<usize>,
-    /// Another conversation writes a question and an answer each turn: plain lines, with no
-    /// claim, verb or note, so the record moves at its end as a box's does at the least.
-    others: bool,
+    elsewhere: Elsewhere,
+    verbs: Verbs,
     topics: bool,
+}
+
+/// Another conversation's lines: plain, with no claim, verb or note, so the record moves at its
+/// end as a box's does at the least.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Elsewhere {
+    Silent,
+    /// A question and an answer each turn.
+    EachTurn,
+    /// And a line after each step of a round, so the record moves while the round is being
+    /// answered.
+    AndMidRound,
+}
+
+/// How long the verbs' answers are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Verbs {
+    Short,
+    /// Over the window's long-answer size, which an earlier round sends as a marker.
+    Long,
 }
 
 const QUIET: Life = Life {
     steps: None,
     remembers: None,
-    others: false,
+    elsewhere: Elsewhere::Silent,
+    verbs: Verbs::Short,
     topics: false,
 };
 
 const LIVELY: Life = Life {
     steps: Some(3),
     remembers: Some(25),
-    others: true,
+    elsewhere: Elsewhere::AndMidRound,
+    verbs: Verbs::Short,
     topics: true,
 };
 
@@ -327,6 +354,10 @@ struct Call {
     step: usize,
     served: Served,
     size: usize,
+    /// The record before the mark, or the window's start, moved since the call before.
+    crossed: bool,
+    /// The bytes of the record that stand after the mark.
+    tail: usize,
 }
 
 struct Running {
@@ -415,24 +446,44 @@ impl Running {
         let mut second = 20_000_000;
         let mut provider = Provider::default();
         let mut served = Vec::new();
+        let mut record_before: Vec<String> = Vec::new();
+        let mut window_before = None;
         let mut serve = |turn: usize, step: usize, second: usize| {
-            let blocks = blocks(&asked(&ask, &self.stores, &self.id), cli);
+            let sent = asked(&ask, &self.stores, &self.id);
+            let tail = sent
+                .context
+                .rest
+                .iter()
+                .filter(|block| !block.starts_with("TOPICS IN USE"))
+                .map(String::len)
+                .sum();
+            let blocks = blocks(&sent, cli);
+            let record: Vec<String> = blocks
+                .iter()
+                .filter(|block| block.part == Part::Record)
+                .map(|block| block.text.clone())
+                .collect();
             let size = blocks.iter().map(|block| block.text.len()).sum();
             let read = transcript::read(self.stores.lines.conversations(), &self.id)
                 .expect("the conversation reads");
             let window =
                 suzatary_conversations::secretary::queue::window(read.stored(), &read.queued())
                     .first();
+            let crossed = record != record_before || window != window_before;
+            record_before = record;
+            window_before = window;
             served.push(Call {
                 turn,
                 step,
                 served: provider.serve(&blocks, second, window),
                 size,
+                crossed,
+                tail,
             });
         };
         for turn in 0..turns {
             second += 120;
-            if life.others {
+            if life.elsewhere != Elsewhere::Silent {
                 let asked = format!("Elsewhere, question {turn}.");
                 self.say(&other, tick(&mut second), person(&asked), Some("ada"));
                 let answered = format!("Elsewhere, answer {turn}. ");
@@ -449,13 +500,16 @@ impl Running {
             for step in 0..steps {
                 serve(turn, step, second);
                 self.say(&self.id, tick(&mut second), calling("weather"), None);
-                let forecast = format!("{{\"forecast\": \"rain at {turn}, step {step}\"}}");
                 self.say(
                     &self.id,
                     tick(&mut second),
-                    answered("weather", forecast),
+                    answered("weather", forecast(turn, step, life.verbs)),
                     None,
                 );
+                if life.elsewhere == Elsewhere::AndMidRound {
+                    let landed = format!("Meanwhile, note {turn}, step {step}.");
+                    self.say(&other, tick(&mut second), person(&landed), Some("ada"));
+                }
             }
             serve(turn, steps, second);
             let answered = format!("Answer {turn}: the form, then the fee. ");
@@ -467,21 +521,25 @@ impl Running {
                 .remembers
                 .is_some_and(|every| turn % every == every - 1)
             {
-                memories
-                    .remember(
-                        &Fact::new(format!("The permit's step {turn} is done")).expect("a fact"),
-                        Kind::Owner,
-                        &Origin::Turn {
-                            conversation: self.id.clone(),
-                            turn: 0,
-                        },
-                        live_shape::at(second),
-                    )
-                    .expect("remembers");
+                self.remember(&memories, turn, second);
             }
             self.stores.summarise(pace, second);
         }
         served
+    }
+
+    fn remember(&self, memories: &Memories<'_>, turn: usize, second: usize) {
+        memories
+            .remember(
+                &Fact::new(format!("The permit's step {turn} is done")).expect("a fact"),
+                Kind::Owner,
+                &Origin::Turn {
+                    conversation: self.id.clone(),
+                    turn: 0,
+                },
+                live_shape::at(second),
+            )
+            .expect("remembers");
     }
 
     fn topic(&self, turn: usize, second: usize) {
@@ -508,6 +566,15 @@ impl Running {
             self.memberships.append(event).expect("appended");
         }
     }
+}
+
+/// What a verb answers at a step of a turn's round.
+fn forecast(turn: usize, step: usize, verbs: Verbs) -> String {
+    let mut forecast = format!("{{\"forecast\": \"rain at {turn}, step {step}\"}}");
+    if verbs == Verbs::Long {
+        forecast.push_str(&" rain".repeat(LONG_ANSWER.div_ceil(5) + 1));
+    }
+    forecast
 }
 
 fn person(text: &str) -> Turn {
@@ -576,14 +643,40 @@ fn causes(calls: &[Call]) -> String {
     out
 }
 
-/// After the first call; within a round (a round's later steps); across rounds (a round's first).
-fn shares(calls: &[Call]) -> (usize, usize, usize) {
+/// The shares of the input read from the cache, after the first call: over every call, within
+/// a round (a round's later steps), between rounds where no step is crossed, and across a step.
+struct Shares {
+    all: usize,
+    within: usize,
+    between: usize,
+    across: usize,
+    /// How many of a round's first calls cross a step, of how many such calls there are.
+    stepped: (usize, usize),
+}
+
+fn shares(calls: &[Call]) -> Shares {
     let after = &calls[1..];
-    (
-        share(after),
-        share(after.iter().filter(|call| call.step > 0)),
-        share(after.iter().filter(|call| call.step == 0)),
-    )
+    let firsts = || after.iter().filter(|call| call.step == 0);
+    Shares {
+        all: share(after),
+        within: share(after.iter().filter(|call| call.step > 0)),
+        between: share(firsts().filter(|call| !call.crossed)),
+        across: share(firsts().filter(|call| call.crossed)),
+        stepped: (
+            firsts().filter(|call| call.crossed).count(),
+            firsts().count(),
+        ),
+    }
+}
+
+impl Shares {
+    fn said(&self) -> String {
+        format!(
+            "{}% after the first call, {}% within a round, {}% between rounds with no step \
+             crossed, {}% across a step ({} of {} rounds cross one)",
+            self.all, self.within, self.between, self.across, self.stepped.0, self.stepped.1
+        )
+    }
 }
 
 fn quiet_shape() -> Shape {
@@ -609,7 +702,7 @@ fn lively_shape() -> Shape {
 fn consecutive_turns_read_most_of_their_input_from_the_cache() {
     for (cli, floor) in [(Cli::Deployed, QUIET_DEPLOYED), (Cli::Newer, QUIET_NEWER)] {
         let calls = Running::of(quiet_shape()).run(60, 4, QUIET, cli);
-        let (read, _, _) = shares(&calls);
+        let read = shares(&calls).all;
         eprintln!("{cli:?}: {read}% after the first call;{}", causes(&calls));
         assert!(
             read >= floor,
@@ -618,29 +711,61 @@ fn consecutive_turns_read_most_of_their_input_from_the_cache() {
     }
 }
 
-/// The floors of the quiet run, by CLI: each reads 96%.
+/// The floors of the quiet run, by CLI: each reads 95%.
 const QUIET_DEPLOYED: usize = 90;
 const QUIET_NEWER: usize = 90;
 
-/// The floors of the lively run, by CLI, over every call and within a round: the deployed CLI
-/// reads 76% and 98%, the newer 80% and 98%.
-const LIVELY_DEPLOYED: (usize, usize) = (70, 95);
-const LIVELY_NEWER: (usize, usize) = (75, 95);
+/// The floors of the lively run, by CLI: over every call, within a round, and between rounds
+/// where no step is crossed. The deployed CLI reads 92%, 97% and 95%, the newer 93%, 97% and 96%;
+/// a call that crosses a step (the record's frozen point, the window's start) reads 40% and 53%,
+/// and one round in five crosses one, most of them the window's.
+const LIVELY_DEPLOYED: (usize, usize, usize) = (88, 95, 90);
+const LIVELY_NEWER: (usize, usize, usize) = (88, 95, 90);
 
-/// 2,400 lines over 12 conversations, a round of five verb steps every third turn, a remember
-/// every 25th, another conversation writing and a topic each round.
+/// A step is one round in three at most, and a call across one still reads the facts and the
+/// record before the window, at least this share of its input.
+const STEPS_AT_MOST: (usize, usize) = (1, 3);
+const ACROSS_A_STEP: usize = 30;
+
+/// 2,400 lines over 12 conversations, a round of five verb steps every third turn with another
+/// conversation writing a line after each step, a remember every 25th, another conversation
+/// writing and a topic each round.
 #[test]
 fn a_lively_store_still_reads_from_the_cache() {
     for (cli, floor) in [(Cli::Deployed, LIVELY_DEPLOYED), (Cli::Newer, LIVELY_NEWER)] {
         let calls = Running::of(lively_shape()).run(60, 4, LIVELY, cli);
-        let (read, within, across) = shares(&calls);
+        let shares = shares(&calls);
+        let tail = calls.iter().map(|call| call.tail);
         eprintln!(
-            "{cli:?}: {read}% after the first call, {within}% within a round, {across}% \
-             across rounds;{}",
+            "{cli:?}: {}; after the mark at most {}, on average {};{}",
+            shares.said(),
+            tail.clone().max().unwrap_or(0),
+            tail.clone().sum::<usize>() / calls.len(),
             causes(&calls)
         );
-        assert!(read >= floor.0, "{cli:?}: {read}% read");
-        assert!(within >= floor.1, "{cli:?}: {within}% read within a round");
+        assert!(
+            tail.clone().max().unwrap_or(0) <= TAIL_BYTES,
+            "{cli:?}: more than a step of the record stands after the mark"
+        );
+        assert!(shares.all >= floor.0, "{cli:?}: {}% read", shares.all);
+        assert!(
+            shares.stepped.0 * STEPS_AT_MOST.1 <= shares.stepped.1 * STEPS_AT_MOST.0
+                && shares.across >= ACROSS_A_STEP,
+            "{cli:?}: {} of {} rounds cross a step, reading {}%",
+            shares.stepped.0,
+            shares.stepped.1,
+            shares.across
+        );
+        assert!(
+            shares.within >= floor.1,
+            "{cli:?}: {}% read within a round",
+            shares.within
+        );
+        assert!(
+            shares.between >= floor.2,
+            "{cli:?}: {}% read between rounds with no step crossed",
+            shares.between
+        );
     }
 }
 
@@ -651,6 +776,22 @@ fn the_cache_share_and_the_calls_size() {
     for (name, shape, life) in [
         ("one conversation, quiet", quiet_shape(), QUIET),
         ("12 conversations, lively", lively_shape(), LIVELY),
+        (
+            "12 conversations, lively, no line lands mid-round",
+            lively_shape(),
+            Life {
+                elsewhere: Elsewhere::EachTurn,
+                ..LIVELY
+            },
+        ),
+        (
+            "12 conversations, lively, verbs answering at length",
+            lively_shape(),
+            Life {
+                verbs: Verbs::Long,
+                ..LIVELY
+            },
+        ),
         (
             "13,000 lines over 100 conversations, lively",
             Shape {
@@ -673,14 +814,16 @@ fn the_cache_share_and_the_calls_size() {
                 .iter()
                 .find(|call| call.turn == 100)
                 .map_or(0, |call| call.size);
-            let (read, within, across) = shares(&calls);
+            let tail = calls.iter().map(|call| call.tail);
             eprintln!(
-                "{name}, {cli:?}: {read}% read after the first call, {within}% within a \
-                 round, {across}% across rounds;{}\n  call size in bytes: first {}, at turn \
-                 100 {at_100}, largest {}",
+                "{name}, {cli:?}: {};{}\n  call size in bytes: first {}, at turn 100 {at_100}, \
+                 largest {}; the record after the mark: at most {}, on average {}",
+                shares(&calls).said(),
                 causes(&calls),
                 sizes[0],
-                sizes.iter().max().copied().unwrap_or(0)
+                sizes.iter().max().copied().unwrap_or(0),
+                tail.clone().max().unwrap_or(0),
+                tail.sum::<usize>() / calls.len().max(1)
             );
         }
     }

@@ -508,9 +508,10 @@ pub fn stdin_of(prompt: ForModel, blocks: Blocks) -> Stdin {
 
 /// One stream-json user message: what the context tells before the turns, the transcript's head,
 /// the earlier rounds' turns, the round's turns, each after the files it hands over, the newest
-/// carrying the call's one cache mark, then what the context tells after it and the tail. The
-/// CLI places marks of its own (two in the system text, one after or on the message's last
-/// block) and the API takes four a request. `files` are the blocks of the round's turns, by turn.
+/// carrying the call's one cache mark, then what the context tells after it (the record's newest
+/// parts and the topics) and the tail. The CLI places marks of its own (two in the system text,
+/// one after or on the message's last block) and the API takes four a request. `files` are the
+/// blocks of the round's turns, by turn.
 #[must_use]
 pub fn stdin_for(prompt: &Prompt, files: &Blocks) -> Stdin {
     let text = |text: &ForModel| serde_json::json!({ "type": "text", "text": text.as_str() });

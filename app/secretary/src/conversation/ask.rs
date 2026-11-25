@@ -11,7 +11,7 @@ use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::{Said, Scope, Stored};
 use suzatary_conversations::secretary::taint::{self, Taint};
 use suzatary_digest::secretary::compaction::Reading;
-use suzatary_digest::secretary::digest_view::VIEW_BYTES;
+use suzatary_digest::secretary::record_steps::Steps;
 use suzatary_digest::secretary::told::{Asking, context_of};
 use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_topics::secretary::topics::stores::TopicStores;
@@ -19,9 +19,9 @@ use suzatary_topics::secretary::topics::stores::TopicStores;
 /// How a round asks its model.
 #[derive(Clone, Copy)]
 pub enum Ask<'a> {
-    /// What the model remembers ([`context_of`]: the facts, the record less this conversation's
-    /// window, the topics in use), then the window of this conversation's own live turns
-    /// ([`queue::window`]), which ends in the round being answered.
+    /// What the model remembers ([`context_of`]: the facts, the record, the topics), around the
+    /// window of this conversation's own live turns ([`queue::window`]), which ends in the
+    /// round being answered.
     Digest {
         model: &'a dyn Model,
         memories: &'a Memories<'a>,
@@ -146,7 +146,7 @@ fn digest(
                 memory.as_ref(),
                 topics.as_ref(),
                 record.as_ref(),
-                VIEW_BYTES,
+                Steps::call(),
                 asking,
             )
             .context(),

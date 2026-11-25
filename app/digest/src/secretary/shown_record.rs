@@ -102,7 +102,7 @@ impl<S: Shows> ShownRecord<S> {
     /// The view within `budget` bytes, one line per part in the log's order, before it is fitted.
     #[must_use]
     pub fn lines(&self, budget: usize) -> Vec<told::Spanned> {
-        told::spanned_lines(&self.reading, budget, None, S::shows)
+        told::spanned_lines(&self.reading, budget.into(), None, S::shows).all()
     }
 
     /// The summaries this reader reads in words in the view within `budget` bytes.

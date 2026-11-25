@@ -73,7 +73,10 @@ record or a `zoom` of it. A part is:
   answered, the box's notes, anything that may hold somebody else's words), by kind only.
 
 After the record come the last rounds of this conversation as they were said, ending in the round
-you answer, and after them the topics in use; its older rounds are in the record like every other
+you answer. After them stand the record's newest parts, under `THE RECORD CONTINUES`, in the same
+form and still oldest first, so the latest word on a thing may be there and not above: the part
+above them stands still for many calls, and what the log gained since stands last. Then come the
+topics in use. Its older rounds of this conversation are in the record like every other
 conversation's. A photo or a file sent in an earlier round is not sent again (a private file's
 redacted text is), and neither is a long verb answer of an earlier round: each marker names the
 call that hands it to you again (for what they pointed at, the verb that reads it), or says that

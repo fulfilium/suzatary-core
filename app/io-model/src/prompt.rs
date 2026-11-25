@@ -18,7 +18,7 @@ use suzatary_held::for_model::ForModel;
 pub struct Prompt {
     /// The rules the secretary works under, then the verbs it may call.
     pub system: ForModel,
-    /// What the call is told before its turns: the facts, the record.
+    /// What the call is told before its turns: the facts, the record up to its frozen point.
     pub told: Vec<ForModel>,
     /// How the transcript reads and how to answer it, before its turns.
     pub head: ForModel,
@@ -29,7 +29,7 @@ pub struct Prompt {
     pub round: Vec<ForModel>,
     /// The newest turn's block, which carries the call's one mark; none for a call with no turn.
     pub newest: Option<ForModel>,
-    /// What the call is told after the mark: the topics in use.
+    /// What the call is told after the mark: the record's newest parts, then the topics in use.
     pub after: Vec<ForModel>,
     /// How to answer, said again after everything else.
     pub tail: ForModel,

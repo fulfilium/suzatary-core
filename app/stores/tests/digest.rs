@@ -1850,6 +1850,14 @@ impl Box {
 
     /// What a call is now told, its view within `budget` bytes.
     fn told(&self, budget: usize) -> String {
+        self.told_in(budget).text()
+    }
+
+    /// What a call is now told, its record within `room`.
+    fn told_in(
+        &self,
+        room: impl Into<suzatary_digest::secretary::record_steps::Room>,
+    ) -> suzatary_digest::secretary::told::Told {
         use suzatary_digest::secretary::compaction::Reading;
         let memory = self.memories().reads().read();
         let record = Reading::of(&self.digests().reads());
@@ -1857,10 +1865,9 @@ impl Box {
             memory.as_ref(),
             Ok(&suzatary_topics::secretary::topics::reading::Reading::default()),
             record.as_ref(),
-            budget,
+            room,
             None,
         )
-        .text()
     }
 
     /// A replica holding exactly this box's objects and words, each store given them backwards
@@ -1975,6 +1982,153 @@ proptest! {
         }
         let replica = the.replica();
         prop_assert_eq!(the.told(budget), replica.told(budget));
+    }
+}
+
+/// What each line of the log stands under in what a call is told: its words, or only its kinds.
+fn shown_lines(
+    told: &suzatary_digest::secretary::told::Told,
+) -> std::collections::BTreeMap<usize, Option<String>> {
+    let context = told.context();
+    let mut shown = std::collections::BTreeMap::new();
+    for line in context
+        .cached
+        .iter()
+        .chain(&context.rest)
+        .flat_map(|block| block.lines())
+    {
+        let Some((handle, said)) = line.split_once(' ') else {
+            continue;
+        };
+        let Some((first, lines)) = handle.split_once('+') else {
+            continue;
+        };
+        let (Ok(first), Ok(lines)) = (first.parse::<usize>(), lines.parse::<usize>()) else {
+            continue;
+        };
+        for at in first..first + lines {
+            shown.insert(at, said.strip_prefix("Owner: ").map(str::to_owned));
+        }
+    }
+    shown
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 24, ..ProptestConfig::default() })]
+
+    /// The record a call is told in steps shows each line as the whole log under one budget does:
+    /// when the budget holds every line, a line is in words in one exactly when it is in the
+    /// other, whichever side of the mark it stands, and the two sides name each line once.
+    #[test]
+    fn a_stepped_record_shows_the_lines_one_budget_shows(
+        kinds in proptest::collection::vec(any::<u8>(), 20..120),
+        step in 200usize..4_000,
+        compact in any::<bool>(),
+    ) {
+        use suzatary_digest::secretary::record_steps::Steps;
+        let the = Box::default();
+        the.write("a", turns(&kinds));
+        the.write("b", turns(&kinds.iter().rev().copied().collect::<Vec<_>>()));
+        if compact {
+            the.compact_all(&Recording::joining());
+        }
+        let whole = shown_lines(&the.told_in(suzatary_digest::secretary::digest_view::VIEW_BYTES));
+        let steps = Steps::new(step, suzatary_digest::secretary::digest_view::VIEW_BYTES, 0);
+        let told = the.told_in(steps);
+        prop_assert_eq!(&shown_lines(&told), &whole);
+        let context = told.context();
+        let named: usize = context
+            .cached
+            .iter()
+            .chain(&context.rest)
+            .flat_map(|block| block.lines())
+            .filter_map(|line| line.split(' ').next()?.split_once('+')?.1.parse::<usize>().ok())
+            .sum();
+        prop_assert_eq!(named, whole.len(), "each line is named once");
+    }
+
+    /// Under a budget that makes the view merge, the record a call is told in steps still prints
+    /// no word from outside on either side of the mark: every part is the owner's turn, a summary,
+    /// or a part by its kinds, and every handle opens. Two replicas freeze at the same line.
+    #[test]
+    fn a_stepped_record_prints_no_word_from_outside(
+        kinds in proptest::collection::vec(any::<u8>(), 20..90),
+        step in 100usize..2_000,
+        high in 600usize..4_000,
+        gap in 0usize..2_000,
+    ) {
+        use suzatary_digest::secretary::record_steps::Steps;
+        let the = Box::default();
+        the.write("a", turns(&kinds));
+        the.compact_all(&Recording::joining());
+        let steps = Steps::new(step, high, gap);
+        let told = the.told_in(steps);
+        let text = told.text();
+        prop_assert!(!text.contains("INJECTED"), "{}", text);
+        prop_assert_eq!(&text, &the.replica().told_in(steps).text());
+        let reading = suzatary_digest::secretary::compaction::Reading::of(&the.digests().reads())
+            .expect("reads whole");
+        let context = told.context();
+        for part in context.cached.iter().chain(&context.rest).flat_map(|block| block.lines()) {
+            let Some((handle, said)) = part.split_once(' ') else { continue };
+            if !handle.contains('+') {
+                continue;
+            }
+            prop_assert!(
+                said.starts_with("Owner: ")
+                    || said.starts_with("derived: ")
+                    || (said.starts_with('(') && said.contains(" lines, not shown: ")),
+                "{}",
+                part
+            );
+            prop_assert!(
+                suzatary_digest::secretary::told::zoom(&reading, handle, |_| true).is_ok(),
+                "every handle told opens: {}",
+                handle
+            );
+        }
+    }
+
+    /// The part before the mark only grows at its end while nothing merges, and moves no more
+    /// than once for each step of bytes the log grows: a line that does not pass a step changes
+    /// no block before the mark.
+    #[test]
+    fn the_record_before_the_mark_stands_still_between_steps(
+        kinds in proptest::collection::vec(any::<u8>(), 30..120),
+        step in 300usize..3_000,
+    ) {
+        use suzatary_digest::secretary::record_steps::Steps;
+        let steps = Steps::new(step, suzatary_digest::secretary::digest_view::VIEW_BYTES, 0);
+        let the = Box::default();
+        let id = ConversationId::new("a").expect("a slug");
+        let mut before: Option<Vec<String>> = None;
+        let mut moved = 0;
+        for (k, turn) in turns(&kinds).into_iter().enumerate() {
+            let entry = Entry::Said { at: at(k), turn, by: Some("ada".into()) };
+            write_line(&the.lines, id.clone(), u32::try_from(k).expect("few lines"), &entry);
+            let cached = the.told_in(steps).context().cached;
+            if let Some(before) = &before {
+                // The head of the record is the second block; each block holds four lines, so a
+                // block may fill up: it is its last block that can change.
+                let settled = before.len().saturating_sub(1);
+                prop_assert_eq!(&cached[..settled], &before[..settled], "line {}", k);
+            }
+            if before.as_ref() != Some(&cached) {
+                moved += 1;
+            }
+            before = Some(cached);
+        }
+        // A line costs its bytes and a handle at most, or what a hidden line adds to a run.
+        let read = the.read();
+        let tree = read.tree().expect("lines");
+        let cost = tree.root().bytes() + 113 * u64::try_from(tree.lines()).expect("few");
+        prop_assert!(
+            u64::try_from(moved).expect("few") <= cost / u64::try_from(step).expect("small") + 1,
+            "the record before the mark moved {} times over lines costing {} in steps of {}",
+            moved,
+            cost,
+            step
+        );
     }
 }
 

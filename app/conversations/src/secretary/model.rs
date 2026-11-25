@@ -104,7 +104,8 @@ impl Earlier {
 }
 
 /// What a call is told beside its conversation: `cached` before its turns (the facts and the
-/// record), `rest` after the call's one mark (the topics in use).
+/// record up to its frozen point), `rest` after the call's one mark (the record's newest parts,
+/// then the topics in use).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Context {
     pub cached: Vec<String>,

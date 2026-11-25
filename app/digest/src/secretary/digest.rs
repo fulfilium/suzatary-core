@@ -802,15 +802,22 @@ impl Digest {
     /// The view under `budget` bytes ([`digest::view`]); `None` while there are no lines.
     #[must_use]
     pub fn view(&self, budget: u64) -> Option<View> {
+        self.tree()
+            .map(|tree| self.view_over(tree, Waters::at(budget)))
+    }
+
+    /// The view of `tree` under `waters`, read under this digest's summaries: `tree` is this
+    /// digest's own or one over the first lines of it ([`crate::secretary::record_steps`]), whose
+    /// nodes that the digest's tree holds too read as they do there.
+    #[must_use]
+    pub fn view_over(&self, tree: &Tree<Label>, waters: Waters) -> View {
         VIEWS.with(|count| count.set(count.get() + 1));
-        self.tree().map(|tree| {
-            digest::view(
-                tree,
-                digest::Node::bytes,
-                |node| self.summarized(node),
-                Waters::at(budget),
-            )
-        })
+        digest::view(
+            tree,
+            digest::Node::bytes,
+            |node| self.summarized(node),
+            waters,
+        )
     }
 
     /// The texts the history names: a summary's, live while its node is in the tree and the
