@@ -31,7 +31,7 @@ import { execFile, execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, join, normalize } from "node:path";
 
-import type { Browser, Journal, Page } from "./cdp";
+import type { Browser, Conditions, Journal, Page } from "./cdp";
 import { WAIT_MS, launch } from "./cdp";
 import type { Fulfillment } from "../src/wire/generated/wire";
 import http from "../src/wire/http";
@@ -88,6 +88,10 @@ export const DESKTOP: readonly [number, number] = [1280, 800];
 
 /** The audit's wide window: a desk's browser with room for the list, the todo and the secretary at once. */
 export const WIDE: readonly [number, number] = [1440, 900];
+
+/** Lighthouse's Fast 4G (165 ms a request, about 1.0 MB/s down and 170 KB/s up): what a phone on a tailnet relay gets
+ * on a good day, applied to a page and its workers (`Page.network`). */
+export const FAST_4G: Conditions = { offline: false, latency: 60 * 2.75, downloadThroughput: (9_000_000 / 8) * 0.9, uploadThroughput: (1_500_000 / 8) * 0.9 };
 
 /** A middle width: a small laptop, where the list, the todo and an open panel are tightest. */
 export const MIDDLE: readonly [number, number] = [1100, 800];

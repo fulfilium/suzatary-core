@@ -63,7 +63,9 @@ fn held() -> LineReplica {
     };
     let root = vec![name(0)];
     let steps = [
-        Step::Opened,
+        Step::Opened {
+            kind: Some(suzatary_conversations::secretary::store::Kind::Review),
+        },
         Step::Asks,
         Step::Noted,
         Step::Answers,

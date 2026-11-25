@@ -18,6 +18,8 @@ mod held_lines;
 mod known_pull;
 #[path = "lines_rule.rs"]
 mod lines_rule;
+#[path = "listed.rs"]
+mod listed;
 #[path = "own_lines.rs"]
 mod own_lines;
 #[path = "pieces.rs"]

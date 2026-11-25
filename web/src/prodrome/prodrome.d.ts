@@ -98,11 +98,13 @@ export class Lines {
   refused_in(asks: ObjectStore): Step | undefined;
   /** `[{hash, text}]` held, each hashed against its name, and `[<name>]` let go. */
   hold(add: string, drop: string): void;
-  /** `[{hash, text}]` already admitted by their names held, hashed not again, and `[<name>]` let go. */
-  hold_admitted(add: string, drop: string): void;
+  /** `[{hash, text}]` already admitted by their names held, hashed not again, and `[<name>]` let go: the conversations they moved. */
+  hold_admitted(add: string, drop: string): string;
+  /** Of `[<id>]`, those held whole: every line and every node they rest on. */
+  whole_of(ids: string): string;
   /** The keys `{<name>: <hex>}` held and `[<name>]` let go. */
   keys(add: string, drop: string): void;
-  /** Every conversation, newest first. */
+  /** Every conversation the skeleton holds, newest first, each row's words as far as the prints held read them. */
   list(inbox: Proposals): string;
   /** One conversation's window, the box's route's reading. */
   conversation(
@@ -114,7 +116,7 @@ export class Lines {
     memory?: string,
   ): string;
   /** Every conversation's turns holding a query. */
-  search(q: string): string;
+  search(q: string, whole: boolean): string;
   /** The skeleton's nodes held and let go. */
   nodes(add: string, drop: string): void;
   /** `[<name>]`: every line whose words the stream's newest pages read. */

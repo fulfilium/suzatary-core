@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs"
 import type { Chains, Core, Lines, Named, Window } from "../src/prodrome/core"
 import { conversationOf, erasedOf, inboxOf, listOfLines, objectsOf } from "../src/prodrome/core"
 
-import type { InboxProposalsPayload, MemoryPayload } from "../src/wire/generated/wire"
+import type { InboxProposalsPayload, MemoryPayload, SkeletonPayload } from "../src/wire/generated/wire"
 import { forAll, type Rng } from "./gen"
 import { heldChain, holdAll, restsOn, storeOf } from "./held"
 import { keyed } from "./keyed"
@@ -35,15 +35,25 @@ const box = JSON.parse(readFileSync("app/api/tests/web/replicas.json", "utf8")) 
   proposals: string
   windows: Asked[]
   searches: { q: string; answer: string }[]
+  skeleton: SkeletonPayload
 }
 const named = (xs: readonly Shipped[]): Named[] => xs.map(o => ({ hash: o.hash, literal: o.text }))
 const inbox = named(box.inbox)
 const conversations = named(box.conversations)
 const chains = box.chains.map(c => ({ name: c.name, untrusted: c.untrusted, objects: named(c.objects), heads: [] }))
 
+/** A tab's lines once it pulled the box's whole skeleton, as every tab holds it before any content: the list reads its
+ * conversations from it. The caller frees them. */
+const pulled = (): Lines => {
+  const t = new core.Lines()
+  t.piece(JSON.stringify(box.skeleton), JSON.stringify(box.skeleton.keys), 0)
+  t.land().free()
+  return t
+}
+
 /** The worker's lines holding `c` and the keys `given`; the caller frees them. */
 const linesOf = (c: readonly Named[], given: Record<string, string> = box.keys): Lines => {
-  const t = new core.Lines()
+  const t = pulled()
   t.hold(objectsOf(c), "[]")
   keyed(t, given)
   return t
@@ -67,7 +77,7 @@ const read = (i: readonly Named[], t: Lines, held = chains): string[] => {
       t.list(p),
       ...box.windows.map(w =>
         t.conversation(w.id, p, w.before ?? undefined, w.limit ?? undefined, w.about ?? undefined, w.memory ? memory : undefined)),
-      ...box.searches.map(s => t.search(s.q)),
+      ...box.searches.map(s => t.search(s.q, true)),
     ]
   } finally {
     priced.free()
@@ -146,7 +156,7 @@ test("a sync cut anywhere reads, and the last round reads as the box, in lines h
     const c = rounds(r, causal(r, conversations))
     // One tab's lines, each round's new objects held on top of the last's, so every round reads through what the
     // rounds before it computed.
-    const t = new core.Lines()
+    const t = pulled()
     keyed(t, box.keys)
     try {
       let held = 0
@@ -159,7 +169,7 @@ test("a sync cut anywhere reads, and the last round reads as the box, in lines h
           try {
             read(inboxHeld, t)
           } catch (error: unknown) {
-            assert.match(String(error), /does not hold|no conversation named/)
+            assert.match(String(error), /does not hold|no conversation named|lacks \d+ of its lines here/)
           }
         }
       }
@@ -203,7 +213,10 @@ test("the decoded readings are the wire's shapes", () => {
     assert.ok(listed.includes(`remember (person): ${box.memory.cards[0]?.fact}`), "a kept card's words")
     assert.ok(listed.includes("remember (person): its words are deleted"), "a dismissed card's are gone")
     assert.ok(s.inbox(box.at, null, held).proposals.some(p => p.headline === "remember (person)"), "no memory, no words")
-    assert.deepEqual(s.list().conversations.map(c => [c.id, c.unplaced.length]), [["trains", 0], ["lagging", 2], ["about-the-deed", 0]])
+    assert.deepEqual(
+      s.list().conversations.map(c => [c.id, c.words.held === "read" ? c.words.unplaced.length : c.words.held]),
+      [["trains", 0], ["lagging", 2], ["about-the-deed", 0]],
+    )
     const lagging = s.conversation("lagging", {}, null)
     assert.deepEqual(lagging.unplaced, [{ index: 0, why: "notHeld" }, { index: 1, why: "unasked" }], "lines the inbox cannot place, with why")
     assert.deepEqual(lagging.proposals.map(p => p.index), [2], "the placed one keeps its card and its number")

@@ -24,7 +24,7 @@ use suzatary_conversations::secretary::store::{
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::stamp;
 use suzatary_lines::secretary::conversations::Conversations;
-use suzatary_lines::secretary::held_lines::{Admitted, Folds, HeldLines, decodes, hashes};
+use suzatary_lines::secretary::held_lines::{Admitted, Folds, HeldLines, Part, decodes, hashes};
 use suzatary_lines::secretary::line_event::{LineEvent, LineVocabulary};
 use suzatary_lines::secretary::line_form::{Husked, LineReplica};
 use suzatary_lines::secretary::line_shape::LineShape;
@@ -55,11 +55,16 @@ use suzatary_topics::wire::topics as wire;
 /// keys as the last conversation opened drew its first, so one key names slots of two
 /// conversations.
 #[derive(Debug, Clone)]
-enum Step {
+pub(crate) enum Step {
     Said {
         conversation: usize,
         model: bool,
         echoes: bool,
+    },
+    /// A turn other than a person's or a finished answer's: one whose words a reader skips.
+    Other {
+        conversation: usize,
+        turn: Other,
     },
     Erase {
         conversation: usize,
@@ -80,10 +85,28 @@ enum Step {
     },
 }
 
+/// A turn that says no words a list or a search reads: a model's that asks for a tool, a tool's
+/// answer, an act, or a person's of whitespace.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Other {
+    Calls,
+    Tool,
+    Act,
+    /// The box's own note: an act it composed, which the skeleton marks.
+    Note,
+    Blank,
+}
+
+/// How many conversations a script writes in: three dated topics, the default one, the box's
+/// setup and build conversations and a daily review, each under the id and the kind its writer
+/// gives it.
+const CONVERSATIONS: usize = 7;
+
 impl Step {
     fn conversation(&self) -> usize {
         match self {
             Step::Said { conversation, .. }
+            | Step::Other { conversation, .. }
             | Step::Erase { conversation, .. }
             | Step::Rename { conversation }
             | Step::Stop { conversation }
@@ -93,16 +116,18 @@ impl Step {
     }
 }
 
-fn step() -> impl Strategy<Value = Step> {
+pub(crate) fn step() -> impl Strategy<Value = Step> {
     prop_oneof![
-        8 => (0usize..3, any::<bool>(), proptest::bool::weighted(0.2))
+        8 => (0usize..CONVERSATIONS, any::<bool>(), proptest::bool::weighted(0.2))
             .prop_map(|(conversation, model, echoes)| Step::Said { conversation, model, echoes }),
-        2 => (0usize..3, proptest::collection::vec(any::<prop::sample::Index>(), 1..3))
+        2 => (0usize..CONVERSATIONS, prop_oneof![Just(Other::Calls), Just(Other::Tool), Just(Other::Act), Just(Other::Note), Just(Other::Blank)])
+            .prop_map(|(conversation, turn)| Step::Other { conversation, turn }),
+        2 => (0usize..CONVERSATIONS, proptest::collection::vec(any::<prop::sample::Index>(), 1..3))
             .prop_map(|(conversation, lines)| Step::Erase { conversation, lines }),
-        1 => (0usize..3).prop_map(|conversation| Step::Rename { conversation }),
-        1 => (0usize..3).prop_map(|conversation| Step::Stop { conversation }),
-        1 => (0usize..3, 0usize..3).prop_map(|(conversation, back)| Step::Rewind { conversation, back }),
-        1 => (0usize..3).prop_map(|conversation| Step::Propose { conversation }),
+        1 => (0usize..CONVERSATIONS).prop_map(|conversation| Step::Rename { conversation }),
+        1 => (0usize..CONVERSATIONS).prop_map(|conversation| Step::Stop { conversation }),
+        1 => (0usize..CONVERSATIONS, 0usize..3).prop_map(|(conversation, back)| Step::Rewind { conversation, back }),
+        1 => (0usize..CONVERSATIONS).prop_map(|conversation| Step::Propose { conversation }),
     ]
 }
 
@@ -111,7 +136,22 @@ fn at(n: u32) -> Datetime {
 }
 
 fn id(n: usize) -> ConversationId {
-    ConversationId::new(format!("2026-10-01-{}", n + 1)).expect("a slug")
+    match n {
+        3 => suzatary_base::conversation_id::DEFAULT.clone(),
+        4 => suzatary_base::conversation_id::SETUP.clone(),
+        5 => suzatary_topics::secretary::build::CONVERSATION.clone(),
+        6 => ConversationId::new("2026-10-01-review").expect("a daily round"),
+        _ => ConversationId::new(format!("2026-10-01-{}", n + 1)).expect("a slug"),
+    }
+}
+
+/// The kind conversation `n`'s writer opens it with (`filed::opened` for the box's own).
+fn kind(n: usize) -> Kind {
+    match n {
+        3 => Kind::Default,
+        4..=6 => Kind::Review,
+        _ => Kind::Topic,
+    }
 }
 
 /// Keys drawn one count past the last, from a count a script may set back. Its last byte is marked
@@ -137,7 +177,7 @@ impl Entropy for Rewound {
 }
 
 /// The store a script writes, through the box's own writes, with the keys a sweep left.
-fn written(script: &[Step]) -> InMemory {
+pub(crate) fn written(script: &[Step]) -> InMemory {
     let held = InMemory::default();
     let entropy = Rewound::default();
     let store = Conversations {
@@ -160,7 +200,7 @@ fn written(script: &[Step]) -> InMemory {
                     at: at(n),
                     title: Words::kept(format!("Topic {conversation}")),
                     model: "a-cli/small".to_owned(),
-                    kind: Kind::Topic,
+                    kind: kind(conversation),
                 },
             )
             .expect("started");
@@ -168,6 +208,53 @@ fn written(script: &[Step]) -> InMemory {
         act(store, step, n);
     }
     held
+}
+
+/// The `n`th step's turn of kind `turn`, and who said it.
+fn other(turn: Other, n: u32) -> (Turn, Option<stamp::Stamp>) {
+    match turn {
+        Other::Calls => (
+            Turn::Model {
+                text: format!("Looking {n}."),
+                calls: vec![suzatary_conversations::secretary::model::ToolCall {
+                    verb: "mail_search".into(),
+                    args: [("q".to_owned(), serde_json::json!("permit"))].into(),
+                }],
+            },
+            None,
+        ),
+        Other::Tool => (
+            Turn::Tool {
+                verb: "mail_search".into(),
+                answer: format!("found {n}"),
+                outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
+                files: Vec::new(),
+            },
+            None,
+        ),
+        Other::Act => (
+            Turn::Act {
+                text: format!("Ada dismissed it {n}"),
+                references: Vec::new(),
+            },
+            Some("ada".into()),
+        ),
+        Other::Note => (
+            Turn::Act {
+                text: format!("The box noted {n}"),
+                references: Vec::new(),
+            },
+            Some(stamp::Stamp::Box),
+        ),
+        Other::Blank => (
+            Turn::Person {
+                text: " \n  ".to_owned(),
+                references: Vec::new(),
+                attachments: Vec::new(),
+            },
+            Some("ada".into()),
+        ),
+    }
 }
 
 /// Step `step`, the `n`th, written into `store` through the box's own writes.
@@ -189,6 +276,14 @@ fn act(store: Conversations<'_>, step: &Step, n: u32) {
                 }
             };
             let by = (!model).then(|| "ada".into());
+            push(Entry::Said {
+                at: at(n),
+                turn,
+                by,
+            });
+        }
+        Step::Other { turn, .. } => {
+            let (turn, by) = other(*turn, n);
             push(Entry::Said {
                 at: at(n),
                 turn,
@@ -247,7 +342,7 @@ fn act(store: Conversations<'_>, step: &Step, n: u32) {
     }
 }
 
-fn prints(held: &InMemory) -> Vec<(Hash, Vec<u8>)> {
+pub(crate) fn prints(held: &InMemory) -> Vec<(Hash, Vec<u8>)> {
     held.lines
         .objects()
         .expect("objects")
@@ -256,7 +351,7 @@ fn prints(held: &InMemory) -> Vec<(Hash, Vec<u8>)> {
         .collect()
 }
 
-fn keys(held: &InMemory) -> Vec<(KeyName, String)> {
+pub(crate) fn keys(held: &InMemory) -> Vec<(KeyName, String)> {
     held.keys
         .names()
         .into_iter()
@@ -642,15 +737,34 @@ fn whole(all: &[std::sync::Arc<Stored>], pages: usize) -> wire::StreamPayload {
     let mut shown: Vec<_> = all
         .iter()
         .flat_map(|stored| {
-            rounds(stored).into_iter().map(move |round| {
-                (
-                    round.opening.1.at,
-                    &stored.id,
-                    round.opening.0,
-                    stored,
-                    round,
+            // A round of nothing but the box's own notes is no round of the owner's.
+            let noted = |said: &suzatary_conversations::secretary::store::Said| {
+                matches!(
+                    (&said.turn, &said.by),
+                    (
+                        Turn::Act { .. }
+                            | Turn::Erased {
+                                shape: suzatary_conversations::secretary::turn_shape::TurnShape::Act { .. },
+                                ..
+                            },
+                        Some(stamp::Stamp::Box)
+                    )
                 )
-            })
+            };
+            rounds(stored)
+                .into_iter()
+                .filter(move |round| {
+                    !(noted(round.opening.1) && round.rest.iter().all(|(_, said)| noted(said)))
+                })
+                .map(move |round| {
+                    (
+                        round.opening.1.at,
+                        &stored.id,
+                        round.opening.0,
+                        stored,
+                        round,
+                    )
+                })
         })
         .collect();
     shown.sort_by(|a, b| (a.0, a.1, a.2).cmp(&(b.0, b.1, b.2)));
@@ -671,7 +785,7 @@ fn whole(all: &[std::sync::Arc<Stored>], pages: usize) -> wire::StreamPayload {
 /// `migrate-scrub` does, after `stale` writes its turns and titles under the rules from before lines
 /// recorded them; then, if `swept`, every key a reseal replaced destroyed; then each erasure of
 /// `after`, whose lines may be first writes or reseals.
-fn resealed(held: &InMemory, stale: &[usize], swept: bool, after: &[Step]) {
+pub(crate) fn resealed(held: &InMemory, stale: &[usize], swept: bool, after: &[Step]) {
     for (n, conversation) in (500u32..).zip(stale) {
         let id = id(*conversation);
         let Ok(read) = transcript::read(held.conversations(), &id) else {
@@ -790,7 +904,7 @@ proptest! {
             &[],
         );
         let draw = |lazy: &mut HeldLines| {
-            stream::stream(skeleton.outlines(), |id, turn, objects| lazy.round(id, turn, objects), &topics, &chosen, pages, &Dress::BARE)
+            stream::stream(skeleton.outlines(), |id, turn, objects| lazy.part(id, Part::Round(turn), objects), &topics, &chosen, pages, &Dress::BARE)
                 .expect("reads")
         };
         let first = draw(&mut lazy);
@@ -926,7 +1040,7 @@ fn the_first_stream_at_the_live_shape_reads_only_its_rounds() {
     let draw = |lazy: &mut HeldLines| {
         stream::stream(
             skeleton.outlines(),
-            |id, turn, objects| lazy.round(id, turn, objects),
+            |id, turn, objects| lazy.part(id, Part::Round(turn), objects),
             &Reading::default(),
             &BTreeSet::new(),
             1,
@@ -977,7 +1091,7 @@ fn a_print_that_does_not_decode_leaves_out_its_round_and_draws_the_rest() {
         lines.hold(prints, &[]);
         stream::stream(
             skeleton.outlines(),
-            |id, turn, objects| lines.round(id, turn, objects),
+            |id, turn, objects| lines.part(id, Part::Round(turn), objects),
             &Reading::default(),
             &BTreeSet::new(),
             1,

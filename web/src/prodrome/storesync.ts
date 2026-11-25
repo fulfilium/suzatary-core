@@ -77,9 +77,19 @@ export namespace storesync {
     return read.v
   }
 
-  // The whole of both stores: the list and a search read every conversation, and say what they left out.
-  export const list = (lane: lanes.Lane = lanes.FIRST): Promise<ConversationsPayload> => over({ type: "Conversations" }, true, lane).then(held)
-  export const search = (q: string, lane: lanes.Lane): Promise<SearchPayload> => over({ type: "Search", q }, true, lane).then(held)
+  // The list, every conversation with its words as the device holds them, and a search over those it holds whole:
+  // neither waits on the box, and both say what they left out.
+  export const list = (lane: lanes.Lane = lanes.FIRST): Promise<ConversationsPayload> =>
+    over({ type: "Conversations" }, true, lane).then(p => {
+      waiting = new Set(p.conversations.flatMap(c => (c.words.held === "read" ? [] : [c.id])))
+      return p
+    })
+  export const search = (q: string, lane: lanes.Lane): Promise<SearchPayload> =>
+    over({ type: "Search", q }, true, lane).then(p => {
+      if (p.searched < p.of || p.counted === "sofar") partial.add(q)
+      else partial.delete(q)
+      return p
+    })
 
   // The stream a filter shows and the topics in use, read in the worker from one holding of the stores.
   export type Streamed = questions.Answer<"Stream"> extends questions.Whole<infer A> ? A : never
@@ -172,6 +182,14 @@ export namespace storesync {
         return bars.dispatch(s.e)
       case "Refused":
         return told(s.why)
+      case "Came": {
+        const was = coming
+        coming = { conversations: new Set([...(was?.conversations ?? []), ...s.conversations]), whole: new Set([...(was?.whole ?? []), ...s.whole]) }
+        if (was !== null) return
+        cameAt = performance.now()
+        requestAnimationFrame(flushCame)
+        return void setTimeout(flushCame, MOVES_MS)
+      }
       case "Moved": {
         const was = moving
         moving = was === null ? s.conversations : both(was, s.conversations)
@@ -203,6 +221,34 @@ export namespace storesync {
   export const hearWorker = (fx: Heard): void => remote.hear(said => heardFromWorker(said, fx))
 
   export const watch = (listener: () => void): (() => void) => moves.subscribe(() => listener())
+
+  // The conversations whose words came to the core, heard once a frame as a move is.
+  type Came = { readonly conversations: ReadonlySet<string>; readonly whole: ReadonlySet<string> }
+  let coming: Came | null = null
+  let cameAt = 0
+  const came = sources.create<Came, Came>({ conversations: new Set(), whole: new Set() }, (_, now) => now)
+  const flushCame = (): void => {
+    if (coming === null) return
+    const now = coming
+    coming = null
+    measure("came:batched", cameAt)
+    came.dispatch(now)
+  }
+
+  // The list's rows still waiting for their words, as its last answer drew them, and each search's query whose last
+  // answer did not read every conversation: what words that come can change.
+  let waiting: ReadonlySet<string> = new Set()
+  const partial = new Set<string>()
+
+  // A move, or words of a conversation that `wants` waits on: what the list and a search read again, since each
+  // answers before its words are held.
+  const watchWords = (wants: (came: Came) => boolean) => (listener: () => void): (() => void) => {
+    const unhear = [watch(listener), came.subscribe(() => (wants(came.state()) ? listener() : undefined))]
+    return () => unhear.forEach(u => u())
+  }
+  export const watchList = watchWords(c => [...c.conversations].some(id => waiting.has(id)))
+  // A conversation a landing made whole is one the last search did not read: only then does it read more.
+  export const watchSearch = (q: string): ((listener: () => void) => () => void) => watchWords(c => c.whole.size > 0 && partial.has(q))
 
   export const watchConversation = (id: string, listener: () => void): (() => void) =>
     moves.subscribe(() => {

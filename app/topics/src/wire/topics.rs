@@ -434,18 +434,33 @@ pub struct UnplacedProposal {
     pub why: store::Unheld,
 }
 
-/// One row of `GET /api/secretary/conversations`.
+/// One row of the conversations' list: what the skeleton says of a conversation, read before any
+/// of its words, and its words as the device holds them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ConversationRow {
     pub id: String,
-    pub title: String,
+    /// As its opening's unsealed shape says, which the skeleton carries: never read from words.
     pub kind: store::Kind,
     pub opened: String,
     pub turns: u32,
-    pub standing: usize,
-    pub unplaced: Vec<UnplacedProposal>,
-    pub last: String,
     pub last_at: String,
+    pub words: RowWords,
+}
+
+/// A row's words: its title, its last line with words and its proposals.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "held", rename_all = "lowercase")]
+pub enum RowWords {
+    Read {
+        title: String,
+        last: String,
+        standing: usize,
+        unplaced: Vec<UnplacedProposal>,
+    },
+    /// The device lacks this many of the lines they are read from, and asks for them.
+    NotHere { lines: usize },
+    /// A line they are read from does not read on this device.
+    Unread {},
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -453,6 +468,21 @@ pub struct SearchPayload {
     pub query: String,
     /// Newest first.
     pub hits: Vec<suzatary_conversations::secretary::search::Hit>,
+    /// How many conversations it read, of the `of` this device knows of: every one only where
+    /// the two are equal and `of` counts every conversation.
+    pub searched: usize,
+    pub of: usize,
+    pub counted: Counted,
+}
+
+/// What a search's `of` counts: every conversation the box holds, or those the device has heard
+/// of while its pull of the skeleton goes on, so more may come.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(rename = "SearchCounted")]
+pub enum Counted {
+    Every,
+    SoFar,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

@@ -417,7 +417,7 @@ impl Stored {
                 self.proposals.len()
             ))
         })?;
-        joined(self, asking, inbox).map_err(|unplaced| {
+        joined(&self.proposals, asking, inbox).map_err(|unplaced| {
             suzatary_base::refusal::Refusal::conflict(format!(
                 "conversation {} names proposal {}, which cannot be read: {}",
                 self.id, unplaced.asking.object, unplaced.why
@@ -429,11 +429,19 @@ impl Stored {
     /// held with why the reading cannot place it, never dropped.
     #[must_use]
     pub fn lines(&self, inbox: &suzatary_inbox::secretary::inbox::Fold) -> Lines {
+        Lines::of(&self.proposals, inbox)
+    }
+}
+
+impl Lines {
+    /// A conversation's `proposals`, every one it made in order, against the inbox's reading.
+    #[must_use]
+    pub fn of(proposals: &[Asking], inbox: &suzatary_inbox::secretary::inbox::Fold) -> Self {
         Lines(
-            self.proposals
+            proposals
                 .iter()
                 .map(|asking| {
-                    joined(self, asking, inbox)
+                    joined(proposals, asking, inbox)
                         .map_or_else(Line::Unplaced, |standing| Line::Placed(Box::new(standing)))
                 })
                 .collect(),
@@ -442,7 +450,7 @@ impl Stored {
 }
 
 fn joined(
-    stored: &Stored,
+    proposals: &[Asking],
     asking: &Asking,
     inbox: &suzatary_inbox::secretary::inbox::Fold,
 ) -> Result<Standing, Unplaced> {
@@ -464,8 +472,7 @@ fn joined(
     };
     let revises = asking.revises.map(|card| super::Revised {
         card,
-        carried: stored
-            .proposals
+        carried: proposals
             .get(card)
             .and_then(|old| inbox.get(&old.object))
             .map_or(0, |old| rows(old).min(rows(object))),

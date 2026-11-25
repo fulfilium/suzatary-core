@@ -8,17 +8,20 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_data::event::Hash;
 
-use crate::secretary::held_lines::HeldLines;
+use crate::secretary::held_lines::{HeldLines, Part};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_form::{Husked, LineDelta, LineFrame, LinePulling, LineReplica};
-use crate::secretary::outlines::{Frontier, NotANode, Outlines, Parsed, Scope};
+use crate::secretary::outline::Rounds;
+use crate::secretary::outlines::{Frontier, Nodes, NotANode, Outlines, Parsed, Scope};
 use crate::secretary::own_line::OwnLine;
+use crate::secretary::row::{self, Row};
 use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
 use prodrome_data::event::{Actor, Envelope};
 use suzatary_base::answer::Renderable;
 use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::connect::TemplateId;
+use suzatary_conversations::secretary::store::NotAConversation;
 use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Title};
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
@@ -1242,15 +1245,32 @@ pub struct Plan<'r> {
 impl HeldReplica {
     /// Every node `scope` reads, of the landed row and of a pull's pieces not landed yet, whose
     /// print is not held, as it was given.
-    #[must_use]
-    pub fn lacking(&self, scope: &Scope) -> Vec<SkeletonNode> {
+    /// Under [`Scope::Titles`], the rows of the landed row's conversations alone, each as far as
+    /// the words held say which lines it reads.
+    pub fn lacking(&mut self, scope: &Scope) -> Vec<SkeletonNode> {
+        let nodes = match scope {
+            Scope::Nodes(nodes) => nodes,
+            Scope::Titles => {
+                let mut lacking = BTreeSet::new();
+                self.listed(|_, read| {
+                    if let Ok((_, Row::Lacking(names))) = read {
+                        lacking.extend(names);
+                    }
+                });
+                return lacking
+                    .iter()
+                    .filter_map(|name| self.outlines.node(name))
+                    .cloned()
+                    .collect();
+            }
+        };
         let pending = self.pending();
         let given: BTreeMap<&Hash, &SkeletonNode> = pending
             .iter()
             .map(|node| (node.name(), node.given()))
             .collect();
         self.outlines
-            .scope(scope, &pending)
+            .scope(nodes, &pending)
             .into_iter()
             .filter(|name| !self.lines.holds(name))
             .filter_map(|name| {
@@ -1292,12 +1312,73 @@ impl HeldReplica {
     /// conversation the tab does not hold.
     pub fn transcript(&mut self, id: &ConversationId) -> Option<Whole> {
         let lacking = self
-            .lacking(&Scope::Conversations(BTreeSet::from([id.clone()])))
+            .lacking(&Scope::Nodes(Nodes::Conversations(BTreeSet::from([
+                id.clone()
+            ]))))
             .len();
         if lacking > 0 {
             return Some(Whole::Lacking(lacking));
         }
         self.lines.transcript(id).map(Whole::Read)
+    }
+
+    /// Each conversation of the landed row by id, with its row as the prints held read it
+    /// ([`row::read`]), or why its lines are no conversation; a row that lacks lines names those
+    /// it lacks.
+    pub fn listed<A>(
+        &mut self,
+        mut each: impl FnMut(&ConversationId, Result<(&Rounds, Row), &NotAConversation>) -> A,
+    ) -> Vec<A> {
+        let lines = &mut self.lines;
+        let mut out = Vec::new();
+        for (id, outline) in self.outlines.outlines() {
+            let read = outline.as_ref().map(|rounds| {
+                let row = match row::read(rounds, |step, objects| {
+                    lines.part(id, Part::Row(step), objects)
+                }) {
+                    Row::Lacking(names) => Row::Lacking(
+                        names
+                            .into_iter()
+                            .filter(|name| !lines.holds(name))
+                            .collect(),
+                    ),
+                    read @ (Row::Read(_) | Row::Unread) => read,
+                };
+                (rounds, row)
+            });
+            out.push(each(id, read));
+        }
+        out
+    }
+
+    /// Each conversation of the landed row whose every line, and every node they rest on, is
+    /// held, read as its transcript ([`HeldReplica::transcript`]), by id; beside them how many
+    /// conversations the landed row names. What a search over the words held reads.
+    pub fn held_whole(
+        &mut self,
+    ) -> (
+        Vec<Result<std::sync::Arc<crate::secretary::transcript::Transcript>, NotAConversation>>,
+        usize,
+    ) {
+        // A conversation with a line not held is passed over before its closure is walked.
+        let short: BTreeSet<String> = self
+            .lacking(&Scope::Nodes(Nodes::Whole))
+            .into_iter()
+            .filter_map(|node| match node.header {
+                crate::wire::lines::NodeHeader::Line { conversation, .. } => Some(conversation),
+                crate::wire::lines::NodeHeader::Structure { .. } => None,
+            })
+            .collect();
+        let ids: Vec<ConversationId> = self.outlines.outlines().map(|(id, _)| id.clone()).collect();
+        let read = ids
+            .iter()
+            .filter(|id| !short.contains(id.as_str()))
+            .filter_map(|id| match self.transcript(id)? {
+                Whole::Read(read) => Some(read),
+                Whole::Lacking(_) => None,
+            })
+            .collect();
+        (read, ids.len())
     }
 
     /// The nodes a pull's pieces read that the landed row's readings do not hold.

@@ -2,7 +2,7 @@
 // and keeps each move it answers on the device as its frame (`replicalog`), holding no node, key or head of its own.
 
 import type { Lines } from "./core"
-import { CoreError, admitsOf, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf } from "./core"
+import { CoreError, admitsOf, heldOf, holdAdmitted, husksOf, lackingIn, lackingOf, lacksIn, movedOf, owedOf, planOf, wholeOf } from "./core"
 import content from "./content"
 import replicasync from "./replicasync"
 import copies from "./copies"
@@ -11,7 +11,7 @@ import type heads from "./heads"
 import keep from "./keep"
 import ownlines from "./ownlines"
 import d from "../wire/decoder"
-import type lines from "./lines"
+import lines from "./lines"
 import { CONTENT } from "./objects"
 import phases from "./phases"
 import pieces from "./pieces"
@@ -26,17 +26,20 @@ import time from "../app/time"
 import { measure } from "../app/perf"
 import http from "../wire/http"
 import storereads from "../wire/storereads"
-import type { SkeletonPayload } from "../wire/generated/wire"
+import type { SkeletonNode, SkeletonPayload } from "../wire/generated/wire"
 
 export namespace linesync {
   // Which conversations a move touched, or all of them after a reset or a later epoch.
   export type Moved = "All" | readonly string[]
 
-  // Who hears the lines: a reading's leavings by reader, a pull's progress, and a move.
+  // Who hears the lines: a reading's leavings by reader, a pull's progress, a move, and the words of some conversations
+  // handed to the core.
   export type Effects = {
     readonly told: (reader: string, left: excluded.Left) => void
     readonly bars: (e: progress.Event) => void
     readonly moved: (conversations: Moved) => void
+    // Of them, those whose every line and every node they rest on is now held: what a search over part reads more of.
+    readonly came: (conversations: readonly string[], whole: readonly string[]) => void
     readonly replaced: () => void
   }
 
@@ -46,6 +49,15 @@ export namespace linesync {
     readonly earlier: () => Promise<boolean>
     // `read` once every line `scope` reads is held; the scope is asked again after each fetch.
     readonly over: <A>(scope: () => lines.Scope, read: () => A) => Promise<A>
+    // Every line `scope` reads asked for as `over` asks; settles once what the device keeps of them is held, the rest
+    // coming from the box behind it, each answer said to have come (`Effects.came`). A fetch that fails is asked again
+    // after a wait that doubles, as a pull is.
+    readonly asked: (scope: () => lines.Scope) => Promise<void>
+    // Whether a pull of the skeleton has ended whole since the lines were last started over: until then the skeleton
+    // may not name every conversation.
+    readonly whole: () => boolean
+    // The content of `nodes` held, asked behind the page's own lines; rejects as a fetch does.
+    readonly fetched: (nodes: readonly SkeletonNode[]) => Promise<void>
     readonly holds: (id: string) => boolean
     // Whether a page is shown: a prefetch waits while none is, and a page hidden may be closed, so the log is compacted.
     readonly shown: (on: boolean) => Promise<void>
@@ -90,6 +102,7 @@ export namespace linesync {
     const moved = (said: string): void => fx.moved(movedOf(said))
 
     let shown = false
+    const came = (touched: readonly string[]): void => fx.came(touched, wholeOf(held, touched))
     const fetcher = content.fetcher({
       ask: hashes => storereads.content("lines", hashes),
       asked: bytes => fx.bars({ type: "Asked", name: "lines", bytes }),
@@ -97,8 +110,20 @@ export namespace linesync {
       lost: bytes => fx.bars({ type: "Lost", name: "lines", bytes }),
       atOnce: () => http.atOnce(content.AT_ONCE),
       lacking: names => lackingOf(held, names),
-      held: rows => Promise.resolve(holdAdmitted(held, rows)),
-      husked: husks => stepped(held.take_husks(JSON.stringify(husks))),
+      held: rows => {
+        const touched = holdAdmitted(held, rows)
+        if (touched.length > 0) came(touched)
+        return Promise.resolve()
+      },
+      // A husk stands where a print would: words that came, no move of the skeleton.
+      husked: async husks => {
+        const step = held.take_husks(JSON.stringify(husks))
+        const [delta, said] = [step.delta, movedOf(step.moved)]
+        step.free()
+        if (said === "All") fx.moved(said)
+        else if (said.length > 0) came(said)
+        await append(delta)
+      },
       shown: () => shown,
     })
     const fetching = fetcher.fetch
@@ -118,13 +143,26 @@ export namespace linesync {
     // The first reading's end: every prefetch waits for it, so the first draw reads first.
     let ended = (): void => {}
     const firstRead = new Promise<void>(done => (ended = done))
-    // The plan's content the device lacks, fetched behind every reading's fetch, one answer at a time.
+    // Whether the rows' lines are still owed to this copy of the lines: once per copy, so a later landing's prefetch
+    // does not race a page's own fetch of a new line.
+    let titlesOwed = true
+    // What the device lacks of every conversation's row (once), then of the plan, fetched behind every reading's fetch,
+    // one answer at a time: a list drawn next reads its rows from the device, and the plan is the bulk.
     const prefetch = serial.of(async (): Promise<void> => {
       await firstRead
       if (!idb.available()) return
-      await fetching("Ahead", (await planned()).ahead).catch(() => {
-        ahead = null
-      })
+      const titles = titlesOwed ? lackingIn(held, lines.TITLES) : []
+      await fetching("Ahead", titles)
+        .then(() => {
+          titlesOwed = false
+          // Kept on the device alone: a list waiting on these rows reads them from there.
+          const touched = [...new Set(titles.flatMap(n => (n.header.node === "line" ? [n.header.conversation] : [])))]
+          if (touched.length > 0) came(touched)
+        })
+        .then(async () => fetching("Ahead", (await planned()).ahead))
+        .catch(() => {
+          ahead = null
+        })
     })
     const prefetched = (heads: string): void => {
       if (ahead === heads) return
@@ -371,12 +409,16 @@ export namespace linesync {
     })
 
     let landing = awaited()
+    // Whether a pull has ended whole since the lines last started over.
+    let everWhole = false
     // A later epoch overtook what is held: every row reset, and a wait on a landing waits on the next.
     const startOver = async (): Promise<void> => {
       await stepped(held.start_over())
       replaced()
     }
     const replaced = (): void => {
+      everWhole = false
+      titlesOwed = true
       const was = landing
       landing = awaited()
       was.done("Replaced")
@@ -461,6 +503,7 @@ export namespace linesync {
       }
       fx.bars({ type: "Pulled", name: NAME })
       if (ended.type === "Whole") {
+        everWhole = true
         // The box's own copy, taken whole from nothing, that is not closed under its parents: no start-over can close it,
         // so it is held unchanged and said once.
         if (fromNothing && !open && !held.closed()) {
@@ -483,8 +526,26 @@ export namespace linesync {
     // A replaced landing is waited on through its replacement; a landed one ends the wait.
     const whole = (): Promise<void> => (held.heard() ? Promise.resolve() : landing.once.then(how => (how === "Landed" ? undefined : whole())))
 
+    // The scopes `asked` is fetching behind its answer, each once at a time; one whose fetch failed is asked again
+    // after `wait`, which doubles to a minute.
+    const asking = new Set<string>()
+    const behind = (scope: () => lines.Scope, wait: number): void => {
+      const key = JSON.stringify(scope())
+      if (asking.has(key)) return
+      asking.add(key)
+      void over(scope, () => undefined).then(
+        () => asking.delete(key),
+        () => {
+          asking.delete(key)
+          setTimeout(() => behind(scope, Math.min(wait * 2, AGAIN_MS.most)), wait)
+        },
+      )
+    }
+    // A conversation's lines, or the stream's, go first; the rows and a search's whole store behind them.
+    const laneOf = (scope: lines.Scope): content.Lane => (scope.type === "Whole" || scope.type === "Titles" ? "Behind" : "First")
+
     const over = async <A>(scope: () => lines.Scope, read: () => A): Promise<A> => {
-      const lane = scope().type === "Whole" ? "Behind" : "First"
+      const lane = laneOf(scope())
       try {
         for (;;) {
           const need = lackingIn(held, scope())
@@ -534,6 +595,14 @@ export namespace linesync {
       },
       earlier: () => restored.get().then(() => log.aside().then(a => a.type === "Val" && a.v.earlier)),
       over,
+      asked: scope => {
+        // Begun before `over` asks for the same names, so this is the call that reads them from the device.
+        const device = fetcher.local(laneOf(scope()), lackingIn(held, scope()))
+        behind(scope, AGAIN_MS.first)
+        return device
+      },
+      whole: () => everWhole,
+      fetched: nodes => fetching("Behind", nodes),
       holds: id => held.holds(id),
       shown: on => {
         shown = on

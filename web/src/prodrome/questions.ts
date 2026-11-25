@@ -24,6 +24,7 @@ import {
   functionsOf,
   holdIn,
   inboxOf,
+  lackingIn,
   linesLeft,
   linked,
   linker,
@@ -142,14 +143,17 @@ export namespace questions {
     Reset: { q: { readonly store: stores.Name }; a: readonly string[] }
     // Says what it was priced without as the inbox's reader.
     Proposals: { q: { readonly at: string; readonly memory: MemoryPayload | null }; a: text.Text<{ readonly payload: InboxProposalsPayload; readonly held: readonly string[] }> }
-    Conversations: { q: Record<never, never>; a: Whole<ConversationsPayload> }
+    // Every conversation the skeleton holds, each row as far as the device holds its words, asked for behind it.
+    Conversations: { q: Record<never, never>; a: ConversationsPayload }
     Conversation: { q: { readonly id: string; readonly window: Window; readonly memory: MemoryPayload | null }; a: One }
     // Read back to the turn it must reach (`grouped.covering`), grouped into rounds on the owner's days in `zone`.
     Window: {
       q: { readonly id: string; readonly window: grouped.Asked; readonly memory: MemoryPayload | null; readonly drawn: readonly Drawn[]; readonly zone: time.Zone }
       a: Grouped
     }
-    Search: { q: { readonly q: string }; a: Whole<SearchPayload> }
+    // Over the conversations whose every line the device holds, saying how many of how many; the rest asked for behind
+    // it.
+    Search: { q: { readonly q: string }; a: SearchPayload }
     Left: { q: Record<never, never>; a: excluded.T }
     // The device's rendered blocks: the worker alone reads and writes them.
     Blocks: { q: { readonly keys: readonly string[] }; a: (string | null)[] }
@@ -281,7 +285,14 @@ export namespace questions {
       ready(stores, turn)
         .then(() => sync.over(scope, (): Whole<A> => ({ type: "Held", v: read() })))
         .catch((e: unknown): Whole<A> => notHere(scope(), e))
-    const whole = <A>(turn: Turn, read: () => A): Promise<Whole<A>> => scoped(turn, () => lines.WHOLE, read)
+    // The conversations whose rows the last list drew with their words.
+    let drawn: ReadonlySet<string> = new Set()
+    // Read once what the device keeps of `scope` is held, never waiting on the box.
+    const local = <A>(turn: Turn, scope: lines.Scope, read: () => A): Promise<A> =>
+      ready("All", turn)
+        .then(() => sync.asked(() => scope))
+        .then(turn)
+        .then(read)
     // Where the lines hold none of `id`, the device may not have pulled it yet; only a whole pull says the box holds none.
     const conversation = async <A>(id: string, turn: Turn, read: () => Promise<A> | A): Promise<A | Unheld> => {
       await ready("All", turn)
@@ -426,7 +437,27 @@ export namespace questions {
             return text.object({ payload: read.text, held: text.printed(heldNames()) })
           })
         case "Conversations":
-          return whole(turn, () => listOfLines(held, proposals()))
+          return local(turn, lines.TITLES, () => listOfLines(held, proposals())).then(async (now): Promise<ConversationsPayload> => {
+            // A row once drawn with its words keeps them: where a new line it reads is not here yet, the answer waits
+            // for that row's own lines (or for their fetch to fail), and for no other row's.
+            let read = now
+            for (let asked = ""; ; ) {
+              const fell = new Set(read.conversations.flatMap(c => (c.words.held !== "read" && drawn.has(c.id) ? [c.id] : [])))
+              const need = fell.size === 0 ? [] : lackingIn(held, lines.TITLES).filter(n => n.header.node === "line" && fell.has(n.header.conversation))
+              const names = need.map(n => n.hash).join(",")
+              if (need.length === 0 || names === asked) break
+              asked = names
+              const came = await sync.fetched(need).then(
+                () => true,
+                () => false,
+              )
+              await turn()
+              read = listOfLines(held, proposals())
+              if (!came) break
+            }
+            drawn = new Set(read.conversations.flatMap(c => (c.words.held === "read" ? [c.id] : [])))
+            return read
+          })
         case "Conversation": {
           const { id, window, memory } = q
           return conversation(id, turn, () => sync.over(() => lines.one(id), (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })))
@@ -453,7 +484,7 @@ export namespace questions {
             .catch((e: unknown): Grouped => notHere(lines.one(id), e))
         }
         case "Search":
-          return whole(turn, () => searchOf(held, q.q))
+          return local(turn, lines.WHOLE, () => searchOf(held, q.q, sync.whole()))
         // Asked after a reading, so it says at least what that reading left out.
         case "Left":
           return excluded.join(excludedOf(proposals()), linesLeft(held))

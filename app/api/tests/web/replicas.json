@@ -228,7 +228,8 @@
             "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0"
           ],
           "step": {
-            "step": "opened"
+            "step": "opened",
+            "kind": "topic"
           },
           "writer": "box"
         }
@@ -410,7 +411,8 @@
             "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
           ],
           "step": {
-            "step": "opened"
+            "step": "opened",
+            "kind": "topic"
           },
           "writer": "box"
         }
@@ -555,7 +557,8 @@
             "2791831bfc6e6e3c03455addf475f278e8df6d907ef1e396c02a1fd088d4e25a"
           ],
           "step": {
-            "step": "opened"
+            "step": "opened",
+            "kind": "topic"
           },
           "writer": "box"
         }
@@ -637,8 +640,8 @@
       "ff234b439627f020679367b7f4bd920e93f0e5b9a379eb9877c465dbaa96b9c1": "000102030405060008090a0b0c0d0e08101112131415161018191a1b1c1d1e18"
     },
     "rest": 0,
-    "size": 8033,
-    "weight": 8033
+    "size": 8072,
+    "weight": 8072
   },
   "keys": {
     "1b2e08206305d4481c96d6d008d19a08e2696ec060534ed4c6c8d54e702ceec0": "000102030405060208090a0b0c0d0e0a101112131415161218191a1b1c1d1e1a",
@@ -699,7 +702,7 @@
       }
     ]
   },
-  "list": "{\"conversations\":[{\"id\":\"trains\",\"title\":\"Trains\",\"kind\":\"topic\",\"opened\":\"2026-09-02T12:03:20\",\"turns\":5,\"standing\":1,\"unplaced\":[],\"last\":\"Noted\",\"last_at\":\"2026-09-02T12:06:40\"},{\"id\":\"lagging\",\"title\":\"Three proposals\",\"kind\":\"topic\",\"opened\":\"2026-09-02T12:00:00\",\"turns\":0,\"standing\":1,\"unplaced\":[{\"index\":0,\"why\":\"notHeld\"},{\"index\":1,\"why\":\"unasked\"}],\"last\":\"\",\"last_at\":\"2026-09-02T12:00:00\"},{\"id\":\"about-the-deed\",\"title\":\"About the deed\",\"kind\":\"topic\",\"opened\":\"2026-09-02T12:00:00\",\"turns\":4,\"standing\":1,\"unplaced\":[],\"last\":\"Nothing else today.\",\"last_at\":\"2026-09-02T12:01:35\"}]}",
+  "list": "{\"conversations\":[{\"id\":\"trains\",\"kind\":\"topic\",\"opened\":\"2026-09-02T12:03:20\",\"turns\":5,\"last_at\":\"2026-09-02T12:06:40\",\"words\":{\"held\":\"read\",\"title\":\"Trains\",\"last\":\"Noted\",\"standing\":1,\"unplaced\":[]}},{\"id\":\"lagging\",\"kind\":\"topic\",\"opened\":\"2026-09-02T12:00:00\",\"turns\":0,\"last_at\":\"2026-09-02T12:00:00\",\"words\":{\"held\":\"read\",\"title\":\"Three proposals\",\"last\":\"\",\"standing\":1,\"unplaced\":[{\"index\":0,\"why\":\"notHeld\"},{\"index\":1,\"why\":\"unasked\"}]}},{\"id\":\"about-the-deed\",\"kind\":\"topic\",\"opened\":\"2026-09-02T12:00:00\",\"turns\":4,\"last_at\":\"2026-09-02T12:01:35\",\"words\":{\"held\":\"read\",\"title\":\"About the deed\",\"last\":\"Nothing else today.\",\"standing\":1,\"unplaced\":[]}}]}",
   "proposals": "{\"at\":\"2026-09-02T12:06:40\",\"proposals\":[{\"id\":\"pe0202384e0620cf052da2283f47c43c8\",\"asked\":\"proposal:lagging/2\",\"serves\":null,\"headline\":\"email counsel@example.test — Your lease\",\"by\":{\"kind\":\"secretary\"},\"why\":\"the deed is due\",\"state\":{\"kind\":\"open\"},\"value\":\"absent\",\"at\":\"2026-09-02T12:00:00\"},{\"id\":\"p86f99cf7e3106689524da6e1f3bff7c5\",\"asked\":\"proposal:about-the-deed/0\",\"serves\":\"todo:life/email-harrow\",\"headline\":\"email counsel@example.test — Your deed\",\"by\":{\"kind\":\"secretary\"},\"why\":\"the deed is due and nothing has gone out yet\",\"state\":{\"kind\":\"open\"},\"value\":0.66,\"at\":\"2026-09-02T12:00:21\"},{\"id\":\"p7bf745230679b9064803a823f584469b\",\"asked\":\"proposal:trains/0\",\"serves\":null,\"headline\":\"email counsel@example.test — Trains\",\"by\":{\"kind\":\"secretary\"},\"why\":\"the meeting moved\",\"state\":{\"kind\":\"cancelled\",\"at\":\"2026-09-02T12:06:40\"},\"value\":\"absent\",\"at\":\"2026-09-02T12:03:24\"},{\"id\":\"pda3d123aec30ef75a018ccd6ad1dc1fa\",\"asked\":\"proposal:trains/1\",\"serves\":null,\"headline\":\"remember (person): Mira Solberg keeps the books\",\"by\":{\"kind\":\"secretary\"},\"why\":\"her signature says so\",\"state\":{\"kind\":\"open\"},\"value\":\"absent\",\"at\":\"2026-09-02T12:03:25\"},{\"id\":\"p7631d4dbe886e2eda86186f981faa87a\",\"asked\":\"proposal:trains/2\",\"serves\":null,\"headline\":\"remember (person): its words are deleted\",\"by\":{\"kind\":\"secretary\"},\"why\":\"her signature says so\",\"state\":{\"kind\":\"cancelled\",\"at\":\"2026-09-02T12:06:40\"},\"value\":\"absent\",\"at\":\"2026-09-02T12:03:26\"}],\"failed\":[]}",
   "windows": [
     {
@@ -762,15 +765,15 @@
   "searches": [
     {
       "q": "deed",
-      "answer": "{\"query\":\"deed\",\"hits\":[{\"conversation\":\"about-the-deed\",\"title\":\"About the deed\",\"kind\":\"topic\",\"turn\":0,\"at\":\"2026-09-02T12:00:01\",\"side\":\"person\",\"excerpt\":\"email Harrow about the deed\"}]}"
+      "answer": "{\"query\":\"deed\",\"hits\":[{\"conversation\":\"about-the-deed\",\"title\":\"About the deed\",\"kind\":\"topic\",\"turn\":0,\"at\":\"2026-09-02T12:00:01\",\"side\":\"person\",\"excerpt\":\"email Harrow about the deed\"}],\"searched\":3,\"of\":3,\"counted\":\"every\"}"
     },
     {
       "q": "EARLY",
-      "answer": "{\"query\":\"EARLY\",\"hits\":[{\"conversation\":\"trains\",\"title\":\"Trains\",\"kind\":\"topic\",\"turn\":2,\"at\":\"2026-09-02T12:03:23\",\"side\":\"answer\",\"excerpt\":\"= Noted The early train, from now on.\"},{\"conversation\":\"trains\",\"title\":\"Trains\",\"kind\":\"topic\",\"turn\":0,\"at\":\"2026-09-02T12:03:21\",\"side\":\"person\",\"excerpt\":\"remember that I take the early train\"}]}"
+      "answer": "{\"query\":\"EARLY\",\"hits\":[{\"conversation\":\"trains\",\"title\":\"Trains\",\"kind\":\"topic\",\"turn\":2,\"at\":\"2026-09-02T12:03:23\",\"side\":\"answer\",\"excerpt\":\"= Noted The early train, from now on.\"},{\"conversation\":\"trains\",\"title\":\"Trains\",\"kind\":\"topic\",\"turn\":0,\"at\":\"2026-09-02T12:03:21\",\"side\":\"person\",\"excerpt\":\"remember that I take the early train\"}],\"searched\":3,\"of\":3,\"counted\":\"every\"}"
     },
     {
       "q": "nothing like it",
-      "answer": "{\"query\":\"nothing like it\",\"hits\":[]}"
+      "answer": "{\"query\":\"nothing like it\",\"hits\":[],\"searched\":3,\"of\":3,\"counted\":\"every\"}"
     }
   ]
 }

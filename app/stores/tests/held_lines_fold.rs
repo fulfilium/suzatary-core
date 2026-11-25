@@ -242,7 +242,10 @@ fn a_key_taken_out_leaves_no_words_it_opened() {
         .filter(|(_, object)| object.event().is_some())
         .map(|(name, _)| name)
         .collect();
-    assert!(matches!(lines.round(&id, 0, &names), Held::Opened(_)));
+    assert!(matches!(
+        lines.part(&id, Part::Round(0), &names),
+        Held::Opened(_)
+    ));
     assert!(lines.read().0.is_ok());
     let says = "a title nobody else says";
     assert!(

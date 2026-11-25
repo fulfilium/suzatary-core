@@ -1029,8 +1029,8 @@ fn weight(node: &SkeletonNode) -> usize {
                             .sum::<usize>()
                             + run.as_str().len()
                     }
-                    Step::Opened
-                    | Step::Asks
+                    Step::Opened { kind } => kind.map_or(0, |kind| kind.as_str().len() + 8),
+                    Step::Asks
                     | Step::Edits
                     | Step::Noted
                     | Step::Answers

@@ -9,6 +9,7 @@ use crate::secretary::answers::{AnswerError, Answers};
 use crate::wire::topics as wire;
 use suzatary_base::answer::Renderable;
 use suzatary_base::capability::Datetime;
+use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::{Answered, Refusal};
 use suzatary_connect::connect::AccountKind;
@@ -17,7 +18,9 @@ use suzatary_connect::connect::RoutineId;
 use suzatary_connect::connect::Table;
 use suzatary_conversations::secretary::about;
 use suzatary_conversations::secretary::model::Turn;
-use suzatary_conversations::secretary::store::{Said, Standing, Stored};
+use suzatary_conversations::secretary::store::{
+    Lines, NotAConversation, Said, Standing, Stored, heading,
+};
 use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_held::secretary::attached;
 use suzatary_held::secretary::attachment_source::AttachmentSource;
@@ -33,6 +36,8 @@ use suzatary_inbox::wire::inbox::{
     Cached, Card, CardFile, CodingFile, CodingSession, FileFrom, HeldFrom, HeldIn, ProposedAct,
     ProposedObject, RememberWords, ReplacedFact,
 };
+use suzatary_lines::secretary::outline::Rounds;
+use suzatary_lines::secretary::row::{self, Row};
 use suzatary_memory::secretary::memory;
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::salted_text::TextName;
@@ -65,7 +70,7 @@ impl Window {
 /// In turns.
 pub const DEFAULT_TURN_WINDOW: usize = 60;
 
-pub(crate) const SEARCH_LIMIT: usize = 50;
+pub const SEARCH_LIMIT: usize = 50;
 
 /// What a reading takes from beyond the two stores.
 #[derive(Clone, Copy)]
@@ -184,7 +189,9 @@ pub fn block_named(stored: &Stored, sha: &str) -> Option<String> {
     })
 }
 
-/// Newest first.
+/// Newest first, each row read from its whole conversation. No route serves it and no device reads
+/// it: it is the list [`listed`] equals wherever a row's words are held, the oracle of the laws
+/// (`app/api/tests/listed.rs`) and of the web vectors.
 #[must_use]
 pub fn conversations<S: std::borrow::Borrow<Stored>>(
     stored: &[S],
@@ -288,12 +295,15 @@ pub fn waiting(fold: &inbox::Fold, set: &ChainSet<'_>) -> Vec<wire::InboxProposa
     open
 }
 
-/// Every conversation's turns holding `q`, newest first.
+/// The turns of every conversation of `stored` holding `q`, newest first, said as read from
+/// those conversations of the `of` a reader knows of, which `counted` says.
 ///
 /// # Errors
 /// A blank or over-long `q`.
 pub fn search<S: std::borrow::Borrow<Stored>>(
     stored: &[S],
+    of: usize,
+    counted: wire::Counted,
     q: &str,
 ) -> Answered<wire::SearchPayload> {
     let needle = suzatary_conversations::secretary::search::Needle::new(q)
@@ -307,6 +317,9 @@ pub fn search<S: std::borrow::Borrow<Stored>>(
     Ok(wire::SearchPayload {
         query: q.trim().to_owned(),
         hits,
+        searched: stored.len(),
+        of,
+        counted,
     })
 }
 
@@ -408,20 +421,75 @@ pub fn unplaced(
 }
 
 fn row(stored: &Stored, fold: &inbox::Fold) -> wire::ConversationRow {
-    let lines = stored.lines(fold);
     wire::ConversationRow {
         id: stored.id.as_str().to_owned(),
-        title: stored.heading().into_owned(),
         kind: stored.kind,
         opened: stamp(stored.opened),
-        last: last_line(stored),
         last_at: stamp(stored.turns.last().map_or(stored.opened, |said| said.at)),
-        turns: u32::try_from(stored.turns.len()).unwrap_or(u32::MAX),
+        turns: count(stored.turns.len()),
+        words: read_words(&stored.title, &stored.lines(fold), last_line(stored)),
+    }
+}
+
+/// Every conversation of a replica as [`listed_row`] reads it, by id, or why its lines are no
+/// conversation: newest first, where both are held the list [`conversations`] reads.
+///
+/// # Errors
+/// The first conversation, by id, whose lines are no conversation, as [`conversations`] fails.
+pub fn listed(
+    rows: Vec<Result<wire::ConversationRow, NotAConversation>>,
+) -> Result<wire::ConversationsPayload, NotAConversation> {
+    let mut conversations = rows.into_iter().collect::<Result<Vec<_>, _>>()?;
+    conversations.reverse();
+    Ok(wire::ConversationsPayload { conversations })
+}
+
+/// Conversation `id`'s row, read from its skeleton's outline and `row`, the few lines its words
+/// are read from (`suzatary_lines::secretary::row`), never from the whole conversation.
+#[must_use]
+pub fn listed_row(
+    id: &ConversationId,
+    rounds: &Rounds,
+    row: Row,
+    fold: &inbox::Fold,
+) -> wire::ConversationRow {
+    let words = match row {
+        Row::Read(lines) => read_words(
+            &lines.title,
+            &Lines::of(&lines.proposals, fold),
+            lines
+                .last
+                .and_then(|said| line_of(&said.turn))
+                .unwrap_or_default(),
+        ),
+        Row::Lacking(lacking) => wire::RowWords::NotHere {
+            lines: lacking.len(),
+        },
+        Row::Unread => wire::RowWords::Unread {},
+    };
+    wire::ConversationRow {
+        id: id.as_str().to_owned(),
+        kind: rounds.kind(),
+        opened: stamp(rounds.opened()),
+        last_at: stamp(row::last_at(rounds)),
+        turns: count(rounds.said().len()),
+        words,
+    }
+}
+
+fn count(turns: usize) -> u32 {
+    u32::try_from(turns).unwrap_or(u32::MAX)
+}
+
+fn read_words(title: &words::Words<String>, lines: &Lines, last: String) -> wire::RowWords {
+    wire::RowWords::Read {
+        title: heading(title).into_owned(),
+        last,
         standing: lines
             .standings()
             .filter(|standing| standing.object.reading.performs())
             .count(),
-        unplaced: unplaced(&lines),
+        unplaced: unplaced(lines),
     }
 }
 
@@ -464,20 +532,29 @@ fn announced(stored: &Stored, index: usize, standing: &Standing) -> Option<Strin
 }
 
 fn last_line(stored: &Stored) -> String {
-    let line = stored
+    stored
         .live()
         .into_iter()
         .rev()
-        .find_map(|(_, said)| match &said.turn {
-            Turn::Person { text, .. } => text.lines().map(str::trim).find(|line| !line.is_empty()),
-            Turn::Model { text, calls } if calls.is_empty() => {
-                crate::secretary::title::typst_prose_line(text)
-                    .or_else(|| text.lines().map(str::trim).find(|line| !line.is_empty()))
-            }
-            Turn::Model { .. } | Turn::Tool { .. } | Turn::Act { .. } | Turn::Erased { .. } => None,
-        })
-        .unwrap_or("");
-    line.chars().take(120).collect()
+        .find_map(|(_, said)| line_of(&said.turn))
+        .unwrap_or_default()
+}
+
+/// The line of `turn`'s words a list shows, the first 120 characters of its first line with
+/// words (of an answer, its first line of prose); none for a turn with no words, or none but
+/// blank lines.
+fn line_of(turn: &Turn) -> Option<String> {
+    use suzatary_conversations::secretary::search::{Side, words};
+    fn first(text: &str) -> Option<&str> {
+        text.lines().map(str::trim).find(|line| !line.is_empty())
+    }
+    let line = match words(turn)? {
+        (Side::Person, text) => first(text),
+        (Side::Answer, text) => {
+            crate::secretary::title::typst_prose_line(text).or_else(|| first(text))
+        }
+    }?;
+    Some(line.chars().take(120).collect())
 }
 
 /// `[max(0, before - limit), before)` of a sequence of length `total`.

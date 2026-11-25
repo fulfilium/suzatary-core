@@ -19,8 +19,12 @@ use suzatary_memory::secretary::locked_text::KeyName;
 #[serde(tag = "step", rename_all = "lowercase")]
 #[ts(rename = "LineStep")]
 pub enum Step {
-    /// Opens the conversation; a later opening line moves nothing.
-    Opened,
+    /// Opens the conversation; a later opening line moves nothing. `kind` is what it is for, as
+    /// its unsealed shape stores it; none on a line that stores no kind, whose kind its
+    /// conversation's id says (`line_shape::unkinded`).
+    Opened {
+        kind: Option<suzatary_conversations::secretary::store::Kind>,
+    },
     /// A turn that opens a round: a person's, an act's, or the act a stop reads as.
     Asks,
     /// An edit's own question: `Asks`, and takes up the `Again` it rests on.
@@ -87,7 +91,10 @@ impl Step {
     #[must_use]
     pub fn of(shape: &LineShape) -> Self {
         match shape {
-            LineShape::Opened { .. } | LineShape::SetUp { .. } => Step::Opened,
+            LineShape::Opened { kind, .. } => Step::Opened { kind: *kind },
+            LineShape::SetUp { .. } => Step::Opened {
+                kind: Some(suzatary_conversations::secretary::store::Kind::Topic),
+            },
             LineShape::Said { turn, by, saying } => match turn {
                 TurnShape::Act { .. } if *by == Some(Stamp::Box) => Step::Noted,
                 TurnShape::Person { .. } | TurnShape::Act { .. } => match saying {

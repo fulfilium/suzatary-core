@@ -93,7 +93,7 @@ const read = (objects: readonly Named[], scope: Extract<lines.Scope, { readonly 
     held.hold(objectsOf(objects), "[]")
     landed(held, [], box.keys)
     return scope.type === "Whole"
-      ? JSON.stringify([listOfLines(held, proposals), searchOf(held, "draft"), searchOf(held, "train")])
+      ? JSON.stringify([listOfLines(held, proposals), searchOf(held, "draft", true), searchOf(held, "train", true)])
       : JSON.stringify(scope.ids.map(id => conversationOf(held, proposals, id, {}, null)))
   } catch (e: unknown) {
     return `refused: ${String(e)}`

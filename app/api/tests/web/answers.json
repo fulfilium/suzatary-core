@@ -2051,35 +2051,44 @@
           {
             "id": "every-stage",
             "kind": "topic",
-            "last": "",
             "last_at": "2026-09-02T12:00:00",
             "opened": "2026-09-02T12:00:00",
-            "standing": 2,
-            "title": "Every stage",
             "turns": 0,
-            "unplaced": []
+            "words": {
+              "held": "read",
+              "last": "",
+              "standing": 2,
+              "title": "Every stage",
+              "unplaced": []
+            }
           },
           {
             "id": "every-line",
             "kind": "topic",
-            "last": "and the beans after that?",
             "last_at": "2026-09-02T12:03:40",
             "opened": "2026-09-02T12:03:20",
-            "standing": 0,
-            "title": "The garden, by week",
             "turns": 8,
-            "unplaced": []
+            "words": {
+              "held": "read",
+              "last": "and the beans after that?",
+              "standing": 0,
+              "title": "The garden, by week",
+              "unplaced": []
+            }
           },
           {
             "id": "about-the-deed",
             "kind": "topic",
-            "last": "Nothing else today.",
             "last_at": "2026-09-02T12:01:35",
             "opened": "2026-09-02T12:00:00",
-            "standing": 1,
-            "title": "About the deed",
             "turns": 4,
-            "unplaced": []
+            "words": {
+              "held": "read",
+              "last": "Nothing else today.",
+              "standing": 1,
+              "title": "About the deed",
+              "unplaced": []
+            }
           }
         ]
       },
@@ -4952,6 +4961,7 @@
   "SearchPayload": [
     {
       "value": {
+        "counted": "every",
         "hits": [
           {
             "at": "2026-09-02T12:00:01",
@@ -4963,7 +4973,9 @@
             "turn": 0
           }
         ],
-        "query": "deed"
+        "of": 3,
+        "query": "deed",
+        "searched": 3
       },
       "maps": []
     }
@@ -5018,6 +5030,7 @@
               "kind": "Opened",
               "node": "line",
               "step": {
+                "kind": "topic",
                 "step": "opened"
               },
               "writer": "box"
@@ -5030,8 +5043,8 @@
         ],
         "rest": 0,
         "since": "Known",
-        "size": 524,
-        "weight": 524
+        "size": 537,
+        "weight": 537
       },
       "maps": [
         [

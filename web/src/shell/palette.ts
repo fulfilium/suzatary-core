@@ -174,7 +174,7 @@ export function openPalette(): void {
     const convoRows = lo.fold(lo.flatten(convos.now()), {
       loading: (): Command[] => [],
       error: () => [unavailableRow("Conversations unavailable")],
-      val: (rows) => rank(query, rows.map(hitOfConversation), (hit) => hit.search, ASYNC_LIMIT).map(commandOfHit),
+      val: (rows) => rank(query, rows.flatMap(hitOfConversation), (hit) => hit.search, ASYNC_LIMIT).map(commandOfHit),
     });
     if (convoRows.length > 0) out.push({ label: "Conversations", rows: convoRows });
     return out;

@@ -42,6 +42,15 @@ pub enum Frontier<'o> {
 /// What a reading reads of the skeleton.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Scope {
+    /// Nodes the skeleton alone names.
+    Nodes(Nodes),
+    /// Each conversation's row (`row::read`), whose last turn with words only the words held say.
+    Titles,
+}
+
+/// Nodes of the skeleton, named by the skeleton alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Nodes {
     Whole,
     /// These conversations, each with every node its lines rest on.
     Conversations(BTreeSet<ConversationId>),
@@ -312,7 +321,7 @@ impl Outlines {
 
     /// Every node `scope` reads of the skeleton held and `beside` (nodes not held yet), by name.
     #[must_use]
-    pub fn scope<'s>(&'s self, scope: &Scope, beside: &'s [Parsed]) -> BTreeSet<&'s Hash> {
+    pub fn scope<'s>(&'s self, scope: &Nodes, beside: &'s [Parsed]) -> BTreeSet<&'s Hash> {
         let beside: BTreeMap<&Hash, &Parsed> =
             beside.iter().map(|node| (node.name(), node)).collect();
         let lines = || {
@@ -346,8 +355,8 @@ impl Outlines {
             under
         };
         match scope {
-            Scope::Whole => self.given.keys().chain(beside.keys().copied()).collect(),
-            Scope::Objects(names) => names
+            Nodes::Whole => self.given.keys().chain(beside.keys().copied()).collect(),
+            Nodes::Objects(names) => names
                 .iter()
                 .filter_map(|name| {
                     self.given
@@ -356,8 +365,8 @@ impl Outlines {
                         .or_else(|| beside.get_key_value(name).map(|(name, _)| *name))
                 })
                 .collect(),
-            Scope::Conversations(ids) => closure(ids),
-            Scope::Naming(keys) => closure(&naming(lines(), keys)),
+            Nodes::Conversations(ids) => closure(ids),
+            Nodes::Naming(keys) => closure(&naming(lines(), keys)),
         }
     }
 
@@ -404,7 +413,7 @@ impl Outlines {
         let mut bytes = 0;
         for (id, _) in newest {
             let more: Vec<&Hash> = self
-                .scope(&Scope::Conversations(BTreeSet::from([id.clone()])), &[])
+                .scope(&Nodes::Conversations(BTreeSet::from([id.clone()])), &[])
                 .into_iter()
                 .filter(|name| !kept.contains(*name))
                 .collect();
@@ -494,7 +503,7 @@ fn retired<'n>(
         match &line.step {
             Step::Erased { keys } => seen.erased.extend(keys),
             Step::Resealed { of, from } => seen.reseals.push((of, from, &line.keys)),
-            Step::Opened
+            Step::Opened { .. }
             | Step::Asks
             | Step::Edits
             | Step::Noted

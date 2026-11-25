@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use suzatary_conversations::secretary::search::{Hit, Side};
 use suzatary_conversations::secretary::store::Kind;
-use suzatary_topics::wire::topics::{ConversationRow, SearchPayload};
+use suzatary_topics::wire::topics::{ConversationRow, Counted, RowWords, SearchPayload};
 use ts_rs::TS;
 use viewtree::Attr::{
     AriaCurrent, AriaLabel, AriaPressed, Class, Href, Placeholder, Role, Title, Type, Value,
@@ -35,7 +35,7 @@ pub(crate) enum Search {
     On {
         q: String,
         n: u32,
-        found: Reading<Vec<Hit>>,
+        found: Reading<SearchPayload>,
     },
 }
 
@@ -107,7 +107,7 @@ impl Searching {
 
     pub(crate) fn found(&mut self, r: Reading<crate::runtime::Answer>) {
         if let Search::On { found, .. } = &mut self.search {
-            *found = read::<SearchPayload>(r).map(|p| p.hits);
+            *found = read::<SearchPayload>(r);
         }
     }
 
@@ -156,19 +156,45 @@ fn card<M>(rows: Vec<Node<M>>) -> Node<M> {
     view! { Div "chatcard" [rows] }
 }
 
+/// What a search read, where it may not have read every conversation: the device holds the
+/// rest's words in part or not at all and asks for them, or is still hearing which there are.
+fn covered<M>(p: &SearchPayload) -> Option<Node<M>> {
+    let said = match p.counted {
+        Counted::SoFar => format!(
+            "Searched {} of the {} conversations this device knows of so far; more are on their way.",
+            p.searched, p.of
+        ),
+        Counted::Every if p.searched < p.of => format!(
+            "Searched {} of {} conversations on this device; the rest are on their way.",
+            p.searched, p.of
+        ),
+        Counted::Every => return None,
+    };
+    Some(view! { P "legend chatsaid" {Role => "status"} [said] })
+}
+
 #[must_use]
 pub(crate) fn hits<M>(
     q: &str,
-    found: &Reading<Vec<Hit>>,
+    found: &Reading<SearchPayload>,
     offsets: &[Offset],
     today: NaiveDate,
 ) -> Node<M> {
     match found {
         Reading::Loading => chrome::placeholder(Shape::Rows),
         Reading::Error { e } => para("problem chatsaid", format!("The search did not run: {e}")),
-        Reading::Val { v } if v.is_empty() => chrome::empty(&format!("Nothing said matches “{q}”.")),
-        Reading::Val { v } => card(
-            v.iter()
+        Reading::Val { v } if v.hits.is_empty() => match covered(v) {
+            Some(said) => view! { Div "chathits" [said] },
+            None => chrome::empty(&format!("Nothing said matches “{q}”.")),
+        },
+        Reading::Val { v } => {
+            view! { Div "chathits" [covered(v), card(found_rows(&v.hits, offsets, today))] }
+        }
+    }
+}
+
+fn found_rows<M>(hits: &[Hit], offsets: &[Offset], today: NaiveDate) -> Vec<Node<M>> {
+    hits.iter()
                 .map(|h| {
                     let who = match h.side {
                         Side::Person => "You",
@@ -180,9 +206,7 @@ pub(crate) fn hits<M>(
                         view! { Span "chatlast" [format!("{who}: {}", h.excerpt)] },
                     ] }
                 })
-                .collect(),
-        ),
-    }
+                .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -231,17 +255,21 @@ impl List {
 fn unopened() -> ConversationRow {
     ConversationRow {
         id: "default".to_owned(),
-        title: "Secretary".to_owned(),
         kind: Kind::Default,
         opened: String::new(),
         turns: 0,
-        standing: 0,
-        unplaced: Vec::new(),
-        last: String::new(),
         last_at: String::new(),
+        words: RowWords::Read {
+            title: "Secretary".to_owned(),
+            last: String::new(),
+            standing: 0,
+            unplaced: Vec::new(),
+        },
     }
 }
 
+/// A row stands where the skeleton puts it, whatever of its words the device holds: they fill
+/// its title and its last line in place as they land.
 fn row<M>(
     r: &ConversationRow,
     current: Option<&str>,
@@ -249,19 +277,55 @@ fn row<M>(
     today: NaiveDate,
 ) -> Node<M> {
     let on = current == Some(r.id.as_str());
-    let badges = (r.standing > 0 || !r.unplaced.is_empty()).then(|| {
-        let n = r.unplaced.len();
-        view! { Span "chatbadges" [
-            (r.standing > 0).then(|| view! { Span "chatbadge" {Title => format!("{} waiting on you", r.standing)} [r.standing.to_string()] }),
-            (n > 0).then(|| view! { Span "chatbadge problem" {Title => format!("{n} proposal{} with no card on this device", if n == 1 { "" } else { "s" })} [format!("{n}?")] }),
-        ] }
-    });
-    view! { A {Class => if on { "chatrow current" } else { "chatrow" }, Href => Place::conversation(&r.id).href(), AriaCurrent => on.then_some("page")} [
-        view! { Span "chattitle" [named(&r.title)] },
+    let class = match (on, &r.words) {
+        (true, RowWords::Read { .. }) => "chatrow current",
+        (true, RowWords::NotHere { .. } | RowWords::Unread {}) => "chatrow current unheld",
+        (false, RowWords::Read { .. }) => "chatrow",
+        (false, RowWords::NotHere { .. } | RowWords::Unread {}) => "chatrow unheld",
+    };
+    let (title, badges, last) = match &r.words {
+        RowWords::Read {
+            title,
+            last,
+            standing,
+            unplaced,
+        } => (
+            view! { Span "chattitle" [named(title)] },
+            badges(*standing, unplaced.len()),
+            (!last.is_empty()).then(|| view! { Span "chatlast" [last.as_str()] }),
+        ),
+        RowWords::NotHere { lines } => (
+            view! { Span "chattitle legend" ["Not on this device yet"] },
+            None,
+            Some(
+                view! { Span "chatlast" [format!("{} · {lines} {} to come", turns(r.turns), if *lines == 1 { "line" } else { "lines" })] },
+            ),
+        ),
+        RowWords::Unread {} => (
+            view! { Span "chattitle legend" ["Its words do not read on this device"] },
+            None,
+            Some(view! { Span "chatlast" [turns(r.turns)] }),
+        ),
+    };
+    view! { A {Class => class, Href => Place::conversation(&r.id).href(), AriaCurrent => on.then_some("page")} [
+        title,
         badges,
         view! { Span "chatwhen" [recent(offsets, &r.last_at, today)] },
-        (!r.last.is_empty()).then(|| view! { Span "chatlast" [r.last.as_str()] }),
+        last,
     ] }
+}
+
+fn turns(n: u32) -> String {
+    format!("{n} {}", if n == 1 { "turn" } else { "turns" })
+}
+
+fn badges<M>(standing: usize, unplaced: usize) -> Option<Node<M>> {
+    (standing > 0 || unplaced > 0).then(|| {
+        view! { Span "chatbadges" [
+            (standing > 0).then(|| view! { Span "chatbadge" {Title => format!("{standing} waiting on you")} [standing.to_string()] }),
+            (unplaced > 0).then(|| view! { Span "chatbadge problem" {Title => format!("{unplaced} proposal{} with no card on this device", if unplaced == 1 { "" } else { "s" })} [format!("{unplaced}?")] }),
+        ] }
+    })
 }
 
 pub(crate) fn view<M: Clone>(

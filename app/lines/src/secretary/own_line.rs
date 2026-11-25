@@ -171,7 +171,7 @@ impl OwnLine {
         matches!(
             self,
             OwnLine::Line { node, .. }
-                if matches!(&node.given().header, crate::wire::lines::NodeHeader::Line { step: crate::secretary::step::Step::Opened, .. })
+                if matches!(&node.given().header, crate::wire::lines::NodeHeader::Line { step: crate::secretary::step::Step::Opened { .. }, .. })
         )
     }
 

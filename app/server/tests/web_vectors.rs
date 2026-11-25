@@ -1291,9 +1291,15 @@ fn a_proposal_line_the_inbox_does_not_hold_is_reported_not_skipped() {
         .iter()
         .find(|row| row.id == id.as_str())
         .expect("listed");
-    assert_eq!(row.standing, 1);
+    let wire::RowWords::Read {
+        standing, unplaced, ..
+    } = &row.words
+    else {
+        panic!("a list read from every line reads every row's words: {row:?}");
+    };
+    assert_eq!(*standing, 1);
     assert_eq!(
-        row.unplaced, payload.unplaced,
+        unplaced, &payload.unplaced,
         "the list carries the lines the page draws"
     );
     let found = transcript::findings(&bundle.conversations.lines, &bundle.inbox);
@@ -1802,13 +1808,7 @@ fn the_replicas_vector_is_what_the_box_answers() {
         memory: false,
         answer: printed(&lags),
     });
-    let searches = ["deed", "EARLY", "nothing like it"]
-        .into_iter()
-        .map(|q| Searched {
-            q: q.to_owned(),
-            answer: printed(&readings::search(&listed(&bundle), q).expect("a search")),
-        })
-        .collect();
+    let searches = searched(&bundle);
     let (set, chain) = life(&bundle);
     let replicas = Replicas {
         at: fpl::iso(fpl::instant_of(bundle.at)),
@@ -1914,6 +1914,21 @@ fn windows_of(bundle: &Bundle, deed: &ConversationId, trains: &ConversationId) -
         });
     }
     windows
+}
+
+/// The searches the vector holds, each over every conversation of `bundle`.
+fn searched(bundle: &Bundle) -> Vec<Searched> {
+    let all = listed(bundle);
+    ["deed", "EARLY", "nothing like it"]
+        .into_iter()
+        .map(|q| Searched {
+            q: q.to_owned(),
+            answer: serde_json::to_string(
+                &readings::search(&all, all.len(), wire::Counted::Every, q).expect("a search"),
+            )
+            .expect("a payload prints"),
+        })
+        .collect()
 }
 
 fn listed(bundle: &Bundle) -> Vec<Stored> {
@@ -2369,7 +2384,9 @@ fn the_answers_vector_holds_every_answer() {
     proposals.failed = vec![failed_chain()];
     samples.add([proposals]);
     samples.add([readings::conversations(&listed, &inbox_fold)]);
-    samples.add([readings::search(&listed, "deed").expect("a search")]);
+    samples.add([
+        readings::search(&listed, listed.len(), wire::Counted::Every, "deed").expect("a search"),
+    ]);
     let objects = bundle
         .conversations
         .lines

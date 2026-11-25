@@ -243,8 +243,10 @@ impl Operator {
             .context("a piece of the lines' skeleton")?;
             anyhow::Ok(piece)
         })?;
-        let lacking = replica.lacking(&suzatary_lines::secretary::outlines::Scope::Conversations(
-            std::collections::BTreeSet::from([id.clone()]),
+        let lacking = replica.lacking(&suzatary_lines::secretary::outlines::Scope::Nodes(
+            suzatary_lines::secretary::outlines::Nodes::Conversations(
+                std::collections::BTreeSet::from([id.clone()]),
+            ),
         ));
         for ask in
             suzatary_api::routes::asks(lacking.iter().map(|node| (node.hash.as_str(), node.size)))

@@ -10,7 +10,7 @@ import asked from "../app/asked"
 export namespace conversations {
   export const rows: reading.Reading<lo.T<readonly ConversationRow[]>> = reading.againOn(
     asked.question(() => lo.of(storesync.list()).then(l => lo.map(l, p => p.conversations))),
-    storesync.watch,
+    storesync.watchList,
   )
 }
 export default conversations

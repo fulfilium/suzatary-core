@@ -27,6 +27,7 @@ pub mod secretary {
     pub mod own_line;
     pub mod prune;
     pub mod rescrub;
+    pub mod row;
     pub mod run;
     pub mod saying;
     pub mod sequence;

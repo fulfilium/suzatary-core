@@ -59,12 +59,12 @@ impl Admitted {
     }
 }
 
-/// What a reader holds of the lines a round reads.
+/// What a reader holds of the lines a part of a conversation reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Held<L> {
     /// Every line, each opened as its conversation opens it, by name.
     Opened(L),
-    /// A print that is no line of the round's conversation: the round is not drawn.
+    /// A print that is no line of the part's conversation: the part is not drawn.
     Unread,
     /// The first line, by name, the reader does not hold.
     Lacking(Hash),
@@ -87,8 +87,8 @@ pub struct HeldLines<F: Folds = Replica> {
     algebra: Reader,
     /// The store's name at the last fold of it, whose entry the next one replaces.
     root: Option<Hash>,
-    /// Each round read on its own, by its conversation and opening turn, as last read.
-    rounds: BTreeMap<(ConversationId, usize), RoundRead>,
+    /// Each part read on its own, by its conversation, as last read.
+    parts: BTreeMap<(ConversationId, Part), PartRead>,
     /// Counts each change of the prints held, wrapping: what names a reading of which are held.
     moves: u32,
     /// The lines held as their husks, which no drop lets go: a husk stands where its print stood,
@@ -98,9 +98,17 @@ pub struct HeldLines<F: Folds = Replica> {
     fed: Option<BTreeSet<String>>,
 }
 
-/// A round as last read: the objects it read and its node, whose entries a later reading of the
-/// round replaces, and a key or print let go forgets.
-struct RoundRead {
+/// A part of a conversation read on its own, which some of its lines say: a round of the stream,
+/// by the turn that opens it, or a step of the conversation's row in the list (`row::read`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Part {
+    Round(usize),
+    Row(usize),
+}
+
+/// A part as last read: the objects it read and its node, whose entries a later reading of the
+/// part replaces, and a key or print let go forgets.
+struct PartRead {
     objects: BTreeSet<Hash>,
     node: Arc<Node>,
 }
@@ -172,8 +180,8 @@ enum Node {
         id: ConversationId,
         lines: Vec<Arc<Node>>,
     },
-    /// One round's lines, opened and left open.
-    Round {
+    /// One part's lines ([`Part`]), opened and left open.
+    Part {
         name: Hash,
         lines: Vec<Arc<Node>>,
     },
@@ -442,7 +450,7 @@ impl Tree for Node {
         match self {
             Node::Store { name, .. }
             | Node::Conversation { name, .. }
-            | Node::Round { name, .. }
+            | Node::Part { name, .. }
             | Node::Line { name, .. } => name,
         }
     }
@@ -450,7 +458,7 @@ impl Tree for Node {
     fn children(&self) -> impl Iterator<Item = &Self> {
         let children: Box<dyn Iterator<Item = &Self>> = match self {
             Node::Store { conversations, .. } => Box::new(conversations.iter().map(|c| &**c)),
-            Node::Conversation { lines, .. } | Node::Round { lines, .. } => {
+            Node::Conversation { lines, .. } | Node::Part { lines, .. } => {
                 Box::new(lines.iter().map(|line| &**line))
             }
             Node::Line { .. } => Box::new(std::iter::empty()),
@@ -494,7 +502,7 @@ impl<F: Folds> Algebra<Node> for Reading<'_, F> {
 
     fn apply(&self, node: &Node, children: Vec<Read<F>>) -> Read<F> {
         match node {
-            Node::Round { .. } => Read::join(children),
+            Node::Part { .. } => Read::join(children),
             Node::Store { .. } => {
                 let mut read = Read::join(children);
                 read.gathered = crate::parts::part("gather", || F::gather(&read.closed));
@@ -592,7 +600,7 @@ impl<F: Folds> HeldLines<F> {
             cache: Cache::default(),
             algebra: Reader::new(F::NAME),
             root: None,
-            rounds: BTreeMap::new(),
+            parts: BTreeMap::new(),
             moves: 0,
             husks: BTreeSet::new(),
             fed: None,
@@ -748,13 +756,13 @@ impl<F: Folds> HeldLines<F> {
             .filter(|name| self.prints.remove(*name).is_some())
             .collect();
         if !dropped.is_empty() {
-            let gone: Vec<(ConversationId, usize)> = self
-                .rounds
+            let gone: Vec<(ConversationId, Part)> = self
+                .parts
                 .iter()
                 .filter(|(_, read)| read.objects.iter().any(|name| dropped.contains(name)))
-                .map(|(round, _)| round.clone())
+                .map(|(part, _)| part.clone())
                 .collect();
-            self.forget_rounds(&gone);
+            self.forget_parts(&gone);
         }
         let mut arrived = Vec::new();
         for (name, print) in add {
@@ -826,22 +834,22 @@ impl<F: Folds> HeldLines<F> {
             opened.extend(self.root.take());
             self.forget(opened);
         }
-        let rounds: Vec<(ConversationId, usize)> = self
-            .rounds
+        let parts: Vec<(ConversationId, Part)> = self
+            .parts
             .iter()
             .filter(|(_, read)| read.node.children().any(|leaf| opened_with(leaf, &lost)))
-            .map(|(round, _)| round.clone())
+            .map(|(part, _)| part.clone())
             .collect();
-        self.forget_rounds(&rounds);
+        self.forget_parts(&parts);
     }
 
-    /// The lines `objects` of conversation `id`, each opened as the conversation opens it, for the
-    /// round it opens at turn `turn`: a slot read from its own seal, the reseals among `objects`
-    /// that seal it and the erasures among them that name it. Only those prints are read.
-    pub fn round(
+    /// The lines `objects` of conversation `id`, each opened as the conversation opens it, for
+    /// its part `part`: a slot read from its own seal, the reseals among `objects` that seal it and
+    /// the erasures among them that name it. Only those prints are read.
+    pub fn part(
         &mut self,
         id: &ConversationId,
-        turn: usize,
+        part: Part,
         objects: &BTreeSet<Hash>,
     ) -> Held<BTreeMap<Hash, Entry>> {
         let mut lines: Vec<HeldLine<'_>> = Vec::new();
@@ -857,9 +865,9 @@ impl<F: Folds> HeldLines<F> {
             }
         }
         let leaves = leaves(&self.keys, &lines, &BTreeMap::new());
-        let node = Arc::new(Node::Round {
+        let node = Arc::new(Node::Part {
             name: memo::name(
-                format!("round {id} {turn}").as_bytes(),
+                format!("{part:?} {id}").as_bytes(),
                 leaves.values().map(|leaf| leaf.name()),
             ),
             lines: leaves.into_values().collect(),
@@ -873,9 +881,9 @@ impl<F: Folds> HeldLines<F> {
             &*node,
             &mut self.cache,
         );
-        let was = self.rounds.insert(
-            (id.clone(), turn),
-            RoundRead {
+        let was = self.parts.insert(
+            (id.clone(), part),
+            PartRead {
                 objects: objects.clone(),
                 node: Arc::clone(&node),
             },
@@ -897,10 +905,10 @@ impl<F: Folds> HeldLines<F> {
         )
     }
 
-    /// The rounds `rounds` taken out of the cache, and their leaves with them.
-    fn forget_rounds(&mut self, rounds: &[(ConversationId, usize)]) {
-        for round in rounds {
-            if let Some(read) = self.rounds.remove(round) {
+    /// The parts `parts` taken out of the cache, and their leaves with them.
+    fn forget_parts(&mut self, parts: &[(ConversationId, Part)]) {
+        for part in parts {
+            if let Some(read) = self.parts.remove(part) {
                 let names: Vec<Hash> = std::iter::once(read.node.name())
                     .chain(read.node.children().map(Tree::name))
                     .cloned()
@@ -1391,7 +1399,7 @@ fn leaves(
                 Node::Line { leaf, .. } => {
                     leaf.slots == slots && names(&leaf.reseals) == names(&own)
                 }
-                Node::Store { .. } | Node::Conversation { .. } | Node::Round { .. } => false,
+                Node::Store { .. } | Node::Conversation { .. } | Node::Part { .. } => false,
             });
             let leaf = same.map_or_else(
                 || Arc::new(leaf(name, line, parents, slots, own)),
@@ -1409,7 +1417,7 @@ fn opened_with(node: &Node, lost: &BTreeSet<&KeyName>) -> bool {
             .slots
             .iter()
             .any(|(key, slot)| slot.key == Key::Held && lost.contains(key)),
-        Node::Store { .. } | Node::Conversation { .. } | Node::Round { .. } => false,
+        Node::Store { .. } | Node::Conversation { .. } | Node::Part { .. } => false,
     }
 }
 

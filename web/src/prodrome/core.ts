@@ -257,8 +257,10 @@ export interface Lines extends Written, Refusable {
   /** `[{line, ruling}]`: own lines refused for good, with words, of topics the box refused. */
   refused_elsewhere: () => string;
   hold: (add: string, drop: string) => void;
-  /** `hold` of literals already checked against their names, so none is hashed again. */
-  hold_admitted: (add: string, drop: string) => void;
+  /** `hold` of literals already checked against their names, so none is hashed again: the conversations they moved. */
+  hold_admitted: (add: string, drop: string) => string;
+  /** Of `[<id>]`, those held whole. */
+  whole_of: (ids: string) => string;
   held: () => string;
   version: () => number;
   since: () => string;
@@ -300,7 +302,8 @@ export interface Lines extends Written, Refusable {
     about: string | undefined,
     memory: string | undefined,
   ) => string;
-  search: (q: string) => string;
+  /** `whole`: the device's pull of the skeleton has ended whole, so it names every conversation. */
+  search: (q: string, whole: boolean) => string;
   /** The node of every line the newest `pages` pages of the stream read, by the skeleton alone. */
   chosen: (topics: TopicReading, chosen: string, pages: number) => string;
   snapshot: () => Uint8Array;
@@ -731,7 +734,7 @@ export const listOfLines = (lines: Lines, inbox: Proposals): ConversationsPayloa
 export const conversationOf = (lines: Lines, inbox: Proposals, id: string, window: Window, memory: MemoryPayload | null): ConversationPayload =>
   checked("conversation", lines.conversation(id, inbox, shown(window.before), shown(window.limit), window.about, memoryOf(memory)), payload.ConversationPayload);
 
-export const searchOf = (lines: Lines, q: string): SearchPayload => checked("search", lines.search(q), payload.SearchPayload);
+export const searchOf = (lines: Lines, q: string, whole: boolean): SearchPayload => checked("search", lines.search(q, whole), payload.SearchPayload);
 
 export const lackingIn = (held: Lines, scope: lines.Scope): readonly SkeletonNode[] =>
   checked("lacking", held.lacking(JSON.stringify(scope)), arr(payload.SkeletonNode));
@@ -793,5 +796,8 @@ export function lackingOf(lines: Lines, names: readonly string[]): ReadonlySet<s
 
 /** Literals the content's admission checked, held without hashing them again: the one caller of `hold_admitted`
  * (`scripts/web-static.sh`), so only an admitted row reaches the path that does not hash. */
-export const holdAdmitted = (lines: Lines, rows: readonly content.Admitted[]): void =>
-  lines.hold_admitted(objectsOf(rows.map(content.rowOf)), "[]");
+/** Of the conversations `ids`, those the core holds whole: every line and every node they rest on. */
+export const wholeOf = (lines: Lines, ids: readonly string[]): readonly string[] => checked("whole", lines.whole_of(JSON.stringify(ids)), arr(str));
+
+export const holdAdmitted = (lines: Lines, rows: readonly content.Admitted[]): readonly string[] =>
+  checked("held", lines.hold_admitted(objectsOf(rows.map(content.rowOf)), "[]"), arr(str));

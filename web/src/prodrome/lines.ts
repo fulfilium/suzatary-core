@@ -3,11 +3,13 @@
 // own skeleton; this names the question.
 
 export namespace lines {
-  // The whole store, for the list and a search; some conversations, each of which reads its own lines and what they
+  // The whole store, for a search; each conversation's row in the list (its opening, title, proposals and last turn
+  // with words, which only the words held find); some conversations, each of which reads its own lines and what they
   // rest on, for a window; the lines whose words the stream's drawn rounds read, and nothing they rest on, as the core's
   // skeleton names them; or every conversation a line naming one of some keys is in, whose words a purge opens.
   export type Scope =
     | { readonly type: "Whole" }
+    | { readonly type: "Titles" }
     | { readonly type: "Conversations"; readonly ids: readonly string[] }
     | { readonly type: "Objects"; readonly names: readonly string[] }
     | { readonly type: "Naming"; readonly keys: readonly string[] }
@@ -36,6 +38,7 @@ export namespace lines {
   export type Sealed = { readonly name: string; readonly conversation: string }
 
   export const WHOLE: Scope = { type: "Whole" }
+  export const TITLES: Scope = { type: "Titles" }
   export const one = (id: string): Scope => ({ type: "Conversations", ids: [id] })
 }
 export default lines

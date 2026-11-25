@@ -98,6 +98,22 @@ pub fn recalled(query: &str, hits: &[Hit]) -> serde_json::Value {
     })
 }
 
+/// The words a turn says to a reader, and whose: a person's, or a finished answer's (a model
+/// turn with no calls), where they are not blank. A trace, a tool, an act, erased words and a
+/// text of whitespace say none: the one rule the search, the list's last line and a row's walk
+/// read a turn by.
+#[must_use]
+pub fn words(turn: &Turn) -> Option<(Side, &str)> {
+    let said = match turn {
+        Turn::Person { text, .. } => (Side::Person, text),
+        Turn::Model { text, calls } if calls.is_empty() => (Side::Answer, text),
+        Turn::Model { .. } | Turn::Tool { .. } | Turn::Act { .. } | Turn::Erased { .. } => {
+            return None;
+        }
+    };
+    (!said.1.trim().is_empty()).then_some((said.0, said.1.as_str()))
+}
+
 /// Newest first, at most `limit`; ties on `at` break by conversation and index. An answer is a
 /// finished one (a model turn with no calls); text on the way to a verb is part of the trace.
 #[must_use]
@@ -118,14 +134,7 @@ pub fn search<S: Borrow<Stored>>(
                 // Set-aside turns are never delivered, and `recall` is a delivery.
                 .filter(|(index, _)| stored.is_live(*index))
                 .filter_map(move |(index, said)| {
-                    let (side, text) = match &said.turn {
-                        Turn::Person { text, .. } => (Side::Person, text),
-                        Turn::Model { text, calls } if calls.is_empty() => (Side::Answer, text),
-                        Turn::Model { .. }
-                        | Turn::Tool { .. }
-                        | Turn::Act { .. }
-                        | Turn::Erased { .. } => return None,
-                    };
+                    let (side, text) = words(&said.turn)?;
                     excerpt(text, needle, context).map(|excerpt| Hit {
                         conversation: stored.id.clone(),
                         title: stored.heading().into_owned(),

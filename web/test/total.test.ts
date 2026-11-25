@@ -54,7 +54,7 @@ const answers = ({ p, lines }: Reading): unknown[] => [
   inboxOf(p, box.at, box.memory, none),
   listOfLines(lines, p),
   ...listOfLines(lines, p).conversations.map(c => conversationOf(lines, p, c.id, {}, box.memory)),
-  searchOf(lines, "deed"),
+  searchOf(lines, "deed", true),
 ]
 const leftOf = ({ p, lines }: Reading): excluded.T => excluded.join(excludedOf(p), linesLeft(lines))
 const reading = <A>(i: readonly Named[], ask: (s: Reading) => A): A => {

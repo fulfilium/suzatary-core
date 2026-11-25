@@ -13,11 +13,11 @@ use suzatary_api::query;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::store::Stored;
 use suzatary_inbox::secretary::inbox::Fold;
-use suzatary_lines::secretary::held_lines::Admitted;
+use suzatary_lines::secretary::held_lines::{Admitted, Part};
 use suzatary_lines::secretary::held_replica::HeldReplica;
 use suzatary_lines::secretary::held_replica::Ruling;
 use suzatary_lines::secretary::held_replica::Whole;
-use suzatary_lines::secretary::outlines::Scope;
+use suzatary_lines::secretary::outlines::{Nodes, Scope};
 use suzatary_memory::secretary::key_ring::KeyRing;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_topics::secretary::readings::{self, DEFAULT_TURN_WINDOW, Dress, Window};
@@ -87,14 +87,44 @@ impl Lines {
     }
 
     /// `add`, `[{hash, text}]`, each a literal the tab's content admission checked against its
-    /// name, held without hashing it again, and `drop`, `[<name>, …]`, let go.
-    pub fn hold_admitted(&mut self, add: &str, drop: &str) -> Result<(), JsError> {
-        let add = objects(add)?
-            .into_iter()
-            .map(|(name, bytes)| Admitted::vouched(name, bytes))
+    /// name, held without hashing it again, and `drop`, `[<name>, …]`, let go. Answers the
+    /// conversations of the lines held, `[<id>, …]`: their readings moved.
+    pub fn hold_admitted(&mut self, add: &str, drop: &str) -> Result<String, JsError> {
+        let add = objects(add)?;
+        let moved: BTreeSet<String> = add
+            .iter()
+            .filter_map(|(name, _)| self.0.outlines().node(name))
+            .filter_map(|node| match &node.header {
+                suzatary_lines::wire::lines::NodeHeader::Line { conversation, .. } => {
+                    Some(conversation.clone())
+                }
+                suzatary_lines::wire::lines::NodeHeader::Structure { .. } => None,
+            })
             .collect();
-        self.0.lines.hold_admitted(add, &names(drop, "drop")?);
-        Ok(())
+        self.0.lines.hold_admitted(
+            add.into_iter()
+                .map(|(name, bytes)| Admitted::vouched(name, bytes))
+                .collect(),
+            &names(drop, "drop")?,
+        );
+        json(&moved)
+    }
+
+    /// Of the conversations `ids` (`[<id>, …]`), those whose every line, and every node they rest
+    /// on, is held: what a search over the words held reads, asked of the conversations a
+    /// landing touched.
+    pub fn whole_of(&mut self, ids: &str) -> Result<String, JsError> {
+        let ids: Vec<String> =
+            serde_json::from_str(ids).map_err(|e| refused(format!("ids: {e}")))?;
+        let mut whole = Vec::new();
+        for id in ids {
+            let conversation = ConversationId::new(id).map_err(|e| refused(e.to_string()))?;
+            let scope = Scope::Nodes(Nodes::Conversations(BTreeSet::from([conversation.clone()])));
+            if self.0.lacking(&scope).is_empty() {
+                whole.push(conversation.as_str().to_owned());
+            }
+        }
+        json(&whole)
     }
 
     /// `[<name>, …]`: every print these lines hold.
@@ -110,13 +140,13 @@ impl Lines {
 
     /// `[{hash, parents, size, header}, …]`: every node `scope` reads, of the landed row and a
     /// pull's pieces, whose print is not held, as it was given.
-    pub fn lacking(&self, scope: &str) -> Result<String, JsError> {
+    pub fn lacking(&mut self, scope: &str) -> Result<String, JsError> {
         json(&self.0.lacking(&scope_of(scope)?))
     }
 
     /// `{nodes, lines}`: how many of the nodes `scope` reads, and of its line nodes, lack their
     /// print.
-    pub fn lacks(&self, scope: &str) -> Result<String, JsError> {
+    pub fn lacks(&mut self, scope: &str) -> Result<String, JsError> {
         let lacking = self.0.lacking(&scope_of(scope)?);
         let lines = lacking
             .iter()
@@ -167,9 +197,16 @@ impl Lines {
         }))
     }
 
-    /// Every conversation, newest first, with what of each stands in `inbox`.
+    /// Every conversation the skeleton holds, newest first, each row's words as far as the prints
+    /// held read them, with what of each stands in `inbox`.
     pub fn list(&mut self, inbox: &Proposals) -> Result<String, JsError> {
-        json(&readings::conversations(&self.stored()?, &inbox.fold()?))
+        let fold = inbox.fold()?;
+        let listed = readings::listed(self.0.listed(|id, read| {
+            read.map(|(rounds, row)| readings::listed_row(id, rounds, row, &fold))
+                .map_err(Clone::clone)
+        }))
+        .map_err(|e| refused(e.to_string()))?;
+        json(&listed)
     }
 
     /// One conversation's window, as the box's route reads it; a memory `undefined` reads every
@@ -296,7 +333,7 @@ impl Lines {
         let (outlines, held) = self.0.reading();
         let stream = stream::stream(
             outlines.outlines(),
-            |id, turn, objects| held.round(id, turn, objects),
+            |id, turn, objects| held.part(id, Part::Round(turn), objects),
             &topics.0,
             &chosen,
             pages,
@@ -321,9 +358,22 @@ impl Lines {
         read(&stream, &blocks)
     }
 
-    /// Every conversation's turns holding `q`, newest first: only words this reading opened.
-    pub fn search(&mut self, q: &str) -> Result<String, JsError> {
-        json(&readings::search(&self.stored()?, q).map_err(|r| said(&r))?)
+    /// The turns holding `q`, newest first, of every conversation whose every line is held, said
+    /// as read from those of all the skeleton names; `whole` where the device's pull of the
+    /// skeleton ended whole, so the skeleton names every conversation.
+    pub fn search(&mut self, q: &str, whole: bool) -> Result<String, JsError> {
+        let counted = if whole {
+            suzatary_topics::wire::topics::Counted::Every
+        } else {
+            suzatary_topics::wire::topics::Counted::SoFar
+        };
+        let (whole, of) = self.0.held_whole();
+        let read: Vec<std::sync::Arc<suzatary_lines::secretary::transcript::Transcript>> = whole
+            .into_iter()
+            .collect::<Result<_, _>>()
+            .map_err(|e| refused(e.to_string()))?;
+        let stored: Vec<&Stored> = read.iter().map(|read| read.stored()).collect();
+        json(&readings::search(&stored, of, counted, q).map_err(|r| said(&r))?)
     }
 
     /// Of the block keys `keys` (`[<key>, …]`), those a device may keep: every key of another
@@ -389,6 +439,7 @@ impl Lines {
 #[derive(serde::Deserialize)]
 #[serde(tag = "type")]
 enum Spelled {
+    Titles,
     Whole,
     Conversations { ids: Vec<String> },
     Objects { names: Vec<String> },
@@ -400,35 +451,30 @@ fn scope_of(text: &str) -> Result<Scope, JsError> {
         serde_json::from_str(text).map_err(|e| refused(format!("scope: {e}")))?;
     let fail = |e: String| refused(format!("scope: {e}"));
     Ok(match spelled {
-        Spelled::Whole => Scope::Whole,
-        Spelled::Conversations { ids } => Scope::Conversations(
+        Spelled::Titles => Scope::Titles,
+        Spelled::Whole => Scope::Nodes(Nodes::Whole),
+        Spelled::Conversations { ids } => Scope::Nodes(Nodes::Conversations(
             ids.into_iter()
                 .map(|id| ConversationId::new(id).map_err(|e| fail(e.to_string())))
                 .collect::<Result<_, _>>()?,
-        ),
-        Spelled::Objects { names } => Scope::Objects(
+        )),
+        Spelled::Objects { names } => Scope::Nodes(Nodes::Objects(
             names
                 .into_iter()
                 .map(|name| Hash::new(name).map_err(|e| fail(e.to_string())))
                 .collect::<Result<_, _>>()?,
-        ),
-        Spelled::Naming { keys } => Scope::Naming(
+        )),
+        Spelled::Naming { keys } => Scope::Nodes(Nodes::Naming(
             keys.into_iter()
                 .map(|key| KeyName::new(key).map_err(|e| fail(e.to_string())))
                 .collect::<Result<_, _>>()?,
-        ),
+        )),
     })
 }
 
 impl Default for Lines {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Lines {
-    fn stored(&mut self) -> Result<Vec<std::sync::Arc<Stored>>, JsError> {
-        self.0.lines.read().0.map_err(|e| refused(e.to_string()))
     }
 }
 

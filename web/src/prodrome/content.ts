@@ -38,6 +38,9 @@ export namespace content {
   export type Fetcher = {
     // The content of `nodes` held; rejects when an answer their names were in did not come or was not kept.
     readonly fetch: (lane: Lane, nodes: readonly SkeletonNode[]) => Promise<void>
+    // The same fetch begun; settles once what the device keeps of the names it began reading is held, the rest coming
+    // from the box behind it.
+    readonly local: (lane: Lane, nodes: readonly SkeletonNode[]) => Promise<void>
     // Sends what a hidden page held back.
     readonly wake: () => void
   }
@@ -265,7 +268,7 @@ export namespace content {
       pump()
     }
 
-    const fetch = async (lane: Lane, nodes: readonly SkeletonNode[]): Promise<void> => {
+    const begin = (lane: Lane, nodes: readonly SkeletonNode[]): { readonly device: Promise<void>; readonly all: Promise<void> } => {
       const missing = fx.lacking(nodes.map(n => n.hash))
       const lacking = nodes.filter(n => missing.has(n.hash))
       const fresh = lacking.filter(n => !waits.has(n.hash))
@@ -282,11 +285,17 @@ export namespace content {
       for (const n of moved) reading.set(n.hash, lane)
       if (lane !== "Ahead") tell(lacking.filter(n => !reading.has(n.hash)))
       pump()
-      if (fresh.length + moved.length > 0) void read(lane, [...fresh, ...moved])
-      await Promise.all(lacking.flatMap(n => waits.get(n.hash)?.done ?? []))
+      const device = fresh.length + moved.length > 0 ? read(lane, [...fresh, ...moved]) : Promise.resolve()
+      return { device, all: Promise.all(lacking.flatMap(n => waits.get(n.hash)?.done ?? [])).then(() => undefined) }
     }
 
-    return { fetch, wake: pump }
+    const local = (lane: Lane, nodes: readonly SkeletonNode[]): Promise<void> => {
+      const begun = begin(lane, nodes)
+      begun.all.catch(() => {})
+      return begun.device
+    }
+
+    return { fetch: (lane, nodes) => begin(lane, nodes).all, local, wake: pump }
   }
 
   // The prints of lines this device wrote and the box took, kept as a fetch of them would have kept them: the device

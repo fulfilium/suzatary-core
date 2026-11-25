@@ -8,11 +8,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use prodrome_data::event::Hash;
 use prodrome_data::literal::Datetime;
 
+use crate::secretary::line_shape::unkinded;
 use crate::secretary::step::Step;
 use crate::secretary::targets::rounds;
 use crate::wire::lines::LineWriter;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_conversations::secretary::store::{NotAConversation, Stored};
+use suzatary_conversations::secretary::store::{Kind, NotAConversation, Stored};
 use suzatary_memory::secretary::locked_text::KeyName;
 
 /// Each live round, oldest first, or why the lines are no conversation.
@@ -42,13 +43,31 @@ pub struct Line<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rounds {
     live: Vec<Round>,
+    /// The line that opens the conversation, when it was written, and what the conversation is
+    /// for, as the fold reads it ([`unkinded`] where the opening stores no kind).
+    opening: Hash,
+    opened: Datetime,
+    kind: Kind,
     /// The line whose words title the conversation.
     title: Hash,
+    /// Every turn, set aside or not, oldest first: when each was said.
+    said: Vec<Datetime>,
+    /// Each proposal line, in the order made.
+    proposals: Vec<Proposed>,
+    /// The turns that are the box's own notes ([`Step::Noted`]), which say no words a list reads.
+    noted: BTreeSet<Hash>,
     /// The slot keys of every line a round may read.
     keys: BTreeMap<Hash, Vec<KeyName>>,
     /// The reseals of each slot, by the slot's first key.
     reseals: BTreeMap<KeyName, BTreeSet<Hash>>,
     erasures: BTreeMap<KeyName, BTreeSet<Hash>>,
+}
+
+/// A proposal line, and how many turns stood before it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Proposed {
+    pub line: Hash,
+    pub after_turn: usize,
 }
 
 /// One live round: its opening, and each of its turns by index with the line that says it.
@@ -75,7 +94,7 @@ impl Voices {
     fn of(step: &Step) -> Self {
         match step {
             Step::Noted => Voices::BoxAlone,
-            Step::Opened
+            Step::Opened { .. }
             | Step::Asks
             | Step::Edits
             | Step::Answers
@@ -119,14 +138,54 @@ impl Rounds {
         &self.title
     }
 
-    /// Every line whose words `round` reads: the title's, its turns', every reseal of their slots,
-    /// and every erasure naming a key of those, as a conversation's reading opens them.
+    #[must_use]
+    pub fn opening(&self) -> &Hash {
+        &self.opening
+    }
+
+    #[must_use]
+    pub fn opened(&self) -> Datetime {
+        self.opened
+    }
+
+    #[must_use]
+    pub fn kind(&self) -> Kind {
+        self.kind
+    }
+
+    /// When each turn was said, oldest first, those set aside included.
+    #[must_use]
+    pub fn said(&self) -> &[Datetime] {
+        &self.said
+    }
+
+    /// Each proposal line, in the order made.
+    #[must_use]
+    pub fn proposals(&self) -> &[Proposed] {
+        &self.proposals
+    }
+
+    /// The line of each live turn that may say words a list reads, newest first: every one but
+    /// the box's own notes, the one kind of turn the skeleton says says none.
+    pub fn newest(&self) -> impl Iterator<Item = &Hash> {
+        self.live
+            .iter()
+            .rev()
+            .flat_map(|round| round.turns.iter().rev().map(|(_, line)| line))
+            .filter(|line| !self.noted.contains(*line))
+    }
+
+    /// Every line whose words `round` reads: the title's and its turns' ([`Rounds::reads`]).
     #[must_use]
     pub fn objects(&self, round: &Round) -> BTreeSet<Hash> {
-        let mut objects: BTreeSet<Hash> = std::iter::once(&self.title)
-            .chain(round.turns.iter().map(|(_, line)| line))
-            .cloned()
-            .collect();
+        self.reads(std::iter::once(&self.title).chain(round.turns.iter().map(|(_, line)| line)))
+    }
+
+    /// `lines`, every reseal of their slots, and every erasure naming a key of those, as a
+    /// conversation's reading opens them.
+    #[must_use]
+    pub fn reads<'h>(&self, lines: impl IntoIterator<Item = &'h Hash>) -> BTreeSet<Hash> {
+        let mut objects: BTreeSet<Hash> = lines.into_iter().cloned().collect();
         let own: Vec<&KeyName> = objects
             .iter()
             .flat_map(|line| self.keys.get(line).into_iter().flatten())
@@ -186,14 +245,20 @@ pub(crate) fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
             .collect::<Vec<_>>(),
     );
     let mut ordered = order.iter().map(|(at, _)| &lines[*at]).enumerate();
-    let mut title = match ordered.next().map(|(_, line)| line) {
-        Some(first) if *first.step == Step::Opened => first.name,
+    let (opening, opened, kind) = match ordered.next().map(|(_, line)| line) {
+        Some(Line {
+            name,
+            at,
+            step: Step::Opened { kind },
+            ..
+        }) => (*name, *at, kind.unwrap_or_else(|| unkinded(id))),
         Some(_) | None => return Err(NotAConversation::Unopened(id.clone())),
     };
+    let mut title = opening;
+    let mut proposed: Vec<Proposed> = Vec::new();
     let mut turns: Vec<(Datetime, &Step, &Hash)> = Vec::new();
     let mut aside: BTreeSet<usize> = BTreeSet::new();
     let mut turn_at: Vec<Option<usize>> = vec![None; order.len()];
-    let mut proposals = 0;
     let mut reseals: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();
     let mut erasures: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();
     for (place, line) in ordered {
@@ -216,8 +281,11 @@ pub(crate) fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
                         .filter_map(|at| turn_at[at]),
                 );
             }
-            Step::Proposed => proposals += 1,
-            Step::Coding { proposal } if *proposal >= proposals => {
+            Step::Proposed => proposed.push(Proposed {
+                line: line.name.clone(),
+                after_turn: turns.len(),
+            }),
+            Step::Coding { proposal } if *proposal >= proposed.len() => {
                 return Err(NotAConversation::Phantom {
                     id: id.clone(),
                     index: *proposal,
@@ -238,9 +306,36 @@ pub(crate) fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
                         .insert(line.name.clone());
                 }
             }
-            Step::Opened | Step::Still | Step::Coding { .. } | Step::Began { .. } => {}
+            Step::Opened { .. } | Step::Still | Step::Coding { .. } | Step::Began { .. } => {}
         }
     }
+    let keys = lines
+        .iter()
+        .filter(|line| !line.keys.is_empty())
+        .map(|line| (line.name.clone(), line.keys.to_vec()))
+        .collect();
+    Ok(Rounds {
+        live: live(&turns, &aside),
+        opening: opening.clone(),
+        opened,
+        kind,
+        title: title.clone(),
+        said: turns.iter().map(|(at, _, _)| *at).collect(),
+        proposals: proposed,
+        noted: turns
+            .iter()
+            .filter(|(_, step, _)| **step == Step::Noted)
+            .map(|(_, _, line)| (*line).clone())
+            .collect(),
+        keys,
+        reseals,
+        erasures,
+    })
+}
+
+/// The live rounds of `turns`, oldest first, those `aside` names left out: each opens with a turn
+/// that does not answer, or with the first live turn.
+fn live(turns: &[(Datetime, &Step, &Hash)], aside: &BTreeSet<usize>) -> Vec<Round> {
     let live = turns
         .iter()
         .enumerate()
@@ -259,18 +354,7 @@ pub(crate) fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
             }),
         }
     }
-    let keys = lines
-        .iter()
-        .filter(|line| !line.keys.is_empty())
-        .map(|line| (line.name.clone(), line.keys.to_vec()))
-        .collect();
-    Ok(Rounds {
-        live: rounds,
-        title: title.clone(),
-        keys,
-        reseals,
-        erasures,
-    })
+    rounds
 }
 
 /// The openings of a conversation read whole.

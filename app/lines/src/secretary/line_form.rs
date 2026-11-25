@@ -118,7 +118,7 @@ enum WriterForm {
 
 #[derive(Serialize, Deserialize)]
 enum StepForm {
-    Opened,
+    Opened { kind: Option<String> },
     Asks,
     Noted,
     Answers,
@@ -136,10 +136,10 @@ enum StepForm {
 
 impl snapshot::Held for LineReplica {
     type Given = Given;
-    /// 4: the landed row and the pending pieces, each with its nodes (each line's writer among
-    /// them), keys, words and frontier, every name as its 32 bytes, and the husks, each line's
-    /// print with its words dropped.
-    const FORM: u32 = 4;
+    /// 5: the landed row and the pending pieces, each with its nodes (each line's writer among
+    /// them, and an opening's kind), keys, words and frontier, every name as its 32 bytes, and
+    /// the husks, each line's print with its words dropped.
+    const FORM: u32 = 5;
 
     fn given(&self) -> Given {
         Given {
@@ -292,7 +292,9 @@ fn node_of(form: NodeForm) -> Result<SkeletonNode, String> {
 
 fn step_form(step: &Step) -> StepForm {
     match step {
-        Step::Opened => StepForm::Opened,
+        Step::Opened { kind } => StepForm::Opened {
+            kind: kind.map(|kind| kind.as_str().to_owned()),
+        },
         Step::Asks => StepForm::Asks,
         Step::Edits => StepForm::Edits,
         Step::Noted => StepForm::Noted,
@@ -325,7 +327,16 @@ fn step_form(step: &Step) -> StepForm {
 fn step_of(form: StepForm) -> Result<Step, String> {
     let name = key_name;
     Ok(match form {
-        StepForm::Opened => Step::Opened,
+        StepForm::Opened { kind } => Step::Opened {
+            kind: kind
+                .map(|kind| {
+                    suzatary_conversations::secretary::store::Kind::ALL
+                        .into_iter()
+                        .find(|known| known.as_str() == kind)
+                        .ok_or("an opening's kind is no kind")
+                })
+                .transpose()?,
+        },
         StepForm::Asks => Step::Asks,
         StepForm::Edits => Step::Edits,
         StepForm::Noted => Step::Noted,

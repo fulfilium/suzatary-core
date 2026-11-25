@@ -26,15 +26,19 @@ export function hitOfMail(row: MailRow): Hit {
   };
 }
 
-/** One conversation; `turns` is the subtitle, the one fact a title does not carry. */
-export function hitOfConversation(row: ConversationRow): Hit {
-  return {
-    kind: "conversation",
-    search: row.title,
-    title: row.title,
-    subtitle: row.turns === 1 ? "1 turn" : `${row.turns} turns`,
-    route: { type: "conversation", id: row.id, refs: [] },
-  };
+/** One conversation whose title the device holds; `turns` is the subtitle, the one fact a title does not carry. A row
+ * whose words have not landed has no title to match, so it is no hit until they do. */
+export function hitOfConversation(row: ConversationRow): Hit[] {
+  if (row.words.held !== "read") return [];
+  return [
+    {
+      kind: "conversation",
+      search: row.words.title,
+      title: row.words.title,
+      subtitle: row.turns === 1 ? "1 turn" : `${row.turns} turns`,
+      route: { type: "conversation", id: row.id, refs: [] },
+    },
+  ];
 }
 
 /** One letter matches almost everything, so a query under two characters asks no server. */

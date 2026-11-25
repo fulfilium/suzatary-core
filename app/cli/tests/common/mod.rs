@@ -4299,7 +4299,9 @@ pub fn held_lines(base: &str) -> suzatary_lines::secretary::held_replica::HeldRe
         Ok(serde_json::from_value(body_json(&mut answer)).expect("a skeleton"))
     })
     .expect("the skeleton reads");
-    let lacking = replica.lacking(&suzatary_lines::secretary::outlines::Scope::Whole);
+    let lacking = replica.lacking(&suzatary_lines::secretary::outlines::Scope::Nodes(
+        suzatary_lines::secretary::outlines::Nodes::Whole,
+    ));
     for ask in
         suzatary_api::routes::asks(lacking.iter().map(|node| (node.hash.as_str(), node.size)))
     {

@@ -567,7 +567,7 @@ proptest! {
 /// The content of `hashes`, asked of the lines by hash as a tab would ask: in ascending order, in
 /// answers of at most `query::MOST_HASHES` names and `routes::MOST_CONTENT_BYTES` bytes by the
 /// sizes the skeleton gave, an object larger than that asked for alone.
-fn fetched(
+pub(crate) fn fetched(
     lines: suzatary_lines::secretary::conversations::Conversations<'_>,
     nodes: &BTreeMap<String, usize>,
 ) -> BTreeMap<String, Content> {
@@ -1190,7 +1190,7 @@ fn pulled_again(
 #[test]
 fn a_purge_takes_the_husks_of_the_lines_whose_keys_it_owes() {
     use suzatary_lines::secretary::held_replica::{HeldReplica, NotAnAnswer};
-    use suzatary_lines::secretary::outlines::Scope;
+    use suzatary_lines::secretary::outlines::{Nodes, Scope};
     let mut store = Writer::new();
     store.apply(&Write::Said {
         conversation: 0,
@@ -1229,7 +1229,7 @@ fn a_purge_takes_the_husks_of_the_lines_whose_keys_it_owes() {
     let owed: BTreeSet<_> = replica.owed(&BTreeSet::new()).into_keys().collect();
     assert!(!owed.is_empty(), "the erasure leaves keys owed");
     let sizes = replica
-        .lacking(&Scope::Naming(owed.clone()))
+        .lacking(&Scope::Nodes(Nodes::Naming(owed.clone())))
         .into_iter()
         .map(|node| (node.hash, node.size))
         .collect();

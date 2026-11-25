@@ -27,6 +27,9 @@ export namespace storeset {
     | { readonly type: "Told"; readonly reader: string; readonly left: excluded.Left }
     | { readonly type: "Bars"; readonly e: progress.Event }
     | { readonly type: "Moved"; readonly conversations: linesync.Moved }
+    // Words of these conversations came to the core: no line moved, so only a reading that answers before its words are
+    // held reads again.
+    | { readonly type: "Came"; readonly conversations: readonly string[]; readonly whole: readonly string[] }
     | { readonly type: "Refused"; readonly why: string }
 
   export type Scope = "Inbox" | "All"
@@ -117,6 +120,7 @@ export namespace storeset {
         told,
         bars,
         moved: conversations => say({ type: "Moved", conversations }),
+        came: (conversations, whole) => say({ type: "Came", conversations, whole }),
         replaced: replaced("lines"),
       },
       blocks,

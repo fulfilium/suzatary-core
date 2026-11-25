@@ -11,6 +11,12 @@
  * on a tailnet relay gets on a good day; `SUZATARY_COLDSYNC_NET=none` runs it at the box's own speed. Each pass is a
  * new profile's first visit. No gate runs it: `SUZATARY_COLDSYNC=<file> SUZATARY_COLDSYNC_PASSES=3 scripts/web-e2e.sh
  * coldsync` does, by name, and writes each pass's record and its table to `<file>`.
+ *
+ * `SUZATARY_COLDSYNC_PAGE=conversations` opens `#/conversations` instead and measures the list: drawn once every row
+ * shows its words (the pinned row and at least one more, none "not on this device yet"), with when its first row was
+ * drawn and how many content objects were pulled before it. `SUZATARY_COLDSYNC_SEARCH=<words>` types them into the
+ * search once the list's first row is drawn. Each pass counts the page's readings of the list and of a search
+ * (`ask:Conversations`, `ask:Search`) until the cold load ends.
  */
 
 import assert from "node:assert/strict"
@@ -18,15 +24,22 @@ import { readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 
 import type { Conditions, Wired } from "./cdp"
-import { PHONE, STEP_MS, WORKER_MARKS, suite, trustThisDevice } from "./harness"
+import { FAST_4G, PHONE, STEP_MS, WORKER_MARKS, suite, trustThisDevice } from "./harness"
 import { BULK } from "./longtasks"
 
 const LINES_BASE = process.env["E2E_BASE_LINES"] ?? ""
 const LINES_INSTANCE = process.env["E2E_LINES_INSTANCE"] ?? ""
 const OUT = process.env["SUZATARY_COLDSYNC"] ?? ""
 const PASSES = Number(process.env["SUZATARY_COLDSYNC_PASSES"] ?? "1")
-const FAST_4G: Conditions = { offline: false, latency: 60 * 2.75, downloadThroughput: (9_000_000 / 8) * 0.9, uploadThroughput: (1_500_000 / 8) * 0.9 }
 const NET: Conditions | null = process.env["SUZATARY_COLDSYNC_NET"] === "none" ? null : FAST_4G
+const PAGE = process.env["SUZATARY_COLDSYNC_PAGE"] === "conversations" ? "conversations" : "secretary"
+// What the page draws first: the stream's first round, or every row of the list with its words.
+const ROW = `document.querySelectorAll(".chatsections .chatrow")`
+const LIST = `(${ROW}.length > 1 && document.querySelector(".chatsections .chatrow.unheld") === null)`
+const SEARCH = process.env["SUZATARY_COLDSYNC_SEARCH"] ?? ""
+// A search's answer replaces the list: its first answer drawn, whatever it covered.
+const FOUND = `(document.querySelector(".chathit, .chatbody .chatsaid, .chatbody .empty") !== null)`
+const MEASURED = SEARCH !== "" ? FOUND : PAGE === "conversations" ? LIST : BULK
 
 const app = await suite("coldsync", PHONE)
 
@@ -55,7 +68,20 @@ const route = (url: string): string => {
 
 // Requests by route: how many, their bytes, the time from the first sent to the last ended, the sum of each one's own
 // time, and the most out at once.
-type Route = { readonly requests: number; readonly bytes: number; readonly decoded: number; readonly spanMs: number; readonly wireMs: number; readonly mostAtOnce: number; readonly beforeDraw: number; readonly bytesBeforeDraw: number }
+type Route = {
+  readonly requests: number
+  readonly bytes: number
+  readonly decoded: number
+  readonly spanMs: number
+  readonly wireMs: number
+  readonly mostAtOnce: number
+  readonly beforeDraw: number
+  readonly bytesBeforeDraw: number
+  // The objects the requests named by `hashes`, all and those ended before the draw.
+  readonly objects: number
+  readonly objectsBeforeDraw: number
+}
+const named = (url: string): number => (new URL(url, "http://x").searchParams.get("hashes") ?? "").split(",").filter((h) => h !== "").length
 const routes = (wired: readonly Wired[], drawnAt: number): Record<string, Route> => {
   const by = new Map<string, Wired[]>()
   for (const w of wired) by.set(route(w.url), [...(by.get(route(w.url)) ?? []), w])
@@ -77,6 +103,8 @@ const routes = (wired: readonly Wired[], drawnAt: number): Record<string, Route>
           mostAtOnce: most,
           beforeDraw: before.length,
           bytesBeforeDraw: before.reduce((k, w) => k + w.bytes, 0),
+          objects: ws.reduce((k, w) => k + named(w.url), 0),
+          objectsBeforeDraw: before.reduce((k, w) => k + named(w.url), 0),
         },
       ]
     }),
@@ -118,9 +146,20 @@ const SKELETON = `(async () => {
 // A node's bytes as JSON, those of the names it holds (its own, its parents', its keys'), and its content's size.
 type Node = { readonly conversation: string; readonly json: number; readonly names: number; readonly size: number }
 
-// Written into every document before its scripts: the instant the stream's first round of the store is drawn.
+// Written into every document before its scripts: the instant the page's first row is drawn, and the instant what the
+// bench measures is.
+// And, until the page goes, the last instant a row of the list waited for its words.
 const DRAWN_AT = `(() => {
-  const tick = () => (${BULK} ? (window.__drawnAt = performance.now()) : requestAnimationFrame(tick))
+  const asks = (window.__asks = {})
+  new PerformanceObserver((list) => {
+    for (const m of list.getEntries()) if (m.name.startsWith("ask:") || m.name.endsWith(":batched")) asks[m.name] = (asks[m.name] ?? 0) + 1
+  }).observe({ type: "measure" })
+  const tick = () => {
+    if (window.__rowAt === undefined && ${ROW}.length > 1) window.__rowAt = performance.now()
+    if (window.__drawnAt === undefined && ${MEASURED}) window.__drawnAt = performance.now()
+    if (document.querySelector(".chatsections .chatrow.unheld") !== null) window.__unheldAt = performance.now()
+    requestAnimationFrame(tick)
+  }
   requestAnimationFrame(tick)
 })()`
 
@@ -134,6 +173,14 @@ const QUIET_MS = 5000
 const reads = (open: readonly string[]): string[] => open.filter((r) => r.includes(" /api/") && !r.endsWith("/events"))
 
 type Pass = {
+  readonly page: string
+  // The list's first row beside the pinned one, where the page drew one before the measure; the last instant a row
+  // waited for its words; and when the skeleton's last piece came.
+  readonly rowMs: number | null
+  readonly unheldMs: number | null
+  readonly skeletonMs: number
+  // The page's readings of the list and of a search until the cold load ended.
+  readonly asks: Record<string, number>
   readonly drawnMs: number
   readonly endedMs: number
   readonly routes: Record<string, Route>
@@ -153,10 +200,16 @@ const pass = async (n: number): Promise<Pass> => {
   const stop = await app.page.wire()
   const from = logged().length
   try {
-    await app.page.navigate(`${LINES_BASE}/?cold${n}#/secretary`)
+    await app.page.navigate(`${LINES_BASE}/?cold${n}#/${PAGE}`)
+    if (SEARCH !== "") {
+      await app.page.waitFor(`window.__rowAt !== undefined && document.querySelector(".chatsearch") !== null`, { timeout: STEP_MS })
+      await app.page.type(".chatsearch", SEARCH)
+    }
     await app.page.waitFor(`window.__drawnAt !== undefined`, { timeout: STEP_MS })
     const origin = await app.page.evaluate<number>(`performance.timeOrigin`)
     const drawnAt = origin + (await app.page.evaluate<number>(`window.__drawnAt`))
+    const rowAt = await app.page.evaluate<number | null>(`window.__rowAt ?? null`)
+    const unheldAt = await app.page.evaluate<number | null>(`window.__unheldAt ?? null`)
     // Ended once no read of the box's API is out for `QUIET_MS`: a prefetch sends its answers one after another.
     const deadline = Date.now() + STEP_MS
     for (let quietSince = Date.now(); Date.now() - quietSince < QUIET_MS && Date.now() < deadline; ) {
@@ -165,6 +218,7 @@ const pass = async (n: number): Promise<Pass> => {
     }
     assert.deepEqual(reads(journal.inFlight()), [], "the cold load ended")
     const wired = stop()
+    const asks = await app.page.evaluate<Record<string, number>>(`window.__asks`)
     const drawn = await app.page.evaluate<string[]>(DRAWN)
     const endedAt = Math.max(...wired.filter((w) => w.url.startsWith("/api/") && !w.url.endsWith("/events")).map((w) => w.ended))
     const worker = await app.page.inWorker<Measures>("prodromework", MEASURES)
@@ -175,6 +229,11 @@ const pass = async (n: number): Promise<Pass> => {
     const of = new Set(drawn)
     const ofDrawn = nodes.filter((x) => x.conversation === "" || of.has(x.conversation))
     return {
+      page: PAGE,
+      rowMs: rowAt === null ? null : Math.round(rowAt),
+      unheldMs: unheldAt === null ? null : Math.round(unheldAt),
+      asks,
+      skeletonMs: Math.round(Math.max(...wired.filter((w) => route(w.url) === "lines skeleton").map((w) => w.ended)) - origin),
       drawnMs: Math.round(drawnAt - origin),
       endedMs: Math.round(endedAt - origin),
       routes: routes(wired, drawnAt),
@@ -206,17 +265,20 @@ const table = (p: Pass): string => {
   const kb = (b: number): string => `${Math.round(b / 1000)} KB`
   const rows = Object.entries(p.routes)
     .sort((a, b) => b[1].decoded - a[1].decoded)
-    .map(([name, r]) => `| ${name} | ${r.requests} (${r.beforeDraw} before the draw) | ${kb(r.bytes)} (${kb(r.bytesBeforeDraw)}) | ${kb(r.decoded)} | ${r.mostAtOnce} | ${r.spanMs} | ${r.wireMs} |`)
+    .map(([name, r]) => `| ${name} | ${r.requests} (${r.beforeDraw} before the draw) | ${r.objects} (${r.objectsBeforeDraw}) | ${kb(r.bytes)} (${kb(r.bytesBeforeDraw)}) | ${kb(r.decoded)} | ${r.mostAtOnce} | ${r.spanMs} | ${r.wireMs} |`)
   const w = (name: string): string => {
     const m = p.worker[name]
     return m === undefined ? "none" : `${Math.round(m.ms)} ms over ${m.count}`
   }
   return [
-    `first round drawn ${p.drawnMs} ms, cold load ended ${p.endedMs} ms after the document started`,
-    "| route | requests | bytes on the wire (before the draw) | decoded | most at once | span ms | sum of each request's ms |",
-    "|---|---|---|---|---|---|---|",
+    p.page === "conversations"
+      ? `list's first row drawn ${p.rowMs ?? "with its words"} ms, every row's words ${p.drawnMs} ms, the skeleton whole ${p.skeletonMs} ms, the last row waiting for its words ${p.unheldMs ?? "never"} ms, cold load ended ${p.endedMs} ms after the document started`
+      : `first round drawn ${p.drawnMs} ms, cold load ended ${p.endedMs} ms after the document started`,
+    "| route | requests | objects named (before the draw) | bytes on the wire (before the draw) | decoded | most at once | span ms | sum of each request's ms |",
+    "|---|---|---|---|---|---|---|---|",
     ...rows,
     `protocols: ${p.protocols.join(", ")}`,
+    `the page's readings until the cold load ended: ${Object.entries(p.asks).map(([k, n]) => `${k} ${n}`).join(", ")}`,
     ...p.box,
     `worker: decode ${w("http:decode")}; the core's piece ${w("lines:piece")}; the piece's frame kept ${w("lines:kept")}; content verified ${w("content:admit")}; content kept and held ${w("content:kept")}`,
     `first screen: ${p.firstScreen.conversations} of ${p.firstScreen.of} conversations drawn; the skeleton's nodes ${kb(p.firstScreen.skeletonBytes)} as JSON (names ${kb(p.firstScreen.nameBytes)} of it), ${kb(p.firstScreen.skeletonOfDrawn)} of it theirs and the structure; content ${kb(p.firstScreen.contentBytes)}, ${kb(p.firstScreen.contentOfDrawn)} of it theirs`,

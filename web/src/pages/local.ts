@@ -63,12 +63,14 @@ export namespace local {
     (chain: string) => boxFolds.of(chain).then(f => ({ ...f, entries: f.entries.filter(e => e.authored?.block.kind === "decision") })),
   )
 
-  const listed = reading.againOn(asked.question(() => storesync.list(laneOf({ type: "Conversations" }))), storesync.watch)
+  const listed = reading.againOn(asked.question(() => storesync.list(laneOf({ type: "Conversations" }))), storesync.watchList)
   // Read again whenever the lines move, the own lines among them.
   const refusedElsewhere = reading.againOn(asked.question(() => storesync.refused()), storesync.watch)
 
   type Search = Extract<Local, { type: "Search" }>
-  const searches = asked.family((s: Search) => s.q, (s: Search) => storesync.search(s.q, laneOf(s)))
+  // Read again as words land: a search over part of the lines says more as more come.
+  const searched = asked.family((s: Search) => s.q, (s: Search) => storesync.search(s.q, laneOf(s)))
+  const searches = (s: Search) => reading.againOn(searched(s), storesync.watchSearch(s.q))
 
   type Stream = Extract<Local, { type: "Stream" }>
   const streams = asked.family(

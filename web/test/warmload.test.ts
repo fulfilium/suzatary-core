@@ -140,11 +140,23 @@ const settled = async (): Promise<void> => {
   live = []
 }
 
-// The conversations as a tab's worker lists them.
+// The conversations as a tab's worker lists them once each row's words are held: the list answers with what the
+// device holds and asks for the rest behind its answer, so it is asked again until no row waits for its words.
 const listed = async (t: Tab): Promise<string> => {
-  const a = await t.ask({ type: "Conversations" })
-  assert.equal(a.type, "Held", JSON.stringify(a))
-  return JSON.stringify(a.type === "Held" ? a.v : null)
+  for (;;) {
+    const a = await t.ask({ type: "Conversations" })
+    if (a.conversations.every(c => c.words.held !== "nothere")) return JSON.stringify(a)
+    await new Promise(next => setTimeout(next, 0))
+  }
+}
+
+// A search on a tab once it has read every conversation: the one reading that asks for every line.
+const searchedAll = async (t: Tab): Promise<void> => {
+  for (;;) {
+    const a = await t.ask({ type: "Search", q: "a" })
+    if (a.searched === a.of) return
+    await new Promise(next => setTimeout(next, 0))
+  }
 }
 
 // A reading of a reload with the box gone, which never answers when the device does not hold the lines landed: it
@@ -326,10 +338,10 @@ test("a husk one tab's purge kept stands through another tab's compaction, and a
   const [quiet, reading] = [tab(), tab()]
   assert.equal(await reading.ask({ type: "Pull" }), true)
   assert.equal(await quiet.ask({ type: "Pull" }), true)
-  // The quiet tab compacts; then the reading tab reads the lines, a line whose every key is gone among them, and its purge
-  // husks that line and deletes its print. The quiet tab read nothing, so it holds no husk of its own.
+  // The quiet tab compacts; then the reading tab reads every line, a line whose every key is gone among them, and its
+  // purge husks that line and deletes its print. The quiet tab read nothing, so it holds no husk of its own.
   await quiet.ask({ type: "Shown", on: false })
-  await listed(reading)
+  await searchedAll(reading)
   const husked = (): string[] => {
     const rows = [...device.rows("suzatary", "replica").entries()]
     const probe = new core.Lines()
