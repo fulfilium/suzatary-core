@@ -67,11 +67,11 @@ impl Failing {
         let episode = prodrome_data::instant::datetime_of(self.since).ok()?;
         let since = utc(self.since);
         let connection = &self.connection;
-        let act = match self.remedy() {
+        let (act, instead): (Act, Option<&str>) = match self.remedy() {
             Remedy::Retry => return None,
             Remedy::Secret => {
                 let name = connection.secrets().into_iter().next()?;
-                Act::Secret {
+                let act = Act::Secret {
                     name: Settable::mint(settables, &name).ok()?.name().to_owned(),
                     // The same words whatever the class, so a class moving within one
                     // episode (an outage, then 401) asks for the one card.
@@ -79,10 +79,13 @@ impl Failing {
                         "{} has failed since {since}: store it again",
                         connection.called()
                     ),
-                }
+                };
+                (act, None)
             }
-            Remedy::Auth => {
-                connection.steps().into_iter().find_map(|step| match step {
+            Remedy::Auth => connection
+                .steps()
+                .into_iter()
+                .find_map(|step| match step {
                     Step::DeviceCode { account } => Some(Act::Auth { account }),
                     // A revoked grant, or one a client in Testing ended after 7 days, holds no
                     // part any more (Google forgets the whole grant), so the consent asks for all.
@@ -95,16 +98,23 @@ impl Failing {
                     | Step::GoogleClient
                     | Step::SignIn
                     | Step::Terminal { .. } => None,
-                })?
-            }
+                })
+                .map(|act| (act, None))
+                // Lieer's own sign-in is a terminal step, so a Gmail account is offered the move
+                // onto the box's own Google sign-in, which a card can finish.
+                .or_else(|| {
+                    let google = connection.moved_to_google()?;
+                    Some((Act::Connect { connection: google }, Some(MOVE)))
+                })?,
         };
         Some(
             Owed::one(
                 Proposal::Act(act),
                 format!(
-                    "{} has failed since {since}: {}",
+                    "{} has failed since {since}: {}{}",
                     self.named(),
-                    said(self.class)
+                    said(self.class),
+                    instead.unwrap_or_default()
                 ),
             )
             .since(episode),
@@ -130,6 +140,10 @@ impl Failing {
         }
     }
 }
+
+/// What a lieer account's card adds: the move is how its sign-in is renewed.
+const MOVE: &str = "; this card signs it in with Google instead, which reads the same mail and \
+                    its calendars too";
 
 fn capitalised(words: &str) -> String {
     let mut chars = words.chars();

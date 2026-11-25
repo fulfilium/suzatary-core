@@ -9,6 +9,7 @@ use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::declared::{Declared, Landed, declared, line};
 use suzatary_mail::mail::fault::Fault;
 use suzatary_mail::mail::imap::{INBOX, ImapError, Pull, Pulled, Session, pull};
+use suzatary_mail::mail::oauth::Lapse;
 use suzatary_mail::mail::puller::{Puller, Unpulled};
 
 use crate::google::{Grants, NotReady};
@@ -131,10 +132,23 @@ pub struct Lieer {
 
 impl Puller for Lieer {
     fn pull(&self, _since: chrono::NaiveDate) -> Result<String, Unpulled> {
-        ran(&Cmd::new(&self.program)
-            .arg("sync")
-            .cwd(&self.maildir)
-            .pass(suzatary_io_access::run::NETWORK))
+        said(
+            &Cmd::new(&self.program)
+                .arg("sync")
+                .cwd(&self.maildir)
+                .pass(suzatary_io_access::run::NETWORK),
+        )
+        .map(|output| tail(&output))
+        .map_err(|failed| unpulled_by_lieer(&failed))
+    }
+}
+
+/// A failed `gmi sync`: a sign-in the provider ended when the run's last `RefreshError` names a
+/// [`Lapse`], else unclassified.
+fn unpulled_by_lieer(failed: &str) -> Unpulled {
+    Unpulled {
+        class: Lapse::of_refresh_error(failed).map_or(Fault::Unclassified, |_| Fault::NeedsLogin),
+        said: tail(failed),
     }
 }
 
@@ -198,4 +212,38 @@ fn ran(cmd: &Cmd) -> Result<String, Unpulled> {
             class: Fault::Unclassified,
             said: tail(&failed),
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What `gmi sync` prints when the provider refuses the refresh with `code`.
+    fn refused(code: &str) -> String {
+        format!(
+            "Traceback (most recent call last):\n  File \"gmi\", line 1, in <module>\n\
+             google.auth.exceptions.RefreshError: ('{code}: words', {{'error': '{code}', \
+             'error_description': 'words'}})\n"
+        )
+    }
+
+    #[test]
+    fn each_code_only_a_person_answers_is_a_sign_in() {
+        for lapse in Lapse::ALL {
+            let unpulled = unpulled_by_lieer(&refused(lapse.code()));
+            assert_eq!(unpulled.class, Fault::NeedsLogin, "{lapse}");
+            assert!(unpulled.said.contains(lapse.code()), "{}", unpulled.said);
+        }
+    }
+
+    #[test]
+    fn an_unknown_code_or_no_refresh_error_stays_unclassified() {
+        for failed in [
+            refused("temporarily_unavailable"),
+            "gmi: could not resolve host".to_owned(),
+            "invalid_grant mentioned outside a RefreshError".to_owned(),
+        ] {
+            assert_eq!(unpulled_by_lieer(&failed).class, Fault::Unclassified);
+        }
+    }
 }

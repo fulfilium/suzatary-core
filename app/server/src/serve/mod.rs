@@ -698,6 +698,21 @@ impl State {
             .inspect_err(|failed| tracing::warn!("noticed: the sources' health: {failed}"))
             .ok();
         let now = instant_of(caps.secretary.clock.now());
+        if let Some(health) = &health {
+            let stalled: Vec<_> = health.stalled(now).collect();
+            if !stalled.is_empty() {
+                let sign_ins = stalled
+                    .iter()
+                    .filter_map(|(source, _)| health.health(source)?.remedial())
+                    .filter(|(class, _)| class.remedy() == suzatary_health::health::Remedy::Auth)
+                    .count();
+                tracing::warn!(
+                    stalled = stalled.len(),
+                    sign_ins,
+                    "noticed: sources failing for over an hour"
+                );
+            }
+        }
         let model = part("model", || self.models.recorded());
         locks::held(&self.secrets_answered).forget();
         let secrets = self.secrets(caps);

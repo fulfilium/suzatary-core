@@ -1,4 +1,4 @@
-//! An account failing for more than a day proposes a todo on the upkeep chain, which a tap
+//! An account whose sync has stalled (failed for longer than `stalled_after`) proposes a todo on the upkeep chain, which a tap
 //! performs; the act is a function of the account and the instant it last synced, so asking again
 //! asks for the same object, and a new failure after a success is a new act.
 
@@ -66,10 +66,7 @@ pub fn act_of(zone: Zone, account: &str, since: Instant) -> Act {
     }
 }
 
-/// How long an account may fail, in days, before the box proposes a todo about it.
-const PERSISTENT: i64 = 1;
-
-/// Propose the todo for every account failing longer than a day at `now`, on the upkeep chain,
+/// Propose the todo for every account whose sync has stalled at `now`, on the upkeep chain,
 /// in `conversation`; answers each proposal's index. A deployment with no `[upkeep]` proposes
 /// nothing, and neither does an account whose todo the chain already holds.
 pub fn propose_persistent(
@@ -97,7 +94,7 @@ pub fn propose_persistent(
             continue;
         };
         let account = account.as_str();
-        if reading.failing_for(now) <= Some(chrono::Duration::days(PERSISTENT)) {
+        if reading.stalled_since(now).is_none() {
             continue;
         }
         let todo = todo_of(account, *since);
@@ -149,7 +146,8 @@ pub fn propose_persistent(
 mod tests {
     use super::*;
 
-    /// A register holding one account that last synced `hours` before the clock.
+    /// A register holding one account that last synced `minutes` before the clock and has failed
+    /// ever since.
     struct FailingFor(i64);
 
     impl suzatary_health::health::Register<SourceKey> for FailingFor {
@@ -171,14 +169,14 @@ mod tests {
                 }],
                 notmuch: String::new(),
             };
-            let at = |hours| now - chrono::Duration::hours(hours);
+            let at = |minutes| now - chrono::Duration::minutes(minutes);
             let failed = suzatary_mail::outcome::Outcome::Failed(
                 suzatary_mail::mail::fault::Fault::Unclassified,
             );
             let healths = suzatary_health::health::Healths::of_sync;
             Ok(
                 healths(&row(suzatary_mail::outcome::Outcome::Succeeded), at(self.0))
-                    .join(&healths(&row(failed), at(1))),
+                    .join(&healths(&row(failed), at(0))),
             )
         }
     }
@@ -257,22 +255,22 @@ mod tests {
         stores
     }
 
-    /// A day's failure proposes one todo on the upkeep chain alone, whatever it is called (the
+    /// An hour's failure proposes one todo on the upkeep chain alone, whatever it is called (the
     /// routing boundary), and asking again asks for the same one; a younger failure, or no
     /// `[upkeep]`, proposes nothing.
     #[test]
-    fn a_failure_past_a_day_is_proposed_once_on_the_upkeep_chain() {
+    fn a_failure_past_an_hour_is_proposed_once_on_the_upkeep_chain() {
         for upkeep in ["ops", "life"] {
             let (held, once) = (stores(), (vec![0], vec![upkeep.to_owned()]));
-            assert_eq!(proposed(&FailingFor(30), &held, Some(upkeep)), once);
+            assert_eq!(proposed(&FailingFor(90), &held, Some(upkeep)), once);
             assert_eq!(
-                proposed(&FailingFor(30), &held, Some(upkeep)),
+                proposed(&FailingFor(90), &held, Some(upkeep)),
                 once,
                 "the same object"
             );
         }
         let nothing = (Vec::new(), Vec::new());
-        assert_eq!(proposed(&FailingFor(20), &stores(), Some("ops")), nothing);
-        assert_eq!(proposed(&FailingFor(30), &stores(), None), nothing);
+        assert_eq!(proposed(&FailingFor(30), &stores(), Some("ops")), nothing);
+        assert_eq!(proposed(&FailingFor(90), &stores(), None), nothing);
     }
 }

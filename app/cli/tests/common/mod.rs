@@ -3875,7 +3875,7 @@ impl FakeJunk {
                 suzatary_mail::mail::oauth::NeedsLogin::Lapsed {
                     email: account.to_owned(),
                     slot: "imap",
-                    code: "invalid_grant".to_owned(),
+                    code: suzatary_mail::mail::oauth::Lapse::InvalidGrant,
                     description: "AADSTS700082: The refresh token has expired.".to_owned(),
                 },
             )),

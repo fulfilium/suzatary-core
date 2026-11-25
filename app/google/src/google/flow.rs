@@ -8,7 +8,7 @@ use base64::Engine as _;
 use super::{Challenge, Client, ClientId, RedirectUri, Scope, Scopes, State, Verifier};
 use suzatary_base::capability::Secret;
 use suzatary_mail::mail::address::EmailAddress;
-use suzatary_mail::mail::oauth::{Answered, FormPost, NeedsLogin, OauthError, Silent};
+use suzatary_mail::mail::oauth::{Answered, FormPost, Lapse, NeedsLogin, OauthError, Silent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Endpoints {
@@ -298,17 +298,13 @@ pub struct AccessToken {
     pub expires_in_seconds: u64,
 }
 
-/// Google's `error` for a grant only a person can renew: revoked, expired (a client in Testing
-/// ends each grant after 7 days), or its password changed.
-const LAPSED: &str = "invalid_grant";
-
 /// Read a refresh's answer for `account`: a token, or the sign-in a lapsed grant needs.
 pub fn read_refresh(
     answered: &Answered,
     account: &EmailAddress,
 ) -> Result<Silent<AccessToken>, OauthError> {
     match refusal(answered) {
-        Some(OauthError::Refused { code, description }) if code == LAPSED => {
+        Some(OauthError::Refused { code, description }) if Lapse::of_code(&code).is_some() => {
             Ok(Silent::NeedsLogin(NeedsLogin::Google {
                 email: account.as_str().to_owned(),
                 why: format!("{code}: {description}"),

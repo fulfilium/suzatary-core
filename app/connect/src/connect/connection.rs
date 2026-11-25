@@ -111,6 +111,16 @@ impl Connection {
             )
     }
 
+    /// For a Gmail account read through lieer, the Google connection that [moves](Self::moves)
+    /// it onto the box's own sign-in; none for any other.
+    #[must_use]
+    pub fn moved_to_google(&self) -> Option<Self> {
+        let TemplateId::Gmail = self.template else {
+            return None;
+        };
+        Self::new(TemplateId::Google, self.params.clone()).ok()
+    }
+
     /// The sources its health is read from; none for what the box reads nothing from.
     #[must_use]
     pub fn sources(&self) -> Vec<SourceKey> {

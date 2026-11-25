@@ -140,7 +140,7 @@ pub enum NeedsLogin {
     Lapsed {
         email: String,
         slot: &'static str,
-        code: String,
+        code: Lapse,
         description: String,
     },
     #[error(
@@ -151,13 +151,70 @@ pub enum NeedsLogin {
     Google { email: String, why: String },
 }
 
-/// Microsoft's `error` codes for a grant only a person can renew.
-const LAPSED: [&str; 4] = [
-    "invalid_grant",
-    "interaction_required",
-    "consent_required",
-    "login_required",
-];
+/// An OAuth 2.0 `error` that only a person can answer: the provider ended the grant or the
+/// client, and no retry mends it. The one list every puller reads a refusal against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lapse {
+    InvalidGrant,
+    InvalidClient,
+    UnauthorizedClient,
+    /// The OAuth client was deleted at the provider.
+    DeletedClient,
+    InteractionRequired,
+    ConsentRequired,
+    LoginRequired,
+}
+
+impl Lapse {
+    pub const ALL: [Lapse; 7] = [
+        Lapse::InvalidGrant,
+        Lapse::InvalidClient,
+        Lapse::UnauthorizedClient,
+        Lapse::DeletedClient,
+        Lapse::InteractionRequired,
+        Lapse::ConsentRequired,
+        Lapse::LoginRequired,
+    ];
+
+    /// The `error` the provider sends.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Lapse::InvalidGrant => "invalid_grant",
+            Lapse::InvalidClient => "invalid_client",
+            Lapse::UnauthorizedClient => "unauthorized_client",
+            Lapse::DeletedClient => "deleted_client",
+            Lapse::InteractionRequired => "interaction_required",
+            Lapse::ConsentRequired => "consent_required",
+            Lapse::LoginRequired => "login_required",
+        }
+    }
+
+    /// The lapse an `error` names; `None` for any other code, which is an outage or a fault of
+    /// the request.
+    #[must_use]
+    pub fn of_code(code: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|lapse| lapse.code() == code)
+    }
+
+    /// The lapse the last `RefreshError` of a lieer run names. Python prints it as
+    /// `RefreshError: ('<code>: <words>', {'error': '<code>', ...})`; this is the one place that
+    /// reads that text.
+    #[must_use]
+    pub fn of_refresh_error(output: &str) -> Option<Self> {
+        const KEY: &str = "'error': '";
+        let line = output.lines().rfind(|line| line.contains("RefreshError"))?;
+        let from = line.find(KEY)? + KEY.len();
+        let code = line[from..].split('\'').next()?;
+        Self::of_code(code)
+    }
+}
+
+impl std::fmt::Display for Lapse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code())
+    }
+}
 
 fn devicecode_url(authority: Authority) -> String {
     format!("https://login.microsoftonline.com/{authority}/oauth2/v2.0/devicecode")
@@ -327,14 +384,15 @@ pub fn read_silent<P: Protocol>(
 ) -> Result<Silent<Minted<P>>, OauthError> {
     match read_refresh::<P>(answered) {
         Ok(minted) => Ok(Silent::Token(minted)),
-        Err(OauthError::Refused { code, description }) if LAPSED.contains(&code.as_str()) => {
-            Ok(Silent::NeedsLogin(NeedsLogin::Lapsed {
+        Err(OauthError::Refused { code, description }) => match Lapse::of_code(&code) {
+            Some(code) => Ok(Silent::NeedsLogin(NeedsLogin::Lapsed {
                 email: email.to_owned(),
                 slot: P::SLOT,
                 code,
                 description,
-            }))
-        }
+            })),
+            None => Err(OauthError::Refused { code, description }),
+        },
         Err(failed) => Err(failed),
     }
 }
@@ -507,11 +565,11 @@ mod tests {
 
     #[test]
     fn a_lapsed_grant_reads_as_needs_login_and_an_outage_does_not() {
-        for code in LAPSED {
+        for lapse in Lapse::ALL {
             let read = read_silent::<Imap>(
                 &answered(
                     400,
-                    serde_json::json!({"error": code, "error_description": "AADSTS70008: expired"}),
+                    serde_json::json!({"error": lapse.code(), "error_description": "AADSTS70008: expired"}),
                 ),
                 "her@study.test",
             )
@@ -521,7 +579,7 @@ mod tests {
                 Silent::NeedsLogin(NeedsLogin::Lapsed {
                     email: "her@study.test".to_owned(),
                     slot: "imap",
-                    code: code.to_owned(),
+                    code: lapse,
                     description: "AADSTS70008: expired".to_owned(),
                 })
             );

@@ -317,3 +317,21 @@ fn outcome(result: Seen) -> Outcome {
         Seen::Outage => Outcome::Failed(Failure::Unclassified),
     }
 }
+
+/// A Gmail account on lieer's own sign-in has only a terminal step, so its sign-in fault is owed
+/// the move onto the box's Google sign-in; an account that moved is owed the Google sign-in.
+#[test]
+fn a_gmail_accounts_sign_in_fault_offers_the_move_to_google() {
+    let gmail = Connection::parse("lieer", &["cy@example.test".to_owned()]).expect("a Gmail");
+    let mut world = World::new();
+    world.declared = world.declared.with(&gmail).expect("declared");
+    let key = gmail.sources().into_iter().next().expect("its mail");
+    world.google(&key, at(1), Outcome::Failed(Failure::NeedsLogin));
+    let owed = world.owed(at(6));
+    let moved = gmail.moved_to_google().expect("a Google twin");
+    let offered: Vec<_> = owed.iter().map(|noticed| &noticed.proposal).collect();
+    assert_eq!(
+        offered,
+        [&Proposal::Act(Act::Connect { connection: moved })]
+    );
+}

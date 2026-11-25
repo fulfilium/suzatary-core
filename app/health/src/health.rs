@@ -196,6 +196,14 @@ impl Health {
     }
 }
 
+/// How long a source may fail, with no success between, before it needs attention whatever its
+/// class. The mail sync runs every five minutes, so this is twelve runs in a row: a blip in the
+/// network or a provider's short outage has ended by then, and what has not is not a blip.
+#[must_use]
+pub fn stalled_after() -> Duration {
+    Duration::hours(1)
+}
+
 /// What an account's sync results say now.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -224,12 +232,12 @@ pub enum Reading {
 }
 
 impl Reading {
-    /// How long it has been failing at `now`, `None` when its latest sync succeeded.
+    /// When it began failing, if it has failed longer than [`stalled_after`] at `now`.
     #[must_use]
-    pub fn failing_for(&self, now: Instant) -> Option<Duration> {
+    pub fn stalled_since(&self, now: Instant) -> Option<Instant> {
         match self {
-            Reading::Ok { .. } => None,
-            Reading::Failing { since, .. } => Some(now - *since),
+            Reading::Failing { since, .. } if now - *since > stalled_after() => Some(*since),
+            Reading::Failing { .. } | Reading::Ok { .. } => None,
         }
     }
 }
@@ -297,6 +305,12 @@ impl<K: Ord + Clone> Healths<K> {
         self.0
             .iter()
             .map(|(source, health)| (source, health.reading()))
+    }
+
+    /// Each source that has failed longer than [`stalled_after`] at `now`, and since when.
+    pub fn stalled(&self, now: Instant) -> impl Iterator<Item = (&K, Instant)> {
+        self.readings()
+            .filter_map(move |(source, reading)| Some((source, reading.stalled_since(now)?)))
     }
 }
 
@@ -464,5 +478,22 @@ mod tests {
                 .remedial(),
             None
         );
+    }
+
+    /// A class no tap mends is still counted once it has failed past the bound, and a success
+    /// ends it.
+    #[test]
+    fn a_failure_past_the_bound_is_stalled_whatever_its_class() {
+        let outage = Outcome::Failed(Failure::Unclassified);
+        let health = Health::of(instant(0), Outcome::Succeeded, "").join(&Health::of(
+            instant(10),
+            outage,
+            "timed out",
+        ));
+        let since = |at| health.reading().stalled_since(instant(at));
+        assert_eq!(since(60), None);
+        assert_eq!(since(61), Some(instant(0)));
+        let healed = health.join(&Health::of(instant(70), Outcome::Succeeded, ""));
+        assert_eq!(healed.reading().stalled_since(instant(200)), None);
     }
 }

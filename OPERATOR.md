@@ -70,7 +70,7 @@ both derive from it.
 - `suzatary sync` — pull every account per its strategy, reindex, re-tag inbox.
   **A sync failure is not yours.** Every sync records each account's health,
   the app shows it, the briefing names an account failing now, and one failing
-  for a day proposes its own todo. Do not mention a failed sync or author a
+  for an hour proposes its own todo. Do not mention a failed sync or author a
   todo about one; the register already says it.
 - `suzatary new [--limit N]` — your queue: inbox mail not yet seen (by hash), not noise. Read status is irrelevant: mail {{persona.name}} read on his phone still needs triage.
 - `suzatary search "<notmuch-query>" [--limit N]` — any query, newest first.
