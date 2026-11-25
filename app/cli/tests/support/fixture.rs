@@ -400,7 +400,7 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
     transcript::answer(
         store.conversations(),
         &id,
-        &suzatary_lines::secretary::answer::Answer::after(
+        &suzatary_lines::secretary::answer::Answer::replied(
             at,
             SWEEP_ANSWER.to_owned(),
             Vec::new(),

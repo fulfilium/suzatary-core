@@ -11,6 +11,7 @@ pub mod secretary {
     pub mod outcome;
     pub mod queue;
     pub mod search;
+    pub mod sentence;
     pub mod store;
     pub mod taint;
     pub mod tool_name;

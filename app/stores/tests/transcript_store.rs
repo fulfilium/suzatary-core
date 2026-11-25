@@ -171,7 +171,7 @@ fn a_question_is_answered_once_by_the_round_that_claimed_it() {
     );
     let answer = |second: u32| {
         suzatary_lines::secretary::answer::BoxLine::Answer(
-            suzatary_lines::secretary::answer::Answer::after(
+            suzatary_lines::secretary::answer::Answer::replied(
                 at(second),
                 "On Friday.".to_owned(),
                 Vec::new(),

@@ -10,10 +10,10 @@ use crate::verb::Request;
 use suzatary_base::capability::Clock;
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_base::escape::escape_markup;
 use suzatary_base::refusal::Refusal;
 use suzatary_conversations::secretary::model::{Conversation, Halt, ModelError, ToolCall, Turn};
 use suzatary_conversations::secretary::queue;
+use suzatary_conversations::secretary::sentence::{Built, Closing, Outside, Sentence};
 use suzatary_conversations::secretary::store::RunId;
 use suzatary_conversations::secretary::store::{Entry, Scope, Stored};
 use suzatary_conversations::secretary::taint::Taint;
@@ -33,9 +33,9 @@ pub struct Round {
     /// How many times the model was asked.
     pub steps: usize,
     /// What the round's calls carried, joined as each is BUILT, before it is sent, so a call
-    /// that fails carried it too: clean before the first is built. Its model turns, its closing
+    /// that fails carried it too: nothing before the first is built. Its model turns, its closing
     /// turn among them, store it, and its verbs' gate reads it: held is sent by construction.
-    pub carries: Taint,
+    pub built: Built,
 }
 
 /// Everything that differs between the rounds of different callers.
@@ -161,62 +161,37 @@ impl Why {
     /// the line a caller logs.
     #[must_use]
     pub fn said(&self) -> String {
+        self.closing().said()
+    }
+
+    /// The words that end a round for this reason: the box's own sentence wherever no outside
+    /// text is quoted.
+    #[must_use]
+    pub fn closing(&self) -> Closing {
         match self {
             Why::Model { failed, after } => model_failed(failed, after.as_ref()),
-            Why::Silent { after: Some(verb) } => format!(
-                "I stopped after {verb} answered, without an answer for you. Ask again, or ask \
-                 me to narrow it."
-            ),
-            Why::Silent { after: None } => {
-                "The model replied with nothing to say. Ask again.".to_owned()
-            }
-            Why::Bound(bound) => format!(
-                "I asked for a verb {bound} times without finishing, so this exchange stopped \
-                 here. Say something to continue it."
-            ),
+            Why::Silent { after } => Closing::silent(after.as_ref()),
+            Why::Bound(bound) => Closing::Own(Sentence::Bound(*bound)),
             Why::Refused(refusal) => {
-                format!("I could not finish: {}. Ask again.", refusal.message())
+                Closing::Outside(Outside::Refused(refusal.message().to_owned()))
             }
-            Why::Stopped(by) => format!("{} stopped this answer.", by.as_str()),
-            Why::Unanswered => UNANSWERED.to_owned(),
+            Why::Stopped(by) => Closing::Outside(Outside::Stopped(by.as_str().to_owned())),
+            Why::Unanswered => Closing::Own(Sentence::Unanswered),
         }
     }
 }
 
-/// The box's words for a model that failed after `after` answered.
-fn model_failed(failed: &ModelError, after: Option<&ToolName>) -> String {
-    match (failed, after) {
-        (ModelError::TooLong(_), Some(verb)) => format!(
-            "I could not finish: {verb} answered more than I can read. Ask me to narrow it; \
-             your next message is sent without that answer."
-        ),
-        (ModelError::TooLong(_), None) => "I could not finish: this message, with what it \
-             brought, is longer than the model reads. Ask again in smaller parts. Nothing is cut: \
-             your next message is sent with this one whole, a long answer it brought by its \
-             marker, or without it when even that is too long."
-            .to_owned(),
-        (ModelError::TimedOut(limit), _) => format!(
-            "I stopped: the model did not answer within {} s. Ask again, or ask for less at once.",
-            limit.as_secs()
-        ),
-        (ModelError::Unreachable(words), _) => format!(
-            "I could not finish: the model could not be reached ({words}). Ask again in a minute."
-        ),
-        (ModelError::Limited(limited), _) => {
-            format!("I could not finish: {limited}. Ask again after then.")
-        }
-        (ModelError::Overloaded(_), _) => {
-            "I could not finish: the model's service is overloaded. Ask again in a few minutes."
-                .to_owned()
-        }
-        (ModelError::Refused(words), _) => format!(
-            "I could not finish: the model refused its sign-in ({words}). Sign in again from \
-             Settings."
-        ),
-        (ModelError::Failed(words), _) => {
-            format!("I could not finish: the model failed ({words}). Ask again.")
-        }
-        (ModelError::Halted, _) => "I stopped: the model's run was ended. Ask again.".to_owned(),
+/// The words for a model that failed after `after` answered.
+fn model_failed(failed: &ModelError, after: Option<&ToolName>) -> Closing {
+    match failed {
+        ModelError::TooLong(_) => Closing::too_long(after),
+        ModelError::TimedOut(limit) => Closing::Own(Sentence::TimedOut(*limit)),
+        ModelError::Unreachable(words) => Closing::Outside(Outside::Unreachable(words.clone())),
+        ModelError::Limited(limited) => Closing::Own(Sentence::Limited(*limited)),
+        ModelError::Overloaded(_) => Closing::Own(Sentence::Overloaded),
+        ModelError::Refused(words) => Closing::Outside(Outside::SignIn(words.clone())),
+        ModelError::Failed(words) => Closing::Outside(Outside::Failed(words.clone())),
+        ModelError::Halted => Closing::Own(Sentence::Halted),
     }
 }
 
@@ -255,7 +230,7 @@ impl Round {
             now,
             rules.retry,
             rules.confirms,
-            |_| closing(now, &Why::Unanswered, Taint::Clean),
+            |_| closing(now, &Why::Unanswered, Built::Nothing),
         )? {
             transcript::Claimed::Nothing => return Ok(None),
             transcript::Claimed::Closed => {
@@ -305,7 +280,7 @@ impl Round {
             let _asking =
                 suzatary_conversations::secretary::model::pulled::Asking::of(rules.sink.halt);
             let call = rules.ask.carrying(rules.system, &read);
-            self.carries = self.carries.join(call.carries);
+            self.built = self.built.joined(call.carries);
             let reply = rules
                 .ask
                 .send(call.call, &tools, rules.sink)
@@ -352,11 +327,11 @@ impl Round {
         }
         self.sent = Some(asked.sent);
         self.calls.clone_from(&asked.reply.calls);
-        let answer = Answer::after(
+        let answer = Answer::replied(
             at.clock.now(),
             asked.reply.say,
             asked.reply.calls,
-            self.carries,
+            self.built.carries(),
         );
         self.answering(at, run, vec![BoxLine::Answer(answer)])
     }
@@ -374,7 +349,7 @@ impl Round {
             .map(|(name, value)| (name.clone(), value.clone()))
             .collect();
         let stamped = at.clock.now();
-        let sent = self.carries;
+        let sent = self.built.carries();
         let answer = rules
             .verbs
             .find(&called.verb)
@@ -398,18 +373,7 @@ impl Round {
         why: &Why,
     ) -> Result<transcript::Answering, Refusal> {
         let now = at.clock.now();
-        let lines = match why {
-            Why::Stopped(by) => vec![BoxLine::Entry(Entry::Stopped {
-                at: now,
-                by: by.as_str().to_owned(),
-            })],
-            Why::Model { .. }
-            | Why::Silent { .. }
-            | Why::Bound(_)
-            | Why::Refused(_)
-            | Why::Unanswered => closing(now, why, self.carries),
-        };
-        self.answering(at, run, lines)
+        self.answering(at, run, closing(now, why, self.built))
     }
 
     /// `lines`, appended in one hold of the lock while the round of `run` is open, or once this
@@ -455,31 +419,23 @@ impl Round {
     }
 }
 
-/// The box's own sentence for a question no round answered in time.
-pub const UNANSWERED: &str = "This was not answered in time; ask again.";
-
 /// The line that ends an exchange the model did not finish: a model turn with no calls, since
-/// "over" is derived from the transcript, carrying `carries`, the round's join of every call it
-/// built. A total function: after a call was built, its words may quote the model CLI's or a
-/// verb's (escaped, since they are no markup), and it carries what that call was sent; before
-/// any call was built its words are the box's own (a store's refusal, the bound's count), and
-/// it carries the round's join so far, clean; the unanswered question's is a constant
-/// ([`Answer::own`]).
-fn closing(now: Datetime, why: &Why, carries: Taint) -> Vec<BoxLine> {
-    let answer = match why {
-        Why::Unanswered => Answer::own(now, UNANSWERED),
+/// "over" is derived from the transcript, in [`Why::closing`]'s words. What it carries is
+/// [`Answer::closing`]'s, given what the round had `built`. A stop is not a model's turn.
+fn closing(now: Datetime, why: &Why, built: Built) -> Vec<BoxLine> {
+    match why {
+        Why::Stopped(by) => vec![BoxLine::Entry(Entry::Stopped {
+            at: now,
+            by: by.as_str().to_owned(),
+        })],
         Why::Model { .. }
         | Why::Silent { .. }
         | Why::Bound(_)
         | Why::Refused(_)
-        | Why::Stopped(_) => Answer::after(
-            now,
-            escape_markup(&why.said()).as_str().to_owned(),
-            Vec::new(),
-            carries,
-        ),
-    };
-    vec![BoxLine::Answer(answer)]
+        | Why::Unanswered => {
+            vec![BoxLine::Answer(Answer::closing(now, &why.closing(), built))]
+        }
+    }
 }
 
 /// `Err` once the halt is pulled, naming who pulled it.
@@ -492,5 +448,118 @@ fn unasked(failed: ModelError, after: Option<ToolName>, halt: &Halt) -> Why {
     match obeyed(halt) {
         Err(stopped) => stopped,
         Ok(()) => Why::Model { failed, after },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn at() -> Datetime {
+        Datetime::new(2026, 11, 17, 9, 0, 0, 0).expect("an instant")
+    }
+
+    /// Every way a round ends short of an answer, once.
+    fn whys() -> Vec<(Why, Option<&'static str>)> {
+        let after = || Some(ToolName::from("show"));
+        let limited = serde_json::from_str(r#"{"limit":"rate","until":"2026-10-30T12:00:00"}"#)
+            .expect("a limit");
+        let model = |failed| Why::Model {
+            failed,
+            after: after(),
+        };
+        // Each beside the words of outside it quotes, if it does.
+        vec![
+            (Why::Unanswered, None),
+            (Why::Bound(3), None),
+            (Why::Silent { after: None }, None),
+            (Why::Silent { after: after() }, None),
+            (
+                Why::Silent {
+                    after: Some(ToolName::from("guessed")),
+                },
+                Some("guessed"),
+            ),
+            (
+                Why::Refused(Refusal::internal("a store said this")),
+                Some("a store said this"),
+            ),
+            (model(ModelError::TooLong("n".into())), None),
+            (
+                Why::Model {
+                    failed: ModelError::TooLong("n".into()),
+                    after: None,
+                },
+                None,
+            ),
+            (model(ModelError::TimedOut(Duration::from_secs(5))), None),
+            (model(ModelError::Limited(limited)), None),
+            (model(ModelError::Overloaded("n".into())), None),
+            (model(ModelError::Halted), None),
+            (
+                model(ModelError::Unreachable("cli said a".into())),
+                Some("cli said a"),
+            ),
+            (
+                model(ModelError::Refused("cli said b".into())),
+                Some("cli said b"),
+            ),
+            (
+                model(ModelError::Failed("cli said c".into())),
+                Some("cli said c"),
+            ),
+        ]
+    }
+
+    fn carried(why: &Why, built: Built) -> (Taint, String) {
+        match closing(at(), why, built).as_slice() {
+            [BoxLine::Answer(answer)] => match answer.entry() {
+                Entry::Said {
+                    turn: Turn::Model { text, calls },
+                    ..
+                } if calls.is_empty() => (answer.carries(), text),
+                other => panic!("not a bare model turn: {other:?}"),
+            },
+            other => panic!("not one answer: {other:?}"),
+        }
+    }
+
+    /// A closing that quotes words from outside is tainted before any call was built, and
+    /// carries the round's join after; one that quotes none carries the join, clean before any
+    /// call. Neither says less than the join, and each still says what failed.
+    #[test]
+    fn each_closing_carries_by_whose_words_it_holds() {
+        for (why, quoted) in whys() {
+            for (built, tainted_by_quote) in [
+                (Built::Nothing, Taint::Tainted),
+                (Built::Joined(Taint::Clean), Taint::Clean),
+                (Built::Joined(Taint::Tainted), Taint::Tainted),
+            ] {
+                let (carries, text) = carried(&why, built);
+                let expect = match (&why, quoted) {
+                    (Why::Refused(_), _) => Taint::Tainted,
+                    (_, Some(_)) => tainted_by_quote,
+                    (_, None) => built.carries(),
+                };
+                assert_eq!(carries, expect, "{why:?} after {built:?}");
+                assert!(!text.is_empty(), "{why:?}");
+                if let Some(words) = quoted {
+                    assert!(text.contains(words), "{why:?}: {text}");
+                }
+                assert_eq!(text, why.closing().escaped(), "{why:?}");
+            }
+        }
+    }
+
+    /// A stop is a line of its own and never a model's turn.
+    #[test]
+    fn a_stop_is_not_a_model_turn() {
+        let by = prodrome_data::event::Actor::new("ada").expect("an actor");
+        let lines = closing(at(), &Why::Stopped(by), Built::Nothing);
+        assert!(matches!(
+            lines.as_slice(),
+            [BoxLine::Entry(Entry::Stopped { .. })]
+        ));
     }
 }

@@ -182,7 +182,7 @@ impl LineEvent {
             ..
         } = &mut line.shape
         {
-            *carries = Some(answer.carries);
+            *carries = Some(answer.carries());
         }
         line.sealed(&words, entropy)
     }
@@ -1468,7 +1468,7 @@ mod tests {
         else {
             panic!("a model's turn");
         };
-        let answer = crate::secretary::answer::Answer::after(at, text, calls, Taint::Tainted);
+        let answer = crate::secretary::answer::Answer::replied(at, text, calls, Taint::Tainted);
         let (line, keys) =
             LineEvent::answered(id(), box_actor.clone(), 3, &answer, &Counting::default())
                 .expect("a line");

@@ -2,23 +2,25 @@
 
 use suzatary_base::capability::Datetime;
 use suzatary_conversations::secretary::model::{ToolCall, Turn};
+use suzatary_conversations::secretary::sentence::{Built, Closing, Outside};
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_conversations::secretary::taint::Taint;
 
-/// A model's turn to write.
+/// A model's turn to write; only its constructors make one.
+///
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Answer {
-    pub at: Datetime,
-    pub text: String,
-    pub calls: Vec<ToolCall>,
+    at: Datetime,
+    text: String,
+    calls: Vec<ToolCall>,
     /// The round's join of every call it built.
-    pub carries: Taint,
+    carries: Taint,
 }
 
 impl Answer {
-    /// A turn after calls that carried `carries`, a failed one's included.
+    /// A reply the model made after calls that carried `carries`, a failed one's included.
     #[must_use]
-    pub fn after(at: Datetime, text: String, calls: Vec<ToolCall>, carries: Taint) -> Self {
+    pub fn replied(at: Datetime, text: String, calls: Vec<ToolCall>, carries: Taint) -> Self {
         Self {
             at,
             text,
@@ -27,15 +29,31 @@ impl Answer {
         }
     }
 
-    /// The box's own constant sentence: clean, since no model, verb or store wrote it.
+    /// The turn that ends a round short of an answer. The box's own sentence carries what the
+    /// calls built carried. A refusal's words come from a store or a verb, not from a call, so
+    /// they are always tainted. The model CLI's words and a model-chosen verb name carry the join
+    /// once a call was built, and are tainted before any call was.
     #[must_use]
-    pub fn own(at: Datetime, sentence: &'static str) -> Self {
+    pub fn closing(at: Datetime, closing: &Closing, built: Built) -> Self {
+        let carries = match (closing, built) {
+            (Closing::Own(_), built) => built.carries(),
+            (Closing::Outside(Outside::Refused(_)), _) | (Closing::Outside(_), Built::Nothing) => {
+                Taint::Tainted
+            }
+            (Closing::Outside(_), Built::Joined(carries)) => carries,
+        };
         Self {
             at,
-            text: sentence.to_owned(),
+            text: closing.escaped(),
             calls: Vec::new(),
-            carries: Taint::Clean,
+            carries,
         }
+    }
+
+    /// What the line stores that the turn carries into a call.
+    #[must_use]
+    pub fn carries(&self) -> Taint {
+        self.carries
     }
 
     #[must_use]
@@ -68,7 +86,7 @@ impl BoxLine {
                 at,
                 turn: Turn::Model { text, calls },
                 ..
-            } => BoxLine::Answer(Answer::after(at, text, calls, carries)),
+            } => BoxLine::Answer(Answer::replied(at, text, calls, carries)),
             other => BoxLine::Entry(other),
         }
     }

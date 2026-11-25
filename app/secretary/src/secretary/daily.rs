@@ -57,7 +57,7 @@ impl Round {
         let Round { id, daily, held } = self;
         held.unwrap_or_else(|| Stored {
             title: Words::kept(daily.title().to_owned()),
-            model: caps.model.name(),
+            model: Some(caps.model.name()),
             ..Stored::empty(&id, Kind::Review, caps.clock.now())
         })
     }

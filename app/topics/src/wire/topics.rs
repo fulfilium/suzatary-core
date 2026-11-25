@@ -308,6 +308,7 @@ pub struct InboxProposalsPayload {
 pub struct ConversationPayload {
     pub id: String,
     pub title: String,
+    /// The model its opening named; empty where it names none.
     pub model: String,
     pub opened: String,
     pub turns: Vec<TurnRow>,

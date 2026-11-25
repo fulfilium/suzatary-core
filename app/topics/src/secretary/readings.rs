@@ -363,7 +363,7 @@ pub fn conversation(
     wire::ConversationPayload {
         id: stored.id.as_str().to_owned(),
         title: stored.heading().into_owned(),
-        model: stored.model.clone(),
+        model: stored.model.clone().unwrap_or_default(),
         opened: stamp(stored.opened),
         lines: selected
             .iter()

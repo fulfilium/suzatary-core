@@ -102,3 +102,35 @@ fn each_setup_gets_exactly_one_opening_across_restarts() {
         assert!(owing(lines).expect("reads").is_empty(), "seed {seed}");
     }
 }
+
+/// A conversation a template set up names no model, and one opened with an empty name reads the
+/// same: a reader shows the model it names or nothing.
+#[test]
+fn only_an_opening_that_names_a_model_names_one() {
+    let store = suzatary_stores::stores::conversations::InMemory::default();
+    let lines = store.conversations();
+    let begin = |entry: Entry| {
+        let id = transcript::begin(lines, &entry).expect("begun");
+        transcript::read(lines, &id)
+            .expect("reads")
+            .stored()
+            .model
+            .clone()
+    };
+    let opened = |model: &str| Entry::Opened {
+        at: at(0),
+        title: Words::kept("Trip".to_owned()),
+        model: model.to_owned(),
+        kind: suzatary_conversations::secretary::store::Kind::Topic,
+    };
+    assert_eq!(
+        begin(Entry::SetUp {
+            at: at(1),
+            title: Words::kept("Connect Gmail".to_owned()),
+            template: TemplateId::Gmail,
+        }),
+        None
+    );
+    assert_eq!(begin(opened("")), None);
+    assert_eq!(begin(opened("ada-model")), Some("ada-model".to_owned()));
+}

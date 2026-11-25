@@ -2630,7 +2630,10 @@ fn show(instance: &Instance, id: &str) -> anyhow::Result<()> {
     let id = ConversationId::among(id, &held)?;
     let stored = conversations::read(store.conversations(), &id)
         .map_err(|refusal| anyhow::anyhow!("{}", refusal.message()))?;
-    println!("{}  {}  ({})", stored.id, stored.title, stored.model);
+    match &stored.model {
+        Some(model) => println!("{}  {}  ({model})", stored.id, stored.title),
+        None => println!("{}  {}", stored.id, stored.title),
+    }
     transcript(&stored, &lines_of(instance, &stored)?, &words_of(instance));
     Ok(())
 }

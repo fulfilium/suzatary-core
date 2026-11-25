@@ -105,7 +105,7 @@ fn lines_of(stored: &Stored) -> Lines {
     let mut entries = vec![Entry::Opened {
         at: stored.opened,
         title: stored.title.clone(),
-        model: stored.model.clone(),
+        model: stored.model.clone().unwrap_or_default(),
         kind: stored.kind,
     }];
     entries.extend(

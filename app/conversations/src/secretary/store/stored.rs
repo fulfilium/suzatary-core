@@ -22,8 +22,9 @@ pub struct Stored {
     /// untitled topic.
     pub title: Words<String>,
     pub kind: Kind,
-    /// The model its opening named; empty for a conversation a template set up.
-    pub model: String,
+    /// The model its opening named; none for a conversation a template set up, whose answering
+    /// model is the deployment's choice at the time of each round.
+    pub model: Option<String>,
     /// Every turn, oldest first.
     pub turns: Vec<Said>,
     /// What each turn carries into a call, by the same index as `turns`.
@@ -275,7 +276,7 @@ impl Stored {
             opened,
             title: Words::kept(String::new()),
             kind,
-            model: String::new(),
+            model: None,
             turns: Vec::new(),
             carried: Vec::new(),
             steps: queue::Steps::default(),
@@ -295,8 +296,10 @@ impl Stored {
             return Err(NotAConversation::Unopened(id.clone()));
         };
         let model = match start.begun {
-            super::Begun::Opened { model } => model.to_owned(),
-            super::Begun::SetUp(_) => String::new(),
+            super::Begun::Opened { model } => {
+                Some(model.to_owned()).filter(|named| !named.is_empty())
+            }
+            super::Begun::SetUp(_) => None,
         };
         Ok(Self {
             title: start.title.clone(),

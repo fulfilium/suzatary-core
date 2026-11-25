@@ -1223,7 +1223,9 @@ fn rename_key(Key { name, words, .. }: Key) -> Option<Msg> {
 
 /// The model's name is only a tooltip.
 fn head(m: &Model) -> Node<Msg> {
-    let model = payload(m).map_or(String::new(), |p| p.model.clone());
+    let model = payload(m)
+        .map(|p| p.model.clone())
+        .filter(|named| !named.is_empty());
     let waiting = m.intents.renamed(&m.id).is_none() && matches!(m.held, Held::Loading);
     let heading = match &m.renaming {
         Some(typed) => {
@@ -1904,6 +1906,17 @@ mod tests {
         state: &str,
         again: &serde_json::Value,
     ) -> Msg {
+        window_named("", turns, waiting, state, again)
+    }
+
+    /// [`window_again`] of a conversation whose opening names `model`.
+    fn window_named(
+        model: &str,
+        turns: usize,
+        waiting: &serde_json::Value,
+        state: &str,
+        again: &serde_json::Value,
+    ) -> Msg {
         let rows: Vec<_> = (0..turns)
             .map(|i| json!({"index": i, "text": format!("t{i}"), "at": "", "attempt": "current", "gone": null,
                 "who": "person", "references": [], "attachments": [], "queued": state != "idle" && i + 1 == turns}))
@@ -1911,7 +1924,7 @@ mod tests {
         let rounds: Vec<_> = (0..turns)
             .map(|i| json!({"key": i, "startIndex": i, "opening": i, "trace": [], "answer": null, "proposals": [], "earlier": [], "marked": false, "label": ""}))
             .collect();
-        let body = json!({"type": "Read", "about": "Asked", "payload": {"read": {"id": "c", "title": "", "model": "", "opened": "", "turns": rows,
+        let body = json!({"type": "Read", "about": "Asked", "payload": {"read": {"id": "c", "title": "", "model": model, "opened": "", "turns": rows,
             "lines": (0..turns).map(|i| format!("{i:064x}")).collect::<Vec<_>>(),
             "proposals": [], "unplaced": [], "waiting": waiting, "state": state, "first": 0, "total": turns, "again": again, "rounds": rounds}, "html": {}, "drawn": []}});
         Msg::Host(Box::new(Input::Held {
@@ -2305,6 +2318,24 @@ mod tests {
             at: None,
         };
         Runtime::<Conversation>::start(Flags { context, at }).0
+    }
+
+    /// The header shows the model its opening named, and a conversation a template set up names
+    /// none, which leaves no empty label.
+    #[test]
+    fn the_header_names_a_model_or_nothing() {
+        let header = |model: &str| {
+            let mut rt = page();
+            let msg = window_named(model, 1, &json!([]), "idle", &serde_json::Value::Null);
+            drawn_whole(&mut rt, msg).0
+        };
+        let named = header("ada-model");
+        assert!(named.contains("ada-model"), "{named}");
+        let unnamed = header("");
+        assert!(!unnamed.contains("ada-model"), "{unnamed}");
+        // A title is drawn as `title\t<text>`: the named header draws one more than the other.
+        let titles = |drawn: &str| drawn.matches("title\t").count();
+        assert_eq!(titles(&named), titles(&unnamed) + 1, "{unnamed}");
     }
 
     /// A turn the box adds grows the held window instead of sliding the oldest out.
