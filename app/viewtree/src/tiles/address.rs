@@ -155,8 +155,8 @@ fn tree<P: Page>(t: &Tree<&P>) -> String {
 
 /// A reader of the tree's print. `slots` is the least number of leaves the workspace being read
 /// will hold: each node below the root holds two children or more, so entering one adds a leaf,
-/// and so does each child after its second. A read stops the moment it would pass `MOST`, so the
-/// nesting it reads is at most `MOST - 1` nodes deep, whatever the string.
+/// and so does each child after its second. A read stops the moment it would pass `MOST` and one
+/// pinned leaf, so the nesting it reads is at most `MOST` nodes deep, whatever the string.
 struct Reader<'s> {
     s: &'s [u8],
     i: usize,
@@ -190,10 +190,10 @@ impl Reader<'_> {
         took
     }
 
-    /// One more leaf the workspace will hold; `None` past `MOST`.
+    /// One more leaf the workspace will hold; `None` past `MOST` and a pinned one.
     fn slot(&mut self) -> Option<()> {
         self.slots += 1;
-        (self.slots <= MOST).then_some(())
+        (self.slots <= MOST + 1).then_some(())
     }
 
     /// A node, and how many `*` it holds.

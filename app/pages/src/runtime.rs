@@ -194,11 +194,9 @@ pub enum Effect<H, A, S = Never> {
     Mark {
         name: String,
     },
-    /// Tell whoever mounted the page something it shows around it.
-    Tell {
-        #[ts(type = "unknown")]
-        said: serde_json::Value,
-    },
+    /// Let this page's tile go: a pinned page, docked beside others, asks the shell to stop
+    /// holding it.
+    Release,
 }
 
 /// A question the core in the tab's worker answers (`web/src/prodrome/questions.ts`).

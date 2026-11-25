@@ -77,20 +77,23 @@ export namespace program {
   const same = (w: Who, was: Who): boolean => w.me === was.me && app.sameReach(w.reach, was.reach)
 
   // Where a page stands: whether what it opens is drawn beside it and whether it is drawn at all (each told again when
-  // it moves), and where its `Go` and `Replace` go, a new entry of the history or the one the reader is at. A page in a
-  // tile opens from its tile; any other reads the address alone, and is always drawn.
+  // it moves), where its `Go` and `Replace` go, a new entry of the history or the one the reader is at, and who lets
+  // it go when it asks (`Release`). A page in a tile opens from its tile; any other reads the address alone, is always
+  // drawn, and is let go by nobody.
   export type Shown = "Drawn" | "Hidden"
   export type Placed = {
     readonly opens: () => Opens
     readonly shown: () => Shown
     readonly hear: (moved: () => void) => () => void
     readonly go: (href: string, how: "Went" | "Replaced") => void
+    readonly release: () => void
   }
   const OVER: Placed = {
     opens: () => "Over",
     shown: () => "Drawn",
     hear: () => () => {},
     go: (href, how) => (how === "Went" ? address.went(parseAddress(href)) : address.replaced(parseAddress(href))),
+    release: () => {},
   }
 
   const context = (placed: Placed): Context => {
@@ -215,7 +218,7 @@ export namespace program {
 
   // The scroll box is the document's, or one the page draws itself, found once drawn; `lane` is the shell's behind the page;
   // `layer` is where it draws what it marks as the window's (`painter.create`).
-  export type Around = { readonly box?: () => Element; readonly lane?: lanes.Lane; readonly told?: (said: unknown) => void; readonly placed?: Placed; readonly layer?: HTMLElement }
+  export type Around = { readonly box?: () => Element; readonly lane?: lanes.Lane; readonly placed?: Placed; readonly layer?: HTMLElement }
   const page_ = (): Element => document.scrollingElement ?? document.documentElement
 
   // Only the module is awaited: the page draws when the caller calls what this returns.
@@ -316,6 +319,7 @@ export namespace program {
               ...(on.has("Search") ? { focusSearch: press({ type: "Search" }) } : {}),
               ...(on.has("Add") ? { add: press({ type: "Add" }) } : {}),
               ...(on.has("Escape") ? { escape: () => (press({ type: "Escape" })(), true) } : {}),
+              within: root,
             }
             setKeyTarget(target)
             keys = target
@@ -392,8 +396,8 @@ export namespace program {
             return void settled(core(e.question, lane)).then(answered(e.ask))
           case "Reset":
             return void resetReplica(new Set(e.losses))
-          case "Tell":
-            return around.told?.(e.said)
+          case "Release":
+            return placed.release()
           case "Mark":
             return void requestAnimationFrame(() => (performance.clearMarks(e.name), performance.mark(e.name)))
         }

@@ -3,11 +3,11 @@
 use serde::Deserialize;
 use suzatary_api::wire::MailPage;
 use ts_rs::TS;
-use viewtree::Attr::{Class, Href, Title};
+use viewtree::Attr::{Class, Data, Href, Title};
 use viewtree::kit::para;
 use viewtree::{Node, view};
 
-use crate::chrome::{Shape, ask, mark};
+use crate::chrome::{Shape, mark};
 use crate::mailrow::{account, body, decided, folder, onward, subject};
 use crate::places::{Place, Question};
 use crate::reading::{Msg, View, json};
@@ -82,7 +82,7 @@ impl View for Message {
 
     fn body(a: &At, offsets: &[Offset], v: &Read) -> Vec<Node<Msg>> {
         match v {
-            Read::Found(p) => found(offsets, p),
+            Read::Found(p) => found(a, offsets, p),
             Read::Gone(said) => gone(&a.id, said),
         }
     }
@@ -106,7 +106,7 @@ fn gone(id: &str, said: &str) -> Vec<Node<Msg>> {
     ]
 }
 
-fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
+fn found(a: &At, _: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
     let message = &p.message;
     let row = &message.row;
     let thread = (!message.thread.is_empty()).then(|| {
@@ -142,8 +142,11 @@ fn found(_: &[Offset], p: &MailPage) -> Vec<Node<Msg>> {
         )
     });
     [
-        Some(view! { Div "mailchips" [account(row), folder(row), decided(row), thread] }),
-        Some(ask(&format!("mail:{}", row.hash))),
+        // The reference the secretary beside this page talks about: its row's hash, the text a
+        // round carries, whatever id the address named it by (`chat/aside.ts`).
+        Some(
+            view! { Div "mailchips" {Data("about") => format!("mail:{}", row.hash), Data("for") => Place::Message(&a.id).href()} [account(row), folder(row), decided(row), thread] },
+        ),
         Some(body(&message.body)),
         cut,
         links,

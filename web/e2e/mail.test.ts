@@ -51,8 +51,7 @@ app.scene("a row opens its message, whose body is text, and Back returns to the 
     "the body is the message's text",
   );
   assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".mailmessage .mailbody *").length`), 0, "a body holds no element");
-  const ask = await app.page.evaluate<string | null>(`document.querySelector(".mailmessage .asksecretary")?.getAttribute("href") ?? null`);
-  assert.ok(ask?.startsWith("#/secretary?ref=mail%3A") === true, `Ask names the message by its hash: ${String(ask)}`);
+  assert.equal(await app.page.evaluate<number>(`document.querySelectorAll('#view a[href^="#/aside"]').length`), 0, "the page draws no door of its own");
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".mailmessage details.why").open`), false, "the headers are folded");
 
   await app.page.click(".mailmessage button.back");

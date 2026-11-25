@@ -58,6 +58,8 @@ export class Desk {
   workspace(): string;
   /** The page `href` names, opened from the tile `key`. */
   open(key: number, href: string): void;
+  /** JSON of `Dock`, the shell's say on the secretary beside the pages; throws on a say that does not read. */
+  dock(dock: string): void;
   /** The divider between the tiles `before` and `after` to the shares of weights `a` and `b`, 1 to 3. */
   resize(before: number, after: number, a: number, b: number): void;
   /** JSON of `Drawing`, for a viewport in pixels at the 16px root. */

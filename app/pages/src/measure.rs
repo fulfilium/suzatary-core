@@ -6,3 +6,4 @@ pub(crate) const TAP: u32 = 44;
 pub(crate) const DIVIDER: u32 = 24;
 pub(crate) const LIST: u32 = 320;
 pub(crate) const COLUMN: u32 = 480;
+pub(crate) const BESIDE: u32 = 352;

@@ -1,4 +1,5 @@
-/** The reference in view, which the Ask button and the secretary panel attach to: derived from the route alone, never typed. */
+/** The reference in view, which the secretary beside the page is about: derived from the route alone, never typed; a page
+ * that names itself otherwise (a message, by its row's hash) is read by `chat/aside.ts`. */
 
 import type { Reference } from "./refs";
 import type { Route } from "../shell/route";

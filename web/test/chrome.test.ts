@@ -6,7 +6,6 @@ import time from "../src/app/time"
 import type login from "../src/app/login"
 import stale from "../src/shell/stale"
 import chrome from "../src/shell/chrome"
-import nav from "../src/shell/nav"
 import type shell from "../src/app/shell"
 import excluded from "../src/prodrome/excluded"
 import onscreen from "../src/app/store"
@@ -26,7 +25,7 @@ const event = (r: Rng): app.Event =>
     () => ({ type: "Build", line: r.pick<shell.Line>([{ type: "None" }, { type: "Ready", version: "0.18.0" }]) }),
   ])()
 const seen = (r: Rng): chrome.Seen => ({
-  room: r.pick(["Beside", "Over"] as const),
+  door: r.pick<chrome.Seen["door"]>([{ type: "None" }, { type: "Header", shows: {} }]),
   workspace: route(r),
   fold: r.pick<() => onscreen.Fold>([
     () => onscreen.UNLOADED,
@@ -55,23 +54,24 @@ test("a part is painted only when its value moved", () => {
   const painted: string[] = []
   const paint = chrome.painter({
     nav: () => void painted.push("nav"),
-    panel: () => void painted.push("panel"),
+    beside: () => void painted.push("beside"),
     live: () => void painted.push("live"),
     stale: () => void painted.push("stale"),
     excluded: () => void painted.push("excluded"),
     signing: () => void painted.push("signing"),
     build: () => void painted.push("build"),
   })
-  // A login that writes, on a page with no room beside it: leaving for the conversation moves no panel.
+  // A login that writes: the conversation offers no door to the secretary, so leaving for it and coming back each move
+  // the door, and nothing else that did not move is painted.
   const a = app.step(app.initial(bare({ type: "inbox" }), "life"), { type: "Met", me: { type: "Writes", login: "ada@example.invalid", actor: "ada" }, served: ["life"], categories: [], zone: time.UTC })
-  const fold = { fold: onscreen.UNLOADED, excluded: excluded.NOTHING, theme: "auto" as const, room: "Over" as const, workspace: { type: "inbox" } as const }
+  const fold = { fold: onscreen.UNLOADED, excluded: excluded.NOTHING, theme: "auto" as const, door: { type: "Header", shows: {} } as const, workspace: { type: "inbox" } as const }
   const loaded: onscreen.Fold = { type: "Shown", entries: [], at: "t", by: { type: "Cached", fetchedAt: 0 } }
   paint(chrome.of(a, fold))
   paint(chrome.of(app.step(a, { type: "Waiting", waiting: { count: 0, unplaced: {} } }), fold))
-  paint(chrome.of(app.step(a, { type: "Went", to: bare({ type: "conversation", id: "default", refs: [] }) }), { ...fold, workspace: { type: "secretary", refs: [], topics: [] } }))
-  paint(chrome.of(a, { fold: loaded, excluded: excluded.NOTHING, theme: "auto", room: "Over", workspace: { type: "inbox" } }))
-  paint(chrome.of(a, { fold: loaded, excluded: excluded.left([{ name: "a1", why: "not held", resting: [] }]), theme: "auto", room: "Over", workspace: { type: "inbox" } }))
-  assert.deepEqual(painted, ["nav", "panel", "live", "stale", "excluded", "signing", "build", "nav", "nav", "stale", "excluded"])
+  paint(chrome.of(app.step(a, { type: "Went", to: bare({ type: "conversation", id: "default", refs: [] }) }), { ...fold, door: { type: "None" }, workspace: { type: "secretary", refs: [], topics: [] } }))
+  paint(chrome.of(a, { ...fold, fold: loaded }))
+  paint(chrome.of(a, { ...fold, fold: loaded, excluded: excluded.left([{ name: "a1", why: "not held", resting: [] }]) }))
+  assert.deepEqual(painted, ["nav", "beside", "live", "stale", "excluded", "signing", "build", "nav", "beside", "nav", "beside", "stale", "excluded"])
 })
 
 test("the banner is down while the fold is loaded and heard, and always for this browser's own fold while the stream is up", () => {
@@ -95,14 +95,5 @@ test("an act on its way raises no banner, and no banner names an object", () => 
     const b = stale.of("off", pending)
     assert.ok(b.type === "Shown")
     assert.ok(!/[0-9a-f]{8}/.test(stale.said(b.why)), stale.said(b.why))
-  })
-})
-
-test("law: one door to the secretary on each width: the panel beside every page with room but its own, and no floating Ask", () => {
-  forAll(300, r => {
-    const a = walk(r)
-    const s = seen(r)
-    const drawn = chrome.of(a, s)
-    assert.equal(drawn.panel.type === "Beside", s.room === "Beside" && nav.activeFor(app.route(a)) !== "secretary")
   })
 })

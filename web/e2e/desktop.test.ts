@@ -1,8 +1,8 @@
 /**
  * THE WIDE LAYOUT, AT DESKTOP SIZE: what the owner's browser at a desk sees, where the phone's tests do not look.
  *
- * More drops a sheet whose links a press reaches. The secretary panel's toggle keeps one place, open or closed, and
- * a closed panel takes no width. A list drawn alone scrolls the document; tiles drawn together each scroll themselves,
+ * More drops a sheet whose links a press reaches. The secretary's toggle keeps one place, open or closed, and a
+ * hidden secretary stands in no tile. A list drawn alone scrolls the document; tiles drawn together each scroll themselves,
  * and the page under them fits the window.
  */
 
@@ -42,10 +42,11 @@ app.scene("More opens a sheet whose links are visible and take a press", async (
 
 /**
  * ONE GRID FOR EVERY PAGE (the 2026-10-13 audit, X4): the brand and the words stand in the same place on every page,
- * a todo beside the list is the wider of the two, and a secretary panel with nothing about the page in it is closed to
- * its toggle until the person opens it. First in the file that touches the panel, so the person has said nothing yet.
+ * a todo beside the list is the wider of the two, and a secretary with nothing about the page in it stays hidden
+ * behind its toggle until the person opens it. First in the file that touches the secretary, so the person has said
+ * nothing yet.
  */
-app.scene("at 1440 px the header holds still across pages, the todo read is the widest column, and an unused panel is closed", async () => {
+app.scene("at 1440 px the header holds still across pages, the todo read is the widest column, and an unused secretary is hidden", async () => {
   await app.resize(WIDE);
   const brands: Box[] = [];
   for (const [hash, ready] of [
@@ -61,9 +62,9 @@ app.scene("at 1440 px the header holds still across pages, the todo read is the 
   assert.deepEqual(brands.slice(1), brands.slice(0, -1), "the brand is where it was on every page");
   await app.page.navigate(`${BASE}/#/todo/${todos.flat.id}`);
   await app.page.waitFor(`document.querySelector("#view.tiled .todoview .todobody") !== null`);
-  await app.page.waitFor(`document.querySelector(".secretarypanel .frameheader")?.textContent.includes("Nothing about") === true`);
-  assert.equal(await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`), "false", "nothing in it is about this todo");
-  assert.equal((await box(".secretarypanel")).width, 0);
+  // Nothing in the conversation is about this todo, so the header offers its door and no tile holds the secretary.
+  await app.page.waitFor(`document.querySelector("#beside:not([hidden])") !== null`);
+  assert.equal(await app.page.evaluate<number>(`document.querySelectorAll("#view .panelbody").length`), 0, "a hidden secretary stands in no tile");
   const list = await box(".tile:has(.todospane)");
   const pane = await box(".tile:has(.todoview)");
   assert.ok(pane.width > list.width, `the todo (${pane.width} px) is wider than the list (${list.width} px)`);
@@ -72,48 +73,54 @@ app.scene("at 1440 px the header holds still across pages, the todo read is the 
 });
 
 /**
- * AT A MIDDLE WIDTH WITH THE PANEL OPEN the todo keeps its room: the panel takes its width from the room the tiles
- * stand in, where the list no longer fits beside the todo, so the todo is read alone under the Todos crumb, never
- * squeezed under its least.
+ * AT A MIDDLE WIDTH WITH THE SECRETARY OPEN the todo keeps its room: the secretary is the tile after it, and the list,
+ * which no longer fits beside both, stands behind them under the Todos crumb; nothing is squeezed under its least.
  */
-app.scene("at 1100 px with the panel open, the todo stands alone under its crumb, and closing the panel brings the list back", async () => {
+app.scene("at 1100 px with the secretary open, the todo stands beside it under the list's crumb, and hiding it brings the list back", async () => {
   await app.resize(MIDDLE);
   await app.page.navigate(`${BASE}/#/todo/${todos.flat.id}`);
   await app.page.waitFor(`document.querySelector("#view.tiled .todoview .todobody") !== null`);
-  await app.page.waitFor(`document.querySelector(".secretarypanel .panelcollapse")?.textContent !== ""`);
-  if ((await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") {
-    await app.page.click(".panelcollapse");
-  }
-  await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "true"`);
-  await app.page.waitFor(`document.querySelector("#view:not(.tiled) .todoview .todobody") !== null && document.querySelector(".tilelines .crumbs .back") !== null`);
+  await app.page.waitFor(`document.querySelector("#beside:not([hidden])") !== null`);
+  await app.page.click("#beside");
+  await app.page.waitFor(`(document.querySelector("#view.tiled .tile .panelbody .frameheader")?.textContent ?? "") !== "" && document.querySelector(".tilelines .crumbs .back") !== null && document.querySelector("#view .todospane") === null`);
   const pane = await box(".tile:has(.todoview)");
-  assert.ok(pane.x + pane.width <= (await box(".secretarypanel")).x + 0.5, "the todo stands clear of the panel");
-  await app.page.click(".panelcollapse");
-  await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "false"`);
-  await app.page.waitFor(`document.querySelector("#view.tiled .tile .todospane") !== null`);
+  assert.ok(pane.x + pane.width <= (await box(".tile:has(.panelbody)")).x + 0.5, "the todo stands before the secretary");
+  await app.page.click("#view > .tile .hidesecretary");
+  await app.page.waitFor(`document.querySelector("#view.tiled .tile .todospane") !== null && document.querySelector("#view .panelbody") === null`);
+  // The door is back, a real button where the secretary is not drawn.
+  await app.page.waitFor(`!document.querySelector("#beside").hidden && document.querySelector("#beside").getBoundingClientRect().width > 0`);
   await app.resize(DESKTOP);
 });
 
-app.scene("the panel's toggle keeps its place, a closed panel takes no width, and tiles drawn together fit the window", async () => {
-  await app.open(WRITE_BASE, `#/todo/${todos.flat.id}`);
-  await app.page.waitFor(`document.querySelector(".secretarypanel .panelcollapse") !== null`);
-  if ((await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") {
-    await app.page.click(".panelcollapse");
-  }
-  const open = await box(".panelcollapse");
-  assert.ok((await box(".secretarypanel")).width > 0, "an open panel has its column");
-  await app.page.click(".panelcollapse");
-  await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "false"`);
-  assert.deepEqual(await box(".panelcollapse"), open, "the toggle is where it was");
-  assert.equal((await box(".secretarypanel")).width, 0, "a closed panel takes no width");
-  assert.equal(await app.page.evaluate<boolean>(`document.activeElement === document.querySelector(".panelcollapse")`), true, "the toggle keeps the focus");
-  // Closed, the list stands beside the todo, and the page does not scroll: its tiles do.
+app.scene("the secretary's doors keep their places, a hidden secretary stands in no tile, and tiles drawn together fit the window", async () => {
+  // A page of many things: its door is the header's under the wide chrome.
+  await app.open(WRITE_BASE, "#/");
+  await app.page.waitFor(`document.querySelector("#beside:not([hidden])") !== null`);
+  const door = await box("#beside");
+  await app.page.click("#beside");
+  await app.page.waitFor(`document.querySelector("#view > .tile .panelbody") !== null && document.querySelector("#beside").hidden`);
+  assert.ok((await box(".tile:has(.panelbody)")).width > 0, "an open secretary has its tile");
+  assert.equal(await app.page.evaluate<string | null>(`document.querySelector("#view > .tile .panelbody").getAttribute("aria-label")`), "Secretary", "a named region");
+  const hide = await box("#view > .tile .hidesecretary");
+  await app.page.click("#view > .tile .hidesecretary");
+  await app.page.waitFor(`!document.querySelector("#beside").hidden && document.querySelector("#view .panelbody") === null`);
+  assert.deepEqual(await box("#beside"), door, "the door is where it was");
+  await app.page.click("#beside");
+  await app.page.waitFor(`document.querySelector("#view > .tile .panelbody") !== null`);
+  assert.deepEqual(await box("#view > .tile .hidesecretary"), hide, "and its Hide where it was");
+  await app.page.click("#view > .tile .hidesecretary");
+  await app.page.waitFor(`document.querySelector("#view .panelbody") === null`);
+  // A page about one thing: its door is the header's too, where it was, and the todo stands beside the secretary
+  // inside the window.
+  await app.page.evaluate(`location.hash = "#/todo/${todos.flat.id}"`);
+  await app.page.waitFor(`document.querySelector("#view .todoview") !== null && !document.querySelector("#beside").hidden`);
+  assert.deepEqual(await box("#beside"), door, "the door on a todo is where it is on the list");
   const fits = `document.querySelector("#view").classList.contains("tiled") && document.documentElement.scrollHeight <= innerHeight`;
   await app.page.waitFor(fits);
-  await app.page.click(".panelcollapse");
-  await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "true"`);
-  assert.deepEqual(await box(".panelcollapse"), open, "and back where it was");
-  // Open, the room at this width still holds the list beside the todo, and the page still fits.
+  await app.page.click("#beside");
+  await app.page.waitFor(`document.querySelector("#view > .tile .panelbody") !== null`);
   await app.page.evaluate(`new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())))`);
   await app.page.waitFor(fits);
+  await app.page.click("#view > .tile .hidesecretary");
+  await app.page.waitFor(`document.querySelector("#view .panelbody") === null`);
 });

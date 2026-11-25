@@ -235,12 +235,6 @@ pub(crate) fn link<M>(class: &str, to: Place<'_>, words: impl Child<M>) -> Node<
     view! { A {Class => class, Href => to.href()} [words] }
 }
 
-/// A link, so it middle-clicks and Back returns here.
-#[must_use]
-pub(crate) fn ask<M>(reference: &str) -> Node<M> {
-    view! { Div "askrow" [link("asksecretary", Place::Ask(reference), "Ask the secretary")] }
-}
-
 #[must_use]
 pub(crate) fn empty<M>(said: &str) -> Node<M> {
     view! { P "empty" [said] }

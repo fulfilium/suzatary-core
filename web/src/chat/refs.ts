@@ -170,10 +170,11 @@ export const parsed = (texts: readonly string[]): Reference[] =>
     return reference === null ? [] : [reference];
   });
 
-/** A link, not a button: it is a navigation, so it middle-clicks, can be sent, and Back returns here. */
-export function askHref(reference: Reference): string {
-  return routeHref({ type: "secretary", refs: [print(reference)], topics: [] });
-}
+/** The address of the page a reference's text names, where it names one. */
+export const pageOf = (text: string): string | null => {
+  const r = parse(text);
+  return r === null ? null : hrefOf(r);
+};
 
 export type Token = { readonly text: string } | { readonly reference: Reference };
 

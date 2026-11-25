@@ -2,6 +2,7 @@
 
 mod cases;
 mod check;
+mod dock;
 mod laws;
 mod page;
 mod runs;

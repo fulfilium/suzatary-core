@@ -36,6 +36,7 @@ import {
   unsentIn,
   searchOf,
   streamOf,
+  talksOf,
   within,
 } from "./core"
 import chainsync from "./chainsync"
@@ -146,6 +147,10 @@ export namespace questions {
     // Every conversation the skeleton holds, each row as far as the device holds its words, asked for behind it.
     Conversations: { q: Record<never, never>; a: ConversationsPayload }
     Conversation: { q: { readonly id: string; readonly window: Window; readonly memory: MemoryPayload | null }; a: One }
+    // Whether the conversation, as this device holds it whole, has a turn about `about`; nothing is fetched or pulled for
+    // it, so a conversation the device holds no whole copy of has said nothing yet. The read is the conversation's
+    // memoized transcript and one pass over its turns.
+    Talk: { q: { readonly id: string; readonly about: string }; a: "Quiet" | "Talking" }
     // Read back to the turn it must reach (`grouped.covering`), grouped into rounds on the owner's days in `zone`.
     Window: {
       q: { readonly id: string; readonly window: grouped.Asked; readonly memory: MemoryPayload | null; readonly drawn: readonly Drawn[]; readonly zone: time.Zone }
@@ -462,6 +467,15 @@ export namespace questions {
           const { id, window, memory } = q
           return conversation(id, turn, () => sync.over(() => lines.one(id), (): One => ({ type: "Held", payload: conversationOf(held, proposals(), id, window, memory) })))
             .catch((e: unknown): One => notHere(lines.one(id), e))
+        }
+        case "Talk": {
+          const { id, about } = q
+          return sync.engine.sync.restored
+            .get()
+            .then(turn)
+            .then((): "Quiet" | "Talking" =>
+              sync.holds(id) && sync.lacking(lines.one(id)) === 0 && talksOf(held, id, about) ? "Talking" : "Quiet",
+            )
         }
         case "Window": {
           const { id, window, memory, drawn, zone } = q

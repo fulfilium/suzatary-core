@@ -6,11 +6,16 @@
 //! other address (Back, a typed hash, the bar) is read with `tiles::parse`. The address is the
 //! tree's print, a bare hash wherever the tree is a workspace's home or a home with one page
 //! opened from it.
+//!
+//! The secretary beside a page is the pinned leaf `Route::Aside`, which the shell holds or lets go
+//! by its `Dock` say (`web/src/chat/aside.ts`), never by the width, through the module's `Hold`
+//! and `Release`. The address carries it only where it has the focus, so every hash a person has
+//! prints as before whether it stands or not.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use viewtree::tiles::{
-    self, Act, Arranged, At, Axis, Fit, Id, Leaf, Measures, Node, Page, Part, Px, Rect, Share,
+    self, Act, Arranged, At, Axis, Fit, Id, Leaf, Measures, Node, Page, Part, Pin, Px, Rect, Share,
     Tiles, Tree, Unfit, Viewport,
 };
 
@@ -20,10 +25,31 @@ use crate::runtime::Opens;
 
 pub struct Desk {
     tiles: Tiles<Route>,
-    /// The shares set at dividers in this tab: each row a resize left, by the kinds of its
-    /// children in order, drawn on every node of those kinds the desk holds. The address does not
-    /// carry them.
-    resized: Vec<(Vec<Kind>, Vec<Share>)>,
+    /// The shares set at dividers in this tab, each row a resize left, drawn on every node whose
+    /// children are of its kinds. The address does not carry them.
+    resized: Vec<Resized>,
+    dock: Dock,
+}
+
+/// A row of shares a resize left, keyed by the kinds of the node's free children, so the
+/// secretary docked beside them or not changes nothing a person set; the share of the child that
+/// holds the secretary is kept beside them.
+struct Resized {
+    kinds: Vec<Kind>,
+    free: Vec<Share>,
+    pinned: Option<Share>,
+}
+
+/// What the shell says of the secretary beside the focused workspace's pages, from the page's
+/// reference, the conversation's talk about it and the person's presses.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[serde(tag = "type")]
+pub enum Dock {
+    /// Not beside the pages: the focused workspace is the secretary's own, or nothing shows it.
+    Absent,
+    /// Docked at the focused workspace's end (`Act::Hold`): drawn beside its pages where the room
+    /// holds it, and behind them, one crumb away, where it does not.
+    Held { about: String },
 }
 
 /// What the host draws, every rectangle in the room's frame: the box the tiles stand in, under
@@ -42,6 +68,28 @@ pub struct Drawing {
     pub keep: usize,
     pub rows: Vec<Crumbs>,
     pub dividers: Vec<Line>,
+    pub pinned: Pinned,
+}
+
+/// Where the focused workspace's pinned leaf stands, with the address a door to it or from it
+/// goes to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "type")]
+pub enum Pinned {
+    /// Drawn in the tile `key`, its leaf's route `href`; `without` is the address of the tree
+    /// without it, the focus where it stood or on the page before it, and, where it stands alone
+    /// in its workspace, the page it is about (else the workspace's home).
+    Drawn {
+        #[ts(type = "number")]
+        key: u64,
+        href: String,
+        without: String,
+    },
+    /// Behind the drawn tiles; `to` is the address of the tree focused on it.
+    Behind {
+        to: String,
+    },
+    None,
 }
 
 /// A drawn tile; `key` names its element and its program across drawings.
@@ -96,6 +144,8 @@ pub struct Crumbs {
 pub struct Crumb {
     /// The route of the leaf a tap on it reaches, `#` first.
     pub href: String,
+    /// The address of the tree focused on that leaf, `#` first.
+    pub to: String,
     pub at: Stands,
 }
 
@@ -192,6 +242,7 @@ impl Desk {
         Tiles::new(home).map(|tiles| Desk {
             tiles,
             resized: Vec::new(),
+            dock: Dock::Absent,
         })
     }
 
@@ -202,6 +253,26 @@ impl Desk {
             let bare = address.strip_prefix('#').unwrap_or(address);
             self.tiles = tiles::parse(bare, &self.tiles);
         }
+        self.settle();
+    }
+
+    /// The shell's say on the secretary beside the pages, applied at once and after every act.
+    pub fn dock(&mut self, dock: Dock) {
+        self.dock = dock;
+        self.settle();
+    }
+
+    /// The tree made to hold what the say says: the secretary held at the focused workspace's end
+    /// or let go, and let go from every other workspace; one that has the focus is the person's
+    /// and stays.
+    fn settle(&mut self) {
+        let act = match &self.dock {
+            Dock::Absent => Act::Release,
+            Dock::Held { about } => Act::Hold(Route::Aside {
+                about: about.clone(),
+            }),
+        };
+        self.tiles = tiles::act(self.tiles.clone(), act);
     }
 
     /// The focused workspace, as the bar's link to it, `#` first: the bar lights it at the act,
@@ -211,31 +282,38 @@ impl Desk {
         self.tiles.workspace().href()
     }
 
-    /// The tree's print, `#` first.
+    /// The tree's print, `#` first, without the secretary beside the pages unless it has the
+    /// focus: the shell holds it, and the address names what a person opened.
     #[must_use]
     pub fn address(&self) -> String {
-        format!("#{}", tiles::print(&self.tiles))
+        Desk::print(&tiles::act(self.tiles.clone(), Act::Release))
+    }
+
+    fn print(tiles: &Tiles<Route>) -> String {
+        format!("#{}", tiles::print(tiles))
     }
 
     /// A link followed in the tile `key`: the page `href` names opens from that tile, by the
     /// layout's one rule. A workspace's home, as the bar's own links, is that workspace, and so is
-    /// any page opened from a tile no longer drawn.
+    /// any page opened from a tile no longer drawn; so is the secretary, which stands beside the
+    /// page it is about and no other.
     pub fn open(&mut self, key: u32, href: &str) {
         let page = Route::parse(href);
         match self.leaf(key) {
-            Some(id) if page.home() != page => {
+            Some(id) if page.home() != page && page.kind() != Kind::Aside => {
                 let focused = tiles::act(self.tiles.clone(), Act::Focus(id));
                 self.tiles = tiles::act(focused, Act::Open(page));
             }
-            Some(_) | None => self.go(&page.href()),
+            Some(_) | None => return self.go(&page.href()),
         }
+        self.settle();
     }
 
     /// The divider between the tiles `before` and `after` set to `shares`: the two children
     /// beside it take them, and every other child of their node keeps its share. The row of shares
-    /// that leaves is what the desk keeps, for every node whose children are of those kinds, so a
-    /// later resize of another divider of the row starts from the row as it stands, and no pair
-    /// set apart from its row undoes another.
+    /// that leaves is what the desk keeps, for every node whose free children are of those kinds,
+    /// so a later resize of another divider of the row starts from the row as it stands, no pair
+    /// set apart from its row undoes another, and the secretary coming or going keeps them.
     pub fn resize(&mut self, before: u32, after: u32, shares: [Share; 2]) {
         let (Some(b), Some(a)) = (self.leaf(before), self.leaf(after)) else {
             return;
@@ -249,10 +327,17 @@ impl Desk {
             },
         );
         if let Some(row) = row(acted.root(), b, a) {
-            let kinds = kinds(row);
-            self.resized.retain(|(k, _)| *k != kinds);
-            self.resized
-                .push((kinds, row.parts().map(|p| p.share).collect()));
+            let (kinds, free, pinned) = split(row);
+            let kept = self
+                .resized
+                .iter()
+                .position(|r| r.kinds == kinds)
+                .map(|i| self.resized.remove(i));
+            self.resized.push(Resized {
+                kinds,
+                free,
+                pinned: pinned.or(kept.and_then(|r| r.pinned)),
+            });
         }
     }
 
@@ -273,12 +358,59 @@ impl Desk {
     /// The tree with the rows of shares set in this tab.
     fn shown(&self) -> Tiles<Route> {
         self.tiles.clone().reshared(&|n: &Node<Leaf<Route>>| {
-            let k = kinds(n);
-            self.resized
-                .iter()
-                .find(|(kinds, _)| *kinds == k)
-                .map(|(_, s)| s.clone())
+            let (kinds, _, _) = split(n);
+            let r = self.resized.iter().find(|r| r.kinds == kinds)?;
+            let mut free = r.free.iter();
+            n.parts()
+                .map(|p| {
+                    if p.holds_pinned() {
+                        Some(r.pinned.unwrap_or(p.share))
+                    } else {
+                        free.next().copied()
+                    }
+                })
+                .collect()
         })
+    }
+
+    /// A crumb of a row: its leaf's route, and the address of the tree focused on that leaf.
+    fn crumb(&self, c: &tiles::Crumb<Route>) -> Crumb {
+        let focused = tiles::act(self.tiles.clone(), Act::Focus(c.to));
+        Crumb {
+            href: c.page.href(),
+            to: Desk::print(&tiles::act(focused, Act::Release)),
+            at: match c.at {
+                At::Before => Stands::Before,
+                At::Drawn => Stands::Drawn,
+                At::After => Stands::After,
+            },
+        }
+    }
+
+    /// Where the focused workspace's pinned leaf stands in a drawing of `drawn` leaves.
+    fn pinned(&self, drawn: &[Id]) -> Pinned {
+        let leaves = self.tiles.root().focus.tree.leaves();
+        let Some(pin) = leaves.last().filter(|l| l.page().pin() == Pin::Pinned) else {
+            return Pinned::None;
+        };
+        let focused = self.tiles.focused().id() == pin.id();
+        let drawn_ = |without: String| Pinned::Drawn {
+            key: pin.id().key(),
+            href: pin.page().href(),
+            without,
+        };
+        match (drawn.contains(&pin.id()), focused, leaves.len()) {
+            (true, true, 1) => drawn_(
+                pin.page()
+                    .subject()
+                    .map_or_else(|| self.workspace(), |p| p.href()),
+            ),
+            (true, true, _) => drawn_(Desk::print(&tiles::act(self.tiles.clone(), Act::Close))),
+            (true, false, _) => drawn_(self.address()),
+            (false, _, _) => Pinned::Behind {
+                to: Desk::print(&tiles::act(self.tiles.clone(), Act::Focus(pin.id()))),
+            },
+        }
     }
 
     /// `arrange` for the room the tiles stand in, with each tile's route.
@@ -316,10 +448,12 @@ impl Desk {
                 href: l.page().href(),
             })
             .collect();
+        let drawn: Vec<Id> = tiles.iter().map(|t| t.id).collect();
         Drawing {
             scroll,
             behind,
-            keep: Route::destinations().len() - 1 + tiles::MOST - 1,
+            keep: Route::destinations().len() - 1 + tiles::MOST,
+            pinned: self.pinned(&drawn),
             tiles: tiles
                 .into_iter()
                 .map(|t| Drawn {
@@ -342,14 +476,7 @@ impl Desk {
                         .shown
                         .iter()
                         .chain(&r.more)
-                        .map(|c| Crumb {
-                            href: c.page.href(),
-                            at: match c.at {
-                                At::Before => Stands::Before,
-                                At::Drawn => Stands::Drawn,
-                                At::After => Stands::After,
-                            },
-                        })
+                        .map(|c| self.crumb(c))
                         .collect(),
                     node: r.node,
                 })
@@ -422,6 +549,15 @@ mod host {
             self.desk.open(key, href);
         }
 
+        /// `dock` JSON of `Dock`.
+        pub fn dock(&mut self, dock: &str) -> Result<(), wasm_bindgen::JsError> {
+            let dock = serde_json::from_str(dock).map_err(|e| {
+                wasm_bindgen::JsError::new(&format!("a say that does not read: {e}"))
+            })?;
+            self.desk.dock(dock);
+            Ok(())
+        }
+
         /// `before` and `after` the shares' weights, 1 to 3; any other weight changes nothing.
         pub fn resize(&mut self, from: u32, to: u32, before: u32, after: u32) {
             if let (Some(b), Some(a)) = (super::share(before), super::share(after)) {
@@ -437,9 +573,17 @@ mod host {
     }
 }
 
-/// A node's children, each by the kind of the leaf it shows.
-fn kinds(n: &Node<Leaf<Route>>) -> Vec<Kind> {
-    n.parts().map(|p| p.tree.focused().page().kind()).collect()
+/// A node's free children by the kind of the leaf each shows, their shares, and the share of the
+/// child that holds the secretary.
+fn split(n: &Node<Leaf<Route>>) -> (Vec<Kind>, Vec<Share>, Option<Share>) {
+    let (pinned, free): (Vec<_>, Vec<_>) = n.parts().partition(|p| p.holds_pinned());
+    (
+        free.iter()
+            .map(|p| p.tree.focused().page().kind())
+            .collect(),
+        free.iter().map(|p| p.share).collect(),
+        pinned.first().map(|p| p.share),
+    )
 }
 
 /// The node whose child holding `before` stands right before its child holding `after`.

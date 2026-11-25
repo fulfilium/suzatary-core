@@ -2,8 +2,8 @@
 // tile, crumb row and divider, keyed as the drawing names them, each placed by its rectangle's share of the room, and a
 // style or a row's crumbs written only where they differ, so the same drawing changes nothing. A tile's element is
 // never moved, so no page loses its scroll or its focus. Where a page stands is the desk's; what the host reads of the
-// window is the room the tiles stand in (`#view`'s width, the window's height) and whether the window's chrome is the
-// wide one (`room`).
+// window is the room the tiles stand in (`#view`'s width, the window's height). A pinned leaf, docked or let go, is the
+// desk's answer to the shell's say (`Around.said`), which the host hands it unread.
 //
 // Every act on the tree goes through the desk: a link followed in a tile and its page's `Go` open from that tile, a
 // divider's drag, tap and keys resize it, and the address the host hands the history is the desk's print.
@@ -14,7 +14,7 @@
 // go when its leaf leaves the tree, or when more than the drawing's bound are hidden, the one drawn longest ago first
 // (`keep`). A page let go and opened again is mounted again from its address, as a page navigated to.
 
-import type { Area, Crumbs, Drawing, Drawn, Line, Notch, Opens } from "../wire/generated/pages"
+import type { Area, Crumbs, Drawing, Drawn, Line, Notch, Opens, Pinned } from "../wire/generated/pages"
 import keep from "./keep"
 import type { Desk } from "../pages/views"
 import type { Mounted } from "../view/page"
@@ -69,9 +69,15 @@ export namespace tiles {
     // The address moved. `fresh` mounts every page again (a switch of chain); `again` (Back, Forward, a resize) leaves a
     // page drawn alone where the log puts it rather than at its top. Answers the pages drawn anew.
     readonly go: (to: Address, fresh: boolean, again: boolean) => Promise<readonly HTMLElement[]>
-    // Whether the window's chrome is the wide one, which the secretary's panel reads as the rest of the chrome does: the
-    // same media query as every wide rule of `style.css`, at the token they are pinned to.
-    readonly room: () => Opens
+    // The shell's say moved: told to the desk once no move of the address is in flight, and drawn. Answers where the
+    // pinned leaf stands in the tree it drew.
+    readonly dock: () => Promise<Pinned>
+    // Resolves once no move of the address is in flight: a press reads the drawing it acts on after it.
+    readonly idle: () => Promise<void>
+    // How many gos have begun: a caller that waited for its own sees whether another began since.
+    readonly goes: () => number
+    // The address of the drawing on screen and where its pinned leaf stands; none before the first.
+    readonly committed: () => Committed | null
     // The routes drawn now.
     readonly drawn: () => readonly Route[]
     // Lets go the hidden pages of the routes `of` names: a page drawn again would show what it was made from.
@@ -83,6 +89,12 @@ export namespace tiles {
     readonly destroy: () => void
   }
 
+  export type Committed = { readonly here: Address; readonly pinned: Pinned }
+
+  // What the shell gives the host: `moved` after the tiles moved; `said`, the shell's say as JSON, read on every move;
+  // `release`, the ask of the page in the tile `key` to be let go (`Effect::Release`).
+  export type Around = { readonly moved: () => void; readonly said: () => string; readonly release: (key: number) => void }
+
   // A crumb names its page: a workspace's home by the bar's word, any other page by what it is.
   const NOUNS: { readonly [K in Route["type"]]?: string } = {
     todo: "Todo",
@@ -93,6 +105,7 @@ export namespace tiles {
     conversations: "Conversations",
     newtopic: "New topic",
     memory: "Memory",
+    aside: "Secretary",
   }
   const label = (href: string): string => {
     const route = parseRoute(href)
@@ -101,7 +114,7 @@ export namespace tiles {
 
   // A row's crumbs. The one just before the drawn ones is Back where Back lands on its page: the history's previous entry
   // is that page, or there is none and Back puts that page in place. Any other before, and one after, is a link to its
-  // page, so a crumb goes where it says.
+  // page, so a crumb goes where it says; one after goes to the tree focused there, which keeps the pages beside it.
   const crumbsOf = (row: Crumbs): HTMLElement[] => {
     const log = app.now().log
     const previous = log.entries[log.at - 1]?.address.route
@@ -112,7 +125,7 @@ export namespace tiles {
         case "Before":
           return [i === back ? backButton(label(c.href), parseRoute(c.href)) : el("a", { class: "back", href: c.href }, chevronIcon(), label(c.href))]
         case "After":
-          return [el("a", { class: "crumbafter", href: c.href }, label(c.href), chevronIcon())]
+          return [el("a", { class: "crumbafter", href: c.to }, label(c.href), chevronIcon())]
         case "Drawn":
           return []
       }
@@ -149,9 +162,10 @@ export namespace tiles {
     return style
   }
 
-  export const install = (view: HTMLElement, layers: HTMLElement, desk: () => Promise<Desk>, moved: () => void): Host => {
+  export const install = (view: HTMLElement, layers: HTMLElement, desk: () => Promise<Desk>, around: Around): Host => {
+    const { moved, said, release } = around
     let live: Tile[] = []
-    let drawing: Drawing = { scroll: "Document", tiles: [], behind: [], keep: 0, rows: [], dividers: [] }
+    let drawing: Drawing = { scroll: "Document", tiles: [], behind: [], keep: 0, rows: [], dividers: [], pinned: { type: "None" } }
     let room = { w: 0, h: 0 }
     let shown: Shown = { type: "Waiting" }
     // The focused workspace's home, read from the desk's tree as an address moves it, before any page of it has loaded.
@@ -163,7 +177,6 @@ export namespace tiles {
     const marks = new Map<string, Mark>()
     // Each divider's element's line now, which its drag, tap and keys read.
     const dividers = new Map<HTMLElement, Line>()
-    const wide = window.matchMedia(`(min-width: ${tokens.measure.wide / 16}rem)`)
 
     // The room in pixels at the 16px root, floored as a media query compares: a person's larger text moves the
     // arrangement the way `rem` moves CSS.
@@ -381,6 +394,7 @@ export namespace tiles {
       shown: () => t.shown,
       hear: moved => (t.heard.add(moved), () => void t.heard.delete(moved)),
       go: (href, how) => void open(t, href, how),
+      release: () => release(t.key),
     })
 
     // The divider `l` moved to its stop `i`: the same tiles, placed again.
@@ -464,8 +478,10 @@ export namespace tiles {
 
     type Arranged = { readonly room: { readonly w: number; readonly h: number }; readonly drawing: Drawing }
     const arrange = (d: Desk, at: { readonly w: number; readonly h: number }): Arranged => ({ room: at, drawing: JSON.parse(d.drawing(at.w, at.h)) })
-    // The drawing the DOM is made to; answers the scroller it had.
+    // The drawing the DOM is made to, and the address it is of; answers the scroller it had.
+    let committed: Committed | null = null
     const commit = (a: Arranged): Drawing["scroll"] => {
+      committed = shown.type === "Tiles" ? { here: shown.here, pinned: a.drawing.pinned } : null
       const was = drawing.scroll
       room = a.room
       drawing = a.drawing
@@ -481,12 +497,53 @@ export namespace tiles {
       lines.replaceChildren()
     }
 
+    // The pages a drawing draws, which a drawing of the same pages need not mount.
+    const pagesOf = (x: Drawing): string => JSON.stringify(x.tiles.map(t => [t.key, t.href]))
+    // Whether the latest go is in flight, and who waits for it to end: the desk is told a say only between gos, so a go
+    // commits the tree it arranged. A go a later one took over is waited for by nobody.
+    let goes = 0
+    let going = false
+    let ended: (() => void)[] = []
+    const idle = (): Promise<void> => (going ? new Promise<void>(done => void ended.push(done)) : Promise.resolve())
+
     const go = async (to: Address, fresh: boolean, again: boolean): Promise<readonly HTMLElement[]> => {
+      const mine = ++goes
+      going = true
+      try {
+        return await went(to, fresh, again)
+      } finally {
+        if (mine === goes) {
+          going = false
+          for (const done of ended.splice(0)) done()
+        }
+      }
+    }
+
+    // The say moved: told to the desk once no go is in flight, then the same pages drawn again in place, or the address
+    // shown drawn anew where a pinned leaf comes or goes. Answers where the pinned leaf stands in that tree.
+    const dock = async (): Promise<Pinned> => {
+      await idle()
+      const d = await desk()
+      // Before the first address the first go reads the say; a go begun meanwhile is waited for again.
+      if (shown.type !== "Tiles") return { type: "None" }
+      if (going) return dock()
+      d.dock(said())
+      const next = arrange(d, roomOf())
+      if (pagesOf(next.drawing) !== pagesOf(drawing)) void go(shown.here, false, true)
+      else if (JSON.stringify(next.drawing) !== JSON.stringify(drawing)) {
+        draw(commit(next))
+        moved()
+      }
+      return next.drawing.pinned
+    }
+
+    const went = async (to: Address, fresh: boolean, again: boolean): Promise<readonly HTMLElement[]> => {
       const turn = ++latest
       const d = await desk()
       if (turn !== latest) return []
       if (shown.type === "Failed") view.replaceChildren()
       shown = { type: "Tiles", here: to }
+      d.dock(said())
       d.go(hrefOfAddress(to))
       workspace = parseRoute(d.workspace())
       moved()
@@ -531,6 +588,7 @@ export namespace tiles {
       }
       // A page new to the screen, alone, starts at its top, unless the log says where it was.
       if (!again && lone() && made.length > 0) window.scrollTo(0, 0)
+      moved()
       return made.map(t => t.root)
     }
 
@@ -542,9 +600,8 @@ export namespace tiles {
       const now = roomOf()
       if (now.w === room.w && now.h === room.h) return
       const d = await desk()
-      const same = (x: Drawing): string => JSON.stringify(x.tiles.map(t => [t.key, t.href]))
       const next = arrange(d, now)
-      if (same(next.drawing) === same(drawing)) draw(commit(next))
+      if (pagesOf(next.drawing) === pagesOf(drawing)) draw(commit(next))
       else await go(shown.here, false, true)
       moved()
     }
@@ -562,7 +619,10 @@ export namespace tiles {
 
     return {
       go,
-      room: () => (wide.matches ? "Beside" : "Over"),
+      dock,
+      idle,
+      goes: () => goes,
+      committed: () => committed,
       drawn: () => live.filter(t => t.shown === "Drawn").map(t => t.route),
       forget: of => {
         const gone = live.filter(t => t.shown === "Hidden" && of(t.route))
@@ -574,6 +634,7 @@ export namespace tiles {
       failed: said => {
         latest += 1
         shown = { type: "Failed" }
+        committed = null
         unmount()
         view.classList.remove("tiled")
         view.replaceChildren(said)
@@ -581,6 +642,7 @@ export namespace tiles {
       destroy: () => {
         latest += 1
         shown = { type: "Waiting" }
+        committed = null
         unmount()
         view.replaceChildren()
       },

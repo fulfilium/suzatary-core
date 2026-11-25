@@ -76,8 +76,8 @@
   --tabbar: max(var(--tap), 3.5rem);
   /* What a page or a sheet leaves free at a phone's foot: the tab bar, a step, the home indicator. */
   --foot-room: calc(var(--tabbar) + var(--s-4) + env(safe-area-inset-bottom));
-  /* The secretary panel's toggle, fixed at the header's right end: the header leaves it this width. */
-  --panel-toggle: 7rem;
+  /* The secretary's toggle at the header's end, one width for both its words. */
+  --secretary-door: 7rem;
   /* A tree row's fold column, and what each level of depth adds. */
   --fold: 20px;
   --indent: 12px;
@@ -447,17 +447,10 @@ header::before {
   }
 }
 
-/* ONE GRID FOR EVERY PAGE AT 62rem AND UP. The header spans the window, with room
-   on the right for the secretary's toggle; everything under it starts at the brand's
-   edge and runs to the open panel (`--aside`) or the window's edge. The widths are at
+/* ONE GRID FOR EVERY PAGE AT 62rem AND UP. The header spans the window; everything
+   under it starts at the brand's edge and runs to the window's. The widths are at
    the end of this file, after every base rule they override. */
 @media (min-width: 62rem) {
-  :root {
-    --aside: 0px;
-    /* The header's height: its padding round one row of targets. The panel pins under it. */
-    --head: calc(var(--s-3h) + var(--tap) + var(--s-2) + env(safe-area-inset-top));
-  }
-
   body {
     padding-bottom: var(--s-8);
   }
@@ -465,7 +458,6 @@ header::before {
   header {
     gap: var(--s-8);
     padding-top: calc(var(--s-3h) + env(safe-area-inset-top));
-    padding-right: calc(var(--panel-toggle) + var(--s-3));
   }
 
   /* The same words across the top, the sheet dropping from "More". */
@@ -1871,9 +1863,8 @@ body:has(#view.tiled) {
   position: relative;
   flex: 1 1 0;
   min-height: 0;
-  /* Its children are all placed, so without a width its auto margins would shrink it to nothing in the column. The
-     open panel's room (`--aside`, the wide chrome's) is the one margin it keeps. */
-  width: calc(100% - var(--aside, 0px));
+  /* Its children are all placed, so without a width its auto margins would shrink it to nothing in the column. */
+  width: 100%;
 }
 
 .tiled > .tile,
@@ -3860,26 +3851,6 @@ h1[tabindex="-1"]:focus {
   cursor: pointer;
 }
 
-/* "Ask the secretary", on a todo, a message, a thread and a briefing. A LINK
-   and not a button: it navigates, so it middle-clicks and Back returns. */
-.askrow {
-  display: flex;
-  justify-content: flex-end;
-  margin: var(--s-1) 0 var(--s-1h);
-}
-
-.asksecretary {
-  min-height: var(--tap);
-  display: inline-flex;
-  align-items: center;
-  padding: 0 var(--s-3);
-  border: 2px solid var(--line);
-  border-radius: var(--r-pill);
-  color: var(--primary);
-  text-decoration: none;
-  font-size: var(--t-small);
-}
-
 /* --- the compose box --- */
 
 .compose {
@@ -5241,18 +5212,47 @@ h1[tabindex="-1"]:focus {
   max-width: 70ch;
 }
 
-/* --- the secretary layer: ONE DOOR ON EACH WIDTH.
-   On a phone the Secretary tab, and a page's own "Ask the secretary" for what
-   it shows; where the panel stands (the app puts it in the page at its wide
-   width, `chat/aside.ts`), its toggle carries what the page shows, so the
-   page's own link is not drawn: the rule reads the panel, not a width. ---- */
-body:has(> .secretarypanel) .askrow {
-  display: none;
+/* --- the secretary beside a page (`#/aside`, `chat/aside.ts`): ONE CONTROL PER ACT. Show
+   is the header's door, at every width: on a page about one thing under either chrome, on a
+   page of many things under the wide one; hide is the secretary's own, in its header. Which
+   is drawn is the say's (`aside.of`), never a rule here. ---- */
+/* At the header's end, just before the live mark, which stands at the end whether the door is drawn
+   or not: the door takes the header's free room where it is drawn, and the mark where it is not.
+   Drawn only where the secretary is not, at the
+   height of the header's row: the brand's line and a step above and below, which its negative
+   margin gives back, so the header is as tall with it as without it (`tiles.test.ts`). Its width
+   gives before the header overflows, at a large text size. Its tap area is the header's whole
+   height at its width, a box of its own that draws nothing: a finger's 44 px would reach past a
+   phone's header onto the page under it. */
+.secretarytoggle {
+  position: relative;
+  margin-left: auto;
+  flex: 0 1 var(--secretary-door);
+  min-width: 0;
+  white-space: nowrap;
+  padding: var(--s-1) var(--s-3);
+  margin-block: calc(-1 * var(--s-1));
+  border: 0;
+  box-shadow: inset 0 0 0 2px var(--line);
+  border-radius: var(--r-pill);
+  background: var(--ground);
+  color: var(--primary);
+  font: var(--t-small) / 1 var(--f-sans);
+}
+
+.secretarytoggle:not([hidden]) + .live {
+  margin-left: 0;
+}
+
+.secretarytoggle::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--s-1) - var(--s-2h) - env(safe-area-inset-top)) 0 calc(var(--s-1) - var(--s-2)) 0;
 }
 
 /* The frame header — "About <reference> · " (or, on the empty-slice
    fallback, "Nothing about <reference> yet · ") beside a link to the whole
-   conversation — only in the panel; the page never draws it,
+   conversation — only beside a page; the conversation's own page never draws it,
    because the page already IS the whole conversation. */
 .frameheader {
   font-size: var(--t-small);
@@ -5265,107 +5265,76 @@ body:has(> .secretarypanel) .askrow {
   text-decoration: none;
 }
 
-/* The panel does not exist below 62rem at all: the tab and the page's own
-   link are the doors there. */
-.secretarypanel {
-  display: none;
+/* Its header and its composer stand still while its talk scrolls under them, in its
+   tile or, alone, in the document, as the conversation's page does. */
+.panelbody {
+  --covered: calc(var(--tabbar) + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  /* Alone it scrolls the document: a window tall, so its composer rests at the foot, above the bar. */
+  min-height: calc(100dvh - var(--covered));
 }
 
+.tiled .panelbody {
+  --covered: 0px;
+  min-height: 100%;
+}
+
+/* Beside other tiles it scrolls its own tile, whose top no header covers. */
+.tiled .panelheader {
+  top: 0;
+}
+
+/* The wide chrome has no tab bar over the page's foot. */
 @media (min-width: 62rem) {
-  /* Under the header, never beside it, so opening the panel moves nothing in the header. */
-  .secretarypanel {
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    right: 0;
-    top: var(--head);
-    bottom: 0;
-    width: var(--m-beside);
-    z-index: 24;
-    border-left: 1px solid var(--rule);
-    background: var(--ground);
-    padding: var(--s-3);
-    /* The panel does not scroll, so the composer stays on screen: `.panelscroll` does. */
-    overflow: hidden;
-  }
-
-  /* Closed, the panel takes no width; its toggle stays where it was. */
-  .secretarypanel.panelclosed {
-    width: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .secretarypanel.panelclosed .panelbody {
-    display: none;
-  }
-
-  /* ONE PLACE, OPEN OR CLOSED: fixed at the header's line on the right, one width for both labels. A fixed box is
-     not clipped by the closed panel's zero width. */
-  .panelcollapse {
-    position: fixed;
-    top: calc(var(--s-3h) + env(safe-area-inset-top));
-    right: var(--s-3);
-    width: var(--panel-toggle);
-    min-height: var(--tap);
-    padding: 0 var(--s-3);
-    border: 2px solid var(--line);
-    border-radius: var(--r-pill);
-    background: var(--ground);
-    color: var(--primary);
-    font-size: var(--t-small);
-  }
-
-  /* The panel's program draws its body into this host, which lays out as the body itself. */
-  .panelhost {
-    display: contents;
-  }
-
   .panelbody {
-    flex: 1 1 auto;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
+    --covered: 0px;
   }
+}
 
-  .panelheader {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: flex-start;
-    gap: var(--s-2);
-    margin-bottom: var(--s-2);
-  }
+.panelheader {
+  position: sticky;
+  top: var(--sticky-top);
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-2) 0;
+  background: var(--ground);
+}
 
-  .panelheader .frameheader {
-    flex: 1 1 auto;
-    margin-bottom: 0;
-  }
+.panelheader .frameheader {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+}
 
-  .panelheader .legend {
-    flex: 0 0 auto;
-    margin: 0;
-    white-space: nowrap;
-  }
+.hidesecretary {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  border: 2px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--ground);
+  color: var(--primary);
+  font-size: var(--t-small);
+}
 
-  .panelscroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-  }
+.panelheader .legend {
+  flex: 0 0 auto;
+  margin: 0;
+  white-space: nowrap;
+}
 
-  .panelcompose {
-    flex: 0 0 auto;
-  }
+.panelscroll {
+  flex: 1 1 auto;
+}
 
-  .panelcompose .compose {
-    margin-top: var(--s-2);
-  }
-
-  /* The page under the header leaves the open panel its width; a closed panel is only its toggle, in the header's room. */
-  body:has(> .secretarypanel:not(.panelclosed)) {
-    --aside: var(--m-beside);
-  }
+.panelcompose {
+  position: sticky;
+  bottom: var(--covered);
+  z-index: 2;
+  padding: var(--s-2) 0;
+  background: var(--ground);
 }
 
 /* THE ONE "NEEDS YOU" POPUP (`needsyou.ts`): anything newly waiting on him,
@@ -6460,10 +6429,6 @@ body:has(> .secretarypanel) .askrow {
   .needsyouhost {
     max-width: none;
     margin-left: 0;
-    margin-right: var(--aside);
-  }
-
-  header {
     margin-right: 0;
   }
 }

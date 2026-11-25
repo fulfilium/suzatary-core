@@ -28,11 +28,13 @@ import outbox from "./shell/outbox";
 import { installKeyboard, setPaletteOpener } from "./shell/keyboard";
 import nav from "./shell/nav";
 import { openPalette } from "./shell/palette";
-import { updatePanel } from "./chat/panel";
+import secretary from "./chat/aside";
+import talk from "./chat/talk";
 import tiles from "./shell/tiles";
 import pages from "./pages/table";
 import frame from "./view/frame";
-import { hrefOfAddress } from "./shell/route";
+import { type Route, hrefOf, hrefOfAddress, parseAddress, parseRoute } from "./shell/route";
+import tokens from "./view/tokens";
 import address from "./shell/address";
 import routelog from "./shell/routelog";
 import kept from "./view/kept";
@@ -62,12 +64,114 @@ import page from "./shell/page";
 await page.draw(import.meta.url);
 
 const desk = once.of(async () => new (await program.module()).Desk()).get;
-// The room moved (the window, the open panel): the chrome is drawn again, as the panel reads it.
-const host = tiles.install(byId("view"), byId("layers"), desk, () => paint(chrome.of(app.now(), seen())));
+const presses = ui.cell(registers.presses);
+// The window's chrome, as every wide rule of `style.css` reads it: an input of the say, never a rule that hides a door.
+const wide = window.matchMedia(`(min-width: ${tokens.measure.wide / 16}rem)`);
+const chromeNow = (): secretary.Chrome => (wide.matches ? "Wide" : "Phone");
+// The talk about the page in view, as heard since the page was arrived at.
+let heard: { readonly about: string; readonly talk: secretary.Heard; readonly unhear: () => void } | null = null;
+const heardTalk = (about: string): secretary.Heard => (heard?.about === about ? heard.talk : "Unheard");
+// The reference the page in view names itself by, where it does (`data-about` beside `data-for`, its own address): a
+// message names its row's hash, whatever id its address used.
+let named: { readonly for: string; readonly about: string } | null = null;
+const namedFor = (route: Route): string | null => (named !== null && named.for === hrefOf(route) ? named.about : null);
+const said = (route: Route): secretary.Said => secretary.of(route, chromeNow(), app.now().chain, presses.get(), heardTalk, namedFor(route));
+const host = tiles.install(byId("view"), byId("layers"), desk, {
+  moved: () => paint(chrome.of(app.now(), seen())),
+  said: () => JSON.stringify(said(app.route(app.now())).dock),
+  release: (key) => void hide(key),
+});
+
+// The talk the say on the page in view reads, asked anew at each arrival and heard as it moves; none is asked where a
+// press or the page decides. Only an answer that moves it tells the desk.
+const listen = (arrived: boolean): void => {
+  const asks = said(app.route(app.now())).asks;
+  if (!arrived && (heard?.about ?? null) === asks) return;
+  heard?.unhear();
+  heard = null;
+  if (asks === null) return;
+  const unhear = talk.listen(asks, (t) => {
+    if (heard === null || heard.about !== asks || heard.talk === t) return;
+    heard = { ...heard, talk: t };
+    void host.dock();
+  });
+  heard = { about: asks, talk: "Unheard", unhear };
+};
+wide.addEventListener("change", () => {
+  listen(false);
+  void host.dock();
+});
+// A page that names itself once its reading lands: the say and its talk are asked again about that name.
+new MutationObserver(() => {
+  const href = hrefOf(app.route(app.now()));
+  const e = byId("view").querySelector<HTMLElement>(`[data-about][data-for="${CSS.escape(href)}"]`);
+  const now = e === null ? null : { for: href, about: e.dataset.about ?? "" };
+  if (now?.about === named?.about && now?.for === named?.for) return;
+  named = now;
+  listen(false);
+  void host.dock();
+}).observe(byId("view"), { subtree: true, childList: true, attributes: true, attributeFilter: ["data-about", "data-for"] });
+
+// Where the keyboard goes once a press's own move has ended: into the secretary's region after a show, to the header's
+// door after a hide. It is that press's alone: called once the press has begun its move, it ends unfound when another
+// press or another move (a link followed meanwhile) begins before that move ends, and is spent once it ends.
+let pressed = 0;
+const focusAfter = async (to: "Secretary" | "Door"): Promise<void> => {
+  const mine = ++pressed;
+  const own = host.goes();
+  await host.idle();
+  const c = host.committed();
+  if (mine !== pressed || host.goes() !== own || c === null) return;
+  const drawn = c.pinned.type === "Drawn";
+  const target = to === "Secretary" ? (drawn ? document.querySelector<HTMLElement>("#view .panelbody") : null) : !drawn && said(c.here.route).door.type === "Header" ? byId("beside") : null;
+  target?.focus({ preventScroll: to === "Door" });
+};
+
+// Show, from the header's door once no move is in flight, for the page the drawing committed: its press, and, where the
+// room holds the secretary only behind the page, the tree focused there, a new entry of the history. Beside the page,
+// no entry: the address names the secretary only where it has the focus.
+const show = async (): Promise<void> => {
+  await host.idle();
+  const c = host.committed();
+  const door = c === null ? null : said(c.here.route).door;
+  if (door === null || door.type === "None") return;
+  presses.set(door.shows);
+  listen(false);
+  const p = await host.dock();
+  if (p.type === "Behind") address.went(parseAddress(p.to));
+  await focusAfter("Secretary");
+};
+byId("beside").addEventListener("click", () => void show());
+
+// Hide, the secretary's own, once no move is in flight: the press on the page it is about, then, where it has the
+// focus, the page before it, as a close goes: Back where that page is the entry before (the show that made it), else in
+// its place. Either way Back never shows it again. Unfocused beside the page, no entry.
+const hide = async (key: number): Promise<void> => {
+  await host.idle();
+  const c = host.committed();
+  if (c === null || c.pinned.type !== "Drawn" || c.pinned.key !== key) return;
+  const leaf = parseRoute(c.pinned.href);
+  const behind = parseAddress(c.pinned.without);
+  if (leaf.type !== "aside") return;
+  presses.set(secretary.hidden(leaf.about, behind.route, app.now().chain, presses.get()));
+  listen(false);
+  if (c.here.route.type !== "aside") await host.dock();
+  else {
+    const log = app.now().log;
+    const previous = log.entries[log.at - 1]?.address;
+    if (previous !== undefined && routelog.same(previous, behind)) {
+      // Back is the browser's: its move starts when the browser says it moved.
+      const moved = new Promise<void>((done) => window.addEventListener("popstate", () => done(), { once: true }));
+      address.back(behind.route);
+      await moved;
+    } else address.replaced(behind);
+  }
+  await focusAfter("Door");
+};
 
 const paint = chrome.painter({
   nav: (now, was) => nav.paint(byId("tabbar"), now, was, app.dispatch),
-  panel: (p) => updatePanel(p),
+  beside: (t) => void (byId("beside").hidden = t.type !== "Header"),
   stale: stale.install(byId("stale"), refetchFold),
   excluded: leftout.install(byId("excluded"), (copy) => {
     const named = storesync.named(copy);
@@ -101,11 +205,11 @@ async function mount(a: app.App, fresh: boolean, heard: boolean, again: boolean,
   // The box's fold, which carries what it rendered, is asked for beside a page's module, not after it (once per tab).
   if (pages.folds[route.type] === "Shown") void ensureFold().catch(() => {});
   const made = await host.go(app.address(a), fresh, again);
-  paint(chrome.of(app.now(), seen()));
   // No page drawn anew: the pages on screen took the move on themselves.
   if (turn !== latest || made.length === 0) return;
-  // In its own task, since focusing the heading lays the page out; a page that took the focus keeps it.
-  if (heard) setTimeout(() => (view.contains(document.activeElement) ? undefined : announce(made[made.length - 1] ?? view)), 0);
+  // In its own task, since focusing the heading lays the page out; a page that took the focus keeps it, and so does the
+  // header's door a hide gave it.
+  if (heard) setTimeout(() => (view.contains(document.activeElement) || document.activeElement === byId("beside") ? undefined : announce(made[made.length - 1] ?? view)), 0);
   if (again) kept.restore(routelog.here(a.log).kept, () => drawn !== null && drawn.log === a.log);
 }
 
@@ -236,7 +340,17 @@ function switched(): void {
 }
 
 // Before the tiles are first drawn, the bar lights the address's own page.
-const seen = (): chrome.Seen => ({ fold: store.state(), excluded: readings.left(), theme: theme(), room: host.room(), workspace: host.workspace() ?? app.route(app.now()) });
+// The door is the drawing's on screen: none where it draws the secretary.
+const seen = (): chrome.Seen => {
+  const c = host.committed();
+  return {
+    fold: store.state(),
+    excluded: readings.left(),
+    theme: theme(),
+    door: c === null || c.pinned.type === "Drawn" ? { type: "None" } : said(c.here.route).door,
+    workspace: host.workspace() ?? app.route(app.now()),
+  };
+};
 
 let drawn: app.App | null = null;
 
@@ -249,6 +363,13 @@ foldWhere(() => (pages.folds[app.route(app.now()).type] === "Shown" ? "Page" : "
 function draw(a: app.App): void {
   const was = drawn;
   drawn = a;
+  // A page arrived at hears its talk anew. The secretary arrived at by a new entry of the history is asked for beside the
+  // page it is about; Back and Forward to it ask nothing.
+  const route = app.route(a);
+  const arrived = was === null || hrefOf(app.route(was)) !== hrefOf(route);
+  const entered = was === null || was.log.entries[a.log.at]?.address !== a.log.entries[a.log.at]?.address;
+  if (arrived && entered && route.type === "aside") presses.set(secretary.went(route.about, presses.get()));
+  listen(arrived);
   const moved = was !== null && was.chain !== a.chain;
   if (was === null || moved) remember(a.chain);
   if (moved) switched();

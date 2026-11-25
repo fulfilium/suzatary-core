@@ -294,6 +294,8 @@ export interface Lines extends Written, Refusable {
   /** What the device keeps within a budget, and what of it lacks its print. */
   plan: (budget: number) => string;
   list: (inbox: Proposals) => string;
+  /** Whether a round of conversation `id` touches the reference `about`; false where it is not held whole. */
+  talks: (id: string, about: string) => boolean;
   conversation: (
     id: string,
     inbox: Proposals,
@@ -733,6 +735,9 @@ export const listOfLines = (lines: Lines, inbox: Proposals): ConversationsPayloa
 
 export const conversationOf = (lines: Lines, inbox: Proposals, id: string, window: Window, memory: MemoryPayload | null): ConversationPayload =>
   checked("conversation", lines.conversation(id, inbox, shown(window.before), shown(window.limit), window.about, memoryOf(memory)), payload.ConversationPayload);
+
+/** Whether conversation `id` holds a round about `about`: one boolean crosses, whatever the conversation holds. */
+export const talksOf = (lines: Lines, id: string, about: string): boolean => lines.talks(id, about);
 
 export const searchOf = (lines: Lines, q: string, whole: boolean): SearchPayload => checked("search", lines.search(q, whole), payload.SearchPayload);
 

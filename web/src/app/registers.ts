@@ -12,7 +12,7 @@ export namespace registers {
   // "" for the deployment's first chain.
   export const chain = ui.kind<string>({ name: "chain", tier: "Device", initial: "", value: d.str })
   // By page (`chat/aside.ts`).
-  export const panel = ui.kind<aside.Presses>({ name: "panel", tier: "Tab", initial: {} })
+  export const presses = ui.kind<aside.Presses>({ name: "presses", tier: "Tab", initial: {} })
 
   // By conversation: the owner's words, so they follow the owner.
   export const draft = ui.kind<string>({ name: "draft", tier: "Owner", initial: "", value: d.str })

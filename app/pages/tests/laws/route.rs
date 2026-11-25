@@ -73,6 +73,7 @@ fn route() -> impl Strategy<Value = Route> {
                 focus,
                 at
             }),
+        w().prop_map(|about| Route::Aside { about }),
         w().prop_map(|hash| Route::Unknown { hash }),
     ]
 }
@@ -99,6 +100,7 @@ fn every_variant_is_drawn() {
         | Route::NewTopic
         | Route::Conversations
         | Route::Conversation { .. }
+        | Route::Aside { .. }
         | Route::Unknown { .. } => (),
     };
     Route::destinations().iter().for_each(variant);
@@ -121,6 +123,8 @@ fn viewport() -> impl Strategy<Value = Viewport> {
 
 /// A list's least width, a divider and a column's (`tokens.typ`): the room two tiles need.
 const BESIDE: u32 = 320 + 24 + 480;
+/// A list's least width, a divider and the secretary's.
+const ASIDE: u32 = 320 + 24 + 352;
 
 #[derive(serde::Deserialize)]
 struct Pair {
@@ -229,9 +233,9 @@ proptest! {
         prop_assert!(Route::destinations().contains(&end(&r)), "{:?} ends at {:?}", r, end(&r));
     }
 
-    /// A bare hash's layout: a page drawn alone scrolls the document, and only a todo beside the
-    /// list it is opened from, and a conversation beside the conversations, make two tiles,
-    /// exactly where the room holds both least widths and a divider, at any height. Alone, such a
+    /// A bare hash's layout: a page drawn alone scrolls the document, and only a todo or the
+    /// secretary beside the list it is opened from, and a conversation beside the conversations,
+    /// make two tiles, exactly where the room holds both least widths and a divider, at any height. Alone, such a
     /// page stands under its workspace's crumb row; the two stand either side of one divider,
     /// named by the list.
     #[test]
@@ -249,16 +253,18 @@ proptest! {
         prop_assert_eq!(d.tiles.len() + d.behind.len(), leaves);
         // The list a bare hash opens its page beside, and the workspace both stand in.
         let from = if matches!(r, Route::Todo { .. }) {
-            Some(("#/", 0))
+            Some(("#/", 0, BESIDE))
+        } else if matches!(r, Route::Aside { .. }) {
+            Some(("#/", 0, ASIDE))
         } else if matches!(r, Route::Conversation { .. } | Route::NewTopic | Route::Memory) {
-            Some(("#/conversations", 2))
+            Some(("#/conversations", 2, BESIDE))
         } else {
             None
         };
         let hrefs: Vec<&str> = d.tiles.iter().map(|t| t.href.as_str()).collect();
         let href = r.href();
         match from {
-            Some((list, ws)) if at.w.0 >= BESIDE => {
+            Some((list, ws, least)) if at.w.0 >= least => {
                 prop_assert_eq!(hrefs, vec![list, href.as_str()]);
                 prop_assert_eq!(d.scroll, Scroller::Tiles);
                 prop_assert!(d.rows.is_empty());
@@ -272,7 +278,7 @@ proptest! {
                 prop_assert_eq!(d.scroll, Scroller::Document);
                 prop_assert!(d.dividers.is_empty());
                 let rows: Vec<Vec<usize>> = d.rows.iter().map(|r| r.node.clone()).collect();
-                prop_assert_eq!(rows, from.map(|(_, ws)| vec![ws]).into_iter().collect::<Vec<_>>());
+                prop_assert_eq!(rows, from.map(|(_, ws, _)| vec![ws]).into_iter().collect::<Vec<_>>());
             }
         }
     }

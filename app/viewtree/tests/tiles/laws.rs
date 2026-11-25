@@ -18,7 +18,7 @@ use super::runs::{ids, page, run, states, viewport};
 
 /// The count a law over runs affords in the suite; `PROPTEST_CASES` raises it for one run. A
 /// failing seed is kept beside this file.
-fn cases(n: u32) -> ProptestConfig {
+pub(super) fn cases(n: u32) -> ProptestConfig {
     let n = std::env::var("PROPTEST_CASES")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -230,15 +230,24 @@ proptest! {
     }
 
     /// A tile `Opens::Beside` exactly when opening, from it, a page of the shape it declares that
-    /// its workspace does not show draws the tile and that page together.
+    /// its workspace does not show, and of another kind than the leaf the open is made from,
+    /// draws the tile and that page together.
     #[test]
     fn opens_says_whether_an_open_from_the_tile_is_drawn_beside_it((home, m, first, steps) in run()) {
         for (_, _, t, at) in states(home, first, &steps) {
             for p in arrange(&t, at, &m).tiles {
                 let page = p.page.clone();
                 let from = act(t.clone(), Act::Focus(p.id));
-                // A page the workspace shows already is focused, not opened.
+                // A page the workspace shows already is focused, not opened; one of the kind of the
+                // free leaf a pinned tile opens from replaces that leaf.
                 if from.root().focus.tree.leaves().iter().any(|l| *l.page() == page.opened()) {
+                    continue;
+                }
+                let origin = match page.pin() {
+                    Pin::Pinned => super::dock::before_end(&from).and_then(|id| from.page(id)),
+                    Pin::Free => None,
+                };
+                if origin.is_some_and(|o| o.kind() == page.opened().kind()) {
                     continue;
                 }
                 let opened = act(from.clone(), Act::Open(page.opened()));
@@ -316,7 +325,7 @@ proptest! {
     }
 
     /// Every act keeps the tree well formed: the root's shape the home's, two children below the
-    /// root, at most `MOST` tiles a workspace, a pinned leaf only as its workspace's end. Closing
+    /// root, at most `MOST` free tiles a workspace, a pinned leaf only as its workspace's end. Closing
     /// a workspace's last tile changes nothing.
     #[test]
     fn every_act_keeps_the_tree_well_formed((home, _m, first, steps) in run()) {
@@ -338,7 +347,8 @@ fn weight(s: Share) -> u32 {
 }
 
 /// An open of one page, which inserted a tile beside a free leaf, then `Close`, gives the tree
-/// back; an open that opens a chain first (`Act::Open`) is left out. The law reaches its
+/// back, the pinned ends let go on both sides; an open that opens a chain first (`Act::Open`) is
+/// left out. The law reaches its
 /// assertion in at least a third of its cases.
 #[test]
 fn open_then_close_is_the_identity_where_the_open_inserted() {
@@ -367,7 +377,10 @@ fn open_then_close_is_the_identity_where_the_open_inserted() {
             if workspaces(&opened)[w].len() == workspaces(&t)[w].len() + 1 {
                 reached.set(reached.get() + 1);
                 let closed = act(opened, Act::Close);
-                prop_assert_eq!(pages(&closed), pages(&t));
+                // Beside a held page the close is the one made without it, which drops a share a
+                // page left alone beside it had: the trees agree without their held pages.
+                let (a, b) = (act(closed, Act::Release), act(t.clone(), Act::Release));
+                prop_assert_eq!(pages(&a), pages(&b));
             }
         }
         Ok(())

@@ -209,6 +209,19 @@ impl Lines {
         json(&listed)
     }
 
+    /// Whether a round of conversation `id` touches the reference `about`: one boolean, whatever
+    /// the conversation holds. False where the device does not hold it whole.
+    pub fn talks(&mut self, id: &str, about: &str) -> Result<bool, JsError> {
+        let id = ConversationId::new(id).map_err(|e| refused(e.to_string()))?;
+        let Some(about) = query::about(Some(about)).map_err(|r| said(&r))? else {
+            return Ok(false);
+        };
+        Ok(match self.0.transcript(&id) {
+            Some(Whole::Read(Ok(read))) => readings::talks(&read, &about),
+            Some(Whole::Read(Err(_)) | Whole::Lacking(_)) | None => false,
+        })
+    }
+
     /// One conversation's window, as the box's route reads it; a memory `undefined` reads every
     /// receipt as unread. Blocks stay their source, and no changeset is drawn.
     #[expect(

@@ -14,16 +14,17 @@ pub enum Act<P> {
     /// where the focused leaf is on the page's `home` chain, each page of the chain after it opens
     /// first, by this rule, and then the page: an open from a workspace's home of a page two steps
     /// from it inserts two tiles, the tree the page's bare address reads as. Each page then opens
-    /// so: a page of the focused leaf's kind replaces it; a pinned page becomes the focused
-    /// workspace's end, replacing a pinned end or the end of a full workspace, or added after the
-    /// last child; any other page goes beside (`open::beside`).
+    /// so: a page of the focused leaf's kind replaces it; a pinned page is held (`Hold`) and
+    /// focused, or replaces a focused pinned end; any other page goes beside (`open::beside`). An
+    /// open from a pinned leaf is the same open from the free leaf before it (`open::origin`).
     Open(P),
-    /// The focused leaf becomes a node down with the page, which stands below a free leaf and
-    /// above a pinned one: the one act that makes a node down. A pinned page opens as `Open`
-    /// opens it, at its workspace's end.
+    /// The focused leaf becomes a node down with the page below it: the one act that makes a node
+    /// down. From a pinned leaf, it is made from the free leaf before it; a pinned page opens as
+    /// `Open` opens it.
     Below(P),
     /// Removes the focused leaf; the neighbour before it takes the focus, else the one after. A
-    /// node left with one child is replaced by it. A workspace's last leaf stays.
+    /// node left with one child is replaced by it. A workspace's last free leaf stays, and so does
+    /// its last leaf. Beside a page `Hold` docked, the close is the one made without it.
     Close,
     /// Focuses the leaf `Id`: a crumb's, a tile's, or a workspace's.
     Focus(Id),
@@ -39,6 +40,16 @@ pub enum Act<P> {
         after: Id,
         shares: [Share; 2],
     },
+    /// A pinned page docked at the focused workspace's end, the focus where it stands: it
+    /// replaces a pinned end of another page, or stands after the workspace's children where the
+    /// workspace is a node across that fits, and otherwise beside the whole workspace in a new
+    /// node across; every other workspace lets its pinned end go, but one that is that
+    /// workspace's focused leaf, so one page is docked at a time. A pinned end that has the focus is the person's and stays, and a free page is not
+    /// held. `Release` after it is `Release`.
+    Hold(P),
+    /// Every workspace's pinned end let go, the focus where it stands; one that is its
+    /// workspace's focused leaf stays.
+    Release,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,23 +61,31 @@ pub enum Dir {
 }
 
 /// Total, and keeps the tree well formed (`Tiles::check`). An open or a `Below` that would put
-/// more than `MOST` tiles in the workspace opens here instead, or does nothing when the focused
-/// leaf is pinned.
+/// more than `MOST` free tiles in the workspace opens here instead.
 pub fn act<P: Page>(tiles: Tiles<P>, act: Act<P>) -> Tiles<P> {
     match act {
         Act::Open(page) => opened(tiles, page),
         Act::Below(page) if page.pin() == Pin::Pinned => opened(tiles, page),
-        Act::Below(page) => bounded(tiles, page, |mut t, page| {
-            let new = t.mint(page);
-            let opened = new.page().share();
-            t.root = descend(t.root, |h| {
-                h.put(|leaf| open::wrap(Axis::Down, leaf, new, opened))
-            });
-            t
-        }),
-        Act::Close => Tiles {
-            root: descend(tiles.root, close).normal_children(),
-            ..tiles
+        Act::Below(page) => {
+            let tiles = Tiles {
+                root: open::origin(tiles.root),
+                ..tiles
+            };
+            let opened = page.share();
+            let mut tiles = tiles;
+            let new = tiles.mint(page);
+            Tiles {
+                root: open::bounded(tiles.root, new, |root, new| {
+                    descend(root, |h| {
+                        h.put(|leaf| open::wrap(Axis::Down, leaf, new, opened))
+                    })
+                }),
+                ..tiles
+            }
+        }
+        Act::Close => match (tiles.focused().page().pin(), open::free(&tiles.root)) {
+            (Pin::Free, n) if n <= 1 => tiles,
+            (Pin::Free | Pin::Pinned, _) => closed(tiles),
         },
         Act::Focus(id) => Tiles {
             root: open::focus(tiles.root, id),
@@ -84,41 +103,49 @@ pub fn act<P: Page>(tiles: Tiles<P>, act: Act<P>) -> Tiles<P> {
             root: resized(tiles.root, before, after, shares),
             ..tiles
         },
+        Act::Hold(page) => held(tiles, page),
+        Act::Release => released(tiles),
     }
 }
 
 fn opened<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
+    if let Some(id) = shown(&tiles, &page) {
+        return Tiles {
+            root: open::focus(tiles.root, id),
+            ..tiles
+        };
+    }
+    let tiles = Tiles {
+        root: open::origin(tiles.root),
+        ..tiles
+    };
     let chain = homes(&page);
-    let focused = tiles.focused().page();
-    let shown = tiles
-        .root
-        .focus
-        .tree
-        .leaves()
-        .iter()
-        .any(|l| *l.page() == page);
-    match chain.iter().position(|c| c == focused) {
-        Some(k) if !shown => chain[..k]
+    match chain.iter().position(|c| c == tiles.focused().page()) {
+        Some(k) => chain[..k]
             .iter()
             .rev()
             .cloned()
             .chain(std::iter::once(page))
             .fold(tiles, one),
-        Some(_) | None => one(tiles, page),
+        None => one(tiles, page),
     }
 }
 
-/// One page opened by the rule, from the focused leaf.
-fn one<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
-    let shown = tiles
+/// The first leaf of the focused workspace that shows `page`.
+fn shown<P: Page>(tiles: &Tiles<P>, page: &P) -> Option<Id> {
+    tiles
         .root
         .focus
         .tree
         .leaves()
         .iter()
-        .find(|l| *l.page() == page)
-        .map(|l| l.id());
-    if let Some(id) = shown {
+        .find(|l| l.page() == page)
+        .map(|l| l.id())
+}
+
+/// One page opened by the rule, from the focused leaf.
+fn one<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
+    if let Some(id) = shown(&tiles, &page) {
         return Tiles {
             root: open::focus(tiles.root, id),
             ..tiles
@@ -129,12 +156,15 @@ fn one<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
     }
     match page.pin() {
         Pin::Pinned => at_end(tiles, page),
-        Pin::Free => bounded(tiles, page, |mut t, page| {
+        Pin::Free => {
             let share = page.share();
-            let new = t.mint(page);
-            t.root = open::beside(t.root, new, share);
-            t
-        }),
+            let mut tiles = tiles;
+            let new = tiles.mint(page);
+            Tiles {
+                root: open::bounded(tiles.root, new, |root, new| open::beside(root, new, share)),
+                ..tiles
+            }
+        }
     }
 }
 
@@ -153,25 +183,6 @@ pub(crate) fn homes<P: Page>(page: &P) -> Vec<P> {
     chain
 }
 
-/// `grow`, unless it adds a tile to a workspace of `MOST` or more.
-fn bounded<P: Page>(
-    tiles: Tiles<P>,
-    page: P,
-    grow: impl FnOnce(Tiles<P>, P) -> Tiles<P>,
-) -> Tiles<P> {
-    let was = open::tiles(&tiles.root);
-    let grown = grow(tiles.clone(), page.clone());
-    let now = open::tiles(&grown.root);
-    if now <= was || now <= MOST {
-        grown
-    } else {
-        match tiles.focused().page().pin() {
-            Pin::Free => here(tiles, page),
-            Pin::Pinned => tiles,
-        }
-    }
-}
-
 /// The focused leaf replaced by a fresh leaf of `page`.
 fn here<P: Page>(mut tiles: Tiles<P>, page: P) -> Tiles<P> {
     let new = tiles.mint(page);
@@ -179,41 +190,191 @@ fn here<P: Page>(mut tiles: Tiles<P>, page: P) -> Tiles<P> {
     tiles
 }
 
-/// A pinned page as the focused workspace's end, taking the focus.
+/// A pinned page held and focused, or in place of a focused pinned end.
 fn at_end<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
-    let (end, path) = tiles.root.focus.tree.end();
-    let full = open::tiles(&tiles.root) >= MOST;
-    if end.page().pin() == Pin::Pinned || full {
-        let mut at = vec![tiles.root.index()];
-        at.extend(path);
-        let root = open::along(tiles.root, &at);
-        return here(Tiles { root, ..tiles }, page);
+    let tiles = docked_here(tiles, page.clone());
+    let (end, _) = tiles.root.focus.tree.end();
+    match (*end.page() == page).then(|| end.id()) {
+        Some(id) => Tiles {
+            root: open::focus(tiles.root, id),
+            ..tiles
+        },
+        None => here(tiles, page),
     }
-    let mut tiles = tiles;
-    let share = page.share();
-    let new = tiles.mint(page);
-    tiles.root = tiles
-        .root
-        .on_focus(|tree| (appended(tree, new, share), ()))
-        .0;
-    tiles
 }
 
-/// The workspace with `new` after its last child, focused on it.
-fn appended<P: Page>(tree: Tree<Leaf<P>>, new: Leaf<P>, share: Share) -> Tree<Leaf<P>> {
-    match tree {
-        Tree::Leaf(l) => open::wrap(Axis::Across, l, new, share),
-        Tree::Node(n) => {
-            let mut n = n.select(usize::MAX);
-            let fresh = Part {
-                share,
-                tree: Tree::Leaf(new),
-            };
-            let end = std::mem::replace(&mut *n.focus, fresh);
-            n.before.push(end);
-            Tree::Node(n)
-        }
+fn held<P: Page>(tiles: Tiles<P>, page: P) -> Tiles<P> {
+    match page.pin() {
+        Pin::Free => tiles,
+        Pin::Pinned => let_go(docked_here(tiles, page), Where::Elsewhere),
     }
+}
+
+/// The pinned page at the focused workspace's end, where `Hold` docks it: a pinned end of the same
+/// page stays the same leaf, moved there if it stands elsewhere, with its share; one of another
+/// page is replaced. A pinned end that has the focus stays as it stands.
+fn docked_here<P: Page>(mut tiles: Tiles<P>, page: P) -> Tiles<P> {
+    let focused = tiles.focused().id();
+    let (end, path) = tiles.root.focus.tree.end();
+    let kept = match (page.pin(), end.page().pin()) {
+        (Pin::Free, _) => return tiles,
+        (Pin::Pinned, Pin::Pinned) if end.id() == focused => return tiles,
+        (Pin::Pinned, Pin::Pinned) if *end.page() == page => {
+            Some((end.clone(), share_at(&tiles.root.focus.tree, &path)))
+        }
+        (Pin::Pinned, Pin::Pinned | Pin::Free) => None,
+    };
+    let (leaf, share) = kept.unwrap_or_else(|| {
+        let share = page.share();
+        (tiles.mint(page), share)
+    });
+    let root = tiles.root.on_focus(|w| {
+        let without = match w.end().0.page().pin() {
+            Pin::Pinned => undocked(w),
+            Pin::Free => w,
+        };
+        (docked(without, leaf, share), ())
+    });
+    Tiles {
+        root: root.0,
+        ..tiles
+    }
+}
+
+/// The workspace with `new` docked at its end, the focus where it stands.
+fn docked<P: Page>(tree: Tree<Leaf<P>>, new: Leaf<P>, share: Share) -> Tree<Leaf<P>> {
+    let end = Part {
+        share,
+        tree: Tree::Leaf(new),
+    };
+    let (part, focus) = match tree {
+        Tree::Node(mut n) if n.axis == Axis::Across && n.fit == Fit::Fits => {
+            n.after.push(end);
+            return Tree::Node(n);
+        }
+        Tree::Leaf(l) => (l.page().share(), Tree::Leaf(l)),
+        Tree::Node(n) => (Share::Two, Tree::Node(n)),
+    };
+    Tree::Node(Node {
+        after: vec![end],
+        ..Node::of(
+            Axis::Across,
+            Fit::Fits,
+            Part {
+                share: part,
+                tree: focus,
+            },
+        )
+    })
+}
+
+fn released<P: Page>(tiles: Tiles<P>) -> Tiles<P> {
+    let_go(tiles, Where::Everywhere)
+}
+
+/// Which workspaces let their pinned ends go: every one, or every one but the focused.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Where {
+    Everywhere,
+    Elsewhere,
+}
+
+/// The workspaces `at` names without their pinned ends, but one that is its workspace's focused
+/// leaf: the person's, in every workspace.
+fn let_go<P: Page>(tiles: Tiles<P>, at: Where) -> Tiles<P> {
+    let here = tiles.root.index();
+    let root = tiles.root.map_parts(|i, part| {
+        let (end, _) = part.tree.end();
+        let named = at == Where::Everywhere || i != here;
+        match (
+            end.page().pin(),
+            end.id() == part.tree.focused().id(),
+            named,
+        ) {
+            (Pin::Pinned, false, true) => Part {
+                tree: undocked(part.tree),
+                ..part
+            },
+            (Pin::Free, _, _) | (Pin::Pinned, true, _) | (Pin::Pinned, false, false) => part,
+        }
+    });
+    Tiles { root, ..tiles }
+}
+
+/// The focused leaf closed. Beside a pinned end where `Hold` docks it, the close is the one the
+/// workspace without it makes, and the end is docked again after; a pinned end anywhere else
+/// stays where it stands.
+fn closed<P: Page>(tiles: Tiles<P>) -> Tiles<P> {
+    let shut = |t: Tiles<P>| Tiles {
+        root: descend(t.root, close).normal_children(),
+        ..t
+    };
+    let (end, path) = tiles.root.focus.tree.end();
+    if end.page().pin() == Pin::Free || end.id() == tiles.focused().id() {
+        return shut(tiles);
+    }
+    let (end, share) = (end.clone(), share_at(&tiles.root.focus.tree, &path));
+    let redock = |t: Tiles<P>, end: Leaf<P>| Tiles {
+        root: t.root.on_focus(|w| (docked(w, end, share), ())).0,
+        ..t
+    };
+    let without = Tiles {
+        root: tiles.root.clone().on_focus(|w| (undocked(w), ())).0,
+        ..tiles.clone()
+    };
+    if redock(without.clone(), end.clone()).root == tiles.root {
+        redock(shut(without), end)
+    } else {
+        shut(tiles)
+    }
+}
+
+/// The share of the child at `path`, each child's place from the top of `tree`.
+fn share_at<L>(tree: &Tree<L>, path: &[usize]) -> Share {
+    let mut share = Share::One;
+    let mut at = tree;
+    for &i in path {
+        let Tree::Node(n) = at else { break };
+        let Some(part) = n.parts().nth(i) else { break };
+        share = part.share;
+        at = &part.tree;
+    }
+    share
+}
+
+/// The tree without its end leaf, which is not its focused one: a node whose end it is focuses
+/// the child before it, and a node left with one child is replaced by it.
+fn undocked<L>(tree: Tree<L>) -> Tree<L> {
+    let Tree::Node(mut n) = tree else {
+        return tree;
+    };
+    match n.after.pop() {
+        Some(Part {
+            tree: Tree::Leaf(_),
+            ..
+        }) => {}
+        Some(Part { share, tree }) => n.after.push(Part {
+            share,
+            tree: undocked(tree),
+        }),
+        None => match (*n.focus, n.before.pop()) {
+            (
+                Part {
+                    tree: Tree::Leaf(_),
+                    ..
+                },
+                Some(prev),
+            ) => n.focus = Box::new(prev),
+            (Part { share, tree }, prev) => {
+                n.before.extend(prev);
+                n.focus = Box::new(Part {
+                    share,
+                    tree: undocked(tree),
+                });
+            }
+        },
+    }
+    Tree::Node(n).normal()
 }
 
 /// The node without its focused leaf; at the root, or with no other child, unchanged.

@@ -133,6 +133,8 @@ pub enum Step {
     /// The leaf at the index and the one after it in the tree's order: often the two either side
     /// of a divider, and otherwise a pair a resize leaves alone.
     Resize(prop::sample::Index, [Share; 2]),
+    Hold(Pg),
+    Release,
 }
 
 pub fn step() -> impl Strategy<Value = Step> {
@@ -149,6 +151,8 @@ pub fn step() -> impl Strategy<Value = Step> {
         2 => any::<prop::sample::Index>().prop_map(Step::Focus),
         2 => dir.prop_map(Step::Move),
         2 => (any::<prop::sample::Index>(), share(), share()).prop_map(|(i, a, b)| Step::Resize(i, [a, b])),
+        1 => page().prop_map(Step::Hold),
+        1 => Just(Step::Release),
     ]
 }
 
@@ -180,6 +184,8 @@ pub fn the_act(tiles: &Tiles<Pg>, step: &Step) -> Act<Pg> {
                 shares: *shares,
             }
         }
+        Step::Hold(p) => Act::Hold(p.clone()),
+        Step::Release => Act::Release,
     }
 }
 

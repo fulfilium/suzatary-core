@@ -58,6 +58,7 @@ fn generates_the_pages_boundary_types() {
     d.visit::<runtime::Keyed>();
     d.visit::<suzatary_pages::typstlist::Flags>();
     d.visit::<suzatary_pages::desk::Drawing>();
+    d.visit::<suzatary_pages::desk::Dock>();
     let mut out = String::from(
         "// GENERATED FROM app/pages/src BY `cargo test -p suzatary-pages`. DO NOT EDIT.\n",
     );

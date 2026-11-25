@@ -63,6 +63,11 @@ pub enum Route {
         focus: bool,
         at: Option<u64>,
     },
+    /// The secretary beside the pages of the focused workspace: the default conversation's talk
+    /// about `about`, a reference's text, or the whole conversation for `""`.
+    Aside {
+        about: String,
+    },
     /// The address as it was written, without `#`.
     Unknown {
         hash: String,
@@ -85,6 +90,7 @@ pub enum Kind {
     Calendar,
     Secretary,
     Conversation,
+    Aside,
 }
 
 /// `decodeURIComponent`: `None` where a `%` escape is malformed or the bytes are not UTF-8.
@@ -193,6 +199,7 @@ impl Route {
                 }),
             },
             "conversations" if rest.is_empty() => Some(Route::Conversations),
+            "aside" => decode(rest).map(|about| Route::Aside { about }),
             "about" if rest.is_empty() => Some(Route::About),
             "settings" if rest.is_empty() => Some(Route::Settings),
             "calendar" => decode(rest).map(|date| Route::Calendar { date }),
@@ -250,6 +257,8 @@ impl Route {
                     ("at", &at.map(|a| a.to_string()).unwrap_or_default()),
                 ])
             ),
+            Route::Aside { about } if about.is_empty() => "#/aside".to_owned(),
+            Route::Aside { about } => format!("#/aside/{}", component(about)),
             Route::About => "#/about".to_owned(),
             Route::Settings => "#/settings".to_owned(),
             Route::Briefings => "#/briefings".to_owned(),
@@ -285,6 +294,34 @@ impl Route {
     }
 }
 
+impl Route {
+    /// The page the secretary beside the pages is about, where its reference names one.
+    pub(crate) fn subject(&self) -> Option<Route> {
+        match self {
+            Route::Aside { about } => crate::places::page_of(about).map(|h| Route::parse(&h)),
+            Route::Todos
+            | Route::Add { .. }
+            | Route::Typst { .. }
+            | Route::Unknown { .. }
+            | Route::Todo { .. }
+            | Route::Inbox { .. }
+            | Route::Mail { .. }
+            | Route::Message { .. }
+            | Route::Thread { .. }
+            | Route::About
+            | Route::Settings
+            | Route::Briefings
+            | Route::Briefing { .. }
+            | Route::Calendar { .. }
+            | Route::Secretary { .. }
+            | Route::Conversations
+            | Route::Memory
+            | Route::NewTopic
+            | Route::Conversation { .. } => None,
+        }
+    }
+}
+
 impl Page for Route {
     type Kind = Kind;
 
@@ -302,12 +339,15 @@ impl Page for Route {
             Route::Calendar { .. } => Kind::Calendar,
             Route::Secretary { .. } | Route::Conversations => Kind::Secretary,
             Route::Memory | Route::NewTopic | Route::Conversation { .. } => Kind::Conversation,
+            Route::Aside { .. } => Kind::Aside,
         }
     }
 
-    /// A list reads well from a list's width; a page read as a column needs the column's.
+    /// A list reads well from a list's width; a page read as a column needs the column's; the
+    /// secretary beside a page, the width it had as the window's panel.
     fn shape(&self) -> Shape {
         let least = match self {
+            Route::Aside { .. } => measure::BESIDE,
             Route::Todos
             | Route::Add { .. }
             | Route::Typst { .. }
@@ -332,13 +372,27 @@ impl Page for Route {
     }
 
     fn pin(&self) -> Pin {
-        Pin::Free
+        match self.kind() {
+            Kind::Aside => Pin::Pinned,
+            Kind::Todos
+            | Kind::Todo
+            | Kind::Inbox
+            | Kind::Mail
+            | Kind::About
+            | Kind::Settings
+            | Kind::Briefings
+            | Kind::Calendar
+            | Kind::Secretary
+            | Kind::Conversation => Pin::Free,
+        }
     }
 
+    /// A list and the secretary beside a page take one share; a page read as a column, two.
     fn share(&self) -> Share {
-        match self.shape() {
-            Shape::Flows { least } if least == Px(measure::LIST) => Share::One,
-            Shape::Flows { .. } | Shape::Paged { .. } => Share::Two,
+        match (self.kind(), self.shape()) {
+            (Kind::Aside, _) => Share::One,
+            (_, Shape::Flows { least }) if least == Px(measure::LIST) => Share::One,
+            (_, Shape::Flows { .. } | Shape::Paged { .. }) => Share::Two,
         }
     }
 
@@ -361,6 +415,9 @@ impl Page for Route {
         ] = Route::destinations();
         match self.kind() {
             Kind::Conversation => Route::Conversations,
+            // The secretary is opened from the page it is about, so a bare address of it stands
+            // beside that page, in its workspace, and a hide goes back to it.
+            Kind::Aside => self.subject().unwrap_or(todos),
             Kind::Todos | Kind::Todo => todos,
             Kind::Inbox => inbox,
             Kind::Secretary => secretary,

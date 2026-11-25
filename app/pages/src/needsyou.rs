@@ -54,6 +54,7 @@ pub enum Named {
     Newtopic,
     Conversations,
     Conversation,
+    Aside,
     Unknown,
 }
 

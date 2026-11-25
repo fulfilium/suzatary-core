@@ -132,6 +132,9 @@ export namespace storesync {
   export const conversation = (id: string, window: Window, memory: MemoryPayload | null, lane: lanes.Lane = lanes.FIRST): Promise<One> =>
     over({ type: "Conversation", id, window, memory }, false, lane)
 
+  // Whether the conversation `id`, as the device holds it whole, has a turn about `about`; nothing is fetched for it.
+  export const talk = (id: string, about: string, lane: lanes.Lane): Promise<"Quiet" | "Talking"> => over({ type: "Talk", id, about }, false, lane)
+
   export const notHere = (lines: number, of: string, why: string): string => `Not on this device yet: ${lines} ${lines === 1 ? "line" : "lines"} of ${of} (${why}).`
 
   // The same, read back to the turn it must reach, grouped into rounds on the owner's days in `zone`.

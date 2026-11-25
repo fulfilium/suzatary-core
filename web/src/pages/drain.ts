@@ -39,7 +39,7 @@ export namespace drain {
     Watch: "Performs", Keep: "Performs", Listen: "Performs", Keys: "Waits", Sync: "Performs", Act: "Performs",
     Endorse: "Performs", Timer: "Performs", Frame: "Performs", Focus: "Waits", Scroll: "Waits", Copy: "Drops",
     Go: "Drops", Leave: "Drops", Replace: "Drops", Back: "Drops", Toast: "Performs", Offer: "Performs",
-    Core: "Performs", Reset: "Performs", Mark: "Performs", Tell: "Performs",
+    Core: "Performs", Reset: "Performs", Mark: "Performs", Release: "Drops",
   }
 
   // Let go, a program performs only what a write needs and what says how it went.
@@ -48,7 +48,7 @@ export namespace drain {
     Watch: "Drops", Keep: "Drops", Listen: "Drops", Keys: "Drops", Sync: "Drops", Act: "Performs",
     Endorse: "Performs", Timer: "Drops", Frame: "Drops", Focus: "Drops", Scroll: "Drops", Copy: "Drops",
     Go: "Drops", Leave: "Drops", Replace: "Drops", Back: "Drops", Toast: "Performs", Offer: "Performs",
-    Core: "Drops", Reset: "Drops", Mark: "Drops", Tell: "Drops",
+    Core: "Drops", Reset: "Drops", Mark: "Drops", Release: "Drops",
   }
 
   // The place an effect that waits holds: one scroll, one focus, the keys of each ask, the last of each kept.

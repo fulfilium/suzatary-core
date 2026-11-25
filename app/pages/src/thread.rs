@@ -7,7 +7,7 @@ use viewtree::Attr::{Class, Href, Open};
 use viewtree::kit::para;
 use viewtree::{Node, view};
 
-use crate::chrome::{ask, mark};
+use crate::chrome::mark;
 use crate::mailrow::{account, arrived, body, decided, sender, subject, todo};
 use crate::places::{Place, Question};
 use crate::reading::{Msg, View, json};
@@ -65,14 +65,10 @@ impl View for Thread {
 
     fn body(_: &At, offsets: &[Offset], v: &ThreadPayload) -> Vec<Node<Msg>> {
         let n = v.messages.len();
-        // The whole-conversation reference is one only this page can offer.
-        std::iter::once(ask(&format!("thread:{}", v.thread)))
-            .chain(
-                v.messages
-                    .iter()
-                    .enumerate()
-                    .map(|(i, p)| block(offsets, p, i + 1 == n)),
-            )
+        v.messages
+            .iter()
+            .enumerate()
+            .map(|(i, p)| block(offsets, p, i + 1 == n))
             .collect()
     }
 }

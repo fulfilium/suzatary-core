@@ -1888,22 +1888,38 @@ fn windows_of(bundle: &Bundle, deed: &ConversationId, trains: &ConversationId) -
         (trains, None, None, None),
         (trains, None, Some(1), None),
     ] {
+        let read =
+            suzatary_lines::secretary::transcript::read(bundle.conversations.conversations(), id)
+                .expect("reads");
+        let reference: Option<suzatary_base::reference::Reference> = about
+            .as_deref()
+            .map(|about| about.parse().expect("a reference"));
         let window = readings::conversation(
-            &suzatary_lines::secretary::transcript::read(bundle.conversations.conversations(), id)
-                .expect("reads"),
+            &read,
             &inbox::fold(&bundle.inbox).expect("the inbox reads"),
             &readings::Window {
                 before,
                 limit: limit.unwrap_or(readings::DEFAULT_TURN_WINDOW),
-                about: about
-                    .as_deref()
-                    .map(|about| about.parse().expect("a reference")),
+                about: reference.clone(),
             },
             &readings::Dress {
                 answers: bundle,
                 ..readings::Dress::BARE
             },
         );
+        // The talk the secretary beside a page reads is this window's: a round about the
+        // reference exactly where the window about it holds a turn.
+        if let Some(r) = &reference {
+            assert_eq!(
+                readings::talks(&read, r),
+                !window.turns.is_empty(),
+                "the talk about {r:?}"
+            );
+            assert!(
+                readings::talks(&read, r),
+                "the vector's window about the todo holds talk"
+            );
+        }
         windows.push(Asked {
             id: id.to_string(),
             before: before.map(|n| n.to_string()),

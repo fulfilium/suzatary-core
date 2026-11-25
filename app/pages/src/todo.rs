@@ -812,7 +812,6 @@ impl Model {
             self.edit_panel(e),
             Some(self.reading(e)),
             Some(self.content(e)),
-            Some(chrome::ask(&self.reference())),
             self.provenance(e),
             conflicts_block(e),
             self.news(),

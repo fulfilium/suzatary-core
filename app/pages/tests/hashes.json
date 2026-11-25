@@ -686,5 +686,25 @@
  {
   "hash": "#/i",
   "href": "#/i"
+ },
+ {
+  "hash": "#/aside",
+  "href": "#/aside"
+ },
+ {
+  "hash": "#/aside/",
+  "href": "#/aside"
+ },
+ {
+  "hash": "#/aside/todo%3Alife%2Fx",
+  "href": "#/aside/todo%3Alife%2Fx"
+ },
+ {
+  "hash": "#/aside/%zz",
+  "href": "#/aside/%zz"
+ },
+ {
+  "hash": "#/aside?x=1",
+  "href": "#/aside"
  }
 ]

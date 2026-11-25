@@ -8,7 +8,8 @@ import { el } from "../view/dom";
 import { focusables } from "../view/focus";
 import marks from "../view/marks";
 import type { Route } from "./route";
-import { hrefOf } from "./route";
+import { hrefOf, parseRoute } from "./route";
+import { pageOf } from "../chat/refs";
 import { THEMES, type Theme, labelFor, setTheme } from "../app/theme";
 
 export namespace nav {
@@ -52,6 +53,11 @@ export namespace nav {
       case "todo":
       case "add":
         return "todos";
+      // The secretary beside a page stands in the workspace of the page it is about (`Route::home`).
+      case "aside": {
+        const href = pageOf(route.about);
+        return href === null ? "todos" : activeFor(parseRoute(href));
+      }
       case "message":
       case "thread":
         return "mail";

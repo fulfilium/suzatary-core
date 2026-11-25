@@ -1,13 +1,13 @@
 /**
  * THE TILES AND THE WINDOW (docs/TILEDLAYOUT-PLAN-2026-11-22.md §13). The arrangement asks the room the tiles stand in
- * (the window less the body's gutters and the open panel); the chrome asks the window. Two tiles stand side by side
- * only where the chrome is the wide one, at every width and text size, and no tile is drawn under its least width. The
+ * (the window less the body's gutters); the chrome asks the window. Tiles stand side by side exactly where the room holds
+ * their least widths, at every width and text size, the secretary's tile among them, and no tile is drawn under its least. The
  * host draws what the desk answers and nothing else: the same drawing changes nothing on the page, a tile kept across
  * a move keeps its element, its focus and where its page stood on the screen, and a write in flight when its tile goes
  * still lands.
  *
  * `SUZATARY_SHOTS` (or a temp directory) receives the pictures of the last scene: the list, a todo beside it and Back,
- * at 390, 988, 1,100 (with the panel open), 1,440 and 1,920 px; and the pictures of the scenes after it.
+ * at 390, 988, 1,100 (with the secretary open), 1,440 and 1,920 px; and the pictures of the scenes after it.
  */
 
 import assert from "node:assert/strict";
@@ -15,7 +15,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BASE, PHONE, SETTLED, WRITE_BASE, addTodo, doneFromList, openTodo, reveal, row, suite } from "./harness";
+import { BASE, PHONE, SETTLED, WRITE_BASE, addTodo, doneFromList, openInPlace, openTodo, reveal, row, suite } from "./harness";
 import cast from "../test/cast";
 import { launch } from "./cdp";
 import tokens from "../src/view/tokens";
@@ -43,50 +43,65 @@ type Seen = {
   // The bar at the window's foot (a phone's chrome), and the add sheet's handle docked above it.
   foot: Box | null;
   handle: Box | null;
-  panel: number | null;
   scrolls: boolean;
   sideways: boolean;
   inner: { w: number; h: number };
+  // Whether the header's door is drawn.
+  door: boolean;
 };
 const SEEN = `(() => {
   const r = (e) => e.getBoundingClientRect();
   const fixed = (e) => e !== null && !e.hidden && getComputedStyle(e).position === "fixed" && r(e).height > 0;
   const bar = document.querySelector(".tabbar");
   const picker = document.querySelector(".addsheet");
-  const panel = document.querySelector(".secretarypanel");
   return {
     wide: matchMedia("(min-width: ${tokens.measure.wide / 16}rem)").matches,
     tiled: document.querySelector("#view").classList.contains("tiled"),
     root: parseFloat(getComputedStyle(document.documentElement).fontSize),
     room: r(document.querySelector("#view")).width,
-    tiles: [...document.querySelectorAll("#view > .tile")].map((t) => ({ cls: t.querySelector(".todospane, .inboxpage") ? "list" : t.querySelector(".todoview") ? "todo" : "other", x: r(t).x, y: r(t).y, w: r(t).width, bottom: r(t).bottom })),
+    tiles: [...document.querySelectorAll("#view > .tile")].map((t) => ({ cls: t.querySelector(".todospane, .inboxpage") ? "list" : t.querySelector(".todoview") ? "todo" : t.querySelector(".panelbody") ? "aside" : "other", x: r(t).x, y: r(t).y, w: r(t).width, bottom: r(t).bottom })),
     header: r(document.querySelector("header")).bottom,
     foot: fixed(bar) ? { top: r(bar).top, bottom: r(bar).bottom } : null,
     handle: fixed(picker) && !picker.classList.contains("open") ? { top: r(picker.querySelector(".pickerhandle")).top, bottom: r(picker.querySelector(".pickerhandle")).bottom } : null,
-    panel: panel !== null && r(panel).width > 0 ? r(panel).x : null,
     scrolls: document.documentElement.scrollHeight > innerHeight,
     sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
     inner: { w: innerWidth, h: innerHeight },
+    door: !document.querySelector("#beside").hidden && r(document.querySelector("#beside")).width > 0,
   };
 })()`;
 
 // The room in pixels at the 16px root, which `arrange` is given.
 const units = (s: Seen): number => (s.room * 16) / s.root;
-const TWO = tokens.measure.list + tokens.measure.divider + tokens.measure.column;
+const { list, divider: gap, column, beside: aside } = tokens.measure;
+const TWO = list + gap + column;
 
-// THE LAW: no tile is ever under a bar, in either chrome. Two tiles stand exactly where the room holds a list, a
-// divider and a column; each at least its least width; under the header, above the bar at the foot and the add
-// sheet's handle, clear of the panel, inside the window; the page does not scroll while they stand, and never sideways.
-const agree = (s: Seen, where: string): void => {
-  assert.equal(s.tiled, units(s) >= TWO, `${where}: a room of ${units(s)} px draws ${s.tiles.length} tile(s)`);
+// How many tiles a todo opened from the list draws in a room of `w`, the secretary hidden and shown, from each width on,
+// until the next: the list beside the todo from 824 px, which the todo and the secretary take from 856 px, and all three
+// from 1,200 px (the least widths of `tokens.typ` and two dividers).
+const TILES: { readonly [K in "hidden" | "shown"]: readonly (readonly [number, number])[] } = {
+  hidden: [[0, 1], [list + gap + column, 2]],
+  shown: [[0, 1], [list + gap + column, 2], [list + gap + column + gap + aside, 3]],
+};
+const tilesFor = (w: number, open: boolean): number => (TILES[open ? "shown" : "hidden"].filter(([from]) => w >= from).pop() ?? [0, 1])[1];
+
+// THE LAW: no tile is ever under a bar, in either chrome. Tiles stand exactly where the room holds their least widths
+// and the dividers between; each at least its least width; under the header, above the bar at the foot and the add
+// sheet's handle, inside the window; the page does not scroll while they stand, and never sideways.
+// The header's door is hidden exactly where the secretary is drawn, on a todo at every width and on the list under the
+// wide chrome; never both.
+const agree = (s: Seen, where: string, open = false): void => {
+  assert.equal(s.tiles.length, tilesFor(units(s), open), `${where}: a room of ${units(s)} px draws ${s.tiles.length} tile(s)`);
+  const drawn = s.tiles.some((t) => t.cls === "aside");
+  assert.ok(!(s.door && drawn), `${where}: a door to a secretary drawn`);
+  if (s.wide || s.tiles.some((t) => t.cls === "todo")) assert.equal(s.door, !drawn, `${where}: the door is hidden exactly where the secretary is drawn`);
   stand(s, where);
 };
 
 // The part of the law that holds for any tiles (a page read as a column, `other`, among them): each at least its least
-// width, under the header, above every bar and the window's foot, clear of the panel; the page never scrolls sideways,
+// width, under the header, above every bar and the window's foot; the page never scrolls sideways,
 // nor at all while tiles stand together.
 const stand = (s: Seen, where: string): void => {
-  const least = { list: tokens.measure.list, todo: tokens.measure.column, other: tokens.measure.column };
+  const least = { list, todo: column, aside, other: column };
   assert.equal(s.sideways, false, `${where}: the page scrolls sideways`);
   assert.equal(s.tiled, s.tiles.length > 1, `${where}: tiled exactly when more than one tile stands`);
   if (!s.tiled) return;
@@ -97,25 +112,43 @@ const stand = (s: Seen, where: string): void => {
     assert.ok(t.bottom <= s.inner.h + 0.5, `${at} is past the window's foot`);
     if (s.foot !== null) assert.ok(t.bottom <= s.foot.top + 0.5, `${at} is under the bar (from ${s.foot.top})`);
     if (s.handle !== null) assert.ok(t.bottom <= s.handle.top + 0.5, `${at} is under the add sheet's handle (from ${s.handle.top})`);
-    if (s.panel !== null) assert.ok(t.x + t.w <= s.panel + 0.5, `${where}: the ${t.cls} is under the panel`);
   }
   assert.equal(s.scrolls, false, `${where}: the page scrolls; its tiles should`);
 };
 
 const seen = (): Promise<Seen> => app.page.evaluate<Seen>(SEEN);
 
-// Whether the room at a window of `w` px (16 px text, no panel, no scrollbar) holds two tiles.
+// Whether the room at a window of `w` px (16 px text, the secretary hidden, no scrollbar) holds two tiles.
 const twoAt = (w: number): boolean => w - 2 * tokens.measure.gutter >= TWO;
 
+// The one door that shows the secretary, the header's, at every width; and the secretary's own Hide, wherever it is
+// drawn.
+const door = `"#beside"`;
+const drawnAside = `document.querySelector("#view > .tile .panelbody") !== null`;
+// A door is drawn and the secretary is not.
+const offered = `!(${drawnAside}) && document.querySelector("#beside:not([hidden])") !== null`;
+const pressDoor = async (page = app.page): Promise<void> => page.click(await page.evaluate<string>(door));
+// A document loaded anew at `hash`, this tab's presses let go: a scene of the secretary's starts from no say of another.
+let loads = 0;
+const fresh = async (hash: string, size: readonly [number, number]): Promise<void> => {
+  await app.resize(size);
+  await app.page.evaluate(`sessionStorage.clear()`);
+  loads += 1;
+  await app.page.navigate(`${WRITE_BASE}/?scene=${loads}${hash}`);
+};
 const panelOpen = async (open: boolean): Promise<void> => {
-  await app.page.waitFor(`document.querySelector(".secretarypanel .panelcollapse") !== null`);
-  const now = (await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "true";
-  if (now !== open) await app.page.click(".panelcollapse");
-  await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "${open}"`);
+  if (open) {
+    await app.page.waitFor(`!(${drawnAside}) && document.querySelector(${door}) !== null`);
+    await app.page.click(await app.page.evaluate<string>(door));
+    await app.page.waitFor(`(document.querySelector("#view > .tile .panelbody .frameheader")?.textContent ?? "") !== ""`);
+  } else {
+    await app.page.click("#view > .tile .hidesecretary");
+    await app.page.waitFor(`!(${drawnAside})`);
+  }
   await app.page.evaluate(SETTLED);
 };
 
-app.scene("from 840 to 1010 px, with the panel and without, at the browser's text size and at 20 px, no tile is under a bar", async () => {
+app.scene("from 840 to 1010 px, with the secretary open and hidden, at the browser's text size and at 20 px, no tile is under a bar", async () => {
   for (const text of [16, 20]) {
     await app.page.textSize(text);
     const px = (w: number): number => Math.round((w * text) / 16);
@@ -128,11 +161,11 @@ app.scene("from 840 to 1010 px, with the panel and without, at the browser's tex
       assert.equal(s.root, text, "the browser's text size is the root's");
       agree(s, `${px(w)} px at ${text} px text`);
     }
-    // The panel is the wide chrome's: from the edge, open, the room is what it leaves.
+    // Open, the secretary is a tile like any other, from the width where it fits beside the todo.
     await panelOpen(true);
-    for (let w = 992; w <= 1010; w += 1) {
+    for (let w = 880; w <= 1010; w += 1) {
       await app.resize([px(w), 800]);
-      agree(await seen(), `${px(w)} px at ${text} px text, the panel open`);
+      agree(await seen(), `${px(w)} px at ${text} px text, the secretary open`, true);
     }
     await panelOpen(false);
   }
@@ -170,30 +203,22 @@ app.scene("with classic scrollbars, the tiles a window draws do not depend on wh
   }
 });
 
-app.scene("at 1100 px with the panel open, the todo stands alone, and at 1440 px both stand at their least or more", async () => {
+app.scene("at 1100 px with the secretary open, the todo stands beside it, and at 1440 px the list, the todo and the secretary stand at their least or more", async () => {
   await app.resize([1440, 800]);
   await app.open(WRITE_BASE, `#/todo/${todos.flat.id}`);
-  for (const [w, two] of [
-    [1100, false],
-    [1440, true],
-  ] as const) {
+  for (const w of [1100, 1440]) {
     await app.resize([w, 800]);
-    await app.page.waitFor(`document.querySelector(".secretarypanel .panelcollapse") !== null`);
-    if ((await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") await app.page.click(".panelcollapse");
-    await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "true"`);
-    await app.page.evaluate(SETTLED);
-    await app.page.waitFor(two ? beside : `!document.querySelector("#view").classList.contains("tiled") && ${todoDrawn}`, { timeout: 20000 });
+    await panelOpen(true);
+    await app.page.waitFor(`${todoDrawn} && document.querySelectorAll("#view > .tile").length === ${tilesFor(w - 2 * tokens.measure.gutter, true)}`, { timeout: 20000 });
     const s = await seen();
-    agree(s, `${w} px, panel open`);
-    const panel = await app.page.evaluate<number>(`document.querySelector(".secretarypanel").getBoundingClientRect().x`);
-    for (const t of s.tiles) assert.ok(t.x + t.w <= panel + 0.5, `${w} px: a tile stands under the panel`);
-    await app.page.click(".panelcollapse");
-    await app.page.waitFor(`document.querySelector(".panelcollapse").getAttribute("aria-expanded") === "false"`);
+    agree(s, `${w} px, the secretary open`, true);
+    assert.deepEqual(s.tiles.map((t) => t.cls).slice(-2), ["todo", "aside"], `${w} px: the secretary stands after the todo`);
+    await panelOpen(false);
   }
-  // Closed again, the list comes back beside the todo at 1100 px.
+  // Hidden again, the list comes back beside the todo at 1100 px.
   await app.resize([1100, 800]);
   await app.page.waitFor(beside, { timeout: 20000 });
-  agree(await seen(), "1100 px, panel closed");
+  agree(await seen(), "1100 px, the secretary hidden");
   await app.resize(PHONE);
 });
 
@@ -351,27 +376,35 @@ app.scene("the notice of a write made from a scrolled list is in view, with its 
   await app.resize(PHONE);
 });
 
-// What stands where at each window width, with the panel closed and (where the wide chrome has one) open, and how wide,
+// What stands where at each window width, with the secretary hidden and (where the room holds it beside the todo) open,
+// and how wide,
 // printed as a table: a todo opened from the list, which obeys the law, then a message opened from that todo.
-app.scene("at 390 to 1,920 px, with the panel closed and open, the tiles obey the law; their widths are printed", async () => {
+app.scene("at 390 to 1,920 px, with the secretary hidden and open, the tiles obey the law; their widths are printed", async () => {
   const rows: string[] = [];
   for (const w of [390, 768, 900, 988, 1024, 1100, 1280, 1440, 1920]) {
-    for (const open of w >= tokens.measure.wide ? [false, true] : [false]) {
+    // Where the wide header holds the toggle; narrower, the scene of 840 to 1,010 px reads a press made wider.
+    const fits = w >= tokens.measure.wide;
+    for (const open of fits ? [false, true] : [false]) {
       await app.resize([w, 900]);
       await app.page.navigate(`${BASE}/#/todo/${todos.agents.id}`);
       await app.page.waitFor(`${todoDrawn} && document.querySelector(".tile .todoview .sourcelink") !== null`, { timeout: 20000 });
-      if (w >= tokens.measure.wide) await panelOpen(open);
+      if (open) await panelOpen(true);
       await app.page.evaluate(SETTLED);
       const s = await seen();
-      agree(s, `${w} px, panel ${open ? "open" : "closed"}`);
+      agree(s, `${w} px, the secretary ${open ? "open" : "hidden"}`, open);
       const widths = (t: Seen["tiles"]): string => t.map((x) => `${x.cls === "other" ? "message" : x.cls} ${Math.round(x.w)}`).join(", ");
       await app.page.click(".tile .todoview .sourcelink");
       await app.page.waitFor(`location.hash.startsWith("#/mail/") && document.querySelectorAll("#view > .tile:not(:has(.todospane)):not(:has(.todoview))").length === 1`, { timeout: 20000 });
       await app.page.evaluate(SETTLED);
       const message = await seen();
-      stand(message, `${w} px, panel ${open ? "open" : "closed"}, the message opened`);
-      rows.push(`| ${w} | ${open ? "open" : "closed"} | ${widths(s.tiles)} | ${widths(message.tiles)} |`);
-      if (w >= tokens.measure.wide) await panelOpen(false);
+      stand(message, `${w} px, the secretary ${open ? "open" : "hidden"}, the message opened`);
+      rows.push(`| ${w} | ${open ? "open" : "hidden"} | ${widths(s.tiles)} | ${widths(message.tiles)} |`);
+      // Hidden again on the todo, where it was pressed open.
+      if (open) {
+        await app.page.evaluate(`history.back()`);
+        await app.page.waitFor(`location.hash === "#/todo/${todos.agents.id}" && ${todoDrawn}`, { timeout: 20000 });
+        await panelOpen(false);
+      }
     }
   }
   console.log(["TABLE", ...rows].join("\n"));
@@ -379,7 +412,7 @@ app.scene("at 390 to 1,920 px, with the panel closed and open, the tiles obey th
 });
 
 // Pictures for the eye: the list, a todo beside it (or over it), and Back.
-app.scene("pictures of the list, a todo and Back at 390, 988, 1100 with the panel open, 1440 and 1920 px", async () => {
+app.scene("pictures of the list, a todo and Back at 390, 988, 1100 with the secretary open, 1440 and 1920 px", async () => {
   await app.open(BASE);
   for (const [w, panel] of [
     [390, false],
@@ -391,25 +424,24 @@ app.scene("pictures of the list, a todo and Back at 390, 988, 1100 with the pane
     await app.resize([w, 900]);
     await app.page.navigate(`${BASE}/#/`);
     await app.page.waitFor(listed);
-    if (panel) {
-      await app.page.waitFor(`document.querySelector(".secretarypanel .panelcollapse") !== null`);
-      if ((await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") await app.page.click(".panelcollapse");
-    }
+    if (panel) await panelOpen(true);
     await app.page.evaluate(SETTLED);
     await app.page.screenshot(join(OUT, `tiles-${w}-list.png`));
     await reveal(app.page, todos.urgent.id);
     await app.page.evaluate(`location.hash = "#/todo/${todos.urgent.id}"`);
     await app.page.waitFor(todoDrawn, { timeout: 20000 });
-    // The panel's press is kept per page, so it is opened on the todo too.
-    if (panel && (await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") await app.page.click(".panelcollapse");
+    // The secretary's press is kept per page, so it is opened on the todo too.
+    if (panel) await panelOpen(true);
     await app.page.evaluate(SETTLED);
-    agree(await seen(), `${w} px`);
+    agree(await seen(), `${w} px`, panel);
     await app.page.screenshot(join(OUT, `tiles-${w}-todo.png`));
+    // Hidden again on the todo, so no later scene meets this tab's press there.
+    if (panel) await panelOpen(false);
     await app.page.evaluate(`history.back()`);
     await app.page.waitFor(`location.hash === "#/" && document.querySelector(".todoview") === null && ${listed}`);
     await app.page.evaluate(SETTLED);
     await app.page.screenshot(join(OUT, `tiles-${w}-back.png`));
-    if (panel && (await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "true") await app.page.click(".panelcollapse");
+    if (panel) await panelOpen(false);
   }
   await app.resize(PHONE);
 });
@@ -561,7 +593,7 @@ app.scene("a divider dragged with a mouse and with a finger snaps to its stops, 
   await app.page.evaluate(SETTLED);
   assert.equal(await app.page.evaluate<boolean>(`document.activeElement === document.querySelector(".tileline")`), true, "the divider keeps the keyboard");
   // A resize outlives the address: another todo opened beside the list, in the same room (no talk about it opens the
-  // secretary's panel), stands at the same stop.
+  // secretary), stands at the same stop.
   const kept = await divider();
   await app.page.evaluate(`location.hash = "#/todo/${todos.high.id}"`);
   await app.page.waitFor(`location.hash === "#/todo/${todos.high.id}" && document.querySelector(".tile .todoview")?.textContent.includes("${todos.high.id}") === true`, { timeout: 20000 });
@@ -671,17 +703,17 @@ app.scene("on a phone, a half-typed note survives its todo going behind a messag
   await app.page.waitFor(listed, { timeout: 20000 });
   await app.page.evaluate(`window.__list = document.querySelector(".todospane").closest(".tile")`);
   await openTodo(app.page, todos.agents.id);
-  await app.page.waitFor(`${source} !== null && !window.__list.isConnected && ${running} === 2`, { timeout: 20000 });
+  await app.page.waitFor(`${source} !== null && !window.__list.isConnected && ${running} === ${2}`, { timeout: 20000 });
   await app.page.evaluate(`window.__todo = document.querySelector(".todoview").closest(".tile")`);
   const field = `.tile .todoview input.noteline`;
   await app.page.waitFor(`document.querySelector("${field}") !== null`);
   await app.page.type(field, "half a thought");
   await app.page.click(`.tile .todoview .sourcelink`);
-  await app.page.waitFor(`location.hash.startsWith("#/mail/") && !window.__todo.isConnected && ${running} === 3`, { timeout: 20000 });
+  await app.page.waitFor(`location.hash.startsWith("#/mail/") && !window.__todo.isConnected && ${running} === ${3}`, { timeout: 20000 });
   await app.page.screenshot(join(OUT, "kept-412-behind.png"));
   // The crumb is Back to the todo: a real press.
   await app.page.clickText(".crumbs .back", "Todo");
-  await app.page.waitFor(`location.hash === "#/todo/${todos.agents.id}" && window.__todo.isConnected && ${running} === 2`, { timeout: 20000 });
+  await app.page.waitFor(`location.hash === "#/todo/${todos.agents.id}" && window.__todo.isConnected && ${running} === ${2}`, { timeout: 20000 });
   assert.equal(await app.page.evaluate<boolean>(`window.__todo.querySelector("input.noteline") === document.querySelector("${field}")`), true, "the note is the field it was");
   assert.equal(await app.page.evaluate<string>(`document.querySelector("${field}").value`), "half a thought", "what was typed is there");
   await app.page.screenshot(join(OUT, "kept-412-back.png"));
@@ -697,7 +729,7 @@ app.scene("a list drawn again after Back takes its keys back: j moves its cursor
   await app.page.evaluate(`window.__list = document.querySelector(".todospane").closest(".tile")`);
   // A todo opened over the list: the list is kept behind, its keys let go.
   await openTodo(app.page, todos.agents.id);
-  await app.page.waitFor(`!window.__list.isConnected && ${running} === 2`, { timeout: 20000 });
+  await app.page.waitFor(`!window.__list.isConnected && ${running} === ${2}`, { timeout: 20000 });
   await app.page.evaluate(`history.back()`);
   await app.page.waitFor(`location.hash === "#/" && window.__list.isConnected && ${running} === 1`, { timeout: 20000 });
   await app.page.evaluate(`document.activeElement?.blur()`);
@@ -712,7 +744,7 @@ app.scene("on a phone, a write made while the list is behind its todo lands, and
   const id = await addTodo(app.page, "Water the kept fern", "home");
   await app.page.evaluate(`window.__list = document.querySelector(".todospane").closest(".tile")`);
   await openTodo(app.page, id);
-  await app.page.waitFor(`document.querySelector(".tile .todoview .act-done") !== null && !window.__list.isConnected && ${running} === 2`, { timeout: 20000 });
+  await app.page.waitFor(`document.querySelector(".tile .todoview .act-done") !== null && !window.__list.isConnected && ${running} === ${2}`, { timeout: 20000 });
   await app.page.click(".tile .todoview .act-done");
   // The list hears its store while hidden: the row goes from the element kept behind.
   await app.page.waitFor(`window.__list.querySelector('${row(id)}') === null`, { timeout: 20000 });
@@ -776,3 +808,484 @@ app.scene("every workspace's page and a todo kept behind a message on a phone: n
   await app.page.evaluate(`location.hash = "#/about"`);
   await app.page.waitFor(`window.__pages[0].isConnected`, { timeout: 20000 });
 });
+
+// THE SECRETARY IS THE PINNED TILE (the note's §3 and §16): its toggle in the wide header shows and hides it, and a press
+// holds for its page in this tab at any width. Beside the todo where the room holds both; behind it where it does not,
+// as on a phone, one crumb away, and Back goes back to the todo. What was half typed in it survives its going behind and
+// every change of the window, and the same element comes back.
+const composer = `#view > .tile .panelbody .composebox`;
+app.scene("the secretary at 412, 960, 1,280 and 1,440 px, shown, behind and hidden, with Back, keeps a half-typed question", async () => {
+  for (const w of [412, 960, 1280, 1440]) {
+    await app.resize([1440, 900]);
+    await app.page.navigate(`${WRITE_BASE}/#/todo/${todos.flat.id}`);
+    await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
+    assert.equal(await app.page.evaluate<boolean>(drawnAside), false, "nothing about the todo, so it is not drawn");
+    await panelOpen(true);
+    await app.page.waitFor(`document.querySelector("${composer}") !== null`, { timeout: 20000 });
+    await app.page.evaluate(`window.__aside = document.querySelector("${composer}").closest(".tile")`);
+    await app.page.type(composer, "half a question");
+    await app.resize([w, 900]);
+    const alone = w - 2 * tokens.measure.gutter < column + gap + aside;
+    if (alone) {
+      // Behind the todo, one crumb away.
+      await app.page.waitFor(`${todoDrawn} && !window.__aside.isConnected && [...document.querySelectorAll(".tilelines .crumbafter")].some((c) => c.textContent.includes("Secretary"))`, { timeout: 20000 });
+      await app.page.screenshot(join(OUT, `secretary-${w}-behind.png`));
+      await app.page.clickText(".tilelines .crumbafter", "Secretary");
+      await app.page.waitFor(`window.__aside.isConnected && document.querySelector("#view .todoview") === null`, { timeout: 20000 });
+      await app.page.screenshot(join(OUT, `secretary-${w}-open.png`));
+      assert.equal(await app.page.evaluate<string>(`document.querySelector("${composer}").value`), "half a question", `${w} px: what was typed is there`);
+      // Back is the todo, the secretary behind it again.
+      await app.page.evaluate(`history.back()`);
+      await app.page.waitFor(`location.hash === "#/todo/${todos.flat.id}" && ${todoDrawn} && !window.__aside.isConnected`, { timeout: 20000 });
+    } else {
+      await app.page.waitFor(`${todoDrawn} && window.__aside.isConnected`, { timeout: 20000 });
+      await app.page.screenshot(join(OUT, `secretary-${w}-open.png`));
+      assert.equal(await app.page.evaluate<string>(`document.querySelector("${composer}").value`), "half a question", `${w} px: what was typed is there`);
+    }
+    await app.resize([1440, 900]);
+    await app.page.waitFor(`window.__aside.isConnected`, { timeout: 20000 });
+    assert.equal(await app.page.evaluate<string>(`document.querySelector("${composer}").value`), "half a question", `${w} px, then 1,440: what was typed is there`);
+    // Emptied as a person empties it, so the composer's own draft is empty for the next width.
+    await app.page.evaluate(`(() => { const c = document.querySelector("${composer}"); c.value = ""; c.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+    await panelOpen(false);
+    if (w >= tokens.measure.wide) await app.page.screenshot(join(OUT, `secretary-${w}-hidden.png`));
+    assert.equal(await app.page.evaluate<string>(`location.hash`), `#/todo/${todos.flat.id}`, `${w} px: the address names the todo alone`);
+  }
+  await app.resize(PHONE);
+});
+
+// What it says is about the page beside it: shown beside one todo it names that todo; a link to another opens beside
+// the list, where no press shows it, and shown there it says what it holds about the other.
+app.scene("the secretary beside a todo talks about that todo, and after an open, about the next", async () => {
+  await app.resize([1440, 900]);
+  await app.open(WRITE_BASE, `#/todo/${todos.flat.id}`);
+  await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
+  await panelOpen(true);
+  const header = `(document.querySelector("#view > .tile .panelbody .frameheader")?.textContent ?? "")`;
+  await app.page.waitFor(`${header}.includes("${todos.flat.id}")`, { timeout: 20000 });
+  const was = await app.page.evaluate<string>(`location.hash`);
+  await reveal(app.page, todos.agents.id);
+  await app.page.click(`.tile ${row(todos.agents.id)}`);
+  await app.page.waitFor(`location.hash !== ${JSON.stringify(was)} && document.querySelector(".tile .todoview")?.textContent.includes("${todos.agents.id}") === true`, { timeout: 20000 });
+  // Another page: its own press, none, and no talk about it, so the secretary is not drawn until it is shown there.
+  await app.page.waitFor(`${offered} && !(${drawnAside})`, { timeout: 20000 });
+  await panelOpen(true);
+  await app.page.waitFor(`${header}.includes("${todos.agents.id}")`, { timeout: 20000 });
+  await app.page.screenshot(join(OUT, "secretary-1440-next.png"));
+  await panelOpen(false);
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === ${JSON.stringify(was)} && ${header}.includes("${todos.flat.id}")`, { timeout: 20000 });
+  await panelOpen(false);
+  await app.resize(PHONE);
+});
+
+// Fifty shows and hides of the secretary beside a todo: no node or listener is left behind. A hide lets its program go
+// with its leaf, and a show mounts it again from its address (a stream of its own and a window read), as a page
+// navigated to: measured below at a fourfold throttle, from the press to the conversation drawn.
+app.scene("fifty shows and hides of the secretary at a desk leave no node or listener behind, and a show draws it at a fourfold throttle", async () => {
+  await app.resize([1440, 900]);
+  await app.page.navigate(`${WRITE_BASE}/#/todo/${todos.flat.id}`);
+  await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
+  const round = async (): Promise<void> => {
+    await pressDoor();
+    await app.page.waitFor(`document.querySelector("${composer}") !== null`, { timeout: 20000 });
+    await app.page.click("#view > .tile .hidesecretary");
+    await app.page.waitFor(`document.querySelector("#view .panelbody") === null && document.querySelectorAll("#view > .tile").length === 2`, { timeout: 20000 });
+  };
+  await round();
+  await app.page.evaluate(SETTLED);
+  const before = await app.page.counts();
+  for (let i = 0; i < 50; i += 1) await round();
+  await app.page.evaluate(SETTLED);
+  const after = await app.page.counts();
+  console.log(`fifty shows and hides of the secretary: ${JSON.stringify({ before, after })}`);
+  assert.ok(after.listeners <= before.listeners, `listeners ${before.listeners} -> ${after.listeners}`);
+  assert.ok(after.nodes <= before.nodes * 1.05, `nodes ${before.nodes} -> ${after.nodes}`);
+  await app.page.throttle(4);
+  try {
+    const shows: number[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const t0 = await app.page.evaluate<number>(`performance.now()`);
+      await pressDoor();
+      await app.page.waitFor(`document.querySelector("${composer}") !== null && document.querySelector("#view > .tile .panelbody .turns, #view > .tile .panelbody .empty") !== null`, { timeout: 20000 });
+      shows.push((await app.page.evaluate<number>(`performance.now()`)) - t0);
+      await app.page.click("#view > .tile .hidesecretary");
+      await app.page.waitFor(`document.querySelector("#view .panelbody") === null`, { timeout: 20000 });
+    }
+    console.log(`a show of the secretary, CPU x4, press to the conversation drawn: ${shows.map((m) => m.toFixed(0)).join(", ")} ms`);
+  } finally {
+    await app.page.throttle(1);
+  }
+  await app.resize(PHONE);
+});
+
+// A divider's drag with the secretary pinned, at a CPU four times slower: each frame's length while the list's divider
+// is dragged across its stops, printed, and none past a long task.
+app.scene("a divider dragged with the secretary pinned keeps its frames short at a fourfold CPU throttle", async () => {
+  await app.resize([1440, 900]);
+  await app.page.navigate(`${WRITE_BASE}/#/todo/${todos.flat.id}`);
+  await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
+  await panelOpen(true);
+  await app.page.waitFor(`document.querySelector("${composer}") !== null && document.querySelectorAll("#view > .tile").length === 3`, { timeout: 20000 });
+  await app.page.evaluate(SETTLED);
+  await app.page.throttle(4);
+  try {
+    await app.page.evaluate(`(() => { window.__frames = []; let last = performance.now(); const tick = (t) => { window.__frames.push(t - last); last = t; if (window.__frames.length < 100000) window.__tick = requestAnimationFrame(tick); }; window.__tick = requestAnimationFrame(tick); })()`);
+    const d = await divider();
+    const [x, y] = [d.x + d.w / 2, d.y + d.h / 2];
+    const path: [number, number][] = Array.from({ length: 40 }, (_, i) => [x + i * 12, y]);
+    await app.page.drag([...path, ...path.slice().reverse()], "Mouse");
+    await app.page.evaluate(SETTLED);
+    const frames = await app.page.evaluate<number[]>(`(cancelAnimationFrame(window.__tick), window.__frames.slice(1))`);
+    const sorted = frames.slice().sort((a, b) => a - b);
+    const at = (q: number): number => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0;
+    console.log(`divider drag with the secretary pinned, CPU x4: ${frames.length} frames, median ${at(0.5).toFixed(1)} ms, p95 ${at(0.95).toFixed(1)} ms, max ${at(1).toFixed(1)} ms`);
+    assert.ok(at(1) < 100, `a frame of ${at(1).toFixed(1)} ms during the drag`);
+  } finally {
+    await app.page.throttle(1);
+  }
+  await panelOpen(false);
+  await app.resize(PHONE);
+});
+
+// A question sent from the secretary drawn in this page's tile, and its turn back in the transcript.
+const ask = async (page: typeof app.page, text: string): Promise<void> => {
+  await page.type(composer, text);
+  await page.click("#view > .tile .panelbody .composesend");
+  await page.waitFor(`[...document.querySelectorAll("#view > .tile .panelbody .turn-person .turntext")].some((t) => t.textContent.includes(${JSON.stringify(text)}))`, { timeout: 20000 });
+};
+
+// THE TALK IS A READING (the note's §16): no program runs to learn it. A tab with no press on a todo the conversation
+// holds talk about draws the secretary beside it by that alone, and a move of the talk draws the same element again.
+app.scene("the secretary stands beside a todo by its talk alone, and stays the same element as the talk moves", async () => {
+  await app.resize([1440, 900]);
+  await app.open(WRITE_BASE, `#/todo/${todos.checklist.id}`);
+  await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
+  await panelOpen(true);
+  await ask(app.page, "is the checklist done");
+  await panelOpen(false);
+  // Another tab holds no press, and has read the conversation whole on its own page: the talk alone shows the secretary
+  // beside the todo, and the answer arrives while the page stands.
+  const other = await app.tab();
+  try {
+    await other.viewport(1440, 900);
+    await other.navigate(`${WRITE_BASE}/#/secretary/default`);
+    await other.waitFor(`document.querySelectorAll("#view .turn-person").length > 0`, { timeout: 20000 });
+    await other.evaluate(`location.hash = "#/todo/${todos.checklist.id}"`);
+    await other.waitFor(`document.querySelector("${composer}") !== null && document.querySelector("#view > .tile .todoview") !== null`, { timeout: 20000 });
+    assert.equal(await other.evaluate<boolean>(`document.querySelector("#beside").hidden`), true, "no door to a secretary drawn");
+    assert.equal(await other.evaluate<string>(`location.hash`), `#/todo/${todos.checklist.id}`, "the address names the todo alone");
+    await other.evaluate(`window.__aside = document.querySelector("${composer}").closest(".tile")`);
+    await ask(other, "and the second item");
+    await other.evaluate(SETTLED);
+    assert.equal(await other.evaluate<boolean>(`window.__aside.isConnected && window.__aside.contains(document.querySelector("${composer}"))`), true, "the same element");
+  } finally {
+    await other.close();
+  }
+  await app.resize(PHONE);
+});
+
+// A LINK FOLLOWED IN THE SECRETARY IS FOLLOWED FROM THE PAGE BEFORE IT (§3, rule 5): beside the list, a todo named in
+// the conversation opens between the list and the secretary, and the list stays.
+app.scene("a todo opened from the secretary beside the list stands between them", async () => {
+  await app.resize([1440, 900]);
+  await app.open(WRITE_BASE, "#/");
+  await app.page.waitFor(`${listed} && ${offered}`, { timeout: 20000 });
+  await panelOpen(true);
+  const link = `#view > .tile .panelbody .turnrefs a[href="#/todo/${todos.checklist.id}"]`;
+  await app.page.waitFor(`document.querySelector('${link}') !== null`, { timeout: 20000 });
+  await app.page.click(link);
+  // A press in this tab closed the secretary beside that todo, so the say lets it go; shown again, it stands at the end.
+  await app.page.waitFor(`location.hash === "#/todo/${todos.checklist.id}" && ${todoDrawn} && !(${drawnAside})`, { timeout: 20000 });
+  assert.deepEqual((await seen()).tiles.map((t) => t.cls), ["list", "todo"], "the list stays, the todo beside it");
+  await panelOpen(true);
+  assert.deepEqual((await seen()).tiles.map((t) => t.cls), ["list", "todo", "aside"], "the list, the todo, the secretary");
+  await panelOpen(false);
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === "#/"`, { timeout: 20000 });
+  await panelOpen(false);
+  await app.resize(PHONE);
+});
+
+// THE SECRETARY COSTS A PERSON NO PAGE (§3, `MOST`): three pages of their own and the secretary held, a fourth opens
+// beside them, exactly as it does with the secretary hidden.
+app.scene("with three pages and the secretary held, a fourth opens beside them, as without it", async () => {
+  await app.resize([2400, 900]);
+  const three = `#/todo/${todos.agents.id}~|!(|(%2F,2%2Ftodo%2F${todos.flat.id},2*),,,,,,,)`;
+  const from = `[...document.querySelectorAll("#view > .tile")].find((t) => t.querySelector(".todoview")?.textContent.includes("${todos.agents.id}"))?.querySelector(".sourcelink")`;
+  const opened = async (held: boolean): Promise<string> => {
+    await app.page.navigate(`${WRITE_BASE}/#/`);
+    await app.page.evaluate(`location.hash = ${JSON.stringify(three)}`);
+    await app.page.waitFor(`document.querySelectorAll("#view > .tile .todoview").length === 2 && ${from} != null`, { timeout: 20000 });
+    if (held) await panelOpen(true);
+    await app.page.evaluate(`${from}.click()`);
+    await app.page.waitFor(`location.hash.startsWith("#/mail/") && document.querySelectorAll("#view > .tile .todoview").length === 2`, { timeout: 20000 });
+    await app.page.evaluate(SETTLED);
+    return app.page.evaluate<string>(`location.hash`);
+  };
+  assert.equal(await opened(true), await opened(false), "the same pages, the same address");
+  await app.resize(PHONE);
+});
+
+// SHOW AND HIDE ON A PHONE, WITH THE HISTORY (§16): the header's door is the same act as at a desk, and shows it alone; Back is the todo with the secretary one crumb away; its own Hide goes back to the todo and closes
+// the crumb; Back then is the list, never the secretary; Forward redoes what Back undid.
+app.scene("on a phone the secretary is shown alone and hidden, and Back and Forward cross both", async () => {
+  await app.resize([412, 900]);
+  await app.open(WRITE_BASE, "#/");
+  const todo = `#/todo/${todos.flat.id}`;
+  await app.page.evaluate(`location.hash = "${todo}"`);
+  await app.page.waitFor(`location.hash === "${todo}" && ${todoDrawn}`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<boolean>(`!document.querySelector("#beside").hidden && document.querySelector('#view a[href^="#/aside"]') === null`), true, "a phone's door is the header's, the one there is");
+  await panelOpen(true);
+  await app.page.waitFor(`location.hash.startsWith("#/aside/") && document.querySelector("#view .todoview") === null`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<boolean>(`document.querySelector("#view > .tile .hidesecretary").getBoundingClientRect().height > 0`), true, "its Hide is drawn with it");
+  const crumb = `[...document.querySelectorAll(".tilelines .crumbafter")].some((c) => c.textContent.includes("Secretary"))`;
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === "${todo}" && ${todoDrawn} && ${crumb}`, { timeout: 20000 });
+  await app.page.evaluate(`history.forward()`);
+  await app.page.waitFor(`location.hash.startsWith("#/aside/") && ${drawnAside}`, { timeout: 20000 });
+  await panelOpen(false);
+  await app.page.waitFor(`location.hash === "${todo}" && ${todoDrawn} && !(${crumb})`, { timeout: 20000 });
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === "#/" && ${listed} && !(${drawnAside})`, { timeout: 20000 });
+  await app.page.evaluate(`history.forward()`);
+  await app.page.waitFor(`location.hash === "${todo}" && ${todoDrawn} && !(${crumb})`, { timeout: 20000 });
+  // Shown again, and hidden, while the todo is drawn beside it on a wider window: no entry either way.
+  await app.resize([960, 900]);
+  const entries = await app.page.evaluate<number>(`history.length`);
+  await panelOpen(true);
+  await app.page.waitFor(`${drawnAside} && ${todoDrawn} && location.hash === "${todo}"`, { timeout: 20000 });
+  await app.page.screenshot(join(OUT, "secretary-960-drawn.png"));
+  await panelOpen(false);
+  await app.page.waitFor(`location.hash === "${todo}" && ${todoDrawn}`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<number>(`history.length`), entries, "no entry of the history");
+  await app.resize(PHONE);
+});
+
+// FROM 900 TO 991 PX, a phone's chrome and the secretary drawn beside a todo: what is drawn can be hidden, by its own
+// control, and the header's door is hidden exactly while it is drawn.
+app.scene("from 900 to 991 px the secretary drawn beside a todo has its own Hide, and the header no door", async () => {
+  await app.resize([960, 900]);
+  await app.open(WRITE_BASE, `#/todo/${todos.flat.id}`);
+  await app.page.waitFor(todoDrawn, { timeout: 20000 });
+  await panelOpen(true);
+  for (const w of [900, 920, 960, 991]) {
+    await app.resize([w, 900]);
+    await app.page.waitFor(`${drawnAside} && ${todoDrawn}`, { timeout: 20000 });
+    const seenAt = await app.page.evaluate<{ hide: boolean; header: boolean }>(`({ hide: document.querySelector("#view > .tile .hidesecretary").getBoundingClientRect().width > 0, header: getComputedStyle(document.querySelector("#beside")).display !== "none" && !document.querySelector("#beside").hidden })`);
+    assert.deepEqual(seenAt, { hide: true, header: false }, `${w} px`);
+  }
+  await panelOpen(false);
+  assert.equal(await app.page.evaluate<boolean>(`!document.querySelector("#beside").hidden`), true, "hidden, its door is back");
+  await app.resize(PHONE);
+});
+
+// A PRESS DURING A MOVE ACTS ON THE PAGE THE MOVE DRAWS: a show pressed in the same task as the link that opens another
+// todo waits for that move to end, and is that todo's. The order is certain: both clicks are made before the move can
+// end; a scene whose move ended before the press fails rather than pressing late.
+app.scene("a show pressed during a move is the page's the move draws", async () => {
+  await fresh(`#/todo/${todos.urgent.id}`, [1440, 900]);
+  await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
+  await reveal(app.page, todos.high.id);
+  // The door is pressed once the move has begun (its address written) and before it can end.
+  await app.page.evaluate(`(() => {
+    const door = document.querySelector("#beside");
+    const r = document.querySelector('.tile ${row(todos.high.id)}').getBoundingClientRect();
+    document.elementFromPoint(r.left + 24, r.top + r.height / 2).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, clientX: r.left + 24, clientY: r.top + r.height / 2 }));
+    let tries = 0;
+    window.__late = false;
+    const pressed = () => (location.hash === "#/todo/${todos.high.id}" ? door.click() : ++tries > 10000 ? (window.__late = true) : queueMicrotask(pressed));
+    pressed();
+  })()`);
+  assert.equal(await app.page.evaluate<boolean>(`window.__late`), false, "the door was pressed during the move");
+  const header = `(document.querySelector("#view > .tile .panelbody .frameheader")?.textContent ?? "")`;
+  await app.page.waitFor(`location.hash === "#/todo/${todos.high.id}" && ${header}.includes("${todos.high.id}")`, { timeout: 20000 });
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === "#/todo/${todos.urgent.id}" && ${todoDrawn} && ${offered}`, { timeout: 20000 });
+  await app.page.evaluate(`history.forward()`);
+  await app.page.waitFor(`location.hash === "#/todo/${todos.high.id}" && ${drawnAside}`, { timeout: 20000 });
+  await panelOpen(false);
+  await app.resize(PHONE);
+});
+
+// A PAGE OF MANY THINGS UNDER A PHONE'S CHROME HAS NO SECRETARY (the review's B1): shown at a desk, the list keeps its
+// press, but at 412 and 960 px nothing stands beside it, no door is drawn and no crumb names it; wide again, it is back.
+app.scene("a list at 412 and 960 px has no secretary and no door, and keeps its press for the wide chrome", async () => {
+  await fresh("#/", [1440, 900]);
+  await app.page.waitFor(`${listed} && ${offered}`, { timeout: 20000 });
+  await panelOpen(true);
+  for (const w of [412, 960]) {
+    await app.resize([w, 900]);
+    const crumb = `[...document.querySelectorAll(".tilelines .crumbafter")].some((c) => c.textContent.includes("Secretary"))`;
+    await app.page.waitFor(`!(${drawnAside}) && !(${crumb}) && document.querySelector("#beside").hidden`, { timeout: 20000 });
+  }
+  await app.resize([1440, 900]);
+  await app.page.waitFor(drawnAside, { timeout: 20000 });
+  await panelOpen(false);
+  await app.resize(PHONE);
+});
+
+// THE KEYBOARD ALONE (B2): the header's door pressed with Enter puts the focus on the secretary's region, from which Tab
+// reaches its composer; its Hide pressed with Enter puts the focus on the door, and Enter there shows it again. On a
+// todo with the list beside it, on a message, and on a phone, where the secretary is shown alone.
+const region = `document.activeElement?.matches("#view .panelbody") === true`;
+const byKeyboard = async (hash: string, size: readonly [number, number], ready: string): Promise<void> => {
+  const where = `${hash} at ${size[0]} px`;
+  await fresh(hash, size);
+  await app.page.waitFor(`${ready} && ${offered}`, { timeout: 20000 });
+  await app.page.evaluate(`document.querySelector("#beside").focus()`);
+  await app.page.press("Enter");
+  await app.page.waitFor(`${drawnAside} && ${region}`, { timeout: 20000 });
+  // The region holds no key target: Enter and j there neither open nor move in the list beside it (W3). The list's
+  // cursor is the focus, so a key it took would take the focus from the region.
+  const stood = await app.page.evaluate<string>(`location.hash`);
+  for (const key of ["Enter", "j"]) {
+    await app.page.press(key);
+    await app.page.evaluate(SETTLED);
+    assert.deepEqual(await app.page.evaluate<[boolean, string]>(`[${region}, location.hash]`), [true, stood], `${where}: ${key} on the region`);
+  }
+  let tabs = 0;
+  while (!(await app.page.evaluate<boolean>(`document.activeElement?.matches("#view .panelbody .composebox") === true`))) {
+    assert.ok(++tabs < 80, `${where}: Tab reaches the composer`);
+    await app.page.press("Tab");
+  }
+  await app.page.press("a");
+  await app.page.evaluate(`document.querySelector("#view > .tile .hidesecretary").focus()`);
+  await app.page.press("Enter");
+  await app.page.waitFor(`document.activeElement === document.querySelector("#beside") && !(${drawnAside}) && ${ready}`, { timeout: 20000 });
+  await app.page.press("Enter");
+  await app.page.waitFor(`${drawnAside} && ${region}`, { timeout: 20000 });
+  await app.page.evaluate(`(() => { const c = document.querySelector("#view .panelbody .composebox"); c.value = ""; c.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  await panelOpen(false);
+};
+app.scene("show, type, hide and show again with the keyboard alone, the focus always where the act left it", async () => {
+  await byKeyboard(`#/todo/${todos.flat.id}`, [1440, 900], `${todoDrawn} && ${listed}`);
+  await byKeyboard("#/mail/e2e-message-hash", [1440, 900], `document.querySelector("#view .mailmessage") !== null`);
+  await byKeyboard(`#/todo/${todos.flat.id}`, [412, 900], todoDrawn);
+  await app.resize(PHONE);
+});
+
+// THE HEADER KEEPS ITS HEIGHT AND ITS MARKS: the door stands in the header's row as the brand does, so the header is as
+// tall with it as without it, the live mark stands where it stands without it, and the list's first line where it
+// stands with no door at all. At 150 percent text the door's width gives before the header overflows. Its tap area
+// is the header's whole height at its width, and a tap just under the header is the page's.
+app.scene("at 390 and 412 px, and at 150 percent text, the header is as tall with the door as without it, the live mark stays, and the door is tapped across the header", async () => {
+  const measured = `(() => {
+    const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+    const header = document.querySelector("body > header");
+    return { header: r(header), door: r(document.querySelector("#beside")), live: r(document.querySelector("#live")), first: document.querySelector(".tree .row")?.getBoundingClientRect().top ?? null, sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth || document.querySelector("#beside").getBoundingClientRect().right > header.getBoundingClientRect().right + 0.5 };
+  })()`;
+  type Box = { x: number; y: number; w: number; h: number };
+  type Measured = { header: Box; door: Box; live: Box; first: number | null; sideways: boolean };
+  const at = (x: number, y: number): string => `(() => { const e = document.elementFromPoint(${x}, ${y}); return e === null ? "none" : e.closest("#beside") !== null ? "door" : e.closest("body > header") !== null ? "header" : "page"; })()`;
+  for (const [w, text] of [[390, 16], [412, 16], [390, 24], [1440, 16]] as const) {
+    const where = `${w} px at ${text} px text`;
+    await app.page.textSize(text);
+    await fresh(`#/todo/${todos.flat.id}`, [w, 900]);
+    await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
+    await app.page.evaluate(SETTLED);
+    const with_ = await app.page.evaluate<Measured>(measured);
+    assert.ok(with_.door.h > 0, `${where}: the door is drawn`);
+    assert.equal(with_.sideways, false, `${where}: the header overflows sideways`);
+    // Under a phone's chrome, its tap area is the header's height at the door's middle; just under the header, the page.
+    const x = with_.door.x + with_.door.w / 2;
+    if (w < 1000) for (const y of [with_.header.y + 1, with_.door.y + with_.door.h / 2, with_.header.y + with_.header.h - 1]) assert.equal(await app.page.evaluate<string>(at(x, y)), "door", `${where}: a tap at ${y} px`);
+    if (w < 1000) assert.equal(await app.page.evaluate<string>(at(x, with_.header.y + with_.header.h + 2)), "page", `${where}: a tap just under the header`);
+    await app.page.evaluate(`document.querySelector("#beside").hidden = true`);
+    await app.page.evaluate(SETTLED);
+    const without = await app.page.evaluate<Measured>(measured);
+    assert.equal(with_.header.h, without.header.h, `${where}: the header's height`);
+    assert.deepEqual(with_.live, without.live, `${where}: the live mark's box`);
+    if (w >= 1000) continue;
+    // The list, a page of many things, draws no door under a phone's chrome; its first line stands where the header
+    // without a door leaves it.
+    await app.page.evaluate(`location.hash = "#/"`);
+    await app.page.waitFor(`${listed} && document.querySelector("#beside").hidden`, { timeout: 20000 });
+    await app.page.evaluate(SETTLED);
+    const list = await app.page.evaluate<Measured>(measured);
+    assert.equal(list.header.h, without.header.h, `${where}: the list's header`);
+    assert.deepEqual(list.live, without.live, `${where}: the live mark on the list`);
+    await app.page.evaluate(`location.hash = "#/todo/${todos.flat.id}"`);
+    await app.page.waitFor(`${todoDrawn} && ${offered}`, { timeout: 20000 });
+    await app.page.evaluate(`history.back()`);
+    await app.page.waitFor(`location.hash === "#/" && ${listed}`, { timeout: 20000 });
+    await app.page.evaluate(SETTLED);
+    assert.equal((await app.page.evaluate<Measured>(measured)).first, list.first, `${where}: the list's first line, after a page with the door`);
+  }
+  await app.page.textSize(16);
+  await app.resize(PHONE);
+});
+
+// ON A PHONE ITS HIDE STAYS UNDER THE APP'S HEADER, never beneath it (B3): the secretary alone scrolls the document, and
+// its Hide is the element at its own centre after a scroll, as it is when the conversation opens at its newest turn.
+app.scene("on a phone the secretary's Hide is reachable after the conversation scrolls", async () => {
+  await fresh("#/", [412, 900]);
+  await app.page.waitFor(listed, { timeout: 20000 });
+  await app.page.evaluate(`location.hash = "#/todo/${todos.checklist.id}"`);
+  await app.page.waitFor(todoDrawn, { timeout: 20000 });
+  await panelOpen(true);
+  const reachable = `(() => { const b = document.querySelector("#view > .tile .hidesecretary"); const r = b.getBoundingClientRect(); const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return at !== null && b.contains(at); })()`;
+  await app.page.waitFor(reachable, { timeout: 20000 });
+  await app.page.evaluate(`window.scrollTo(0, document.documentElement.scrollHeight)`);
+  await app.page.evaluate(SETTLED);
+  assert.equal(await app.page.evaluate<boolean>(reachable), true, "after a scroll to the foot");
+  await app.page.evaluate(`window.scrollTo(0, 0)`);
+  await app.page.evaluate(SETTLED);
+  assert.equal(await app.page.evaluate<boolean>(reachable), true, "at the top");
+  await panelOpen(false);
+  await app.resize(PHONE);
+});
+
+// A HIDE PRESSED AS A LINK IN THE SECRETARY OPENS ANOTHER PAGE (B6) waits for that move and acts on the page it draws:
+// the link's entry stays, and Back returns to where the person was, the secretary.
+app.scene("on a phone a hide pressed with a link followed in the secretary keeps the link's entry", async () => {
+  await fresh("#/", [412, 900]);
+  await app.page.waitFor(listed, { timeout: 20000 });
+  await app.page.evaluate(`location.hash = "#/todo/${todos.flat.id}"`);
+  await app.page.waitFor(todoDrawn, { timeout: 20000 });
+  await panelOpen(true);
+  const link = `#view > .tile .panelbody .turnrefs a[href="#/todo/${todos.checklist.id}"]`;
+  await app.page.waitFor(`location.hash.startsWith("#/aside/") && document.querySelector('${link}') !== null`, { timeout: 20000 });
+  const was = await app.page.evaluate<string>(`location.hash`);
+  // Hide is pressed once the link's move has begun (its address written) and before it can end.
+  await app.page.evaluate(`(() => {
+    const hide = document.querySelector("#view > .tile .hidesecretary");
+    document.querySelector('${link}').click();
+    let tries = 0;
+    window.__late = false;
+    const pressed = () => (location.hash === "#/todo/${todos.checklist.id}" ? hide.click() : ++tries > 10000 ? (window.__late = true) : queueMicrotask(pressed));
+    pressed();
+  })()`);
+  assert.equal(await app.page.evaluate<boolean>(`window.__late`), false, "Hide was pressed during the link's move");
+  await app.page.waitFor(`location.hash === "#/todo/${todos.checklist.id}" && ${todoDrawn}`, { timeout: 20000 });
+  await app.page.evaluate(SETTLED);
+  assert.equal(await app.page.evaluate<string>(`location.hash`), `#/todo/${todos.checklist.id}`, "the link's entry stays");
+  await app.page.evaluate(`history.back()`);
+  await app.page.waitFor(`location.hash === ${JSON.stringify(was)}`, { timeout: 20000 });
+  await panelOpen(false);
+  await app.resize(PHONE);
+});
+
+// THE LIST ROW'S ASK IS ITS OWN PLACE: a line opened in place offers the secretary's own page about that todo, never
+// the secretary beside a page, whose one door is the header's.
+app.scene("the list row's Ask is the secretary's own page about the todo", async () => {
+  await fresh("#/", [412, 900]);
+  await app.page.waitFor(listed, { timeout: 20000 });
+  await openInPlace(app.page, todos.agents.id);
+  const capsule = await app.page.evaluate<string | null>(`[...document.querySelectorAll('.rowopen[data-todo="${todos.agents.id}"] a.capsule')].find((a) => a.textContent.trim() === "Ask")?.getAttribute("href") ?? null`);
+  assert.ok(capsule?.startsWith("#/secretary?ref=todo") === true && decodeURIComponent(capsule).endsWith(`/${todos.agents.id}`), `the row's Ask: ${String(capsule)}`);
+  await app.resize(PHONE);
+});
+
+// THE SECRETARY ABOUT A MESSAGE, AT ITS OWN ADDRESS (B8), stands in the Mail workspace, the bar lit on Mail.
+app.scene("a bare secretary address about a message stands in the Mail workspace, and its Hide lands on the message", async () => {
+  await fresh("#/aside/mail%3Aabcdef12", [1440, 900]);
+  await app.page.waitFor(`${drawnAside} && document.querySelector(".tabbar [aria-current='page']")?.textContent.includes("Mail") === true`, { timeout: 20000 });
+  // Its Hide lands on the message it is about, never the Mail list (W2).
+  await app.page.click("#view > .tile .hidesecretary");
+  await app.page.waitFor(`!(${drawnAside})`, { timeout: 20000 });
+  await app.page.evaluate(SETTLED);
+  assert.equal(await app.page.evaluate<string>(`location.hash`), "#/mail/abcdef12", "the person lands on the message");
+  await app.resize(PHONE);
+});
+

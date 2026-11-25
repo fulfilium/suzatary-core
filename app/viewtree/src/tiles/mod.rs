@@ -139,6 +139,14 @@ fn mint<P: Clone>(home: &Node<P>, next: &Cell<u64>) -> Node<Leaf<P>> {
     })
 }
 
+impl<P: Page> Part<Leaf<P>> {
+    /// Whether the child holds a pinned leaf.
+    #[must_use]
+    pub fn holds_pinned(&self) -> bool {
+        open::pinned(self)
+    }
+}
+
 /// What the walk, the open rule and the arrangement read of a leaf.
 pub(crate) trait Tile {
     /// `None` for the ghost a probe opens.

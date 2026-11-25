@@ -24,7 +24,7 @@ pub(crate) enum Place<'a> {
     /// By its notmuch id or a prefix of its hash.
     Message(&'a str),
     Thread(&'a str),
-    /// The secretary, asked about a reference (`mail:<hash>`, `thread:<id>`).
+    /// The secretary's own page, asked about a reference (`mail:<hash>`, `thread:<id>`).
     Ask(&'a str),
     /// The stream, filtered to the rounds carrying every topic named.
     Secretary(&'a [String]),
@@ -221,6 +221,15 @@ fn linked(r: &Reference) -> Option<String> {
             Target::Round { conversation, .. } | Target::Note { conversation, .. },
         ) => Some(Place::conversation(conversation.as_str()).href()),
     }
+}
+
+/// The address of the page a reference's text names, where it names one.
+pub(crate) fn page_of(reference: &str) -> Option<String> {
+    reference
+        .parse::<Reference>()
+        .ok()
+        .as_ref()
+        .and_then(linked)
 }
 
 /// `r` as a link of `class` reading `label`, or `label` as text where it links nowhere.

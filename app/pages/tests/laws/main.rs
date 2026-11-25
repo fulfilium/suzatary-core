@@ -9,6 +9,7 @@ mod cards;
 mod common;
 mod conversation;
 mod conversations;
+mod dock;
 mod draft;
 mod inbox;
 mod mail;

@@ -29,6 +29,8 @@ export type Route =
   | { readonly type: "conversations" }
   // `at` is a search hit's turn: the window opens ending at it.
   | { readonly type: "conversation"; readonly id: string; readonly refs: readonly string[]; readonly focus?: boolean; readonly at?: number }
+  // The secretary beside a page: the default conversation's talk about a reference, "" for the whole conversation.
+  | { readonly type: "aside"; readonly about: string }
   | { readonly type: "unknown"; readonly hash: string };
 
 export const HOME: Route = { type: "todos" };
@@ -120,6 +122,10 @@ export function parseRoute(hash: string): Route {
     }
     case "conversations":
       return rest === "" ? { type: "conversations" } : unknown;
+    case "aside": {
+      const about = decode(rest);
+      return about === null ? unknown : { type: "aside", about };
+    }
     case "about":
       return rest === "" ? { type: "about" } : unknown;
     case "settings":
@@ -164,6 +170,8 @@ export function hrefOf(route: Route): string {
       return "#/secretary/new";
     case "conversations":
       return "#/conversations";
+    case "aside":
+      return route.about === "" ? "#/aside" : `#/aside/${encodeURIComponent(route.about)}`;
     case "conversation":
       return `#/secretary/${encodeURIComponent(route.id)}${search({
         ref: route.refs.join(","),

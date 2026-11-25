@@ -719,47 +719,44 @@ app.scene("the next question typed before a send settles stays in the box, and b
 });
 
 /**
- * THE SECRETARY AS A LAYER, ON A LAPTOP: at 62rem and up the panel stands beside the todo list, and a writer sends from it.
+ * THE SECRETARY BESIDE THE LIST, ON A LAPTOP: opened from the header's door, it stands in a tile after the list, the
+ * whole conversation, and a writer sends from it. Under a phone's chrome a list has no secretary beside it.
  */
-app.scene("the panel is present on the todo list at 62rem and shows the whole conversation", async () => {
+app.scene("the secretary opens beside the todo list at a laptop's width and shows the whole conversation", async () => {
   await app.resize(DESKTOP);
   await app.page.navigate(`${WRITE_BASE}/#/`);
-  await app.page.waitFor(`document.querySelector(".secretarypanel") !== null`, { timeout: 15000 });
+  await app.page.waitFor(`document.querySelector("#beside:not([hidden])") !== null`, { timeout: 15000 });
+  await app.page.click("#beside");
+  const at = "#view > .tile .panelbody";
   // THE HEADER IS DRAWN FROM THE SOURCE'S FIRST WINDOW, so this waits for text.
-  await app.page.waitFor(
-    `(document.querySelector(".secretarypanel .frameheader")?.textContent ?? "") !== ""`,
-    { timeout: 15000 },
-  );
-  const header = await app.page.evaluate<string>(
-    `document.querySelector(".secretarypanel .frameheader").textContent`,
-  );
-  assert.equal(/About /.test(header), false, "nothing is selected, so the panel is the whole conversation");
+  await app.page.waitFor(`(document.querySelector("${at} .frameheader")?.textContent ?? "") !== ""`, { timeout: 15000 });
+  const header = await app.page.evaluate<string>(`document.querySelector("${at} .frameheader").textContent`);
+  assert.equal(/About /.test(header), false, "nothing is selected, so the secretary is the whole conversation");
   assert.match(header, /Whole conversation/);
-  // Open it if nothing in it has opened it yet: an unused panel is its toggle alone.
-  if ((await app.page.evaluate<string>(`document.querySelector(".panelcollapse").getAttribute("aria-expanded")`)) === "false") {
-    await app.page.click(".panelcollapse");
-  }
-  // THE PANEL SCROLLS ITSELF, NEVER THE PAGE UNDER IT: the list behind stays at the top.
-  await app.page.waitFor(`document.querySelector(".secretarypanel .turns") !== null`, { timeout: 15000 });
-  assert.equal(
-    await app.page.evaluate<number>(`document.scrollingElement.scrollTop`),
-    0,
-    "mounting the panel must not scroll the todo list",
-  );
-  // THE COMPOSER IS PINNED, OUTSIDE THE SCROLLING BOX, SO IT IS ALWAYS ON SCREEN.
-  await app.page.waitFor(`document.querySelector(".secretarypanel .composebox") !== null`, { timeout: 15000 });
+  // IT SCROLLS ITS OWN TILE, NEVER THE PAGE BESIDE IT: the list stays at the top.
+  await app.page.waitFor(`document.querySelector("${at} .turns") !== null`, { timeout: 15000 });
+  assert.equal(await app.page.evaluate<number>(`document.scrollingElement.scrollTop`), 0, "showing the secretary must not scroll the todo list");
+  // THE COMPOSER STANDS AT THE TILE'S FOOT, SO IT IS ALWAYS ON SCREEN.
+  await app.page.waitFor(`document.querySelector("${at} .composebox") !== null`, { timeout: 15000 });
   const composeRect = await app.page.evaluate<{ top: number; bottom: number }>(
-    `(() => { const r = document.querySelector(".secretarypanel .composebox").getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })()`,
+    `(() => { const r = document.querySelector("${at} .composebox").getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })()`,
   );
-  assert.ok(composeRect.top >= 0 && composeRect.bottom <= DESKTOP[1], "the panel's composer is inside the viewport");
+  assert.ok(composeRect.top >= 0 && composeRect.bottom <= DESKTOP[1], "the secretary's composer is inside the viewport");
 
-  // A WRITER SENDS FROM IT, by Send and by Enter (a bare Enter sends on a wide screen), and stays able to send.
-  await sendsFrom(".secretarypanel", "said in the panel by Send", "button");
-  await sendsFrom(".secretarypanel", "said in the panel by Enter", "Enter");
+  // A WRITER SENDS FROM IT, by Send and by Enter (a bare Enter sends where there is a keyboard), and stays able to send.
+  await sendsFrom(at, "said beside the list by Send", "button");
+  await sendsFrom(at, "said beside the list by Enter", "Enter");
 
-  // BELOW 62rem THE PANEL IS OUT OF THE DOCUMENT, not hidden, so no phone scene counts its turns.
+  // UNDER A PHONE'S CHROME A PAGE OF MANY THINGS HAS NO SECRETARY BESIDE IT, and so no door and no crumb: the bar's
+  // Secretary is its door there. The press still holds for the wide chrome.
   await app.resize(PHONE);
-  await app.page.waitFor(`document.querySelector(".secretarypanel") === null`, { timeout: 8000 });
+  await app.page.waitFor(`document.querySelector("#view .panelbody") === null && document.querySelector("#beside").hidden && ![...document.querySelectorAll(".tilelines .crumbafter")].some((c) => c.textContent.includes("Secretary"))`, { timeout: 8000 });
+  await app.resize(DESKTOP);
+  await app.page.waitFor(`document.querySelector("#view > .tile .panelbody .composebox") !== null`, { timeout: 8000 });
+  // Hidden again by its own control, for the scenes after this one.
+  await app.page.waitFor(`document.querySelector("#view > .tile .hidesecretary") !== null`);
+  await app.page.click("#view > .tile .hidesecretary");
+  await app.page.waitFor(`document.querySelector("#beside:not([hidden])") !== null && document.querySelector("#view .panelbody") === null`);
 });
 
 /**
@@ -773,7 +770,8 @@ app.scene("a writer sends from the conversation page at desktop and phone width,
     const id = await freshConversation(WRITE_BASE);
     await app.page.navigate(`${WRITE_BASE}/#/secretary/${id}`);
     await app.page.waitFor(`document.querySelector("#view .composebox") !== null`, { timeout: 8000 });
-    assert.equal(await app.page.evaluate<number>(`document.querySelectorAll(".secretarypanel").length`), 0, "no second secretary beside its own page");
+    assert.equal(await app.page.evaluate<number>(`document.querySelectorAll("#view .panelbody").length`), 0, "no second secretary beside its own page");
+    assert.equal(await app.page.evaluate<boolean>(`document.querySelector("#beside").hidden`), true, "and no toggle for one");
     await sendsFrom("#view", `said on the page by Send at ${size[0]}`, "button");
     // A bare Enter is a new line on a phone; the chord sends at every width.
     await sendsFrom("#view", `said on the page by Enter at ${size[0]}`, size === PHONE ? "Ctrl+Enter" : "Enter");

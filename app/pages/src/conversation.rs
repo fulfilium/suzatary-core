@@ -13,7 +13,9 @@ use suzatary_topics::wire::topics::{
     ConversationPayload, ProposalRow, Receipt, Ruling, Speaker, TurnGone, TurnRow, VerbOutcome,
 };
 use ts_rs::TS;
-use viewtree::Attr::{AriaLabel, Class, Data, Hidden, Href, Maxlength, Title, Type, Value};
+use viewtree::Attr::{
+    AriaLabel, Class, Data, Hidden, Href, Maxlength, Tabindex, Title, Type, Value,
+};
 use viewtree::kit::{Reading, para};
 use viewtree::{Key, Node, Program, view};
 
@@ -268,7 +270,6 @@ pub struct Model {
     erasing: Option<usize>,
     renaming: Option<String>,
     sent: Option<String>,
-    told: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -293,6 +294,8 @@ pub enum Msg {
     Copy(String),
     /// The person let a refused own line's words go, by its name.
     Dismissed(String),
+    /// Hide pressed beside a page.
+    Hide,
 }
 
 #[derive(Debug)]
@@ -445,7 +448,6 @@ impl Program for Conversation {
             erasing: None,
             renaming: None,
             sent: None,
-            told: None,
             id,
         };
         m.asked = match first {
@@ -574,6 +576,7 @@ impl Program for Conversation {
             Msg::Named(Some(title)) => vec![rename(m, title)],
             Msg::Copy(text) => vec![Effect::Copy { text }],
             Msg::Dismissed(line) => vec![acted(vec![line])],
+            Msg::Hide => vec![Effect::Release],
         }
     }
 
@@ -582,11 +585,16 @@ impl Program for Conversation {
         let compose =
             composer::view(&m.composer, &m.context.reach, m.context.keys).map(Msg::Composer);
         match &m.at {
-            At::Panel { about } => view! { Div "panelbody" [
-                view! { Div "panelheader" [panel_header(m, about)] },
-                view! { Div "panelscroll" {Data("box") => "panel"} [transcript] },
-                view! { Div "panelcompose" [compose] },
-            ] },
+            At::Panel { about } => {
+                view! { Aside {Class => "panelbody", AriaLabel => "Secretary", Tabindex => "-1"} [
+                    view! { Div "panelheader" [
+                        panel_header(m, about),
+                        view! { Button {Type => "button", Class => "hidesecretary", AriaLabel => "Hide the secretary"} @click(Msg::Hide) ["Hide"] },
+                    ] },
+                    view! { Div "panelscroll" [transcript] },
+                    view! { Div "panelcompose" [compose] },
+                ] }
+            }
             At::Page { .. } => {
                 let chrome = Chrome {
                     class: "conversation",
@@ -923,7 +931,7 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
                     m.held = Held::Failed(e);
                 }
             }
-            return tell(m);
+            return Vec::new();
         }
         Reading::Val { v } => v,
     };
@@ -1008,7 +1016,6 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
             }
         }
     }
-    effects.extend(tell(m));
     effects.extend(drawn(m));
     effects
 }
@@ -1104,21 +1111,6 @@ fn seen(m: &mut Model) -> Vec<Effect> {
             .settled(|k| rows.iter().find(|r| r.index == k.index as usize)),
     );
     card::effects(outs, Hold::Card, Ask::Card).0
-}
-
-/// What the panel's toggle reads: whether the conversation holds talk about the page beside it.
-fn tell(m: &mut Model) -> Vec<Effect> {
-    let At::Panel { .. } = m.at else {
-        return Vec::new();
-    };
-    let talking = !m.fallback && payload(m).is_some_and(|p| !p.turns.is_empty());
-    if m.told == Some(talking) {
-        return Vec::new();
-    }
-    m.told = Some(talking);
-    vec![Effect::Tell {
-        said: serde_json::json!({ "talk": if talking { "Talking" } else { "Quiet" } }),
-    }]
 }
 
 fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {

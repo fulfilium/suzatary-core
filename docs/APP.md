@@ -212,9 +212,11 @@ below for exactly that reason.
    ready — 3 proposals") until it is opened. After that it is a conversation
    like any other.
 
-8. **Ask from anywhere.** "Ask the secretary" exists on a todo, a message, a
-   thread and a briefing, and attaches the reference. It should also be a
-   keyboard verb and a palette entry with no reference, because half the
+8. **Ask from anywhere.** The header's Secretary button shows the secretary
+   beside a todo, a message, a thread and a briefing at every width, about
+   that page, and beside a page of many things on a wide screen; a list row's
+   Ask opens the secretary's own page with the row's reference. It should also
+   be a keyboard verb and a palette entry with no reference, because half the
    questions are not about a thing on screen.
 
 9. **Show the Claude usage this box is spending.** The owner, 2026-09-12: "the

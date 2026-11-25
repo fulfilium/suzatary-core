@@ -15,7 +15,7 @@ pub enum Unfit {
     Root,
     /// A node below the root has one child.
     Single,
-    /// A workspace holds more than `MOST` leaves.
+    /// A workspace holds more than `MOST` free leaves.
     Crowded,
     /// A workspace holds two pinned leaves, or one that is not its end: the last leaf, reached
     /// through the last child of each node.
@@ -39,10 +39,10 @@ fn workspace<L>(tree: &Tree<L>, pin: &impl Fn(&L) -> Pin) -> Result<(), Unfit> {
         return Err(Unfit::Single);
     }
     let leaves = tree.leaves();
-    if leaves.len() > MOST {
+    let pinned = leaves.iter().filter(|l| pin(l) == Pin::Pinned).count();
+    if leaves.len() - pinned > MOST {
         return Err(Unfit::Crowded);
     }
-    let pinned = leaves.iter().filter(|l| pin(l) == Pin::Pinned).count();
     let end_pinned = pin(tree.end().0) == Pin::Pinned;
     match (pinned, end_pinned) {
         (0, _) | (1, true) => Ok(()),
@@ -62,7 +62,7 @@ impl fmt::Display for Unfit {
         f.write_str(match self {
             Unfit::Root => "the root's axis, fit or workspaces are not the home's",
             Unfit::Single => "a node below the root has one child",
-            Unfit::Crowded => "a workspace holds more tiles than it may",
+            Unfit::Crowded => "a workspace holds more free tiles than it may",
             Unfit::Pin => "a workspace's pinned leaf is not its one end",
         })
     }

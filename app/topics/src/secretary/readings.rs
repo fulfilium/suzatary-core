@@ -323,6 +323,16 @@ pub fn search<S: std::borrow::Borrow<Stored>>(
     })
 }
 
+/// Whether any round of the conversation touches `about`: the talk the secretary beside a page
+/// reads, the rounds `conversation` keeps for that reference and nothing of them.
+#[must_use]
+pub fn talks(read: &suzatary_lines::secretary::transcript::Transcript, about: &Reference) -> bool {
+    let turns = &read.stored().turns;
+    about::round_spans(turns)
+        .into_iter()
+        .any(|span| about::round_touches(turns, span, about))
+}
+
 /// One window of a conversation; a line the inbox cannot place goes in `unplaced`, never dropped.
 /// What is queued and the state are the claims' reading, the same on the box and in a tab.
 #[must_use]

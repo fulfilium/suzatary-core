@@ -6,7 +6,7 @@ use ts_rs::TS;
 use viewtree::kit::para;
 use viewtree::{Node, view};
 
-use crate::chrome::{ask, link, mark, rich};
+use crate::chrome::{link, mark, rich};
 use crate::places::{Place, Question};
 use crate::reading::{Msg, View, json};
 use crate::runtime::Answer;
@@ -81,7 +81,6 @@ impl View for Briefing {
                 ]
             }
             BriefingDay::Saved { source, rich: html } => vec![
-                ask(&format!("briefing:{}", p.date)),
                 rich(html.as_deref(), source, "todobody"),
                 para(
                     "legend",

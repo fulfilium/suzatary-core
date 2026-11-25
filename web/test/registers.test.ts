@@ -30,7 +30,7 @@ test("a Tab register never reaches storage; a Device one does, under its own nam
   const tab = ui.over(kv.over(() => m), "tab")
   tab.cell(registers.page, "todos.opened/life").set("dentist")
   assert.equal(m.size(), 0)
-  tab.cell(registers.panel).set({ inbox: "open" })
+  tab.cell(registers.presses).set({ inbox: "open" })
   assert.equal(m.size(), 0, "the panel's presses are this tab's")
   tab.cell(registers.chain).set("suzatary")
   assert.equal(m.size(), 1)

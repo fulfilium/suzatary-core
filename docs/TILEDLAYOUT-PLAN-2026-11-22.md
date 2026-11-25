@@ -247,10 +247,10 @@ drawn beside or over is then `arrange`'s answer for the viewport.
 3. If nothing unpinned stood after the focused tile, the page is inserted right after it, with
    the share its page declares (`Page::share`: One for a list, Two otherwise), and it takes the
    focus.
-4. A pinned page (the secretary) opens at the end of the focused workspace's node, or replaces
-   the pinned child already there. That is rule 2 applied from the workspace's last child.
-5. From a pinned leaf, a free page replaces the free child right before it, or is inserted before
-   it, so a link in the secretary opens beside it and the secretary stays at the end.
+4. A pinned page (the secretary) is docked at the focused workspace's end (`Hold`, below), or
+   replaces the pinned end already there, and takes the focus.
+5. An open from a pinned leaf is the same open from the free leaf before it, so a link in the
+   secretary opens as it would from the page beside it, and the secretary stays at the end.
 
 **The chain.** A page declares the page it is opened from (`Page::home`), and that page may be
 opened from another, up to a workspace's home: a conversation is opened from the conversations,
@@ -264,10 +264,17 @@ The focused tile's node is its parent. If the parent is the root or another `Nev
 node), rule 3 first wraps the focused tile in a new node across. This is the
 behaviour of Miller columns (the Finder's column view). Each page opens to the right of the page
 it was opened from and replaces whatever stood there. "Beside where it fits, over where it does
-not" is then a property of `arrange`, not a second rule. A workspace holds at most four tiles
-(§6). An open that would make a fifth opens here, and Back returns to the page it replaced; from a
-pinned leaf, such an open does nothing. Rule 2 gives the page the share of the first child it
-replaces.
+not" is then a property of `arrange`, not a second rule. A workspace holds at most four free tiles
+(§6); its pinned end is not counted, so a docked page never costs a person one of their own. An
+open that would make a fifth opens here, and Back returns to the page it replaced. Rule 2 gives the
+page the share of the first child it replaces.
+
+**A docked page is held and let go by acts.** `Hold(page)` docks a pinned page at the focused
+workspace's end, the focus where it stands: after the workspace's last child where the workspace is
+a node across that fits, else beside the whole workspace in a new node across, and every other
+workspace lets its pinned end go, so one page is docked at a time. `Release` lets every unfocused
+pinned end go. A pinned end that has the focus is the person's, and neither touches it. A close
+beside a docked page is the close the workspace without it makes, the page docked again after.
 
 **Back, Close and the crumb to the left are not one act.** The crumb is `Focus`. It moves the
 focus and keeps the tile it left alive, which is what lets the reader return to their place.
@@ -297,15 +304,17 @@ pinned leaves anywhere), acts and viewports:
   today's hash. So does a home with one page opened from it (§5), whose crumb row on a phone is
   today's Back row. Today's phone is this trivial case, so the migration can be staged.
 - The address round-trips: `parse(print(t)) == t`, and `parse` is total over strings (§5).
-- Close of a workspace's last tile is the identity. A workspace always holds a page.
+- Close of a workspace's last tile, or of its last free tile, is the identity. A workspace always holds a page.
 - Every act keeps the tree **well formed**, and `Tiles::new` and `parse` answer only such trees
   (`Tiles::check`, the error `Unfit`): the root keeps the home's axis, fit and number of
   workspaces; every node below the root has two children or more; a workspace holds at most four
-  tiles; and a workspace holds at most one pinned leaf, as its **end**, the last leaf reached
-  through the last child of each node. So an open of a pinned page replaces a pinned end, or the
-  end of a full workspace, or is added after the workspace's last child; `Below` of a pinned page
-  opens it the same way; `Below` from a pinned leaf puts the page above it; and `Move` does nothing
-  when either child it would swap holds a pinned leaf.
+  free tiles; and a workspace holds at most one pinned leaf, as its **end**, the last leaf reached
+  through the last child of each node. So an open of a pinned page is `Hold` and a focus; `Below`
+  of a pinned page opens it the same way; `Below` from a pinned leaf is made from the free leaf
+  before it; and `Move` does nothing when either child it would swap holds a pinned leaf.
+- `Release` after `Hold` is the identity; neither moves the focus; and a page held changes no act
+  of a person's: any act from a free leaf, the held page then taken away, is the same act without
+  it (`tests/tiles/dock.rs`).
 - Every drawn tile has its least size, but a focused leaf drawn alone (§2, rule 5).
 
 ## 4. Resizing with a finger and with a mouse
@@ -928,3 +937,57 @@ What this half did not do, and where it goes:
 - **A kept page's clock.** Five pages read `now` once, at their start (the conversations, the inbox, the stream, a
   todo and the list), so a page kept across midnight groups its days by the day before. The clock should come with
   `Context` or a held reading.
+
+## 16. Stage c, third part: the secretary as the pinned leaf
+
+- **The secretary beside a page is a page**, `Route::Aside` at `#/aside/<reference>` (`#/aside` for the whole
+  conversation), of a kind of its own, `Pin::Pinned`, at the least width the panel had (the design token `beside`, 22rem). No conversation
+  id spells it: ids live under `#/secretary/`. Its page is the conversation's program in its `Panel` shape, as before, a
+  region named "Secretary" with its own Hide.
+- **The shell holds it by a say, never by the width** (`desk::Dock`): `Held { about }`, which the desk applies with the
+  module's `Hold`, or `Absent`, applied with `Release`; a secretary that has the focus is the person's, and no say moves
+  it. `chat/aside.ts` is one pure rule from the route, the window's chrome, the presses and the talk to the say and the
+  door: held where a press opened it, or on a page about one thing that no press closed, where the talk shows it; never
+  beside a page of many things under a phone's chrome, whose door is the bar's Secretary. **The talk is a reading**
+  (`chat/talk.ts`): one question to the core's worker over the lines the device holds whole, asked anew at each arrival
+  and again as the conversation moves; it fetches nothing. No program runs to learn it. Its home is the workspace of the
+  page it is about.
+- **The address names it only where it has the focus.** `Desk::address` prints the tree with an unfocused pinned end
+  released, so every hash prints as before whether the secretary stands or not; a crumb carries the address of the tree
+  focused there (`Crumb.to`), and `Drawing.pinned` says where the pinned leaf stands, with the address without it
+  (drawn) or the one that shows it (behind). The chrome's door is drawn from the drawing on screen alone.
+- **One control per act, one door at every width.** Show is the header's button, `#beside`: on a page about one thing
+  under either chrome, on a page of many things under the wide one, hidden only where the say answers none and where
+  the secretary is drawn; it acts for the page the drawing committed. Under a phone's chrome it stands in the header's
+  row as the brand does, so the header is as tall with it as without it. No page draws a door of its own; the list
+  row's Ask is the secretary's own page (`Place::Ask`). Hide is the secretary's own, in its header, at every width
+  (`Effect::Release`). Which door is drawn is the say's, never a CSS rule. After a show the keyboard is on the
+  secretary's region (`aside.panelbody`, focusable by script), from which Tab reaches its composer; after a hide, on the
+  header's door. The focus a press asks for is that press's: it waits for the press's own move, and ends with it. A
+  press waits for a move in flight to end and
+  acts on the page it draws, and the desk is told a say only between moves. Beside the page, neither makes an entry of the history. Behind it, a show goes to
+  it (a new entry); a hide where it has the focus goes as a close goes: Back where the entry before is the page without
+  it, else in its place. So Back after a hide never shows it again, and Forward redoes what Back undid. A hide's press is
+  the page the secretary is about, never the page it stood beside; a secretary drawn alone hides to the page it is
+  about.
+- **A hide lets its program go**: the leaf leaves the tree and its page with it, as any page closed, and a show mounts
+  it from its address. The one keep rule keeps it only while its leaf is in the tree (behind a page on a phone).
+- **Law**: `the_secretary_is_erased_by_its_absence` (`app/pages/tests/laws/dock.rs`): over any acts of a person (a link
+  in any tile, the secretary's among them, a crumb, Back, a typed tree address with nested and down nodes, a divider)
+  interleaved with any says, a person's pages, their order, the focus among them, the address and the dividers' shares
+  are those of the same acts with the say absent throughout; a say never moves a focused secretary; a cold read of the
+  address holds the same tree. 20,000 cases once.
+- **What went**: `chat/panel.ts`, `aside.placement`, `tiles.Host.room` and its media query, `--aside`, `--head`, the
+  `.secretarypanel` block and its 62rem rules; then, from the first build of this part, the stowed secretary
+  (`Beside::Stowed`, `Drawing.runs`, `STOWED`, `keep`'s `runs`), `Effect::Tell`, the module-level `told` and `hearers`
+  of `aside.ts`, and `data-talk`.
+
+What this part did not do, and where it goes:
+
+- **The add sheet inside its tile.** Which of its two shapes a list draws (a docked sheet, or a form under the list) is
+  today the window's question. The tile can answer it two ways: by its width (a container query, point 3 below) or by
+  the arrangement's `Opens` (a list that opens pages over itself docks its sheet). They differ from 856 to 991 px, where
+  the list stands beside a todo under a phone's chrome. The dock itself can be a zero-height sticky foot of the tile
+  holding the sheet and its scrim in one stacking context, offset by `--covered`, which then belongs on the tile rather
+  than on `.conversation` and `.panelbody` (two copies today).
+- **The container query inside a conversation, a kept page's clock, the heap's growth**: not started.

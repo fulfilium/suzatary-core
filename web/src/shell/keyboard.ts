@@ -21,9 +21,13 @@ export interface KeyTarget {
   readonly add?: () => void;
   /** True when the page consumed the Escape (it closed its own sheet, say). */
   readonly escape?: () => boolean;
+  /** The page's element: while the focus is in a tile that does not hold it, its keys are not this page's. */
+  readonly within?: Element;
 }
 
 const NOBODY: KeyTarget = {};
+// The actions a page answers, as against the shell's own (help, the palette, `g`, Escape over an overlay).
+const PAGE_KEYS: ReadonlySet<KeyAction["type"]> = new Set(["move", "open", "close", "act", "undo", "redo", "focusSearch", "add"]);
 let target: KeyTarget = NOBODY;
 
 export function setKeyTarget(next: KeyTarget): void {
@@ -146,6 +150,12 @@ export function installKeyboard(): void {
   let expiry = 0;
   document.addEventListener("keydown", (event: KeyboardEvent) => {
     if (event.isComposing) return;
+    // Enter on a focused button is that button's press.
+    if (event.key === "Enter" && document.activeElement?.closest("button") != null) return;
+    // A page's keys act only where the focus is in its own tile, or in none: the focus in the secretary's region beside
+    // the list moves no cursor of the list.
+    const tile = document.activeElement?.closest("#view > .tile") ?? null;
+    const elsewhere = tile !== null && target.within !== undefined && !tile.contains(target.within);
     const action = keyAction(event.key, {
       typing: typing(document.activeElement),
       pending,
@@ -155,6 +165,7 @@ export function installKeyboard(): void {
     window.clearTimeout(expiry);
     pending = "";
     if (action === null) return;
+    if (elsewhere && PAGE_KEYS.has(action.type)) return;
     if (action.type === "arm") {
       pending = "g";
       expiry = window.setTimeout(() => {

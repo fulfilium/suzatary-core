@@ -4,7 +4,7 @@ use super::apportion::apportion;
 use super::arranged::{Arranged, At, Crumb, Divider, Opens, Placed, Row, Scroller, Stop};
 use super::leaf::{Id, Leaf};
 use super::node::{Axis, Node, Share};
-use super::open::{self, MOST};
+use super::open;
 use super::page::{Page, Pin, Shape};
 use super::px::{Edge, Px, Rect, Size, Viewport};
 use super::walk::{Drawn, walk};
@@ -280,13 +280,11 @@ fn row<P: Clone>(
 /// would make, with a ghost of the shape the tile's page opens.
 fn opens<P: Page>(cx: &Cx<'_, '_, P>, tile: &Leaf<P>) -> Opens {
     let id = tile.id();
-    let probe = open::focus(cx.root.map(&Probe::Tile), id);
-    let was = open::tiles(&probe);
-    let grown = open::beside(probe, Probe::Ghost(tile.page().opens()), Share::One);
-    let now = open::tiles(&grown);
-    if now > was && now > MOST {
-        return Opens::Over;
-    }
+    let probe = open::origin(open::focus(cx.root.map(&Probe::Tile), id));
+    let ghost = Probe::Ghost(tile.page().opens());
+    let grown = open::bounded(probe, ghost, |root, ghost| {
+        open::beside(root, ghost, Share::One)
+    });
     let beside = walk(&grown, cx.at, cx.m)
         .leaves()
         .iter()
@@ -295,6 +293,7 @@ fn opens<P: Page>(cx: &Cx<'_, '_, P>, tile: &Leaf<P>) -> Opens {
 }
 
 /// A leaf of the tree an open would make: a tile, or the page the open adds.
+#[derive(Clone)]
 enum Probe<'t, P> {
     Tile(&'t Leaf<P>),
     Ghost(Shape),

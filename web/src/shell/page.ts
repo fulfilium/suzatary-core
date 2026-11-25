@@ -16,6 +16,9 @@ export namespace page {
       el("a", { class: "brand", href: "#/" }, "Suzatary"),
       // One bar of words: across the top on a wide screen, fixed to the foot on a phone (`shell/nav.ts`).
       el("nav", { id: "tabbar", class: "tabbar", "aria-label": "sections" }),
+      // The door that shows the secretary beside the page (`main.ts`), where it is not drawn; it hides itself. Before
+      // the live mark, so the mark stands at the header's end whether the door is drawn or not.
+      el("button", { id: "beside", type: "button", class: "secretarytoggle", "aria-label": "Show the secretary", hidden: true }, "Secretary"),
       // Acts this browser has taken and not yet handed over, hidden at zero (`shell/pending.ts`).
       el("span", { id: "live", class: "live", title: "connecting…", "aria-label": "connecting…" }),
     ))
