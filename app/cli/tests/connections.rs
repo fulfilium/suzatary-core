@@ -1178,38 +1178,32 @@ fn the_secretary_files_a_connect_card_and_the_tap_adds_the_calendar() {
     );
 }
 
-/// An account, a calendar or a folder is the owner's to name, so mail cannot name one.
+/// A card proposed after mail was read is filed and marked, and the tap performs it as it does
+/// any Connect card.
 #[test]
-fn a_round_that_read_mail_proposes_no_connect_card() {
+fn a_round_that_read_mail_files_a_marked_connect_card() {
     let served = serving_answering(
         "secretary-connect-tainted",
         None,
         Some(common::FakeModel::saying([
             r#"{"say": "", "calls": [{"verb": "search", "args": {"query": "calendar"}}]}"#,
             PROPOSE_WORK,
-            r#"{"say": "Ask me again on its own."}"#,
+            r#"{"say": "Proposed."}"#,
         ])),
         |server, _| server,
     );
     let id = topic(&served);
     let payload = common::said(&served.base, &id, "what did the calendar mail say?");
-    assert!(
-        payload["proposals"]
-            .as_array()
-            .expect("proposals")
-            .is_empty(),
-        "{payload}"
-    );
-    let refused = proposing(&payload);
-    assert_eq!(refused["outcome"]["is"], "refused", "{refused}");
-    let text = refused["text"].as_str().expect("text");
-    assert!(text.contains("not the owner's own words"), "{refused}");
-    assert!(
-        !text.contains("himself") && !text.contains("herself"),
-        "{text}"
-    );
+    let cards = payload["proposals"].as_array().expect("proposals");
+    assert_eq!(cards.len(), 1, "{payload}");
+    assert_eq!(cards[0]["act"]["kind"], "connect", "{payload}");
+    let why = cards[0]["why"].as_str().expect("why");
+    assert!(why.contains("read outside text"), "{why}");
     assert!(
         !file(&served).contains("PLUGIN_ICS_WORK"),
-        "nothing was written"
+        "nothing is written until the tap"
     );
+    let (status, after) = tap(&served.base, &id, 0, &serde_json::json!({}));
+    assert_eq!(status, 200, "{after}");
+    assert!(file(&served).contains("credentials = [\"PLUGIN_ICS_WORK\"]"));
 }

@@ -18,6 +18,9 @@ use suzatary_inbox::secretary::proposer::Proposer;
 use suzatary_topics::secretary::filed::Filing;
 
 /// Why a coding session is refused in a round that read anything but the owner's own words.
+/// A Connect card is filed in such a round because its tap writes one line the card shows in
+/// full; a tap here starts an agent with write access to a repository, which reading the card
+/// does not contain.
 const READ_OUTSIDE: &str = "this round has read something that is not the owner's own words \
                             (mail, a todo, a document, the web, a repository or an old \
                             answer), and a coding session's task is the whole of what an agent \

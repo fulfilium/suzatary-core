@@ -1306,6 +1306,66 @@ fn a_lieer_account_moves_onto_the_sign_in_only_once_its_grant_reads_its_mail() {
     assert!(said.starts_with("Google: "), "{said}");
 }
 
+/// A round that read mail proposes the move of a lieer account onto the sign-in with Google. The
+/// card names the address and says the round read outside text, and its tap leads to the same
+/// move as a card from the owner's own words.
+#[test]
+fn a_connect_card_from_a_round_that_read_mail_moves_the_lieer_account_by_its_tap() {
+    use suzatary_connect::settings::Configuration as _;
+    let model = common::FakeModel::saying_owned([
+        r#"{"say": "", "calls": [{"verb": "search", "args": {"query": "connect"}}]}"#.to_owned(),
+        format!(
+            r#"{{"say": "Asking.", "calls": [{{"verb": "propose_act", "args": {{
+              "act": "connect", "template": "google", "params": ["{ADA}"],
+              "why": "the owner asked to read this account with Google",
+              "sources": "mail:{MARKED_MAIL}"}}}}]}}"#
+        ),
+        r#"{"say": "Proposed."}"#.to_owned(),
+    ]);
+    let serving = serving_as("google-lieer-tainted", Some(model), Sync::Gmail);
+    let base = &serving.base;
+    let id = common::opened(base, "Connect");
+    let proposed = common::said(base, &id, "connect my account with Google");
+    let row = &proposed["proposals"][0];
+    assert_eq!(row["act"]["kind"], "connect", "{proposed}");
+    let why = row["why"].as_str().expect("why");
+    assert!(
+        row["act"].to_string().contains(ADA),
+        "the card names the address: {proposed}"
+    );
+    assert!(why.contains("read outside text"), "{why}");
+
+    let mut tapped = common::act(
+        &format!("{base}/api/secretary/conversations/{id}/proposals/0/tap"),
+        &serde_json::json!({}),
+    );
+    assert_eq!(common::status(&tapped), 200);
+    assert_eq!(
+        common::body_json(&mut tapped)["proposals"][0]["state"],
+        "acted"
+    );
+    assert_eq!(
+        serving
+            .edits
+            .declared()
+            .expect("the recorder reads")
+            .accounts,
+        vec![account(Sync::Gmail)],
+        "the tap writes nothing until the sign-in reads the mail"
+    );
+    let (status, _) = redirected(&consented(&serving, &consent(&serving)));
+    assert_eq!(status, 303);
+    assert_eq!(
+        serving
+            .edits
+            .declared()
+            .expect("the recorder reads")
+            .accounts,
+        vec![account(Sync::Google)],
+        "the account moved, as it does for a card from the owner's own words"
+    );
+}
+
 /// The sign-in card tapped again after it ended: its consent's link.
 fn again(serving: &Serving) -> String {
     let base = &serving.base;

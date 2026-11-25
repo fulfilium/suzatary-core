@@ -247,8 +247,9 @@ and its PDF attachments name, so you can find the message without seeing the num
   `organizations`), `bridge` (Proton Mail), `ics` (a calendar that is not Google's, by the
   label they give), `drive-cli` (a Drive folder you may read), `ntfy` and `fcm`
   (notifications). For an address lieer already reads, file `google` when they ask for that account's
-  calendars. Take the label, address or folder from their own words, or ask. Propose it
-  FIRST in the round: after reading anything but their words it is refused. When the box's own
+  calendars. Take the label, address or folder from their own words, or ask. After reading
+  anything but their words the card is still filed, and the box marks it as such for them; name
+  in `sources` what led to it. When the box's own
   first line in a Setup conversation names a template and asks for a parameter, their reply is
   that parameter: file the act in the same round and say which card comes next. The box files a
   card for each later step; never ask for a link or a key yourself. A step that only a

@@ -12,7 +12,7 @@ use suzatary_connect::connect::Connection;
 use suzatary_connect::settings::Settable;
 use suzatary_conversations::secretary::taint;
 use suzatary_inbox::secretary::acts::Act;
-use suzatary_inbox::secretary::proposal::Proposal;
+use suzatary_inbox::secretary::proposal::{Proposal, Reasons};
 use suzatary_inbox::verb::Caught;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_memory::secretary::memory;
@@ -74,10 +74,11 @@ impl Verb for ProposeAct {
         folder you may read), and `ntfy` or `fcm` with `[]` (notifications). The \
         tap writes it into the instance file, and the box then asks on its own \
         cards for each step it needs (a link, a sign-in); never ask for a link or \
-        a key yourself. Something already connected is refused. Its source is \
-        the round the owner asked in, which the box names itself: `sources` \
-        is not read, and may be `\"\"`. ⚠️ CALL IT FIRST: in a round that has \
-        read anything but the owner's own words it is refused.\n\n\
+        a key yourself. Something already connected is refused. In a round the \
+        owner opened with their words its source is that round, which the box names \
+        itself: `sources` is not read, and may be `\"\"`. In any other round name \
+        `sources`, and in one that read outside text (or that they did not open) the \
+        box adds a line to the card's reasons saying so; the owner decides.\n\n\
         `act=\"calendar_event\"` with `account=<a Google account's address>`, \
         `title`, `start` and `end` (both UTC instants `2026-10-20T14:00:00Z`, or \
         both days `2026-10-20`, `end` the day after the last) and an optional \
@@ -92,8 +93,8 @@ impl Verb for ProposeAct {
 
     fn run(call: &Call<'_>, args: ProposeActArgs) -> Result<Value, Refusal> {
         let (act, reasons) = if args.act == "connect" {
-            let (connection, round) = connect(call, &args)?;
-            (Act::Connect { connection }, args.filing.resting_on(round)?)
+            let (connection, reasons) = connect(call, &args)?;
+            (Act::Connect { connection }, reasons)
         } else {
             let reasons = args.filing.reasons()?;
             (other(call, &args, &reasons)?, reasons)
@@ -141,11 +142,7 @@ impl Verb for ProposeAct {
     }
 }
 
-fn other(
-    call: &Call<'_>,
-    args: &ProposeActArgs,
-    reasons: &suzatary_inbox::secretary::proposal::Reasons,
-) -> Result<Act, Refusal> {
+fn other(call: &Call<'_>, args: &ProposeActArgs, reasons: &Reasons) -> Result<Act, Refusal> {
     Ok(match args.act.as_str() {
         "auth" => {
             let account_text = args
@@ -256,36 +253,41 @@ fn retract(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal> {
     Ok(Act::Retract { node })
 }
 
-const READ_OUTSIDE: &str = "this round has read something that is not the owner's own words \
-                            (mail, a todo, a document, the web, a repository or an old answer)";
+/// Added after the model's `why`, so the model cannot leave it out.
+const NOT_THEIR_WORDS: &str = "⚠ This round was not the owner's own words alone (it read \
+                               outside text, or something other than them opened it): check \
+                               that they asked for exactly this.";
 
-/// Why a Connect card is refused in a round that read anything but the owner's own words.
-const CONNECT_OUTSIDE: &str = "an account, a calendar or a folder is one the owner names, never \
-                               one learned from what was read";
-
-/// The round the owner opened with their own words, refused in any other.
-fn owners_round(call: &Call<'_>, why: &str) -> Result<Reference, Refusal> {
+/// A round the owner opened rests on that round, any other on the sources the model names; a
+/// round that read outside text, or that they did not open, is marked.
+fn connect_reasons(call: &Call<'_>, args: &ProposeActArgs) -> Result<Reasons, Refusal> {
     let stored =
         suzatary_lines::secretary::conversations::read(call.caps.conversations, call.conversation)?;
-    if call.sent == taint::Taint::Tainted {
-        return Err(Refusal::forbidden(format!(
-            "{READ_OUTSIDE}, and {why}: say so, and the owner asks again in a round of its own"
-        )));
-    }
-    match taint::opener(&stored) {
-        Some(memory::Origin::Turn { conversation, turn }) => {
-            Ok(Reference::Target(Target::Round { conversation, turn }))
+    match (taint::opener(&stored), call.sent) {
+        (Some(memory::Origin::Turn { conversation, turn }), sent) => {
+            let reasons = args
+                .filing
+                .resting_on(Reference::Target(Target::Round { conversation, turn }))?;
+            match sent {
+                taint::Taint::Clean => Ok(reasons),
+                taint::Taint::Tainted => marked(&reasons),
+            }
         }
-        Some(memory::Origin::Tapped { .. }) | None => Err(Refusal::forbidden(format!(
-            "this round was not opened by the owner's own words, and {why}: the owner asks \
-                 in a round of their own"
-        ))),
+        (Some(memory::Origin::Tapped { .. }) | None, _) => marked(&args.filing.reasons()?),
     }
 }
 
+fn marked(reasons: &Reasons) -> Result<Reasons, Refusal> {
+    Reasons::new(
+        format!("{} {NOT_THEIR_WORDS}", reasons.why()),
+        reasons.sources().to_vec(),
+    )
+    .map_err(|failed| Refusal::internal(failed.to_string()))
+}
+
 /// The connection `args` names, refused as the tap would refuse it.
-fn connect(call: &Call<'_>, args: &ProposeActArgs) -> Result<(Connection, Reference), Refusal> {
-    let round = owners_round(call, CONNECT_OUTSIDE)?;
+fn connect(call: &Call<'_>, args: &ProposeActArgs) -> Result<(Connection, Reasons), Refusal> {
+    let reasons = connect_reasons(call, args)?;
     let template = args
         .template
         .read()?
@@ -302,5 +304,5 @@ fn connect(call: &Call<'_>, args: &ProposeActArgs) -> Result<(Connection, Refere
     declared
         .with(&connection)
         .map_err(|refused| Refusal::bad_request(format!("no card was filed: {refused}")))?;
-    Ok((connection, round))
+    Ok((connection, reasons))
 }
