@@ -3,7 +3,7 @@
 //!
 //! [`Register`]: suzatary_health::health::Register
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use suzatary_health::health::SourceKey;
 
@@ -16,10 +16,16 @@ pub type Health = HealthFile<SourceKey>;
 /// The register's file name, beside the heartbeat.
 pub const FILE: &str = "source-health.json";
 
+/// The register's file beside `heartbeat`.
+#[must_use]
+pub fn file_beside(heartbeat: &Path) -> PathBuf {
+    heartbeat.with_file_name(FILE)
+}
+
 /// The register beside `heartbeat`, its lock beside it.
 #[must_use]
 pub fn beside(heartbeat: &Path) -> Health {
-    let path = heartbeat.with_file_name(FILE);
+    let path = file_beside(heartbeat);
     let lock = path.with_extension("lock");
     let docs = Docs::new("source health", move |()| path.clone(), &DocCodec::JSON);
     HealthFile::new(docs, lock)

@@ -2944,6 +2944,7 @@ pub struct Server {
     models: Reaching,
     checks: Option<Arc<CheckRecorder>>,
     watching: Option<PathBuf>,
+    health_watching: Option<(PathBuf, Arc<std::sync::atomic::AtomicUsize>)>,
     google: Googled,
     reveal: Option<Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>>,
     mounts: suzatary_cli::instance::Mounts,
@@ -3122,6 +3123,7 @@ impl Server {
             models: Reaching::default(),
             checks: None,
             watching: None,
+            health_watching: None,
             google: Googled::default(),
             reveal: None,
         }
@@ -3131,6 +3133,19 @@ impl Server {
     pub fn reveal(self, reveal: Arc<dyn suzatary_held::held_value::Reveal + Send + Sync>) -> Self {
         Self {
             reveal: Some(reveal),
+            ..self
+        }
+    }
+
+    /// Serving the sources' health the file beside `heartbeat` holds, and filing the cards owed
+    /// whenever it moves what is owed, as `serve` does; each ring of the bell adds one to `rings`.
+    pub fn health_watching(
+        self,
+        heartbeat: PathBuf,
+        rings: Arc<std::sync::atomic::AtomicUsize>,
+    ) -> Self {
+        Self {
+            health_watching: Some((heartbeat, rings)),
             ..self
         }
     }
@@ -3386,12 +3401,9 @@ impl Server {
         let vault = Arc::new(FakeVault::default());
         let requests = recorded_requests(address.port());
         let pairings = Arc::new(suzatary_signatures::signatures::InMemoryPairings::default());
-        let (chained, deploying, door) = dialled(
-            &(self.effects)(held.server()),
-            self.deploying,
-            self.this_box,
-            address,
-        );
+        let mut effects = (self.effects)(held.server());
+        health_served(&mut effects, self.health_watching.as_ref());
+        let (chained, deploying, door) = dialled(&effects, self.deploying, self.this_box, address);
         let state = State::over(
             chained,
             Vec::new(),
@@ -3426,6 +3438,9 @@ impl Server {
         if let Some(path) = self.watching {
             runtime().spawn(serve::instance_watched(state.clone(), path));
         }
+        if let Some((heartbeat, rings)) = self.health_watching {
+            health_watched(&state, &heartbeat, rings);
+        }
         served(listener, serve::app(state, &self.dist));
         Running {
             base: format!("http://{address}"),
@@ -3437,6 +3452,33 @@ impl Server {
             pairings,
         }
     }
+}
+
+/// `effects` reading the sources' health from the file beside the watched heartbeat, if any.
+fn health_served(
+    effects: &mut suzatary_server::server::Server<'_>,
+    watching: Option<&(PathBuf, Arc<std::sync::atomic::AtomicUsize>)>,
+) {
+    if let Some((heartbeat, _)) = watching {
+        effects.secretary.health = Box::leak(Box::new(suzatary_io_local::source_health::beside(
+            heartbeat,
+        )));
+    }
+}
+
+/// The watcher `serve` runs over the health file beside `heartbeat`, filing on each ring and
+/// counting it in `rings`.
+fn health_watched(state: &State, heartbeat: &Path, rings: Arc<std::sync::atomic::AtomicUsize>) {
+    let moved = Arc::new(tokio::sync::Notify::new());
+    runtime().spawn(serve::notice_on_moved(state.clone(), Arc::clone(&moved)));
+    runtime().spawn(serve::health_watched(
+        state.clone(),
+        suzatary_io_local::source_health::file_beside(heartbeat),
+        move || {
+            rings.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            moved.notify_one();
+        },
+    ));
 }
 
 /// How a test server publishes: through `mirrors`, or by default through a mirror of no repos,

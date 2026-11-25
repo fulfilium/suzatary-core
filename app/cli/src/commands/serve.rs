@@ -155,11 +155,8 @@ pub async fn listen(instance: &Instance, serving: Serving) -> anyhow::Result<()>
     serve::started_up(&first, &rest).await;
     // Its first round folds the conversations, which a start step would wait for.
     let state = compacting(state, instance, serving.compacting);
+    files_watched(&state, instance, &serving.moved);
     serve::after_started(&state, serving.moved);
-    tokio::spawn(serve::instance_watched(
-        state.clone(),
-        instance.path.clone(),
-    ));
     watch_from_now_on(instance, stores, &state, &first, rest);
     serve::serve_on(
         serving.listening,
@@ -531,6 +528,21 @@ pub fn projects(mounts: Mounts) -> Projects {
             plan: project.plan,
         }))
     })
+}
+
+/// The instance file and the sources' health file, each read again when it moves; a move of the
+/// health file that changes what is owed rings `moved`.
+fn files_watched(state: &State, instance: &Instance, moved: &Arc<tokio::sync::Notify>) {
+    tokio::spawn(serve::instance_watched(
+        state.clone(),
+        instance.path.clone(),
+    ));
+    let moved = Arc::clone(moved);
+    tokio::spawn(serve::health_watched(
+        state.clone(),
+        suzatary_io_local::source_health::file_beside(&instance.mail.heartbeat),
+        move || moved.notify_one(),
+    ));
 }
 
 /// Only the first chain pushes.

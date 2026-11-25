@@ -11,7 +11,7 @@ use suzatary_base::capability;
 use suzatary_cards::secretary::noticed;
 use suzatary_cards::settings::overview;
 use suzatary_health::health;
-use suzatary_health::health::{Reading, Register};
+use suzatary_health::health::{Reading, Register, SourceKey};
 use suzatary_held::held_value::Reveal;
 use suzatary_held::vault::Vault;
 use suzatary_io_chains::objects::Objects;
@@ -670,6 +670,18 @@ impl State {
         }
     }
 
+    /// What each source's health owes now, `None` while the register does not read.
+    pub(crate) fn source_standings(&self) -> Option<BTreeMap<SourceKey, health::Standing>> {
+        let caps = self.first.caps;
+        let now = instant_of(caps.secretary.clock.now());
+        caps.secretary
+            .health
+            .healths()
+            .inspect_err(|failed| tracing::warn!("noticed: the sources' health: {failed}"))
+            .ok()
+            .map(|healths| healths.standings(now))
+    }
+
     /// File owed cards, withdraw the rest; failures are logged.
     pub fn notice(&self) {
         let heard = part("lock", || locks::held(&self.noticing));
@@ -1147,20 +1159,20 @@ fn heard(
         })
 }
 
+/// File owed cards each time `moved` rings: a model answered or failed, or a source's health moved.
+pub async fn notice_on_moved(state: State, moved: Arc<tokio::sync::Notify>) {
+    loop {
+        moved.notified().await;
+        let noticing = state.clone();
+        if let Err(join_error) = tokio::task::spawn_blocking(move || noticing.notice()).await {
+            tracing::warn!("noticed: a filing after a reading moved did not finish: {join_error}");
+        }
+    }
+}
+
 /// File owed cards hourly, the first at once, and on `moved`; the start waits for none.
 fn notice_from_now_on(state: &State, moved: Arc<tokio::sync::Notify>) {
-    let ringing = state.clone();
-    tokio::spawn(async move {
-        loop {
-            moved.notified().await;
-            let noticing = ringing.clone();
-            if let Err(join_error) = tokio::task::spawn_blocking(move || noticing.notice()).await {
-                tracing::warn!(
-                    "noticed: a filing after a model moved did not finish: {join_error}"
-                );
-            }
-        }
-    });
+    tokio::spawn(notice_on_moved(state.clone(), moved));
     let state = state.clone();
     tokio::spawn(async move {
         let mut every = tokio::time::interval(Duration::from_hours(1));
@@ -1192,6 +1204,46 @@ async fn after_start(step: &'static str, work: impl FnOnce() + Send + 'static) {
     let mut after = Started::default();
     after.blocking(step, work).await;
     after.log("after start", at.elapsed());
+}
+
+/// How often the sources' health file's modification time is looked at.
+const HEALTH_POLL: Duration = Duration::from_secs(1);
+
+/// Ring `moved` when what the sources' health owes changes. The mail sync is another process, so
+/// no bell can reach this one; the file is the one fact both share. It is read only when its
+/// modification time moves, and a sync that writes the same standings rings nothing. A source
+/// crossing the stalled bound with no sync after it is the hourly pass's to notice.
+pub async fn health_watched(state: State, path: PathBuf, ring: impl Fn()) {
+    let modified = || async {
+        tokio::fs::metadata(&path)
+            .await
+            .and_then(|meta| meta.modified())
+            .ok()
+    };
+    let standings = |state: State| async move {
+        tokio::task::spawn_blocking(move || state.source_standings())
+            .await
+            .ok()
+            .flatten()
+    };
+    let mut stamp = modified().await;
+    let mut held = standings(state.clone()).await;
+    let mut every = tokio::time::interval(HEALTH_POLL);
+    loop {
+        every.tick().await;
+        let now = modified().await;
+        if now == stamp {
+            continue;
+        }
+        stamp = now;
+        let Some(read) = standings(state.clone()).await else {
+            continue;
+        };
+        if held.as_ref() != Some(&read) {
+            held = Some(read);
+            ring();
+        }
+    }
 }
 
 const INSTANCE_POLL: Duration = Duration::from_secs(1);

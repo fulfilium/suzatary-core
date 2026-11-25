@@ -1207,3 +1207,73 @@ fn a_round_that_read_mail_files_a_marked_connect_card() {
     assert_eq!(status, 200, "{after}");
     assert!(file(&served).contains("credentials = [\"PLUGIN_ICS_WORK\"]"));
 }
+
+/// A sync that moves an account to `needs_login` files its move card at once, one ring for it; a
+/// sync that writes the same standing again rings nothing.
+#[test]
+fn a_source_failing_files_its_card_without_waiting_for_the_hourly_pass() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use suzatary_health::health::{Failure, Healths, Outcome, SourceKey};
+
+    let heartbeat = suzatary_testkit::this_test().join("health-heartbeat");
+    let rings = Arc::new(AtomicUsize::new(0));
+    let served = serving_answering("health", None, None, |server, _| {
+        server.health_watching(heartbeat.clone(), Arc::clone(&rings))
+    });
+    let (base, setup) = (&served.base, SETUP.as_str());
+    let moves = || {
+        let (_, conversations) = common::replicas(base);
+        if !conversations
+            .iter()
+            .any(|stored| stored.id.as_str() == setup)
+        {
+            return 0;
+        }
+        common::reading(base, setup, &[])["proposals"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|proposal| proposal["state"] == "standing")
+            .count()
+    };
+    let syncs = suzatary_io_local::source_health::beside(&heartbeat);
+    let account = SourceKey::Mail(
+        suzatary_mail::mail::account_email::AccountEmail::new("ada@example.test")
+            .expect("an address"),
+    );
+    let at = |minute| {
+        chrono::NaiveDate::from_ymd_opt(2026, 9, 2)
+            .and_then(|day| day.and_hms_opt(11, minute, 0))
+            .expect("an instant")
+    };
+    let failed = |minute| {
+        Healths::one(
+            account.clone(),
+            at(minute),
+            Outcome::Failed(Failure::NeedsLogin),
+            "IMAP: not connected",
+        )
+    };
+    let until = |done: &dyn Fn() -> bool| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while !done() && std::time::Instant::now() < deadline {
+            std::thread::park_timeout(std::time::Duration::from_millis(100));
+        }
+    };
+    let before = moves();
+    syncs.join(&failed(0)).expect("a result");
+    until(&|| moves() > before);
+    assert_eq!(rings.load(Ordering::SeqCst), 1, "one ring for the change");
+    assert_eq!(moves(), before + 1, "its card is filed with no restart");
+    // The watcher looks every second; the same result and a later one of the same class are read
+    // and move nothing.
+    syncs.join(&failed(0)).expect("the same result");
+    syncs.join(&failed(5)).expect("a later result");
+    std::thread::park_timeout(std::time::Duration::from_millis(2500));
+    assert_eq!(
+        rings.load(Ordering::SeqCst),
+        1,
+        "the same standing rings nothing"
+    );
+    assert_eq!(moves(), before + 1, "and files nothing more");
+}

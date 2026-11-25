@@ -312,6 +312,47 @@ impl<K: Ord + Clone> Healths<K> {
         self.readings()
             .filter_map(move |(source, reading)| Some((source, reading.stalled_since(now)?)))
     }
+
+    /// Every source's [`Standing`] at `now`.
+    #[must_use]
+    pub fn standings(&self, now: Instant) -> BTreeMap<K, Standing> {
+        self.0
+            .iter()
+            .map(|(source, health)| (source.clone(), health.standing(now)))
+            .collect()
+    }
+}
+
+/// The part of a source's health that decides which cards it owes: a sync that succeeds again, or
+/// fails the same way again, moves no standing, only the times of its results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Standing {
+    /// Its latest sync succeeded.
+    Serving,
+    /// It is failing.
+    Failing {
+        /// The class a fix answers ([`Health::remedial`]).
+        class: Failure,
+        /// It has not succeeded since this instant.
+        since: Instant,
+        /// It has failed longer than [`stalled_after`].
+        stalled: bool,
+    },
+}
+
+impl Health {
+    /// What this source owes at `now`.
+    #[must_use]
+    pub fn standing(&self, now: Instant) -> Standing {
+        match self.remedial() {
+            None => Standing::Serving,
+            Some((class, since)) => Standing::Failing {
+                class,
+                since,
+                stalled: self.reading().stalled_since(now).is_some(),
+            },
+        }
+    }
 }
 
 /// A register of results, read whole: what a reader holds.
@@ -351,6 +392,39 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+
+    /// A sync that fails the same way again moves no standing, a success does, and the stalled
+    /// bound is part of it.
+    #[test]
+    fn a_standing_ignores_the_times_of_results_but_not_the_bound() {
+        let at = |minute| instant(minute);
+        let failed = |minute| {
+            Healths::one(
+                "a@example.test".to_owned(),
+                at(minute),
+                Outcome::Failed(Failure::NeedsLogin),
+                "no",
+            )
+        };
+        let (first, later) = (failed(0), failed(5).join(&failed(0)));
+        assert_eq!(first.standings(at(10)), later.standings(at(10)));
+        let stalled = |sum: &Healths<String>, minute| match sum.standings(at(minute))["a@example.test"]
+        {
+            Standing::Failing { stalled, .. } => stalled,
+            Standing::Serving => panic!("failing"),
+        };
+        assert!(!stalled(&first, 59) && stalled(&first, 61));
+        let mended = first.join(&Healths::one(
+            "a@example.test".to_owned(),
+            at(6),
+            Outcome::Succeeded,
+            "",
+        ));
+        assert_eq!(
+            mended.standings(at(10))["a@example.test"],
+            Standing::Serving
+        );
+    }
 
     fn instant(minutes: i64) -> Instant {
         chrono::NaiveDate::from_ymd_opt(2026, 10, 1)
