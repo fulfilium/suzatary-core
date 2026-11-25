@@ -1,18 +1,14 @@
 // The host of the tiles (`app/pages/src/desk.rs`). `draw` makes the DOM equal to the desk's drawing: one element per
-// tile, crumb row and divider, keyed as the drawing names them, each placed by its rectangle's share of the room, and a
-// style or a row's crumbs written only where they differ, so the same drawing changes nothing. A tile's element is
-// never moved, so no page loses its scroll or its focus. Where a page stands is the desk's; what the host reads of the
-// window is the room the tiles stand in (`#view`'s width, the window's height). A pinned leaf, docked or let go, is the
-// desk's answer to the shell's say (`Around.said`), which the host hands it unread.
-//
-// Every act on the tree goes through the desk: a link followed in a tile and its page's `Go` open from that tile, a
-// divider's drag, tap and keys resize it, and the address the host hands the history is the desk's print.
+// tile, crumb row and divider, each placed by its rectangle's share of the room, and a style or a row's crumbs written
+// only where they differ, so the same drawing changes nothing. Where a page stands is the desk's; the host reads only the
+// room the tiles stand in. Every act on the tree goes through the desk: a link followed in a tile and its page's `Go`
+// open from that tile, a divider's drag, tap and keys resize it, and the address the host hands the history is the
+// desk's print. A pinned leaf, docked or let go, is the desk's answer to the shell's say (`Around.said`).
 //
 // A page keeps running while the desk's tree holds its leaf, drawn or behind (`Drawing.behind`): hidden, its element
-// is out of the document, keeping what was typed in it, its program hears its readings and paints into it (`drain`),
-// and where its scroller stood is put back when it is drawn again. The host mounts a page only to draw it, and lets one
-// go when its leaf leaves the tree, or when more than the drawing's bound are hidden, the one drawn longest ago first
-// (`keep`). A page let go and opened again is mounted again from its address, as a page navigated to.
+// is out of the document (`placing`), keeping what was typed in it, and where its scroller stood is put back when it is
+// drawn again. The host lets a page go when its leaf leaves the tree, or when more than the drawing's bound are hidden,
+// the one drawn longest ago first (`keep`); opened again, it is mounted again from its address.
 
 import type { Area, Crumbs, Drawing, Drawn, Line, Notch, Opens, Pinned } from "../wire/generated/pages"
 import keep from "./keep"
@@ -27,6 +23,7 @@ import { type Address, hrefOf, hrefOfAddress, parseAddress, parseRoute, type Rou
 import address from "./address"
 import app from "../app/app"
 import nav from "./nav"
+import placing from "./placing"
 import soon from "../painter/soon"
 import tokens from "../view/tokens"
 
@@ -151,8 +148,6 @@ export namespace tiles {
     return `${l.axis === "Across" ? "The left page" : "The upper page"} takes ${part}`
   }
 
-  const pct = (n: number, of: number): string => `${((100 * n) / Math.max(1, of)).toFixed(3)}%`
-
   // Writes `style` on `e` where it differs from what was written last.
   const restyle = (e: HTMLElement, was: string, style: string): string => {
     if (style !== was) {
@@ -205,15 +200,11 @@ export namespace tiles {
       t.heard.forEach(f => f())
     }
 
-    const at = (r: Area): string =>
-      lone() ? "" : `left:${pct(r.x, room.w)};top:${pct(r.y, room.h)};width:${pct(r.w, room.w)};height:${pct(r.h, room.h)}`
+    const at = (r: Area): string => (lone() ? "" : placing.rectStyle(room, r))
 
     // A tile's place, and where its page stands inside it as padding in rem: none, for every page that flows.
-    const placeOf = (d: Drawn): string => {
-      const [t, r, b, l] = [d.page.y - d.rect.y, d.rect.x + d.rect.w - d.page.x - d.page.w, d.rect.y + d.rect.h - d.page.y - d.page.h, d.page.x - d.rect.x]
-      const inset = t === 0 && r === 0 && b === 0 && l === 0 ? "" : `padding:${t / 16}rem ${r / 16}rem ${b / 16}rem ${l / 16}rem`
-      return [at(d.rect), inset].filter(x => x !== "").join(";")
-    }
+    const tileOf = (d: Drawn): placing.Tile => ({ id: d.key, rect: d.rect, fill: d.page })
+    const placeOf = (d: Drawn): string => [at(d.rect), placing.inset(tileOf(d), 16)].filter(x => x !== "").join(";")
 
     // The marks named `want`, made by `make` where missing and dropped where no longer named.
     const mark = (want: readonly Want[]): void => {
@@ -266,7 +257,6 @@ export namespace tiles {
           t.focused = document.activeElement !== null && t.root.contains(document.activeElement) ? document.activeElement : null
         }
       const back = live.filter(t => t.shown === "Hidden" && drawn(t) !== undefined)
-      const stays = new Set(live.filter(t => t.shown === "Drawn" && drawn(t) !== undefined))
       view.classList.toggle("tiled", !lone())
       for (const t of live) {
         const d = drawn(t)
@@ -312,22 +302,19 @@ export namespace tiles {
         if (now === undefined) dividers.delete(e)
         else dividers.set(e, now)
       }
-      // The drawn tiles stand in the drawing's order. Together, the lines' layer stands after them, above them, so a
-      // divider's handle is taken where it reaches over a tile's edge; one tile alone flows, and its crumb row stands
-      // above it. A tile drawn before and still drawn is never moved: a tile new to the screen, or drawn again, goes
-      // before the next of those. A hidden tile's element is out of the document, so nothing that reads the document
-      // meets it; where its scroller stood and what had the keyboard are put back when it is drawn.
-      const order = drawing.tiles.flatMap(d => live.filter(t => t.key === d.key))
-      const roots = new Set<Element>([lines, ...order.map(t => t.root)])
-      for (const n of [...view.children]) if (!roots.has(n)) n.remove()
+      // The lines' layer stands after the tiles, above them, so a divider's handle is taken where it reaches over a tile's edge;
+      // one tile alone flows, and its crumb row stands above it. A hidden tile's element is out of the document, so nothing
+      // that reads the document meets it.
+      const roots = new Map(live.map(t => [t.key, t.root]))
+      const mine = new Set<Element>(roots.values())
+      for (const n of [...view.children]) if (n !== lines && !mine.has(n)) n.remove()
+      const attached = [...view.children].filter((n): n is HTMLElement => n instanceof HTMLElement && mine.has(n))
+      const { edits } = placing.place(drawing.tiles.map(tileOf), roots, attached, lone() ? null : lines)
+      // The removes come first, so the lines' layer is placed among the tiles that stay and is never moved by a hidden one.
+      for (const e of edits) if (e.type === "Remove") e.e.remove()
       if (lone() && view.firstElementChild !== lines) view.prepend(lines)
       if (!lone() && view.lastElementChild !== lines) view.appendChild(lines)
-      const end = lone() ? null : lines
-      order.forEach((t, i) => {
-        if (stays.has(t) && t.root.parentElement === view) return
-        const next = order.slice(i + 1).find(u => stays.has(u) && u.root.parentElement === view)?.root ?? end
-        if (t.root.nextElementSibling !== next || t.root.parentElement !== view) view.insertBefore(t.root, next)
-      })
+      for (const e of edits) if (e.type === "Insert") view.insertBefore(e.e, e.before)
       for (const [t, { at, top }] of stood) box(t)().scrollTop += at.getBoundingClientRect().top - top
       for (const t of back) box(t)().scrollTop = t.y
       // Told drawn once in the document, a program does what waited (a focus it asked for among it); then what had the

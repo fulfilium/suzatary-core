@@ -1029,8 +1029,21 @@ no page of this application.
   the bound leaves room, and the close-back half of the chain law, which holds where the bound
   holds the chain.
 
-Stage 2, not started: shares as fine as a host wants; a leaf moved to any place; a layout kept and
-read back without the address grammar, as plain data, which reports a tree crowded under the
-reader's bound (`Unfit::Crowded`) and never reads it as something else, as `parse` does for a
-string; and the small TypeScript adapter that places a host's elements from an arrangement and
-keeps the hidden ones.
+Stage 2 made what stage 1 left fixed. Where the crate now answers it (its README says each in a
+few lines):
+
+- **Shares as fine as a host wants.** `Share` is a weight from 1 to 255 (`node.rs`); the policy's
+  `steps` is the largest weight a divider's stop gives a child (`policy.rs`, `arrange.rs`). The
+  steps are the policy's and not the measures': they do not change with the viewport, and they
+  go with the weights the host gives. The address prints a weight of 2 or more in decimal and
+  one as nothing, so every address of 1 to 3 reads as it did (`address.rs`).
+- **A leaf moved to any place.** `Act::Put { leaf, beside, edge }` (`put.rs`): a host names a leaf
+  and an edge, so no put can name a place that does not exist. A leaf stays in its workspace, so
+  the bound is never reached by it; the pinned end stays last.
+- **A layout kept as plain data.** `save` and `load` (`saved.rs`): the tree as `Node<P>`, read back
+  by the one well-formedness check, which answers `Unfit` and never another tree.
+- **The adapter that places a host's elements** is `web/src/shell/placing.ts`, which depends on
+  nothing of this application; `web/src/shell/tiles.ts` uses it.
+
+Not done: a put to the far edge of a node, or into another workspace, and a place the host names
+by path and index.

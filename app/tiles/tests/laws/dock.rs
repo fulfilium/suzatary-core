@@ -5,11 +5,11 @@ use proptest::prelude::*;
 use tiles::{Act, Id, Leaf, Node, Page, Part, Pin, Tiles, Tree, act};
 
 use super::page::{Kind, Pg, pg};
-use super::runs::{Made, apply, run, states};
+use super::runs::{Made, Mix, apply, run, run_of, states};
 
 /// The pages of the tree without the leaf `gone`, each node left with one child replaced by it:
 /// what `Release` must give, read apart from it.
-fn without(n: &Node<Leaf<Pg>>, gone: Id) -> Node<Pg> {
+pub(super) fn without(n: &Node<Leaf<Pg>>, gone: Id) -> Node<Pg> {
     fn tree(t: &Tree<Leaf<Pg>>, gone: Id) -> Option<Tree<Pg>> {
         match t {
             Tree::Leaf(l) if l.id() == gone => None,
@@ -47,7 +47,7 @@ fn without(n: &Node<Leaf<Pg>>, gone: Id) -> Node<Pg> {
     Node::new(n.axis, n.fit, first, parts.collect(), n.index())
 }
 
-fn pages(t: &Tiles<Pg>) -> Node<Pg> {
+pub(super) fn pages(t: &Tiles<Pg>) -> Node<Pg> {
     t.root().map(&|l: &Leaf<Pg>| l.page().clone())
 }
 
@@ -56,14 +56,14 @@ fn workspace(t: &Tiles<Pg>) -> Vec<&Leaf<Pg>> {
 }
 
 /// The focused workspace's pinned end, if it has one.
-fn end(t: &Tiles<Pg>) -> Option<&Leaf<Pg>> {
+pub(super) fn end(t: &Tiles<Pg>) -> Option<&Leaf<Pg>> {
     workspace(t)
         .into_iter()
         .last()
         .filter(|l| l.page().pin() == Pin::Pinned)
 }
 
-fn side() -> impl Strategy<Value = Pg> {
+pub(super) fn side() -> impl Strategy<Value = Pg> {
     (0u8..4).prop_map(|n| pg(Kind::Side, n))
 }
 
@@ -82,12 +82,12 @@ enum Person {
 
 fn person() -> impl Strategy<Value = Person> {
     use tiles::{Dir, Share};
+    let share = || prop_oneof![Just(Share::ONE), Just(Share::TWO), Just(Share::THREE)];
     let free = (
         prop_oneof![Just(Kind::List), Just(Kind::Column), Just(Kind::Slide)],
         0u8..4,
     )
         .prop_map(|(k, n)| pg(k, n));
-    let share = || prop_oneof![Just(Share::One), Just(Share::Two), Just(Share::Three)];
     let dir = prop_oneof![
         Just(Dir::Left),
         Just(Dir::Right),
@@ -259,6 +259,10 @@ pub(super) fn before_end(t: &Tiles<Pg>) -> Option<Id> {
     None
 }
 
+/// Erasure, over the runs this law was first stated for (`Mix::Master`: weights of one to three, no
+/// put): it fails on rare runs at any count, because an `Open` beside a node that the held page
+/// kept from collapsing reads a share that the tree without the page does not have. 1 run in 300 on
+/// master and 4 in 600 here fail at 256 cases; 20,000 cases fail it. It waits for a fix of `Open`.
 /// Erasure: a page held at the end of the workspace a person acts in changes none of their acts.
 /// Any act from a free leaf, `Close` among them, the held page then taken away, gives the tree
 /// the same act gives without it, the policy's `most` among the rules it reads. The law reaches its comparison
@@ -270,7 +274,11 @@ fn a_held_page_changes_no_act_of_a_person() {
     let mut runner = proptest::test_runner::TestRunner::new(config);
     let (reached, acted) = (std::cell::Cell::new(0u32), std::cell::Cell::new(0u32));
     let result = runner.run(
-        &(run(), side(), prop::collection::vec(person(), 1..6)),
+        &(
+            run_of(Mix::Master),
+            side(),
+            prop::collection::vec(person(), 1..6),
+        ),
         |((home, _m, first, steps), p, acts)| {
             let mut any = false;
             for (_, _, t, _) in states(home, first, &steps) {

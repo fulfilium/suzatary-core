@@ -56,7 +56,7 @@ fn nodes<'t>(
     }
 }
 
-fn all_nodes(t: &Tiles<Pg>) -> Vec<(&Node<Leaf<Pg>>, Vec<usize>)> {
+pub(super) fn all_nodes(t: &Tiles<Pg>) -> Vec<(&Node<Leaf<Pg>>, Vec<usize>)> {
     let mut out = Vec::new();
     nodes(t.root(), &mut Vec::new(), &mut out);
     out
@@ -217,7 +217,7 @@ proptest! {
                     at_child.push(*i);
                     let r = given(&a, tree, &at_child).expect("a drawn child has a rectangle");
                     let (len, least) = along(r, extent(tree, &lit, &m));
-                    lens.push((len, least, u64::from(weight(*s))));
+                    lens.push((len, least, u64::from(s.weight())));
                 }
                 let total: u64 = lens.iter().map(|l| l.0).sum();
                 let shares: u64 = lens.iter().map(|l| l.2).sum();
@@ -338,14 +338,6 @@ proptest! {
     }
 }
 
-fn weight(s: Share) -> u32 {
-    match s {
-        Share::One => 1,
-        Share::Two => 2,
-        Share::Three => 3,
-    }
-}
-
 /// An open of one page, which inserted a tile beside a free leaf, then `Close`, gives the tree
 /// back, the pinned ends let go on both sides; an open that opens a chain first (`follow`) is
 /// left out. The law reaches its assertion in at least a third of the opens made where the
@@ -442,7 +434,7 @@ fn chained(p: &super::page::Pg, from: &super::page::Pg) -> bool {
 /// The tree with every share One: what a resize may not change.
 fn unshared(n: &Node<Leaf<Pg>>) -> Node<Leaf<Pg>> {
     let part = |p: &tiles::Part<Leaf<Pg>>| tiles::Part {
-        share: Share::One,
+        share: Share::ONE,
         tree: match &p.tree {
             Tree::Leaf(l) => Tree::Leaf(l.clone()),
             Tree::Node(c) => Tree::Node(unshared(c)),
@@ -551,7 +543,7 @@ proptest! {
         policy in super::runs::policy(),
     ) {
         // Workspaces of one list each, the chains' end among them.
-        let part = |n: u8| tiles::Part::new(Share::One, Tree::Leaf(super::page::pg(super::page::Kind::List, n)));
+        let part = |n: u8| tiles::Part::new(Share::ONE, Tree::Leaf(super::page::pg(super::page::Kind::List, n)));
         let home = Node::new(tiles::Axis::Across, Fit::Never, part(0), (1..lists).map(part).collect(), 0);
         let t = Tiles::new(home, policy).expect("a home of lists is well formed");
         let c = chain(&p);

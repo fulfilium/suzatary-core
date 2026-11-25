@@ -11,7 +11,7 @@ Run `cargo run -p tiles --example notes` to see three panes at a wide and a narr
 ## Start
 
 ```rust
-let home = Node::of(Axis::Across, Fit::Never, Part::new(Share::One, Tree::Leaf(Pane::Notes)));
+let home = Node::of(Axis::Across, Fit::Never, Part::new(Share::ONE, Tree::Leaf(Pane::Notes)));
 let tiles = Tiles::new(home, Policy::default())?;
 let tiles = act(tiles, Act::Open(Pane::Note(1)));
 let drawn = arrange(&tiles, Viewport { w: Px(1280), h: Px(800) }, &measures);
@@ -27,7 +27,7 @@ of one child has one workspace and draws no crumb row of its own.
   `Share` an open gives it, and the shape of the pages it opens.
 - **A tree** (`Tree`) is a leaf or a `Node`. A node has an `Axis` (`Across` or `Down`), a `Fit`
   and its children as a zipper: the focused child is the hole, so a focus that names no child
-  cannot be written. Each child has a `Share` of one, two or three.
+  cannot be written. Each child has a `Share`, its weight from 1 to 255 (`Share::of`, `Share::ONE`).
 - **A fit** is declared, not computed. A `Fits` node draws as many children side by side as fit
   and stacks the rest behind; a `Never` node draws its focused child alone, as tabs do.
 - **`Tiles`** holds the root, the home it started from, the `Policy`, and the counter that gives
@@ -37,7 +37,8 @@ of one child has one workspace and draws no crumb row of its own.
   with the tiles after the focused one: `Beside::Replace` closes them, as Miller columns do, and
   `Beside::Insert` keeps them. At the bound, either rule replaces the focused leaf. A bound of one
   opens every page in place. `Policy::default()` is `Replace` at the bound this crate's first host
-  uses.
+  uses. `steps` is the largest weight a divider's stops give a child
+  (`Policy::with_steps`; default three).
 
 ## The acts
 
@@ -47,6 +48,10 @@ of one child has one workspace and draws no crumb row of its own.
   pinned page docks at the end; any other opens beside the focused leaf, by the policy.
 - `Below(page)`: the focused leaf becomes a node down, with the page below it.
 - `Close`, `Focus(id)`, `Move(dir)`, `Resize { before, after, shares }`.
+- `Put { leaf, beside, edge }`: the leaf takes the place next to the leaf `beside` on `edge`
+  (`Dir`), a sibling where that node fits and runs that way, else in a new node. It keeps its id
+  and share and stays in its workspace; a pinned leaf, or one put across workspaces, stays where it
+  stands, and beside a pinned leaf a leaf goes before it. The focused leaf stays focused.
 - `Hold(page)` and `Release`: a host docks a pinned page at the focused workspace's end, or lets it
   go, without moving the focus or changing any act of a person's.
 
@@ -60,15 +65,25 @@ arrange(tiles, viewport, measures) = place(walk(tiles.root, viewport, measures),
 children after the drawn region, then the ones before, nearest first, while the region still fits
 the viewport. `place` gives a node with children behind a crumb row and divides the rest by the
 shares, each child at least its least size. The answer (`Arranged`) holds the drawn tiles
-(`Placed`: a rectangle, a page and its `Opens`), the dividers with their `Stop`s, and the crumb
-rows. Together they cover the viewport exactly. `Measures` holds the lengths a host chooses, and
-`RootRow` says where the root's crumb row stands.
+(`Placed`: a rectangle, a page and its `Opens`), the dividers with their `Stop`s (each gives the two
+children beside it a weight up to the policy's steps), and the crumb rows. Together they cover the
+viewport exactly. `Measures` holds the lengths a host chooses, and `RootRow` says where the root's
+crumb row stands.
 
 ## Three traits
 
 - `Page` is all that `act` and `arrange` need.
 - `Home: Page` adds the page a page is opened from; `follow(tiles, page)` opens that chain first.
-- `Address: Home` adds a printed form; `print` and `parse` then keep the whole tree in a string.
+- `Address: Home` adds a printed form; `print` and `parse` then keep the whole tree in a string. A
+  share prints as its decimal weight, and one prints nothing.
+
+## Kept as data
+
+`save(&tiles)` answers the tree as plain values of this crate's types (`Node<P>`: pages, shares,
+axes, fits, each node's focus), with no id. `load(&saved, &lineage)` reads it into the lineage's
+home and policy, with fresh ids, or answers why it is not well formed (`Unfit`): a tree crowded
+under the receiver's bound is `Unfit::Crowded`, never read as another tree. A host stores the
+values however it stores values.
 
 ## The laws
 
@@ -80,8 +95,8 @@ along a chain closes back only where the bound holds the chain.
 ## What it does not do
 
 No floating point, no floating windows, no drag targets, and no drawing of its own: a host draws
-what `arrange` answers. Shares are one, two or three, and an open places a page beside the focused
-leaf, never at a place a host names.
+what `arrange` answers. An open places a page beside the focused leaf, and `Put` moves a leaf
+within its workspace; no act moves one to another workspace or to the far edge of a node.
 
 ## Develop
 

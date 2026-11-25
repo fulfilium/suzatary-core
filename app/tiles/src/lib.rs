@@ -3,8 +3,9 @@
 //! `Tiles` holds the tree. Its root's children are the workspaces, and a node's children are a
 //! zipper on the focused one. `act` changes the tree and reads no viewport. `arrange` answers what
 //! is drawn where on a viewport. The page type `P` declares its kind, shape and pin through
-//! `Page`; a page with an address (`Address`) also has `print`, `parse` and `follow`. Nothing here
-//! names a page.
+//! `Page`; a page with an address (`Address`) also has `print`, `parse` and `follow`. `save` and
+//! `load` keep the tree as plain values, for a host with no printed pages. Nothing here names a
+//! page.
 #![forbid(unsafe_code)]
 
 mod act;
@@ -22,7 +23,9 @@ mod node;
 mod open;
 mod page;
 mod policy;
+mod put;
 mod px;
+mod saved;
 mod tree;
 mod walk;
 
@@ -41,6 +44,7 @@ pub use node::{Axis, Fit, Node, Part, Share};
 pub use page::{Address, Home, Page, Pin, Ratio, Shape};
 pub use policy::{Beside, Policy};
 pub use px::{Px, Rect, Viewport};
+pub use saved::{load, save};
 pub use tree::Tree;
 
 /// The root's children are the workspaces. Below the root, every node has two children or more.

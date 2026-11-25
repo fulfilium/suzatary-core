@@ -7,10 +7,14 @@
 //! tree    := "*" | leaf | node | ""
 //! axis    := "|" (across) | "-" (down)
 //! fit     := "" (fits) | "!" (never)
-//! share   := "1" | "2" | "3"          (absent: one)
+//! share   := weight                   (decimal, 1 to 255, no leading zero; absent: one, and only
+//!                                      one prints absent)
 //! focus   := "'"                      (a node's focused child, off the path to "*")
 //! leaf    := the page's print, escaped (`escape`)
 //! ```
+//!
+//! A weight is the longest run of digits, so a hand-written `21` is twenty-one; a leaf's print never
+//! starts with a digit (`escape`), so no page follows a share ambiguously.
 //!
 //! `*` is the focused leaf, whose print is the head; it appears once. On its path a node's focused
 //! child is the part that holds it; off it, the part marked `'`, or the first. A root child
@@ -119,11 +123,9 @@ fn node<P: Address>(n: &Node<&P>, path: Path, home: Option<&Node<&P>>) -> String
         if i > 0 {
             s.push(',');
         }
-        s.push_str(match part.share {
-            Share::One => "",
-            Share::Two => "2",
-            Share::Three => "3",
-        });
+        if part.share != Share::ONE {
+            s.push_str(&part.share.weight().to_string());
+        }
         let focused = i == n.index();
         match (focused, path, &part.tree) {
             (true, Path::On, Tree::Leaf(_)) => s.push('*'),
@@ -191,6 +193,20 @@ impl Reader<'_> {
         took
     }
 
+    /// A share: its decimal weight from 1, or one where none stands. A weight past 255 is no
+    /// share, so no tree.
+    fn share(&mut self) -> Option<Share> {
+        if !matches!(self.peek(), Some(b'1'..=b'9')) {
+            return Some(Share::ONE);
+        }
+        let mut weight = 0u8;
+        while let Some(digit @ b'0'..=b'9') = self.peek() {
+            weight = weight.checked_mul(10)?.checked_add(digit - b'0')?;
+            self.i += 1;
+        }
+        Share::of(weight)
+    }
+
     /// One more leaf the workspace will hold; `None` past `most` and a pinned one.
     fn slot(&mut self) -> Option<()> {
         self.slots += 1;
@@ -227,14 +243,7 @@ impl Reader<'_> {
                 Within::Workspace if i >= 2 => self.slot()?,
                 Within::Workspace => {}
             }
-            let share = match self.peek() {
-                Some(b'2') => Share::Two,
-                Some(b'3') => Share::Three,
-                Some(_) | None => Share::One,
-            };
-            if matches!(self.peek(), Some(b'1' | b'2' | b'3')) {
-                self.i += 1;
-            }
+            let share = self.share()?;
             if self.take(b'\'') {
                 marked.push(i);
             }

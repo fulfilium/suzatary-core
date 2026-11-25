@@ -3,6 +3,8 @@
 
 use std::num::NonZeroU8;
 
+use super::node::Share;
+
 /// One value for every tree of a lineage: `Tiles::new` takes it, and `act`, `arrange`, `print`
 /// and `parse` read it from the tiles. Start from `Policy::default()`, the rule of Miller
 /// columns, and change it with `with_most` and `with_beside`.
@@ -10,6 +12,7 @@ use std::num::NonZeroU8;
 pub struct Policy {
     most: NonZeroU8,
     beside: Beside,
+    steps: Share,
 }
 
 /// What an open beside the focused tile does with the free tiles after it in its node. Either
@@ -38,6 +41,14 @@ impl Policy {
         Policy { beside, ..self }
     }
 
+    /// The same policy with `steps` as the largest weight a divider's stops give a child; the
+    /// arrangement costs its square. It is the policy's, not the measures': it does not change with
+    /// the viewport, and it goes with the weights the host gives (`Page::share`).
+    #[must_use]
+    pub fn with_steps(self, steps: Share) -> Policy {
+        Policy { steps, ..self }
+    }
+
     /// The most free tiles a workspace holds; its pinned end is not counted, so a docked page
     /// never costs a person a page. An open or a `Below` that would make more opens here, so a
     /// bound of one opens every page in place of the focused one.
@@ -51,6 +62,11 @@ impl Policy {
         self.beside
     }
 
+    #[must_use]
+    pub fn steps(self) -> Share {
+        self.steps
+    }
+
     pub(crate) fn bound(self) -> usize {
         usize::from(self.most.get())
     }
@@ -61,6 +77,7 @@ impl Default for Policy {
         Policy {
             most: NonZeroU8::MIN.saturating_add(3),
             beside: Beside::Replace,
+            steps: Share::THREE,
         }
     }
 }

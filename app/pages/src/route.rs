@@ -390,9 +390,9 @@ impl Page for Route {
     /// A list and the secretary beside a page take one share; a page read as a column, two.
     fn share(&self) -> Share {
         match (self.kind(), self.shape()) {
-            (Kind::Aside, _) => Share::One,
-            (_, Shape::Flows { least }) if least == Px(measure::LIST) => Share::One,
-            (_, Shape::Flows { .. } | Shape::Paged { .. }) => Share::Two,
+            (Kind::Aside, _) => Share::ONE,
+            (_, Shape::Flows { least }) if least == Px(measure::LIST) => Share::ONE,
+            (_, Shape::Flows { .. } | Shape::Paged { .. }) => Share::TWO,
         }
     }
 

@@ -53,13 +53,12 @@ impl Split {
     /// The places of the divider after child `j`: its place now first, then every pair of shares
     /// for it and the child after it that gives no child less than its least; one per place, in
     /// order along the axis, with the index of its place now.
-    fn stops(&self, j: usize, now: [Share; 2], d: Px) -> (Vec<Stop>, usize) {
-        let all = [Share::One, Share::Two, Share::Three];
-        let mut pairs: Vec<[Share; 2]> = all
-            .iter()
-            .flat_map(|&x| all.iter().map(move |&y| [x, y]))
+    fn stops(&self, j: usize, now: [Share; 2], d: Px, steps: Share) -> (Vec<Stop>, usize) {
+        let mut pairs: Vec<[Share; 2]> = steps
+            .up_to()
+            .flat_map(|x| steps.up_to().map(move |y| [x, y]))
             .collect();
-        pairs.sort_by_key(|p| p[0].weight() + p[1].weight());
+        pairs.sort_by_key(|p| u32::from(p[0].weight()) + u32::from(p[1].weight()));
         let mut out: Vec<Stop> = Vec::new();
         let mut here = Px(0);
         for (shares, current) in
@@ -75,7 +74,7 @@ impl Split {
                         k if k == j + 1 => shares[1],
                         _ => share,
                     };
-                    (least, share.weight())
+                    (least, u32::from(share.weight()))
                 })
                 .collect();
             let (sizes, gaps) = lengths(self.length, &kids, d);
@@ -149,7 +148,7 @@ fn place<P: Page>(
             let leasts: Vec<(Px, u32)> = kids
                 .iter()
                 .zip(shares.iter().copied())
-                .map(|(k, s)| (along(k.extent(m), node.axis), Share::weight(s)))
+                .map(|(k, s)| (along(k.extent(m), node.axis), u32::from(s.weight())))
                 .collect();
             let (sizes, gaps) = lengths(length(body, node.axis), &leasts, m.divider);
             let split = Split {
@@ -177,7 +176,7 @@ fn place<P: Page>(
                     split.kids.get(j),
                     split.kids.get(j + 1),
                 ) {
-                    let (stops, now) = split.stops(j, [a, b], m.divider);
+                    let (stops, now) = split.stops(j, [a, b], m.divider, cx.policy.steps());
                     out.dividers.push(Divider {
                         rect: cut(body, node.axis, at, gap),
                         node: path.clone(),
@@ -269,7 +268,7 @@ fn opens<P: Page>(cx: &Cx<'_, '_, P>, tile: &Leaf<P>) -> Opens {
     let ghost = Probe::Ghost(tile.page().opens());
     let (most, beside) = (cx.policy.bound(), cx.policy.beside());
     let grown = open::bounded(probe, ghost, most, |root, ghost| {
-        open::beside(root, ghost, Share::One, beside)
+        open::beside(root, ghost, Share::ONE, beside)
     });
     let beside = walk(&grown, cx.at, cx.m)
         .leaves()
@@ -301,7 +300,7 @@ impl<P: Page> Tile for Probe<'_, P> {
     fn share(&self) -> Share {
         match self {
             Probe::Tile(l) => l.page().share(),
-            Probe::Ghost(_) => Share::One,
+            Probe::Ghost(_) => Share::ONE,
         }
     }
     fn shape(&self) -> Shape {

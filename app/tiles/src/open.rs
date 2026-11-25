@@ -161,7 +161,8 @@ pub(crate) fn focus<L: Tile>(root: Node<L>, id: Id) -> Node<L> {
     }
 }
 
-fn path<L: Tile>(n: &Node<L>, id: Id) -> Option<Vec<usize>> {
+/// Each child's place from the root down to the leaf `id`.
+pub(crate) fn path<L: Tile>(n: &Node<L>, id: Id) -> Option<Vec<usize>> {
     n.parts().enumerate().find_map(|(i, p)| match &p.tree {
         Tree::Leaf(l) => (l.id() == Some(id)).then(|| vec![i]),
         Tree::Node(c) => path(c, id).map(|mut rest| {

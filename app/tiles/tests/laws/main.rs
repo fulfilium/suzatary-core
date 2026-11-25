@@ -8,6 +8,9 @@ mod laws;
 #[path = "../../examples/notes.rs"]
 mod notes;
 mod page;
+mod past;
 mod policy;
+mod put;
 mod runs;
+mod saved;
 mod words;

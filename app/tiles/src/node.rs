@@ -1,5 +1,8 @@
 //! A node: its children as a zipper, with its axis, its fit and each child's share.
 
+use std::cmp::Ordering;
+use std::num::NonZeroU8;
+
 use super::tree::Tree;
 
 /// The focused child is the hole of the zipper, so a focus that names no child cannot be written.
@@ -36,21 +39,32 @@ pub enum Fit {
     Never,
 }
 
-/// A child's weight in its node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Share {
-    One,
-    Two,
-    Three,
-}
+/// A child's weight in its node, a whole number from 1 to 255. A node divides its length among
+/// its drawn children in proportion to their weights.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Share(NonZeroU8);
 
 impl Share {
-    pub(crate) fn weight(self) -> u32 {
-        match self {
-            Share::One => 1,
-            Share::Two => 2,
-            Share::Three => 3,
-        }
+    pub const ONE: Share = Share(NonZeroU8::MIN);
+    pub const TWO: Share = Share(NonZeroU8::MIN.saturating_add(1));
+    pub const THREE: Share = Share(NonZeroU8::MIN.saturating_add(2));
+
+    /// `None` for 0.
+    #[must_use]
+    pub fn of(weight: u8) -> Option<Share> {
+        NonZeroU8::new(weight).map(Share)
+    }
+
+    #[must_use]
+    pub fn weight(self) -> u8 {
+        self.0.get()
+    }
+
+    /// The shares from one up to this one, in order.
+    pub(crate) fn up_to(self) -> impl Iterator<Item = Share> {
+        std::iter::successors(Some(Share::ONE), move |s| {
+            s.0.checked_add(1).filter(|n| *n <= self.0).map(Share)
+        })
     }
 }
 
@@ -168,6 +182,62 @@ impl<L> Node<L> {
             focus,
             after,
         }
+    }
+
+    /// The same node with child `k` made by `f`, the focus where it stands.
+    pub(crate) fn on_child(mut self, k: usize, f: impl FnOnce(Part<L>) -> Part<L>) -> Node<L> {
+        match k.cmp(&self.before.len()) {
+            Ordering::Less => {
+                let child = self.before.remove(k);
+                self.before.insert(k, f(child));
+            }
+            Ordering::Equal => self.focus = Box::new(f(*self.focus)),
+            Ordering::Greater => {
+                let k = k - self.before.len() - 1;
+                if k < self.after.len() {
+                    let child = self.after.remove(k);
+                    self.after.insert(k, f(child));
+                }
+            }
+        }
+        self
+    }
+
+    /// The same node with `part` as child `k`, or last where `k` is past the end; the focused
+    /// child stays focused.
+    pub(crate) fn insert(mut self, k: usize, part: Part<L>) -> Node<L> {
+        if k <= self.before.len() {
+            self.before.insert(k, part);
+        } else {
+            let k = (k - self.before.len() - 1).min(self.after.len());
+            self.after.insert(k, part);
+        }
+        self
+    }
+
+    /// The node without child `k` and that child, the focus where it stands: a focused child that
+    /// goes passes it to the one before, else the one after. The node itself, with no child
+    /// removed, where it has one child or none is at `k`.
+    pub(crate) fn without(mut self, k: usize) -> Result<(Node<L>, Part<L>), Node<L>> {
+        if k < self.before.len() {
+            let gone = self.before.remove(k);
+            return Ok((self, gone));
+        }
+        if k == self.before.len() {
+            let next = match self.before.pop() {
+                Some(prev) => prev,
+                None if self.after.is_empty() => return Err(self),
+                None => self.after.remove(0),
+            };
+            let gone = std::mem::replace(&mut *self.focus, next);
+            return Ok((self, gone));
+        }
+        let k = k - self.before.len() - 1;
+        if k < self.after.len() {
+            let gone = self.after.remove(k);
+            return Ok((self, gone));
+        }
+        Err(self)
     }
 
     pub fn map<'a, M>(&'a self, f: &impl Fn(&'a L) -> M) -> Node<M> {

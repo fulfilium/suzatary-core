@@ -41,13 +41,13 @@ fn node(axis: Axis, before: Vec<Part<Pg>>, focus: Part<Pg>, after: Vec<Part<Pg>>
 /// The root of eight workspaces, the first of which is `first`; the others are lists.
 fn root(first: Tree<Pg>) -> Node<Pg> {
     let rest = (1..8)
-        .map(|n| part(Share::One, leaf(pg(Kind::List, n))))
+        .map(|n| part(Share::ONE, leaf(pg(Kind::List, n))))
         .collect();
     Node {
         axis: Axis::Across,
         fit: Fit::Never,
         before: Vec::new(),
-        focus: Box::new(part(Share::One, first)),
+        focus: Box::new(part(Share::ONE, first)),
         after: rest,
     }
 }
@@ -107,9 +107,9 @@ fn side() -> Pg {
 fn three() -> Tiles<Pg> {
     let ws = node(
         Axis::Across,
-        vec![part(Share::One, leaf(list()))],
-        part(Share::Two, leaf(todo())),
-        vec![part(Share::One, leaf(side()))],
+        vec![part(Share::ONE, leaf(list()))],
+        part(Share::TWO, leaf(todo())),
+        vec![part(Share::ONE, leaf(side()))],
     );
     new(root(Tree::Node(ws)))
 }
@@ -171,9 +171,9 @@ fn stacked() -> (Tiles<Pg>, [Pg; 3]) {
     let [inbox, mail, todos] = [pg(Kind::List, 10), pg(Kind::List, 11), pg(Kind::List, 12)];
     let ws = node(
         Axis::Down,
-        vec![part(Share::One, leaf(inbox.clone()))],
-        part(Share::One, leaf(mail.clone())),
-        vec![part(Share::One, leaf(todos.clone()))],
+        vec![part(Share::ONE, leaf(inbox.clone()))],
+        part(Share::ONE, leaf(mail.clone())),
+        vec![part(Share::ONE, leaf(todos.clone()))],
     );
     (new(root(Tree::Node(ws))), [inbox, mail, todos])
 }
@@ -205,13 +205,13 @@ fn a_split_down_inside_a_split_across() {
     let down = node(
         Axis::Down,
         Vec::new(),
-        part(Share::One, leaf(todo())),
-        vec![part(Share::One, leaf(message.clone()))],
+        part(Share::ONE, leaf(todo())),
+        vec![part(Share::ONE, leaf(message.clone()))],
     );
     let ws = node(
         Axis::Across,
-        vec![part(Share::One, leaf(list()))],
-        part(Share::Two, Tree::Node(down)),
+        vec![part(Share::ONE, leaf(list()))],
+        part(Share::TWO, Tree::Node(down)),
         Vec::new(),
     );
     let t = new(root(Tree::Node(ws)));
@@ -308,19 +308,19 @@ fn a_slide_deck_arranges_its_presenter_and_its_audience() {
     let column = node(
         Axis::Down,
         Vec::new(),
-        part(Share::One, leaf(notes.clone())),
-        vec![part(Share::One, leaf(next.clone()))],
+        part(Share::ONE, leaf(notes.clone())),
+        vec![part(Share::ONE, leaf(next.clone()))],
     );
     let deck = node(
         Axis::Across,
         Vec::new(),
-        part(Share::Two, leaf(slide.clone())),
-        vec![part(Share::One, Tree::Node(column))],
+        part(Share::TWO, leaf(slide.clone())),
+        vec![part(Share::ONE, Tree::Node(column))],
     );
     let presenter = new(Node::of(
         Axis::Across,
         Fit::Never,
-        part(Share::One, Tree::Node(deck)),
+        part(Share::ONE, Tree::Node(deck)),
     ));
     let a = arrange(&presenter, at(1920, 1080), &M);
     assert!(a.rows.is_empty(), "a root of one child draws no row");
@@ -348,7 +348,7 @@ fn a_slide_deck_arranges_its_presenter_and_its_audience() {
     let audience = new(Node::of(
         Axis::Across,
         Fit::Never,
-        part(Share::One, leaf(slide.clone())),
+        part(Share::ONE, leaf(slide.clone())),
     ));
     let b = arrange(&audience, at(1600, 1200), &M);
     assert!(b.rows.is_empty() && b.dividers.is_empty());
@@ -356,4 +356,61 @@ fn a_slide_deck_arranges_its_presenter_and_its_audience() {
         (b.tiles[0].rect, b.tiles[0].fill),
         (rect(0, 0, 1600, 1200), rect(0, 150, 1600, 900))
     );
+}
+
+/// A weight prints as its decimal digits before the child, and one prints nothing, so every
+/// address of a weight of one to three reads as it did. A weight of two is the todo's own here,
+/// which the bare address reads, so it prints bare.
+#[test]
+fn a_weight_prints_in_decimal_and_one_prints_nothing() {
+    let (list, todo) = (list(), todo());
+    let t = act(home(), Act::Open(todo.clone()));
+    let share = |w: u8| Share::of(w).expect("a weight from one");
+    for (weight, printed) in [(1, ""), (3, "3"), (12, "12"), (255, "255")] {
+        let resized = act(
+            t.clone(),
+            Act::Resize {
+                before: id(&t, &list),
+                after: id(&t, &todo),
+                shares: [share(1), share(weight)],
+            },
+        );
+        let s = print(&resized);
+        assert!(
+            s.ends_with(&format!("(list%2F0,{printed}*),,,,,,,)")),
+            "{s}"
+        );
+        assert_eq!(
+            parse(&s, &home()).root().map(&Leaf::page),
+            resized.root().map(&Leaf::page)
+        );
+    }
+    assert_eq!(print(&t), todo.print());
+}
+
+/// The weights the focused workspace's node gives its children, in the tree `address` reads.
+fn weights(address: &str) -> Vec<u8> {
+    match &parse(address, &home()).root().focus.tree {
+        Tree::Node(n) => n.parts().map(|p| p.share.weight()).collect(),
+        Tree::Leaf(_) => Vec::new(),
+    }
+}
+
+/// A weight is the longest run of digits that starts with 1 to 9: 2 to 11 read and print as
+/// written, and 256 and 300 are no share, so the address is no tree and reads as its head alone. A
+/// share that starts with a zero is no share either, and the digits that follow it are no page's
+/// print. A hand-written `21` is twenty-one, never two and then a one.
+#[test]
+fn a_weight_reads_as_its_decimal_run_and_a_run_past_255_or_after_a_zero_is_no_tree() {
+    for weight in 2..=11 {
+        let s = format!("list/1~|!(|(list%2F0,{weight}*),,,,,,,)");
+        assert_eq!(weights(&s), [1, weight], "{s}");
+        assert_eq!(print(&parse(&s, &home())), s);
+    }
+    assert_eq!(weights("list/1~|!(|(list%2F0,21*),,,,,,,)"), [1, 21]);
+    let head = weights("list/1");
+    for refused in ["256", "300", "0", "00", "01"] {
+        let s = format!("list/1~|!(|(list%2F0,{refused}*),,,,,,,)");
+        assert_eq!(weights(&s), head, "{s}");
+    }
 }

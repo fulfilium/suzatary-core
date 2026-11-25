@@ -6,6 +6,7 @@ use super::leaf::{Id, Leaf};
 use super::node::{Axis, Fit, Node, Part, Share};
 use super::open;
 use super::page::{Page, Pin};
+use super::put::put;
 use super::tree::Tree;
 
 /// What a person or a host does to the tree, as data: `act` is the one function that applies it.
@@ -30,6 +31,13 @@ pub enum Act<P> {
     /// Swaps the focused child with its neighbour, in the nearest node below the root on the
     /// direction's axis that has one; nothing moves when either child holds a pinned leaf.
     Move(Dir),
+    /// Takes the leaf `leaf` from where it stands and puts it next to the leaf `beside`, on `edge`:
+    /// a sibling where `beside`'s node fits and runs that way, else beside it in a new node. The
+    /// leaf keeps its id, page and share and stays in its workspace, so the policy's `most` is never
+    /// reached. Nothing changes for a leaf of another workspace, a pinned leaf, `beside` the leaf
+    /// itself, or an id no tile holds. Beside a pinned leaf, a leaf goes before it. The focused leaf
+    /// stays focused, and a node that loses its focused child focuses the one before, else after.
+    Put { leaf: Id, beside: Id, edge: Dir },
     /// Sets the shares of two neighbouring children of a node that fits, the one holding the
     /// leaf `before` and the one right after it holding `after`: the children either side of the
     /// divider that names those leaves (`Divider`). Where no such two children stand, nothing
@@ -51,8 +59,8 @@ pub enum Act<P> {
     Release,
 }
 
-/// Where `Act::Move` swaps the focused child: before it (`Left`, `Up`) or after it, along the
-/// axis each names.
+/// Where `Act::Move` swaps the focused child, and the edge `Act::Put` puts a leaf on: before it
+/// (`Left`, `Up`) or after it, along the axis each names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dir {
     Left,
@@ -92,6 +100,10 @@ pub fn act<P: Page>(tiles: Tiles<P>, act: Act<P>) -> Tiles<P> {
             let root = tiles.root.on_focus(|tree| shifted(tree, dir)).0;
             Tiles { root, ..tiles }
         }
+        Act::Put { leaf, beside, edge } => Tiles {
+            root: put(tiles.root, leaf, beside, edge),
+            ..tiles
+        },
         Act::Resize {
             before,
             after,
@@ -233,7 +245,7 @@ fn docked<P: Page>(tree: Tree<Leaf<P>>, new: Leaf<P>, share: Share) -> Tree<Leaf
             return Tree::Node(n);
         }
         Tree::Leaf(l) => (l.page().share(), Tree::Leaf(l)),
-        Tree::Node(n) => (Share::Two, Tree::Node(n)),
+        Tree::Node(n) => (Share::TWO, Tree::Node(n)),
     };
     Tree::Node(Node {
         after: vec![end],
@@ -311,7 +323,7 @@ fn closed<P: Page>(tiles: Tiles<P>) -> Tiles<P> {
 
 /// The share of the child at `path`, each child's place from the top of `tree`.
 fn share_at<L>(tree: &Tree<L>, path: &[usize]) -> Share {
-    let mut share = Share::One;
+    let mut share = Share::ONE;
     let mut at = tree;
     for &i in path {
         let Tree::Node(n) = at else { break };
@@ -396,10 +408,23 @@ enum Done {
     No,
 }
 
+/// Which side of a child a direction names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Side {
+pub(crate) enum Side {
     Before,
     After,
+}
+
+impl Dir {
+    /// The axis a direction names and the side of a child it goes to.
+    pub(crate) fn along(self) -> (Axis, Side) {
+        match self {
+            Dir::Left => (Axis::Across, Side::Before),
+            Dir::Right => (Axis::Across, Side::After),
+            Dir::Up => (Axis::Down, Side::Before),
+            Dir::Down => (Axis::Down, Side::After),
+        }
+    }
 }
 
 fn shifted<P: Page>(tree: Tree<Leaf<P>>, dir: Dir) -> (Tree<Leaf<P>>, Done) {
@@ -407,12 +432,7 @@ fn shifted<P: Page>(tree: Tree<Leaf<P>>, dir: Dir) -> (Tree<Leaf<P>>, Done) {
         return (tree, Done::No);
     };
     let (mut n, done) = n.on_focus(|t| shifted(t, dir));
-    let (axis, side) = match dir {
-        Dir::Left => (Axis::Across, Side::Before),
-        Dir::Right => (Axis::Across, Side::After),
-        Dir::Up => (Axis::Down, Side::Before),
-        Dir::Down => (Axis::Down, Side::After),
-    };
+    let (axis, side) = dir.along();
     let held = |p: &Part<Leaf<P>>| {
         p.tree
             .leaves()

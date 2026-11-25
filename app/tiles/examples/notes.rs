@@ -3,8 +3,8 @@
 //! with `cargo run -p tiles --example notes`; `cargo test -p tiles` runs it too.
 
 use tiles::{
-    Act, Arranged, At, Axis, Fit, Measures, Node, Page, Part, Pin, Policy, Px, RootRow, Shape,
-    Share, Tiles, Tree, Viewport, act, arrange,
+    Act, Arranged, At, Axis, Dir, Fit, Measures, Node, Page, Part, Pin, Policy, Px, RootRow, Shape,
+    Share, Tiles, Tree, Viewport, act, arrange, load, save,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,8 +50,8 @@ impl Page for Pane {
 
     fn share(&self) -> Share {
         match self {
-            Pane::Note(_) => Share::Two,
-            Pane::Notes | Pane::Outline => Share::One,
+            Pane::Note(_) => Share::TWO,
+            Pane::Notes | Pane::Outline => Share::ONE,
         }
     }
 
@@ -65,9 +65,10 @@ fn main() {
     let home = Node::of(
         Axis::Across,
         Fit::Never,
-        Part::new(Share::One, Tree::Leaf(Pane::Notes)),
+        Part::new(Share::ONE, Tree::Leaf(Pane::Notes)),
     );
-    let tiles = Tiles::new(home, Policy::default()).expect("one list is a well-formed home");
+    let start = Tiles::new(home, Policy::default()).expect("one list is a well-formed home");
+    let tiles = start.clone();
     let tiles = act(tiles, Act::Open(Pane::Note(1)));
     let tiles = act(tiles, Act::Hold(Pane::Outline));
     // A note opened from a note replaces it: pages of one kind open in place.
@@ -105,6 +106,28 @@ fn main() {
             (&Pane::Outline, At::After)
         ]
     );
+    // A note put left of the list stands there, and the outline stays at the end. The layout kept
+    // as plain data loads back as the same pages, into a fresh start.
+    let id = |pane: &Pane| {
+        let tile = wide.tiles.iter().find(|t| t.page == *pane);
+        tile.map(|t| t.id)
+            .expect("the wide arrangement draws every pane")
+    };
+    let (list, note) = (id(&Pane::Notes), id(&Pane::Note(2)));
+    let tiles = act(
+        tiles,
+        Act::Put {
+            leaf: note,
+            beside: list,
+            edge: Dir::Left,
+        },
+    );
+    let put = arrange(&tiles, viewport(1280, 800), &m);
+    let pages: Vec<&Pane> = put.tiles.iter().map(|t| &t.page).collect();
+    assert_eq!(pages, [&Pane::Note(2), &Pane::Notes, &Pane::Outline]);
+    let kept = save(&tiles);
+    let back = load(&kept, &start).expect("a saved layout is well formed");
+    assert_eq!(save(&back), kept);
 }
 
 fn viewport(w: u32, h: u32) -> Viewport {

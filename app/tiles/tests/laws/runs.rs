@@ -32,8 +32,23 @@ fn free() -> impl Strategy<Value = Pg> {
         .prop_map(|(k, n)| pg(k, n))
 }
 
-fn share() -> impl Strategy<Value = Share> {
-    prop_oneof![Just(Share::One), Just(Share::Two), Just(Share::Three)]
+/// What a generated run draws: the generator the laws had before stage 2 (weights one to three, no
+/// put), or the wider one (any weight, and the put).
+#[derive(Debug, Clone, Copy)]
+pub enum Mix {
+    Master,
+    Wide,
+}
+
+/// A weight of one to three, and with `Mix::Wide` any weight sometimes.
+pub fn share(mix: Mix) -> BoxedStrategy<Share> {
+    let weight = match mix {
+        Mix::Master => (1u8..=3).boxed(),
+        Mix::Wide => prop_oneof![6 => 1u8..=3, 3 => 4u8..=12, 1 => 13u8..=255].boxed(),
+    };
+    weight
+        .prop_map(|w| Share::of(w).expect("a range from one"))
+        .boxed()
 }
 
 fn axis() -> impl Strategy<Value = Axis> {
@@ -58,7 +73,7 @@ fn node(
 
 /// A workspace of at most `budget` free leaves, nodes of two children or more, any depth that
 /// allows, both axes, both fits.
-fn workspace(budget: usize) -> BoxedStrategy<Tree<Pg>> {
+fn workspace(budget: usize, mix: Mix) -> BoxedStrategy<Tree<Pg>> {
     let leaf = free().prop_map(Tree::Leaf);
     if budget < 2 {
         return leaf.boxed();
@@ -66,7 +81,7 @@ fn workspace(budget: usize) -> BoxedStrategy<Tree<Pg>> {
     let split = (2..=budget).prop_flat_map(move |k| {
         let parts: Vec<_> = (0..k)
             .map(|i| budget / k + usize::from(i < budget % k))
-            .map(|b| (share(), workspace(b)).prop_map(|(s, t)| Part::new(s, t)))
+            .map(|b| (share(mix), workspace(b, mix)).prop_map(|(s, t)| Part::new(s, t)))
             .collect();
         node(parts, fit()).prop_map(Tree::Node)
     });
@@ -90,9 +105,15 @@ fn pinned_end(tree: Tree<Pg>, n: u8) -> Tree<Pg> {
 pub fn policy() -> impl Strategy<Value = Policy> {
     let beside = prop_oneof![Just(Beside::Replace), Just(Beside::Insert)];
     let most = (1u8..=8).prop_map(|n| NonZeroU8::new(n).expect("one to eight"));
+    let steps = prop_oneof![
+        3 => Just(Share::THREE),
+        1 => (1u8..=6).prop_map(|w| Share::of(w).expect("one to six")),
+    ];
     prop_oneof![
         1 => Just(Policy::default()),
-        2 => (most, beside).prop_map(|(most, beside)| Policy::default().with_most(most).with_beside(beside)),
+        2 => (most, beside, steps).prop_map(|(most, beside, steps)| {
+            Policy::default().with_most(most).with_beside(beside).with_steps(steps)
+        }),
     ]
 }
 
@@ -102,9 +123,13 @@ pub type Home = (Node<Pg>, Policy);
 /// A root of one to six workspaces of at most the policy's `most` tiles, a pinned end in some,
 /// mostly a `Never` node across as an application's would be.
 pub fn home() -> impl Strategy<Value = Home> {
-    policy().prop_flat_map(|policy| {
+    home_of(Mix::Wide)
+}
+
+pub fn home_of(mix: Mix) -> impl Strategy<Value = Home> {
+    policy().prop_flat_map(move |policy| {
         let ws = (
-            workspace(usize::from(policy.most().get())),
+            workspace(usize::from(policy.most().get()), mix),
             proptest::option::weighted(0.3, 0u8..4),
         )
             .prop_map(|(t, pin)| match pin {
@@ -113,7 +138,7 @@ pub fn home() -> impl Strategy<Value = Home> {
             });
         let root_fit = prop_oneof![4 => Just(Fit::Never), 1 => Just(Fit::Fits)];
         node(
-            prop::collection::vec((share(), ws).prop_map(|(s, t)| Part::new(s, t)), 1..7),
+            prop::collection::vec((share(mix), ws).prop_map(|(s, t)| Part::new(s, t)), 1..7),
             root_fit,
         )
         .prop_map(move |n| (n, policy))
@@ -160,6 +185,8 @@ pub enum Step {
     Close,
     Focus(prop::sample::Index),
     Move(Dir),
+    /// The leaf at the first index put beside the leaf at the second.
+    Put(prop::sample::Index, prop::sample::Index, Dir),
     /// The leaf at the index and the one after it in the tree's order: often the two either side
     /// of a divider, and otherwise a pair a resize leaves alone.
     Resize(prop::sample::Index, [Share; 2]),
@@ -167,24 +194,29 @@ pub enum Step {
     Release,
 }
 
-pub fn step() -> impl Strategy<Value = Step> {
+pub fn step_of(mix: Mix) -> BoxedStrategy<Step> {
     let dir = prop_oneof![
         Just(Dir::Left),
         Just(Dir::Right),
         Just(Dir::Up),
         Just(Dir::Down)
     ];
+    let put = match mix {
+        Mix::Master => 0,
+        Mix::Wide => 2,
+    };
     prop_oneof![
         2 => page().prop_map(Step::Open),
         2 => page().prop_map(Step::Follow),
         1 => page().prop_map(Step::Below),
         2 => Just(Step::Close),
         2 => any::<prop::sample::Index>().prop_map(Step::Focus),
-        2 => dir.prop_map(Step::Move),
-        2 => (any::<prop::sample::Index>(), share(), share()).prop_map(|(i, a, b)| Step::Resize(i, [a, b])),
+        2 => dir.clone().prop_map(Step::Move),
+        put => (any::<prop::sample::Index>(), any::<prop::sample::Index>(), dir).prop_map(|(i, j, d)| Step::Put(i, j, d)),
+        2 => (any::<prop::sample::Index>(), share(mix), share(mix)).prop_map(|(i, a, b)| Step::Resize(i, [a, b])),
         1 => page().prop_map(Step::Hold),
         1 => Just(Step::Release),
-    ]
+    ].boxed()
 }
 
 pub fn ids(tiles: &Tiles<Pg>) -> Vec<tiles::Id> {
@@ -211,6 +243,7 @@ pub fn made(tiles: &Tiles<Pg>, step: &Step) -> Made {
         | Step::Close
         | Step::Focus(_)
         | Step::Move(_)
+        | Step::Put(..)
         | Step::Resize(..)
         | Step::Hold(_)
         | Step::Release => Made::Act(the_act(tiles, step)),
@@ -227,6 +260,14 @@ fn the_act(tiles: &Tiles<Pg>, step: &Step) -> Act<Pg> {
             Act::Focus(ids[i.index(ids.len())])
         }
         Step::Move(d) => Act::Move(*d),
+        Step::Put(i, j, edge) => {
+            let ids = ids(tiles);
+            Act::Put {
+                leaf: ids[i.index(ids.len())],
+                beside: ids[j.index(ids.len())],
+                edge: *edge,
+            }
+        }
         Step::Resize(i, shares) => {
             let ids = ids(tiles);
             let k = i.index(ids.len());
@@ -252,11 +293,15 @@ pub fn apply(t: Tiles<Pg>, m: Made) -> Tiles<Pg> {
 pub type Run = (Home, Measures, Viewport, Vec<(Step, Viewport)>);
 
 pub fn run() -> impl Strategy<Value = Run> {
+    run_of(Mix::Wide)
+}
+
+pub fn run_of(mix: Mix) -> impl Strategy<Value = Run> {
     (
-        home(),
+        home_of(mix),
         measures(),
         viewport(),
-        prop::collection::vec((step(), viewport()), 0..14),
+        prop::collection::vec((step_of(mix), viewport()), 0..14),
     )
 }
 

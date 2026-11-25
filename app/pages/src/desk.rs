@@ -184,22 +184,14 @@ pub struct Notch {
 }
 
 fn weight(s: Share) -> u32 {
-    match s {
-        Share::One => 1,
-        Share::Two => 2,
-        Share::Three => 3,
-    }
+    u32::from(s.weight())
 }
 
-/// The share of a weight `weight` gives back; none for any other number.
+/// The share of `weight`; none for a weight above the desk's steps.
 #[must_use]
 pub fn share(weight: u32) -> Option<Share> {
-    match weight {
-        1 => Some(Share::One),
-        2 => Some(Share::Two),
-        3 => Some(Share::Three),
-        _ => None,
-    }
+    let share = Share::of(u8::try_from(weight).ok()?)?;
+    (share <= Policy::default().steps()).then_some(share)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -232,7 +224,7 @@ impl Desk {
     ///
     /// `Unfit` where the destinations are not a well-formed home.
     pub fn new() -> Result<Desk, Unfit> {
-        let part = |r: Route| Part::new(Share::One, Tree::Leaf(r));
+        let part = |r: Route| Part::new(Share::ONE, Tree::Leaf(r));
         let [first, rest @ ..] = Route::destinations();
         let home = Node::new(
             Axis::Across,

@@ -75,8 +75,8 @@ impl Page for Pg {
 
     fn share(&self) -> Share {
         match self.kind {
-            Kind::List | Kind::Side => Share::One,
-            Kind::Column | Kind::Slide => Share::Two,
+            Kind::List | Kind::Side => Share::ONE,
+            Kind::Column | Kind::Slide => Share::TWO,
         }
     }
 

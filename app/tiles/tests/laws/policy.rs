@@ -16,7 +16,7 @@ fn pages(t: &Tiles<Pg>) -> Node<&Pg> {
 
 /// A root of one list per workspace, the first `lists` of them.
 fn lists(lists: u8, policy: Policy) -> Tiles<Pg> {
-    let part = |n: u8| tiles::Part::new(Share::One, Tree::Leaf(pg(Kind::List, n)));
+    let part = |n: u8| tiles::Part::new(Share::ONE, Tree::Leaf(pg(Kind::List, n)));
     let home = Node::new(
         Axis::Across,
         Fit::Never,
@@ -97,6 +97,34 @@ proptest! {
             if crowded {
                 let alone = parse(head(&s), &lineage);
                 prop_assert_eq!(pages(&back), pages(&alone), "{}", s);
+            }
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(super::laws::cases(256))]
+
+    /// A divider offers, besides the place it stands at, only weights up to the policy's steps,
+    /// and larger steps offer every place smaller steps do.
+    #[test]
+    fn larger_steps_offer_every_place_smaller_steps_do(
+        ((home, policy), m, first, steps) in run(),
+        more in 1u8..=6,
+    ) {
+        let few = policy;
+        let many = policy.with_steps(Share::of(few.steps().weight().saturating_add(more)).expect("a weight from one"));
+        let (a, b) = (states((home.clone(), few), first, &steps), states((home, many), first, &steps));
+        for ((_, _, ta, at), (_, _, tb, _)) in a.iter().zip(&b) {
+            let (da, db) = (tiles::arrange(ta, *at, &m).dividers, tiles::arrange(tb, *at, &m).dividers);
+            for (x, y) in da.iter().zip(&db) {
+                prop_assert_eq!((x.before, x.after), (y.before, y.after));
+                for s in x.stops.iter().enumerate().filter(|(i, _)| *i != x.now).map(|(_, s)| s) {
+                    prop_assert!(s.shares.iter().all(|w| *w <= few.steps()));
+                }
+                for s in &x.stops {
+                    prop_assert!(y.stops.iter().any(|t| t.at == s.at));
+                }
             }
         }
     }
