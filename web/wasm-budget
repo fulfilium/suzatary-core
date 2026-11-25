@@ -1,6 +1,6 @@
 # <module> <system> <measured> <limit>, written by the train (AGENTS.md, "Derived figures"):
 # `measured` is the module's bytes after wasm-opt in the tree the train started from, one train
 # behind; `limit` adds the allowance for each merged pull request and what they declare.
-prodrome_bg.wasm aarch64-linux 5193419 5209419
-typst_bg.wasm aarch64-linux 22087320 22103320
-views_bg.wasm aarch64-linux 3983512 3999512
+prodrome_bg.wasm aarch64-linux 5193419 5225419
+typst_bg.wasm aarch64-linux 22087320 22119320
+views_bg.wasm aarch64-linux 3983512 4015512
