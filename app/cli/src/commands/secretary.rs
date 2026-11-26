@@ -1487,12 +1487,13 @@ fn act(instance: &Instance, action: &Action) -> anyhow::Result<()> {
         Action::Digest {
             action: DigestAction::Eval { runs },
         } => {
-            use suzatary_digest::secretary::compact_eval;
+            use suzatary_base::call_log::Tracing;
+            use suzatary_digest::secretary::compact_eval::{self, CASES};
             let model = crate::interpreters::CompactorModel::new(
                 instance,
                 instance.secretary.compactors.first().clone(),
             );
-            let rows = compact_eval::run(&model, compact_eval::CASES, *runs);
+            let rows = compact_eval::run(&model, &Tracing, CASES, *runs);
             print!("{}", compact_eval::table(&rows));
             Ok(())
         }

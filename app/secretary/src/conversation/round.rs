@@ -7,11 +7,14 @@ use crate::conversation::ask::{Ask, Asked};
 use crate::secretary::surface::{SecretaryCall, Subset};
 use crate::secretary::verb_answer::VerbAnswer;
 use crate::verb::Request;
+use suzatary_base::call_log::{Call, Journal};
 use suzatary_base::capability::Clock;
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::refusal::Refusal;
-use suzatary_conversations::secretary::model::{Conversation, Halt, ModelError, ToolCall, Turn};
+use suzatary_conversations::secretary::model::{
+    Conversation, Earlier, Halt, ModelError, ToolCall, Turn,
+};
 use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::sentence::{Built, Closing, Outside, Sentence};
 use suzatary_conversations::secretary::store::RunId;
@@ -41,6 +44,8 @@ pub struct Round {
 /// Everything that differs between the rounds of different callers.
 pub struct Rules<'a> {
     pub ask: Ask<'a>,
+    /// Where each call that returned is written down.
+    pub journal: &'a dyn Journal,
     pub system: &'a str,
     pub verbs: &'a Subset,
     /// Runs one call of a verb in `verbs`; a refusal is written down as the call's answer.
@@ -94,6 +99,21 @@ pub struct Transcript<'a> {
     pub conversations: conversations::Conversations<'a>,
     pub clock: &'a dyn Clock,
     pub id: &'a ConversationId,
+}
+
+/// The words a call holds, in bytes: a file counts by its marker, an earlier long answer by none.
+fn sent_bytes(call: &Conversation) -> u64 {
+    let context = call.context.cached.iter().chain(&call.context.rest);
+    let earlier = call.earlier.iter().filter_map(Earlier::turn);
+    let words = call.system.len()
+        + context.map(String::len).sum::<usize>()
+        + call
+            .turns
+            .iter()
+            .chain(earlier)
+            .map(queue::bytes)
+            .sum::<usize>();
+    u64::try_from(words).unwrap_or(u64::MAX)
 }
 
 /// How a round ended. Every round that ran ends one of these two ways, and an [`Ending::Ended`]
@@ -285,6 +305,15 @@ impl Round {
                 .ask
                 .send(call.call, &tools, rules.sink)
                 .map_err(|failed| unasked(failed, after.clone(), rules.sink.halt))?;
+            rules.journal.record(
+                Call::Round {
+                    conversation: at.id,
+                    step: self.steps,
+                },
+                &rules.ask.model_name(),
+                reply.reply.usage,
+                sent_bytes(&reply.sent),
+            );
             obeyed(rules.sink.halt)?;
             let silent = reply.reply.say.trim().is_empty() && reply.reply.calls.is_empty();
             if self.said(at, stored, reply, rules.ask.scope(), run)?

@@ -329,6 +329,7 @@ fn summarized(
     let wrote = summarize(
         decisions,
         &model,
+        &suzatary_base::call_log::Tracing,
         at.unwrap_or_else(|| SystemClock.now()),
         &actor(who)?,
         |step| match step {

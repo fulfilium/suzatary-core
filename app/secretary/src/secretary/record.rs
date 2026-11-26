@@ -69,6 +69,8 @@ pub struct Secretary<'a> {
     /// The instant every write is stamped with.
     pub clock: &'a dyn Clock,
     pub model: &'a dyn Model,
+    /// Where each call to the model is written down, by its counts alone.
+    pub journal: &'a dyn suzatary_base::call_log::Journal,
     pub conversations: suzatary_lines::secretary::conversations::Conversations<'a>,
     /// Where a proposal is filed for a person to tap.
     pub inbox: &'a dyn suzatary_store::store::Prodrome<suzatary_inbox::secretary::inbox_event::InboxEvent>,

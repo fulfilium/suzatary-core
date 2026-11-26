@@ -8,6 +8,7 @@
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::{Ask, Unfit};
 use crate::secretary::digest_line::{Line, NODE_BYTES, NotALine};
+use suzatary_base::call_log::{Call, Journal};
 use suzatary_base::refusal::Refusal;
 use suzatary_conversations::secretary::model::ModelError;
 
@@ -57,6 +58,7 @@ impl From<ModelError> for Failed {
 /// for any other cause, which `before` has already counted and which writes nothing.
 pub fn compact(
     compactor: &dyn Compact,
+    journal: &dyn Journal,
     ask: Ask,
     before: &mut dyn FnMut(u64) -> Result<(), Refusal>,
 ) -> Result<Outcome, Refusal> {
@@ -66,9 +68,18 @@ pub fn compact(
         shortest: u32::try_from(shortest.unwrap_or(0)).unwrap_or(u32::MAX),
     };
     for _ in 0..TRIES {
-        before(ask.bytes())?;
+        let bytes = ask.bytes();
+        before(bytes)?;
         let words = match compactor.compact(&ask).map_err(Failed::from) {
-            Ok(words) => words.split_whitespace().collect::<Vec<_>>().join(" "),
+            Ok(plain) => {
+                journal.record(
+                    Call::Compaction,
+                    compactor.model().as_str(),
+                    plain.usage,
+                    bytes,
+                );
+                plain.text.split_whitespace().collect::<Vec<_>>().join(" ")
+            }
             Err(Failed::TheQuestion) => return Ok(unfit(shortest)),
             Err(Failed::Delays(failed)) => {
                 return Err(Refusal::unprocessable(format!("the compactor: {failed}")));
@@ -96,6 +107,9 @@ mod tests {
 
     use super::*;
     use crate::model_name::ModelName;
+    use suzatary_base::call_log::TokenUsage;
+    use suzatary_base::capability::{Nothing, Recording};
+    use suzatary_conversations::secretary::model::Plain;
 
     /// Answers of the given lengths in turn, and keeps every question.
     struct Lengths {
@@ -119,7 +133,7 @@ mod tests {
             &self.name
         }
 
-        fn compact(&self, ask: &Ask) -> Result<String, ModelError> {
+        fn compact(&self, ask: &Ask) -> Result<Plain, ModelError> {
             self.asked.lock().expect("held").push(ask.clone());
             let length = self
                 .answers
@@ -127,7 +141,10 @@ mod tests {
                 .expect("held")
                 .pop()
                 .ok_or_else(|| ModelError::Failed("no answer left".to_owned()))?;
-            Ok("w".repeat(length))
+            Ok(Plain {
+                text: "w".repeat(length),
+                usage: None,
+            })
         }
     }
 
@@ -137,11 +154,53 @@ mod tests {
 
     fn counted(compactor: &Lengths) -> (Result<Outcome, Refusal>, Vec<u64>) {
         let mut sent = Vec::new();
-        let outcome = compact(compactor, ask(), &mut |bytes| {
+        let outcome = compact(compactor, &Nothing, ask(), &mut |bytes| {
             sent.push(bytes);
             Ok(())
         });
         (outcome, sent)
+    }
+
+    /// Answers a line that fits, reporting that it cost the given counts.
+    struct Costing(ModelName, TokenUsage);
+
+    impl Compact for Costing {
+        fn model(&self) -> &ModelName {
+            &self.0
+        }
+
+        fn compact(&self, _: &Ask) -> Result<Plain, ModelError> {
+            Ok(Plain {
+                text: "w".repeat(40),
+                usage: Some(self.1),
+            })
+        }
+    }
+
+    /// Each call that returns is told to the journal with the counts it reported and the bytes
+    /// it sent, and a call that fails is not.
+    #[test]
+    fn a_call_is_journaled_with_its_counts_and_a_failed_call_is_not() {
+        let spent = TokenUsage {
+            prompt_tokens: 1,
+            completion_tokens: 2,
+            cached_prompt_tokens: 3,
+            cache_written_prompt_tokens: 4,
+        };
+        let journal = Recording::default();
+        let costing = Costing(ModelName::parse("costing").expect("a model"), spent);
+        compact(&costing, &journal, ask(), &mut |_| Ok(())).expect("fits");
+        let calls = journal.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].conversation, None);
+        assert_eq!(calls[0].model, "costing");
+        assert_eq!(calls[0].usage, Some(spent));
+        assert_eq!(calls[0].bytes, ask().bytes());
+        let failing = Failing(ModelName::parse("failing").expect("a model"), || {
+            ModelError::Failed("exit 1".to_owned())
+        });
+        compact(&failing, &journal, ask(), &mut |_| Ok(())).expect_err("fails");
+        assert_eq!(journal.calls().len(), 1);
     }
 
     #[test]
@@ -194,7 +253,7 @@ mod tests {
         let (outcome, sent) = counted(&Lengths::new(&[600]));
         assert!(outcome.is_err(), "the second call fails");
         assert_eq!(sent.len(), 2, "and it was counted before it was made");
-        let refused = compact(&Lengths::new(&[1]), ask(), &mut |_| {
+        let refused = compact(&Lengths::new(&[1]), &Nothing, ask(), &mut |_| {
             Err(Refusal::conflict("held".to_owned()))
         });
         assert!(refused.is_err(), "a refused call is not made");
@@ -208,7 +267,7 @@ mod tests {
             &self.0
         }
 
-        fn compact(&self, _: &Ask) -> Result<String, ModelError> {
+        fn compact(&self, _: &Ask) -> Result<Plain, ModelError> {
             Err((self.1)())
         }
     }
@@ -218,7 +277,7 @@ mod tests {
         let name = || ModelName::parse("failing").expect("a model");
         let mut calls = 0;
         let too_long = Failing(name(), || ModelError::TooLong("over".to_owned()));
-        let outcome = compact(&too_long, ask(), &mut |_| {
+        let outcome = compact(&too_long, &Nothing, ask(), &mut |_| {
             calls += 1;
             Ok(())
         });
@@ -231,7 +290,7 @@ mod tests {
             || ModelError::Failed("exit 1".to_owned()),
         ];
         for outage in outages {
-            let outcome = compact(&Failing(name(), outage), ask(), &mut |_| Ok(()));
+            let outcome = compact(&Failing(name(), outage), &Nothing, ask(), &mut |_| Ok(()));
             assert!(outcome.is_err(), "{outcome:?} writes nothing");
         }
     }

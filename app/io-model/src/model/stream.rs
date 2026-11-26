@@ -4,7 +4,8 @@
 
 use serde::Deserialize;
 
-use suzatary_conversations::secretary::model::{SessionId, TokenUsage};
+use suzatary_base::call_log::TokenUsage;
+use suzatary_conversations::secretary::model::SessionId;
 
 use super::stream_event::StreamEvent;
 
@@ -108,7 +109,8 @@ impl From<Usage> for TokenUsage {
         Self {
             prompt_tokens: usage.input_tokens,
             completion_tokens: usage.output_tokens,
-            cached_prompt_tokens: Some(usage.cache_read_input_tokens),
+            cached_prompt_tokens: usage.cache_read_input_tokens,
+            cache_written_prompt_tokens: usage.cache_creation_input_tokens,
         }
     }
 }

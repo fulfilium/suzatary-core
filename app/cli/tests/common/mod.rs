@@ -958,6 +958,8 @@ pub struct FakeModel {
     limited: Option<suzatary_health::health::Limited>,
     /// How many next calls panic, as a round's task that ends with no close.
     panics: Mutex<usize>,
+    /// What every reply reports it cost.
+    usage: Option<suzatary_base::call_log::TokenUsage>,
 }
 
 impl FakeModel {
@@ -979,6 +981,7 @@ impl FakeModel {
             shown: Mutex::new(Vec::new()),
             limited: None,
             panics: Mutex::new(0),
+            usage: None,
         }
     }
 
@@ -995,6 +998,7 @@ impl FakeModel {
             shown: Mutex::new(Vec::new()),
             limited: None,
             panics: Mutex::new(0),
+            usage: None,
         }
     }
 
@@ -1105,6 +1109,15 @@ impl FakeModel {
         self.shown.lock().expect("not poisoned").push(names);
     }
 
+    /// The same model, every reply reporting that it cost `usage`.
+    #[must_use]
+    pub fn costing(self, usage: suzatary_base::call_log::TokenUsage) -> Self {
+        Self {
+            usage: Some(usage),
+            ..self
+        }
+    }
+
     /// The same model, its account under `limited`.
     #[must_use]
     pub fn limited(self, limited: suzatary_health::health::Limited) -> Self {
@@ -1156,7 +1169,7 @@ impl Model for FakeModel {
                     }
                     _ => on_delta(&text),
                 }
-                Ok(Reply::parse(&text))
+                Ok(Reply::parse(&text).with_usage(self.usage))
             }
             None => Err(ModelError::Failed("the script ran out".to_owned())),
         }
@@ -2411,6 +2424,8 @@ pub struct Fakes {
     pub repository: FakeRepository,
     pub manuals: FakeManuals,
     pub model: FakeModel,
+    /// Every call to the model, as the journal was told of it.
+    pub journal: suzatary_base::capability::Recording,
     pub web: FakeWeb,
     pub drive: FakeDriveAccess,
     pub junk: FakeJunk,
@@ -2524,6 +2539,7 @@ impl Fakes {
             repository: FakeRepository,
             manuals: FakeManuals,
             model: FakeModel::default(),
+            journal: suzatary_base::capability::Recording::default(),
             web: FakeWeb::default(),
             inbox: suzatary_io_chains::objects::Objects::open(root.join("inbox")),
             repos: Arc::new(suzatary_io_sources::repos::Mirrors::new(
@@ -2688,6 +2704,7 @@ impl Fakes {
             render: &self.render,
             clock: &self.clock,
             model: &self.model,
+            journal: &self.journal,
             conversations: self.conversations.conversations(),
             inbox: &self.inbox,
             memories: self.memories(),

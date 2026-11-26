@@ -187,6 +187,7 @@ fn sweep(
         &id,
         &Rules {
             ask: Ask::Transcript { model: caps.model },
+            journal: caps.journal,
             system,
             verbs: &SURFACE,
             run: &run,

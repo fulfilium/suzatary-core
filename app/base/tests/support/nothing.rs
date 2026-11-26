@@ -47,3 +47,59 @@ impl Whois for Nothing {
         Ok(Peer::Stranger)
     }
 }
+
+impl crate::call_log::Journal for Nothing {
+    fn record(
+        &self,
+        _call: crate::call_log::Call<'_>,
+        _model: &str,
+        _usage: Option<crate::call_log::TokenUsage>,
+        _bytes: u64,
+    ) {
+    }
+}
+
+/// What a journal was told of one call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Recorded {
+    pub conversation: Option<String>,
+    pub step: Option<usize>,
+    pub model: String,
+    pub usage: Option<crate::call_log::TokenUsage>,
+    pub bytes: u64,
+}
+
+/// A journal that keeps every call it is told of, from whichever thread.
+#[derive(Debug, Default)]
+pub struct Recording(std::sync::Mutex<Vec<Recorded>>);
+
+impl Recording {
+    #[must_use]
+    pub fn calls(&self) -> Vec<Recorded> {
+        self.0.lock().expect("not poisoned").clone()
+    }
+}
+
+impl crate::call_log::Journal for Recording {
+    fn record(
+        &self,
+        call: crate::call_log::Call<'_>,
+        model: &str,
+        usage: Option<crate::call_log::TokenUsage>,
+        bytes: u64,
+    ) {
+        let (conversation, step) = match call {
+            crate::call_log::Call::Round { conversation, step } => {
+                (Some(conversation.as_str().to_owned()), Some(step))
+            }
+            crate::call_log::Call::Compaction => (None, None),
+        };
+        self.0.lock().expect("not poisoned").push(Recorded {
+            conversation,
+            step,
+            model: model.to_owned(),
+            usage,
+            bytes,
+        });
+    }
+}

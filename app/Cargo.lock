@@ -4427,6 +4427,7 @@ dependencies = [
  "suzatary-base",
  "thiserror",
  "tracing",
+ "tracing-subscriber",
  "ts-rs",
  "typst-syntax",
 ]

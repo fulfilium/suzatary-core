@@ -214,6 +214,7 @@ fn round_under(
     Round::answer(
         &Rules {
             ask: Ask::Transcript { model: &caps.model },
+            journal: &caps.journal,
             system: "you are the secretary",
             verbs: &SOME,
             run: &run,
@@ -667,6 +668,7 @@ fn a_question_said_during_the_last_answer_is_still_owed() {
         Round::answer(
             &Rules {
                 ask: Ask::Transcript { model: &model },
+                journal: &suzatary_base::capability::Nothing,
                 system: "you are the secretary",
                 verbs: &suzatary_secretary::secretary::surface::Subset::ALL,
                 run: &|_, _| Ok(serde_json::json!("unused").into()),
@@ -765,6 +767,7 @@ fn round_over(
         Round::answer(
             &Rules {
                 ask: Ask::Transcript { model },
+                journal: &suzatary_base::capability::Nothing,
                 system: "you are the secretary",
                 verbs: &suzatary_secretary::secretary::surface::Subset::ALL,
                 run: &|_, _| Ok(serde_json::json!("unused").into()),
@@ -1073,5 +1076,34 @@ fn a_question_said_during_another_holder_s_last_ask_is_answered_by_that_holder()
             .expect("reads")
             .owed()
             .is_empty()
+    );
+}
+
+/// Each call of a round is told to the journal with the counts the model returned, and what it
+/// is told holds no words of the call.
+#[test]
+fn a_call_is_journaled_with_its_counts() {
+    let spent = suzatary_base::call_log::TokenUsage {
+        prompt_tokens: 11,
+        completion_tokens: 22,
+        cached_prompt_tokens: 33,
+        cache_written_prompt_tokens: 44,
+    };
+    let caps = Fakes::new("rounds-calls")
+        .model(FakeModel::saying([CALLS, r#"{"say": "Done."}"#]).costing(spent));
+    opened(&caps);
+    assert_eq!(conversed(&caps, "what changed on the rent?"), Ok(Some(2)));
+    let calls = caps.journal.calls();
+    assert_eq!(calls.len(), 2, "one per call: {calls:?}");
+    for (call, step) in calls.iter().zip(1..) {
+        assert_eq!(call.conversation.as_deref(), Some("2026-09-02-1"));
+        assert_eq!(call.step, Some(step));
+        assert_eq!(call.model, "a scripted model");
+        assert_eq!(call.usage, Some(spent));
+        assert!(call.bytes > 0);
+    }
+    assert!(
+        calls[1].bytes > calls[0].bytes,
+        "the second call also holds the first's verbs' answers"
     );
 }

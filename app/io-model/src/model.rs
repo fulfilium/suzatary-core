@@ -15,9 +15,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use suzatary_base::call_log::TokenUsage;
 use suzatary_base::capability::{Clock, Secret};
 use suzatary_conversations::secretary::model::{
-    Conversation, Halt, Model, ModelError, Reply, TokenUsage, Turn,
+    Conversation, Halt, Model, ModelError, Plain, Reply, Turn,
 };
 use suzatary_held::for_model::ForModel;
 
@@ -298,10 +299,12 @@ impl Model for ClaudeCli {
 impl ClaudeCli {
     /// `text` under `system` with no session and none of the secretary's framing, run from an
     /// empty directory and configuration, so no `CLAUDE.md` is found.
-    pub fn plain(&self, system: &ForModel, text: ForModel) -> Result<String, ModelError> {
+    pub fn plain(&self, system: &ForModel, text: ForModel) -> Result<Plain, ModelError> {
         let token = self.ready()?;
         let stdin = stdin_of(text, Blocks::default());
-        reply_of(self.ended(&self.command(Mode::Plain { system }, stdin, token.as_ref()))?)
+        let ended = self.ended(&self.command(Mode::Plain { system }, stdin, token.as_ref()))?;
+        let usage = ended.usage.map(TokenUsage::from);
+        reply_of(ended).map(|text| Plain { text, usage })
     }
 
     /// The tokens of the prompt that [`ClaudeCli::plain`] sends for `text` under `system`, as

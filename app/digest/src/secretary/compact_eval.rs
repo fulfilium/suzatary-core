@@ -11,6 +11,7 @@ use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::Ask;
 use crate::secretary::compactor::{self, Outcome};
 use crate::secretary::digest_line::NODE_BYTES;
+use suzatary_base::call_log::Journal;
 
 /// One rule of the prompt, a span that tests it, and what a line must do to keep it.
 pub struct Case {
@@ -200,7 +201,12 @@ pub struct Row {
 /// Every case `runs` times on `compactor`, through the digest's own size loop; a run that finds
 /// no line fails its case.
 #[must_use]
-pub fn run(compactor: &dyn Compact, cases: &[Case], runs: NonZeroU32) -> Vec<Row> {
+pub fn run(
+    compactor: &dyn Compact,
+    journal: &dyn Journal,
+    cases: &[Case],
+    runs: NonZeroU32,
+) -> Vec<Row> {
     cases
         .iter()
         .map(|case| {
@@ -215,7 +221,7 @@ pub fn run(compactor: &dyn Compact, cases: &[Case], runs: NonZeroU32) -> Vec<Row
                     case.log.iter().map(|line| (*line).to_owned()).collect(),
                     case.span.iter().map(|line| (*line).to_owned()).collect(),
                 );
-                match compactor::compact(compactor, ask, &mut |_| Ok(())) {
+                match compactor::compact(compactor, journal, ask, &mut |_| Ok(())) {
                     Ok(Outcome::Fits { line }) if (case.keeps)(line.as_str()) => row.passed += 1,
                     Ok(Outcome::Fits { line }) => row.failures.push(line.as_str().to_owned()),
                     Ok(Outcome::Unfit { shortest }) => row
@@ -253,7 +259,8 @@ mod tests {
 
     use super::*;
     use crate::model_name::ModelName;
-    use suzatary_conversations::secretary::model::ModelError;
+    use suzatary_base::capability::Nothing;
+    use suzatary_conversations::secretary::model::{ModelError, Plain};
 
     /// Answers each case by the first line of its span, from a table of lines.
     struct Canned {
@@ -277,12 +284,15 @@ mod tests {
             &self.name
         }
 
-        fn compact(&self, ask: &Ask) -> Result<String, ModelError> {
+        fn compact(&self, ask: &Ask) -> Result<Plain, ModelError> {
             *self.calls.lock().expect("held") += 1;
             let first = ask.span().first().map_or("", String::as_str);
-            Ok(match ask.last() {
-                None => (self.lines)(first),
-                Some(_) => "a shorter line".to_owned(),
+            Ok(Plain {
+                text: match ask.last() {
+                    None => (self.lines)(first),
+                    Some(_) => "a shorter line".to_owned(),
+                },
+                usage: None,
             })
         }
     }
@@ -362,10 +372,10 @@ mod tests {
     fn every_rule_passes_a_line_that_keeps_it_and_fails_one_that_breaks_it() {
         let runs = NonZeroU32::new(2).expect("two");
         let cases = CASES;
-        let kept = run(&Canned::new(good), cases, runs);
+        let kept = run(&Canned::new(good), &Nothing, cases, runs);
         assert!(kept.iter().all(|row| row.passed == 2), "{}", table(&kept));
         let broken = Canned::new(bad);
-        let rows = run(&broken, cases, runs);
+        let rows = run(&broken, &Nothing, cases, runs);
         assert!(rows.iter().all(|row| row.passed == 0), "{}", table(&rows));
         let long = rows.last().expect("the long span's row");
         assert_eq!(long.failures, vec!["a shorter line".to_owned(); 2]);
@@ -378,7 +388,12 @@ mod tests {
 
     #[test]
     fn the_table_names_each_rule_with_its_passes() {
-        let rows = run(&Canned::new(good), CASES, NonZeroU32::new(1).expect("one"));
+        let rows = run(
+            &Canned::new(good),
+            &Nothing,
+            CASES,
+            NonZeroU32::new(1).expect("one"),
+        );
         let printed = table(&rows);
         assert_eq!(
             printed.lines().count(),

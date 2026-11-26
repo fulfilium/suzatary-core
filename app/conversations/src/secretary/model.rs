@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::secretary::tool_name::ToolName;
+use suzatary_base::call_log::TokenUsage;
 use suzatary_base::reference::Reference;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -134,13 +135,11 @@ pub struct Reply {
     pub usage: Option<TokenUsage>,
 }
 
-/// Token counts for one turn; `cached_prompt_tokens` is `None` when the model does not say.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct TokenUsage {
-    pub prompt_tokens: u64,
-    pub completion_tokens: u64,
-    /// Prompt tokens served from a cache.
-    pub cached_prompt_tokens: Option<u64>,
+/// A plain-path answer and what it cost.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plain {
+    pub text: String,
+    pub usage: Option<TokenUsage>,
 }
 
 /// The envelope the model answers in: `{"say": "...", "calls": [{"verb": "...", "args": {...}}]}`.

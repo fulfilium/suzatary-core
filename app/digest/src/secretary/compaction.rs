@@ -13,6 +13,7 @@ use prodrome_data::event::{Envelope, Hash};
 use prodrome_data::instant::instant_of;
 use prodrome_data::literal::Datetime;
 use prodrome_digest::Node;
+use suzatary_base::call_log::Journal;
 
 use crate::model_name::ModelName;
 use crate::secretary::compact::Compact;
@@ -264,6 +265,7 @@ pub enum Compacted {
 /// that did not answer; a [`Refusal::conflict`] where the node no longer waits.
 pub fn perform(
     memories: &Memories<'_>,
+    journal: &dyn Journal,
     rule: &Compaction<&dyn Compact>,
     reading: &Reading,
     budget: Budget,
@@ -273,7 +275,16 @@ pub fn perform(
         return Ok(None);
     };
     let (ask, over) = reading.ask(&node)?;
-    attempt(memories, *compact, &node, ask, over, budget, clock).map(Some)
+    attempt(
+        memories,
+        journal,
+        *compact,
+        &node,
+        (ask, over),
+        budget,
+        clock,
+    )
+    .map(Some)
 }
 
 /// Ask `compact` for `node`'s line and record the outcome; a question no day's cap admits is
@@ -282,10 +293,10 @@ pub fn perform(
 /// Every instant is read from the clock each time, since five tries of a slow model span minutes.
 fn attempt(
     memories: &Memories<'_>,
+    journal: &dyn Journal,
     compact: &dyn Compact,
     node: &Hash,
-    ask: Ask,
-    over: Vec<Hash>,
+    (ask, over): (Ask, Vec<Hash>),
     budget: Budget,
     clock: &dyn Clock,
 ) -> Result<Compacted, Refusal> {
@@ -298,7 +309,7 @@ fn attempt(
         });
     }
     let history = memories.digests.history;
-    let outcome = compactor::compact(compact, ask, &mut |sent| {
+    let outcome = compactor::compact(compact, journal, ask, &mut |sent| {
         let _held = history.locked()?;
         let now = clock.now();
         if let Some(hold) = budget.hold(&spent(history)?, Spent::call(sent), instant_of(now)) {
@@ -444,15 +455,16 @@ impl<'c> Claim<'c> {
     pub fn perform(
         self,
         memories: &Memories<'_>,
+        journal: &dyn Journal,
         clock: &dyn Clock,
     ) -> Result<Performed, Failed<'c>> {
         let (ask, over) = (self.ask.clone(), self.over.clone());
         let attempted = attempt(
             memories,
+            journal,
             self.compact,
             &self.node,
-            ask,
-            over,
+            (ask, over),
             self.budget,
             clock,
         );

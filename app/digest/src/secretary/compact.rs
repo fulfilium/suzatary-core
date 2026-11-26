@@ -6,11 +6,11 @@
 
 use crate::model_name::ModelName;
 use crate::secretary::compact_ask::Ask;
-use suzatary_conversations::secretary::model::ModelError;
+use suzatary_conversations::secretary::model::{ModelError, Plain};
 
 /// A model asked to stand one line for a span.
 pub trait Compact: Sync {
     fn model(&self) -> &ModelName;
 
-    fn compact(&self, ask: &Ask) -> Result<String, ModelError>;
+    fn compact(&self, ask: &Ask) -> Result<Plain, ModelError>;
 }

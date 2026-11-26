@@ -32,7 +32,7 @@ use suzatary_io_sources::web::Fetcher;
 
 use suzatary_base::capability::{Whois, WhoisError};
 use suzatary_conversations::secretary::model::{
-    Conversation, Model, ModelError, Pick, Picker, Reply,
+    Conversation, Model, ModelError, Pick, Picker, Plain, Reply,
 };
 use suzatary_digest::secretary::compact::Compact;
 use suzatary_io_access::secrets::Secretspec;
@@ -628,6 +628,11 @@ impl CompactorModel {
     /// `text` under `system` on the plain path, only while the subscription has room above the
     /// reserve.
     pub fn ask(&self, system: &ForModel, text: ForModel) -> Result<String, ModelError> {
+        self.plain(system, text).map(|plain| plain.text)
+    }
+
+    /// [`CompactorModel::ask`], with what the call cost.
+    pub fn plain(&self, system: &ForModel, text: ForModel) -> Result<Plain, ModelError> {
         if !subscription_has_room(&five_hour(&self.allowance), self.reserve) {
             return Err(ModelError::Unreachable(
                 "the subscription is down to the reserve automated jobs never take".to_owned(),
@@ -645,8 +650,8 @@ impl Compact for CompactorModel {
     fn compact(
         &self,
         ask: &suzatary_digest::secretary::compact_ask::Ask,
-    ) -> Result<String, ModelError> {
-        self.ask(&ForModel::of(ask.prompt()), ForModel::of(&ask.text()))
+    ) -> Result<Plain, ModelError> {
+        self.plain(&ForModel::of(ask.prompt()), ForModel::of(&ask.text()))
     }
 }
 

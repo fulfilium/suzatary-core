@@ -37,6 +37,7 @@ impl Secretary<'static> {
             render: &Nothing,
             clock: &Nothing,
             model: &Nothing,
+            journal: &Nothing,
             conversations: conversations::Conversations::nothing(),
             inbox: &Nothing,
             memories: suzatary_digest::secretary::memories::Memories::nothing(),

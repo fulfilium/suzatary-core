@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use prodrome_data::event::{Actor, Hash, canonical_envelope};
 use prodrome_data::literal::Datetime;
 use proptest::prelude::*;
-use suzatary_base::capability::Entropy;
+use suzatary_base::capability::{Entropy, Nothing};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
@@ -1008,7 +1008,10 @@ impl suzatary_digest::secretary::compact::Compact for Recording {
     fn compact(
         &self,
         ask: &suzatary_digest::secretary::compact_ask::Ask,
-    ) -> Result<String, suzatary_conversations::secretary::model::ModelError> {
+    ) -> Result<
+        suzatary_conversations::secretary::model::Plain,
+        suzatary_conversations::secretary::model::ModelError,
+    > {
         self.asked.lock().expect("not poisoned").push(ask.clone());
         if self.fails {
             return Err(
@@ -1018,7 +1021,10 @@ impl suzatary_digest::secretary::compact::Compact for Recording {
             );
         }
         match self.long {
-            Some(bytes) => Ok("w".repeat(bytes)),
+            Some(bytes) => Ok(suzatary_conversations::secretary::model::Plain {
+                text: "w".repeat(bytes),
+                usage: None,
+            }),
             None => self.joining.compact(ask),
         }
     }
@@ -1064,7 +1070,15 @@ impl Box {
                 return done;
             }
             done.extend(
-                perform(&self.memories(), &rule, &reading, ROOMY, &At(at(0))).expect("performed"),
+                perform(
+                    &self.memories(),
+                    &Nothing,
+                    &rule,
+                    &reading,
+                    ROOMY,
+                    &At(at(0)),
+                )
+                .expect("performed"),
             );
         }
     }
@@ -1301,7 +1315,10 @@ impl suzatary_digest::secretary::compact::Compact for Renamed<'_> {
     fn compact(
         &self,
         ask: &suzatary_digest::secretary::compact_ask::Ask,
-    ) -> Result<String, suzatary_conversations::secretary::model::ModelError> {
+    ) -> Result<
+        suzatary_conversations::secretary::model::Plain,
+        suzatary_conversations::secretary::model::ModelError,
+    > {
         self.0.compact(ask)
     }
 }
@@ -1327,23 +1344,27 @@ fn a_node_one_model_finds_unfit_is_owed_to_the_next() {
     let fits = Recording::joining();
     let rule = ladder(&[&long, &fits]);
     let reading = || Reading::of(&the.digests().reads()).expect("reads whole");
-    let Some(Compacted::Unfit { node, .. }) =
-        perform(&the.memories(), &rule, &reading(), ROOMY, &At(at(0))).expect("performed")
-    else {
+    let step = |hour| {
+        perform(
+            &the.memories(),
+            &Nothing,
+            &rule,
+            &reading(),
+            ROOMY,
+            &At(at(hour)),
+        )
+        .expect("performed")
+    };
+    let Some(Compacted::Unfit { node, .. }) = step(0) else {
         panic!("the first model finds no line");
     };
     let (owed, to) = rule.due(&the.read()).expect("owed again");
     assert_eq!((&owed, to.model()), (&node, fits.model()));
-    let Some(Compacted::Summarized { node: fitted, .. }) =
-        perform(&the.memories(), &rule, &reading(), ROOMY, &At(at(1))).expect("performed")
-    else {
+    let Some(Compacted::Summarized { node: fitted, .. }) = step(1) else {
         panic!("the second model fits it");
     };
     assert_eq!(fitted, node);
-    while perform(&the.memories(), &rule, &reading(), ROOMY, &At(at(2)))
-        .expect("performed")
-        .is_some()
-    {}
+    while step(2).is_some() {}
     let read = the.read();
     assert!(read.pending().is_empty(), "every node is summarised");
     let summarised = |node: &Hash| {
@@ -1367,6 +1388,7 @@ fn a_node_one_model_finds_unfit_is_owed_to_the_next() {
     let first = ladder(&[&long]);
     while perform(
         &alone.memories(),
+        &Nothing,
         &first,
         &Reading::of(&alone.digests().reads()).expect("reads"),
         ROOMY,
@@ -1426,9 +1448,16 @@ fn each_call_is_stamped_at_its_own_instant() {
     };
     let clock = Ticking(std::sync::atomic::AtomicUsize::new(0));
     let reading = Reading::of(&the.digests().reads()).expect("reads whole");
-    perform(&the.memories(), &ladder(&[&long]), &reading, ROOMY, &clock)
-        .expect("performed")
-        .expect("a node was owed");
+    perform(
+        &the.memories(),
+        &Nothing,
+        &ladder(&[&long]),
+        &reading,
+        ROOMY,
+        &clock,
+    )
+    .expect("performed")
+    .expect("a node was owed");
     let stamps: Vec<Datetime> = the.read().attempts().map(|(at, _)| at).collect();
     let expected: Vec<Datetime> = (0..5).map(at).collect();
     assert_eq!(stamps, expected, "one instant per call, in the order made");
@@ -1472,7 +1501,7 @@ fn step(
         return Ok(Stepped::Idle);
     };
     let performed = claim
-        .perform(memories, clock)
+        .perform(memories, &Nothing, clock)
         .map_err(|failed| failed.refusal().clone())?;
     Ok(match performed {
         Performed::Compacted(done) => Stepped::Compacted(done),
@@ -1504,7 +1533,8 @@ impl Box {
                         {
                             Round::Taken(claims) => {
                                 for claim in claims {
-                                    let performed = claim.perform(&self.memories(), &At(at(0)));
+                                    let performed =
+                                        claim.perform(&self.memories(), &Nothing, &At(at(0)));
                                     assert!(performed.is_ok(), "a step: {performed:?}");
                                 }
                             }
@@ -3011,7 +3041,7 @@ mod recompacting {
             let rule = ladder(&[&joining]);
             for _ in 0..stop {
                 let reading = Reading::of(&the.digests().reads()).expect("reads whole");
-                if perform(&the.memories(), &rule, &reading, ROOMY, &At(at(0)))
+                if perform(&the.memories(), &Nothing, &rule, &reading, ROOMY, &At(at(0)))
                     .expect("performed")
                     .is_none()
                 {

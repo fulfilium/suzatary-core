@@ -198,6 +198,7 @@ pub fn answer<'p>(
         id,
         &Rules {
             ask,
+            journal: caps.journal,
             system,
             verbs,
             run: &run,

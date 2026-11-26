@@ -165,7 +165,11 @@ async fn work(
     let mut backoff = Backoff::new();
     while let Some(claim) = handed.recv().await {
         let performed = tokio::task::spawn_blocking(move || {
-            claim.perform(&caps.secretary.memories, caps.secretary.clock)
+            claim.perform(
+                &caps.secretary.memories,
+                caps.secretary.journal,
+                caps.secretary.clock,
+            )
         })
         .await;
         match performed {

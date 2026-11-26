@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 pub mod answer;
+pub mod call_log;
 pub mod capability;
 pub mod chains;
 pub mod conversation_id;

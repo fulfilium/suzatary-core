@@ -428,6 +428,7 @@ impl Opened {
             render: &grounds.render,
             clock: &grounds.clock,
             model,
+            journal: &suzatary_base::call_log::Tracing,
             conversations: self.remembering.conversations.conversations(),
             inbox: &self.remembering.inbox,
             memories: self.memories(),

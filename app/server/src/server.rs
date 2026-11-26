@@ -58,6 +58,7 @@ mod tests {
             render: _,
             clock: _,
             model: _,
+            journal: _,
             conversations: _,
             inbox: _,
             memories: _,

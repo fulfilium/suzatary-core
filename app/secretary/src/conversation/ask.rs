@@ -92,6 +92,12 @@ impl Ask<'_> {
         }
     }
 
+    /// The model's name, as a call's journal line names it.
+    #[must_use]
+    pub fn model_name(&self) -> String {
+        self.model().name()
+    }
+
     fn model(&self) -> &dyn Model {
         match *self {
             Ask::Digest { model, .. } | Ask::Transcript { model } => model,

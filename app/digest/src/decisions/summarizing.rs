@@ -2,6 +2,7 @@
 //! session or the box runs asks the model, never the brief.
 
 use std::collections::BTreeSet;
+use suzatary_base::call_log::Journal;
 
 use prodrome_data::event::{Actor, Hash};
 use prodrome_data::literal::Datetime;
@@ -35,6 +36,7 @@ pub enum Step {
 pub fn summarize(
     decisions: &Decisions<'_>,
     compactor: &dyn Compact,
+    journal: &dyn Journal,
     at: Datetime,
     actor: &Actor,
     mut on: impl FnMut(&Step),
@@ -53,7 +55,7 @@ pub fn summarize(
             )));
         };
         let ask = Ask::of_decisions(shown_log(&log, |()| true), span);
-        let step = match compactor::compact(compactor, ask, &mut |_| Ok(()))? {
+        let step = match compactor::compact(compactor, journal, ask, &mut |_| Ok(()))? {
             Outcome::Fits { line } => {
                 decisions.summarize(&node, line.as_str(), at, actor)?;
                 wrote += 1;

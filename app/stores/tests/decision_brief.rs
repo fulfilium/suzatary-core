@@ -106,7 +106,15 @@ fn brief_of(decisions: &Decisions<'_>, about: &[About], tokens: usize) -> String
 }
 
 fn summarized(decisions: &Decisions<'_>) {
-    summarize(decisions, &Joining::default(), at(0), &ada(), |_| {}).expect("summaries");
+    summarize(
+        decisions,
+        &Joining::default(),
+        &suzatary_base::capability::Nothing,
+        at(0),
+        &ada(),
+        |_| {},
+    )
+    .expect("summaries");
 }
 
 /// The handle that leads a line of the brief's record, if one does.

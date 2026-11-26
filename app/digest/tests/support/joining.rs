@@ -5,7 +5,7 @@ use crate::model_name::ModelName;
 use crate::secretary::compact::Compact;
 use crate::secretary::compact_ask::Ask;
 use crate::secretary::digest_line::NODE_BYTES;
-use suzatary_conversations::secretary::model::ModelError;
+use suzatary_conversations::secretary::model::{ModelError, Plain};
 
 /// Joins a span's lines with ` / ` and cuts the result at [`NODE_BYTES`].
 #[derive(Debug, Clone)]
@@ -22,8 +22,11 @@ impl Compact for Joining {
         &self.0
     }
 
-    fn compact(&self, ask: &Ask) -> Result<String, ModelError> {
+    fn compact(&self, ask: &Ask) -> Result<Plain, ModelError> {
         let joined = ask.span().join(" / ");
-        Ok(joined[..joined.floor_char_boundary(NODE_BYTES)].to_owned())
+        Ok(Plain {
+            text: joined[..joined.floor_char_boundary(NODE_BYTES)].to_owned(),
+            usage: None,
+        })
     }
 }

@@ -26,7 +26,7 @@ pub use clock::Clock;
 pub use entropy::{Entropy, SALT_BYTES};
 pub use manuals::{Manual, Manuals};
 #[cfg(any(test, feature = "nothing"))]
-pub use nothing::{Nothing, Parses};
+pub use nothing::{Nothing, Parses, Recorded, Recording};
 pub use render_error::RenderError;
 pub use typeset::{Diagnostic, Rejected, Typeset, parsed};
 pub use whois::{Peer, Whois, WhoisError};
