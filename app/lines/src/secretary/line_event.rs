@@ -1511,7 +1511,7 @@ mod tests {
         let print = prodrome_data::event::canonical_envelope(&envelope);
         assert_eq!(print, PRINT, "it prints back byte for byte");
         assert_eq!(
-            Hash::of_bytes(print.as_bytes()).as_str(),
+            prodrome_data::event::seal_hash(&envelope).as_str(),
             NAME,
             "it keeps its name"
         );

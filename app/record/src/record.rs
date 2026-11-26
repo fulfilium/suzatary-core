@@ -526,7 +526,7 @@ mod stored_spec {
 /// `Authored.subtodos`: each item through [`mk_subtodo`], which refuses a blank body. An inbox
 /// act reads [`SubTodo`]'s own literal, which does not, so the two reads stay apart.
 mod authored_subtodos {
-    use super::{Literal, ProdromeError, SubTodo, Value, codec, mk_subtodo};
+    use super::{Literal, ProdromeError, SUBTODO, SubTodo, Value, codec, mk_subtodo};
 
     pub(super) fn to_value(items: &[SubTodo]) -> Value {
         Value::Tuple(items.iter().map(SubTodo::to_value).collect())
@@ -539,11 +539,8 @@ mod authored_subtodos {
         codec::tuple(value, context)?
             .iter()
             .map(|item| {
-                let call = codec::call_of(item, "SubTodo")?;
-                mk_subtodo(
-                    &codec::read(call, "body", String::from_field)?,
-                    codec::read(call, "done", bool::from_field)?,
-                )
+                let fields = codec::Fields::of(item, SUBTODO)?;
+                mk_subtodo(&fields.get::<String>("body")?, fields.get("done")?)
             })
             .collect()
     }

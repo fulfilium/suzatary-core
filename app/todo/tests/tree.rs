@@ -38,12 +38,16 @@ fn with(own: f64, children: &[&str]) -> Term {
 }
 
 fn todo(id: &str, category: &str, spec: Term) -> TodoEvent {
+    todo_at(id, category, spec, at(1))
+}
+
+fn todo_at(id: &str, category: &str, spec: Term, moment: Datetime) -> TodoEvent {
     mk_authored(
         id,
-        at(1),
+        moment,
         "ada",
         "todo",
-        at(1),
+        moment,
         suzatary_record::record::MarkupSource::escaped(&format!("Do {id}")),
         spec,
         vec!["why".to_owned()],
@@ -61,11 +65,16 @@ fn todo(id: &str, category: &str, spec: Term) -> TodoEvent {
 struct Folded {
     entries: Vec<Entry>,
     members: Members,
+    now: Datetime,
     functions: BTreeMap<TodoId, Term>,
     env: fpl::Env,
 }
 
 fn folded(events: Vec<TodoEvent>) -> Folded {
+    folded_at(events, at(20))
+}
+
+fn folded_at(events: Vec<TodoEvent>, now: Datetime) -> Folded {
     let mut objects: Vec<(Hash, Envelope)> = Vec::new();
     for event in events {
         let envelope = mk_sealed(objects.last().map(|(name, _)| name.clone()), event);
@@ -75,12 +84,13 @@ fn folded(events: Vec<TodoEvent>) -> Folded {
         .nodes()
         .expect("a closed set reads");
     let none = Untrusted::none();
-    let entries = prodrome_reading::view::entries(&nodes, at(20), &none).expect("a fold");
+    let entries = prodrome_reading::view::entries(&nodes, now, &none).expect("a fold");
     let members = view::members(&entries, &view::by_hash(&objects));
-    let believed = Believed::of(&nodes, at(20), &none).expect("functions");
+    let believed = Believed::of(&nodes, now, &none).expect("functions");
     Folded {
         functions: believed.functions,
         env: believed.env,
+        now,
         entries,
         members,
     }
@@ -88,7 +98,13 @@ fn folded(events: Vec<TodoEvent>) -> Folded {
 
 impl Folded {
     fn tree(&self, classifier: &Classifier) -> Tree<Row> {
-        view::tree(&self.entries, &self.members, classifier, at(20), &self.env)
+        view::tree(
+            &self.entries,
+            &self.members,
+            classifier,
+            self.now,
+            &self.env,
+        )
     }
 }
 
@@ -260,5 +276,33 @@ fn children_ascend_in_value_at_every_level() {
         &[By::Urgency, By::Ancestry],
     ] {
         ascends(&house.tree(&by(generators)));
+    }
+}
+
+/// A shift of the grammar's longest span, either way, and a window of it, read at an instant beside
+/// each end of the axis: every reading is a number, where the evaluator once panicked on a sum that
+/// left the calendar.
+#[test]
+fn a_shift_of_the_longest_span_prices_beside_both_ends_of_the_axis() {
+    let longest = chrono::Duration::microseconds(i64::MAX);
+    let ends = [
+        Datetime::new(1, 1, 2, 12, 0, 0, 0).expect("the start of the axis"),
+        Datetime::new(9999, 12, 30, 12, 0, 0, 0).expect("the end of the axis"),
+    ];
+    let terms = [
+        fpl::mk_shift(longest, flat(0.5)).expect("a shift forward"),
+        fpl::mk_shift(-longest, flat(0.5)).expect("a shift back"),
+        fpl::mk_within(longest, PRIORITY_POWER, flat(0.5)).expect("a window"),
+    ];
+    for term in terms {
+        for end in &ends {
+            let house = folded_at(vec![todo_at("far", "home", term.clone(), *end)], *end);
+            let tree = house.tree(&by(&[By::Ancestry]));
+            assert_eq!(
+                todo_node(&tree, "far").worth,
+                Ok(Some(0.5)),
+                "{term:?} at {end:?}"
+            );
+        }
     }
 }

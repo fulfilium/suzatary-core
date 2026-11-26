@@ -1288,7 +1288,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3184,7 +3184,7 @@ dependencies = [
 [[package]]
 name = "prodrome-core"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-dag",
  "prodrome-data",
@@ -3206,7 +3206,7 @@ dependencies = [
 [[package]]
 name = "prodrome-dag"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "ed25519-dalek",
  "prodrome-data",
@@ -3216,7 +3216,7 @@ dependencies = [
 [[package]]
 name = "prodrome-data"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "chrono",
  "ed25519-dalek",
@@ -3229,7 +3229,7 @@ dependencies = [
 [[package]]
 name = "prodrome-declared"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-data",
  "thiserror",
@@ -3238,7 +3238,7 @@ dependencies = [
 [[package]]
 name = "prodrome-derive"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3248,7 +3248,7 @@ dependencies = [
 [[package]]
 name = "prodrome-digest"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-data",
  "prodrome-memo",
@@ -3257,7 +3257,7 @@ dependencies = [
 [[package]]
 name = "prodrome-fpl"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "chrono",
  "prodrome-data",
@@ -3268,7 +3268,7 @@ dependencies = [
 [[package]]
 name = "prodrome-memo"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "memchr",
  "prodrome-data",
@@ -3279,7 +3279,7 @@ dependencies = [
 [[package]]
 name = "prodrome-nest"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-dag",
  "prodrome-data",
@@ -3289,7 +3289,7 @@ dependencies = [
 [[package]]
 name = "prodrome-reading"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-dag",
  "prodrome-data",
@@ -3301,7 +3301,7 @@ dependencies = [
 [[package]]
 name = "prodrome-store"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-dag",
  "prodrome-data",
@@ -3312,7 +3312,7 @@ dependencies = [
 [[package]]
 name = "prodrome-tags"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-dag",
  "prodrome-data",
@@ -3322,7 +3322,7 @@ dependencies = [
 [[package]]
 name = "prodrome-term"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "chrono",
  "prodrome-data",
@@ -3332,7 +3332,7 @@ dependencies = [
 [[package]]
 name = "prodrome-todo"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-data",
  "prodrome-term",
@@ -3341,7 +3341,7 @@ dependencies = [
 [[package]]
 name = "prodrome-typst-wasm"
 version = "0.1.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "serde",
  "serde_json",
@@ -3353,7 +3353,7 @@ dependencies = [
 [[package]]
 name = "prodrome-wasm-exports"
 version = "0.9.0"
-source = "git+https://github.com/fulfilium/prodrome?rev=ed70e10048ad81bb1ba1c05005dea847186e1ce1#ed70e10048ad81bb1ba1c05005dea847186e1ce1"
+source = "git+https://github.com/fulfilium/prodrome?rev=cf4de0063bf995e63593b7aee10da1e7c2fad093#cf4de0063bf995e63593b7aee10da1e7c2fad093"
 dependencies = [
  "prodrome-core",
  "serde",
@@ -3794,7 +3794,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5517,7 +5517,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7003,7 +7003,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

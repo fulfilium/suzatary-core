@@ -77,7 +77,7 @@ fn area(part: usize) -> Area {
 
 /// A node of the decision log, by a name the tests choose.
 fn node_of(n: usize) -> Hash {
-    Hash::of_bytes(format!("node {n}").as_bytes())
+    Hash::new(format!("{n:0<64x}")).expect("64 hex digits")
 }
 
 /// What a writer does: decide a new decision linking to earlier ones, revise a standing one
