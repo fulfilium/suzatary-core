@@ -33,7 +33,7 @@ app.scene("each page draws what the box answers", async () => {
 app.scene("a day with no briefing is an answer, not a failure", async () => {
   await app.open(BASE);
   await drawn("#/briefings/2001-01-01", "2001-01-01");
-  const said = await app.page.evaluate<string>(`document.querySelector(".briefingpage .pagebody").textContent`);
+  const said = await app.page.evaluate<string>(`document.querySelector(".briefingpage .pagebody .legend").textContent`);
   assert.equal(said, "No briefing was written for this day.");
   assert.equal(await app.page.evaluate<boolean>(`document.querySelector(".briefingpage .problem") === null`), true);
 });
@@ -44,4 +44,14 @@ app.scene("memory goes back to the secretary", async () => {
   // The click reaches the program as its Back, and its effect moves the address.
   await app.page.evaluate(`document.querySelector(".memorypage .back").click()`);
   await app.page.waitFor(`!location.hash.startsWith("#/secretary/memory")`);
+});
+
+app.scene("the Briefing tab opens today's brief, and the list of earlier days is one tap back", async () => {
+  await app.open(BASE);
+  await app.page.evaluate(`[...document.querySelectorAll(".tabbar > .tab")].find((tab) => tab.textContent.includes("Briefing")).click()`);
+  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Today"`, { timeout: 15000 });
+  assert.equal(await app.page.evaluate<string>(`location.hash`), "#/briefings/today");
+  await app.page.waitFor(`document.querySelector("#view .earlierbriefings") !== null`);
+  await app.page.evaluate(`document.querySelector("#view .earlierbriefings").click()`);
+  await app.page.waitFor(`document.querySelector("#view .pagetitle")?.textContent === "Briefings"`, { timeout: 15000 });
 });

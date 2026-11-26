@@ -68,17 +68,41 @@ pub(crate) fn briefings(
     crate::routes::briefings(caps.secretary.briefings, caps.secretary.conversations).map(Json)
 }
 
-/// `GET /api/briefings/<date>`: one day's, block by block.
+/// The day a briefing path names: an ISO date, or `today`, the owner's day now.
+#[derive(Clone, Copy)]
+pub(crate) enum BriefingOn {
+    Day(chrono::NaiveDate),
+    Today,
+}
+
+impl Params for BriefingOn {
+    fn parse(asked: &Asked, chained: &Chained) -> Result<Self, Refusal> {
+        if asked.segment("date")? == "today" {
+            return Ok(Self::Today);
+        }
+        Day::parse(asked, chained).map(|Day(day)| Self::Day(day))
+    }
+}
+
+/// `GET /api/briefings/<date>`: one day's, block by block; `today` is the owner's day now.
 pub(crate) fn briefing(
-    call: &Call<Reader, Day, ()>,
+    call: &Call<Reader, BriefingOn, ()>,
 ) -> Result<Json<wire::BriefingPayload>, Refusal> {
     let caps = call.chain.caps;
+    let day = match call.params {
+        BriefingOn::Day(day) => day,
+        BriefingOn::Today => suzatary_base::zone::Moment {
+            at: caps.secretary.clock.now(),
+            zone: call.state.deployment.zone,
+        }
+        .today(),
+    };
     crate::routes::briefing(
         caps.secretary.briefings,
         caps.secretary.render,
         caps.secretary.conversations,
         caps.answers,
-        call.params.0,
+        day,
     )
     .map(Json)
 }

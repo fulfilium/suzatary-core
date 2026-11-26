@@ -17,7 +17,7 @@ app.scene("every slot in the bar opens a page the router knows", async () => {
     ["Todos", "#/"],
     ["Inbox", "#/inbox"],
     ["Secretary", "#/secretary/default"],
-    ["Briefing", "#/briefings"],
+    ["Briefing", "#/briefings/today"],
   ] as const) {
     await app.page.navigate(`${BASE}/${hash}`);
     await app.page.waitFor(`document.querySelector("#view .pagetitle, #view h1") !== null`);

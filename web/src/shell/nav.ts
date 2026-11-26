@@ -23,7 +23,7 @@ export namespace nav {
     { route: { type: "todos" }, label: "Todos", part: "Bar" },
     { route: { type: "inbox" }, label: "Inbox", part: "Bar" },
     { route: { type: "secretary", refs: [], topics: [] }, label: "Secretary", part: "Bar" },
-    { route: { type: "briefings" }, label: "Briefing", part: "Bar" },
+    { route: { type: "briefing", date: "today" }, label: "Briefing", part: "Bar" },
     { route: { type: "mail", query: "", account: "" }, label: "Mail", part: "Places" },
     { route: { type: "calendar", date: "" }, label: "Calendar", part: "Places" },
     { route: { type: "settings" }, label: "Settings", part: "App" },
@@ -70,7 +70,7 @@ export namespace nav {
   }
 
   export function inOverflow(route: Route): boolean {
-    return OVERFLOW.some((tab) => tab.route.type === activeFor(route));
+    return OVERFLOW.some((tab) => activeFor(tab.route) === activeFor(route));
   }
 
   // `workspace` is the one the tiles stand in, which a page opened from another workspace's page does not move.
@@ -79,7 +79,7 @@ export namespace nav {
     const link = (tab: Tab): Link => ({
       label: tab.label,
       href: hrefOf(tab.route),
-      active: tab.route.type === here,
+      active: activeFor(tab.route) === here,
       count: tab.route.type === "inbox" ? (a.waiting?.count ?? 0) : 0,
     });
     const picks = a.served.length < 2 ? [] : a.served.map((name) => ({ name, label: said(name), here: name === a.chain }));

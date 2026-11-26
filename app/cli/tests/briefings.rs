@@ -99,3 +99,22 @@ fn a_path_traversal_attempt_is_400() {
     let response = common::get(&format!("{base}/api/briefings/%2e%2e"));
     assert_eq!(common::status(&response), 400);
 }
+
+/// `today` is the owner's day by the box's clock, so a file saved for that day answers to it and
+/// a day nobody wrote answers 404.
+#[test]
+fn today_is_the_day_the_clock_names() {
+    let (base, dir) = start();
+    let mut response = common::get(&format!("{base}/api/briefings/today"));
+    assert_eq!(
+        common::status(&response),
+        404,
+        "{}",
+        common::body_json(&mut response)
+    );
+    let day = common::now().isoformat();
+    write(&dir, &day[..10], "= Morning\n\nHello there.");
+    let mut response = common::get(&format!("{base}/api/briefings/today"));
+    assert_eq!(common::status(&response), 200);
+    assert_eq!(common::body_json(&mut response)["date"], day[..10]);
+}

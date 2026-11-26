@@ -39,7 +39,7 @@ const DESTINATIONS: Record<string, Route> = {
   i: { type: "inbox" },
   m: { type: "mail", query: "", account: "" },
   s: { type: "secretary", refs: [], topics: [] },
-  b: { type: "briefings" },
+  b: { type: "briefing", date: "today" },
 };
 
 export function keyAction(key: string, context: KeyContext): KeyAction | null {
@@ -102,7 +102,7 @@ export const SHORTCUTS: readonly { readonly keys: string; readonly what: string 
   { keys: "/", what: "search" },
   { keys: "n", what: "add a todo" },
   { keys: "⌘K / Ctrl-K", what: "the command palette" },
-  { keys: "g t / g i / g s / g b", what: "todos / inbox / secretary / briefings — the bar" },
+  { keys: "g t / g i / g s / g b", what: "todos / inbox / secretary / today's briefing — the bar" },
   { keys: "g m", what: "mail" },
   { keys: "Escape", what: "close a sheet, or clear the cursor" },
   { keys: "?", what: "this list" },

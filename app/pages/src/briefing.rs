@@ -12,6 +12,9 @@ use crate::reading::{Msg, View, json};
 use crate::runtime::Answer;
 use crate::zone::Offset;
 
+/// The path's word for the owner's day now; the box resolves it.
+pub const TODAY: &str = "today";
+
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(rename = "BriefingAt")]
 pub struct At {
@@ -53,12 +56,33 @@ impl View for Briefing {
     }
 
     fn title(a: &At, _: Option<&Day>) -> String {
-        a.date.clone()
+        if a.date == TODAY {
+            "Today".to_owned()
+        } else {
+            a.date.clone()
+        }
     }
 
-    fn body(_: &At, _: &[Offset], d: &Day) -> Vec<Node<Msg>> {
+    fn body(a: &At, _: &[Offset], d: &Day) -> Vec<Node<Msg>> {
+        let mut out = Self::day(a, d);
+        out.push(
+            view! { P "legend" [link("earlierbriefings", Place::Briefings, "Earlier briefings")] },
+        );
+        out
+    }
+}
+
+impl Briefing {
+    fn day(a: &At, d: &Day) -> Vec<Node<Msg>> {
         let Day::Written(p) = d else {
-            return vec![para("legend", "No briefing was written for this day.")];
+            return vec![para(
+                "legend",
+                if a.date == TODAY {
+                    "No briefing has been written yet today."
+                } else {
+                    "No briefing was written for this day."
+                },
+            )];
         };
         match &p.day {
             BriefingDay::Brief {
@@ -111,5 +135,21 @@ mod tests {
         };
         assert!(matches!(Briefing::read(refused(404)), Ok(Day::None)));
         assert_eq!(Briefing::read(refused(502)).err(), Some("no".to_owned()));
+    }
+
+    /// The path's `today` is titled and answered as today, not as a date nobody wrote.
+    #[test]
+    fn today_is_named_as_today() {
+        let today = At {
+            date: TODAY.to_owned(),
+        };
+        let other = At {
+            date: "2026-09-04".to_owned(),
+        };
+        assert_eq!(Briefing::title(&today, None), "Today");
+        assert_eq!(Briefing::title(&other, None), "2026-09-04");
+        let words = |a: &At| format!("{:?}", Briefing::body(a, &[], &Day::None));
+        assert!(words(&today).contains("yet today"));
+        assert!(words(&other).contains("for this day"));
     }
 }

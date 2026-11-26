@@ -530,6 +530,18 @@ enum Today {
     Briefed(String),
 }
 
+impl Today {
+    /// Today's briefing is there when the day has a brief or a saved file, the two things the
+    /// box serves for a day.
+    fn of(day: String, p: &BriefingsPayload) -> Self {
+        if p.briefs.iter().any(|b| b.date == day) || p.briefings.iter().any(|b| b.date == day) {
+            Self::Briefed(day)
+        } else {
+            Self::None
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Setup {
     Unknown,
@@ -1330,10 +1342,8 @@ impl Model {
             Hold::Briefings => {
                 let today = day_ms(&self.context.offsets, self.now).to_string();
                 self.today = match read::<BriefingsPayload>(reading) {
-                    Reading::Val { v } if v.briefings.iter().any(|b| b.date == today) => {
-                        Today::Briefed(today)
-                    }
-                    Reading::Val { .. } | Reading::Error { .. } => Today::None,
+                    Reading::Val { v } => Today::of(today, &v),
+                    Reading::Error { .. } => Today::None,
                     Reading::Loading => Today::Unknown,
                 };
                 Vec::new()
@@ -2203,6 +2213,41 @@ impl Program for Todos {
 mod tests {
     use super::*;
     use crate::runtime::Text;
+
+    fn brief_on(date: &str) -> suzatary_api::wire::BriefRow {
+        suzatary_api::wire::BriefRow {
+            date: date.to_owned(),
+            conversation: "c".to_owned(),
+            turn: 1,
+            title: String::new(),
+            words: 1,
+            text: String::new(),
+        }
+    }
+
+    /// A day with a brief has today's link, as does a day with a saved file; another day has none.
+    #[test]
+    fn today_is_briefed_by_a_brief_or_a_saved_file() {
+        let day = || "2026-09-04".to_owned();
+        let with = |briefs: Vec<_>, briefings: Vec<_>| BriefingsPayload { briefs, briefings };
+        let saved = suzatary_api::wire::BriefingRow {
+            date: day(),
+            title: String::new(),
+            words: 1,
+        };
+        assert_eq!(
+            Today::of(day(), &with(vec![brief_on("2026-09-04")], vec![])),
+            Today::Briefed(day())
+        );
+        assert_eq!(
+            Today::of(day(), &with(vec![], vec![saved])),
+            Today::Briefed(day())
+        );
+        assert_eq!(
+            Today::of(day(), &with(vec![brief_on("2026-09-03")], vec![])),
+            Today::None
+        );
+    }
 
     #[test]
     fn the_kept_filter_is_parsed_rather_than_trusted() {

@@ -53,7 +53,7 @@ test("each key means its one action in the context it lands in, and an unbound k
     ["i", armed, { type: "go", route: { type: "inbox" } }],
     ["m", armed, { type: "go", route: { type: "mail", query: "", account: "" } }],
     ["s", armed, { type: "go", route: { type: "secretary", refs: [], topics: [] } }],
-    ["b", armed, { type: "go", route: { type: "briefings" } }],
+    ["b", armed, { type: "go", route: { type: "briefing", date: "today" } }],
     ...["q", "F5", "Tab", "ArrowDown", " "].map((key): [string, KeyContext, null] => [key, IDLE, null]),
   ];
   for (const [key, context, action] of cases) assert.deepEqual(keyAction(key, context), action, `${key} in ${JSON.stringify(context)}`);

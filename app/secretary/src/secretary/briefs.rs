@@ -94,17 +94,25 @@ fn reads(turn: &Turn) -> bool {
     }
 }
 
-/// A brief's line in a list: the first line of its words as Typst parses
-/// them, so a link reads as its label and never as `#link(…)[…]`.
+/// A brief's line in a list: its first sentence as Typst parses the words, so a link reads as
+/// its label and never as `#link(…)[…]`.
 #[must_use]
 pub fn headline(text: &str) -> String {
-    blocks(text)
+    let found = blocks(text);
+    let line = found
         .iter()
         .flat_map(|block| block.plain.lines())
         .map(|line| line.trim_start_matches(['•', ' ']).trim())
         .find(|line| !line.is_empty())
-        .unwrap_or_default()
-        .to_owned()
+        .unwrap_or_default();
+    let mut chars = line.char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        if matches!(c, '.' | '!' | '?') && chars.peek().is_none_or(|(_, next)| next.is_whitespace())
+        {
+            return line[..at + c.len_utf8()].to_owned();
+        }
+    }
+    line.to_owned()
 }
 
 /// How many words a brief holds, as Typst parses them.
@@ -114,4 +122,25 @@ pub fn words(text: &str) -> usize {
         .iter()
         .map(|block| block.plain.split_whitespace().count())
         .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::headline;
+
+    /// A row says the brief's first sentence, not its whole first line.
+    #[test]
+    fn the_headline_is_the_first_sentence() {
+        assert_eq!(
+            headline("Two bills moved up. A third is new."),
+            "Two bills moved up."
+        );
+        assert_eq!(headline("Nothing moved"), "Nothing moved");
+        assert_eq!(
+            headline("The rate is 3.5 now! More."),
+            "The rate is 3.5 now!"
+        );
+        assert_eq!(headline("\n\n- Filed it? Yes."), "Filed it?");
+        assert_eq!(headline(""), "");
+    }
 }
