@@ -11,10 +11,13 @@ name = "suzatary_address"
 path = "src/lib.rs"
 
 # The calendar plugin's wasm32 component links this crate, so `regex` takes only what the
-# pattern needs beyond what `rrule` already enables (`std`, `perf`): `unicode-case`, for `(?i)`.
+# pattern needs beyond what `rrule` already enables (`std`, `perf`): `unicode-gencat`, for `\p{L}`.
 [dependencies]
-regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-case"] }
+regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-gencat"] }
 thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
 
 [lints]
 workspace = true

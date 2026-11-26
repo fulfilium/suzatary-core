@@ -6,8 +6,7 @@ use crate::holds_address;
 pub const MAX_NAME: usize = 200;
 
 /// Trimmed text that is not empty, at most [`MAX_NAME`] characters, holding nothing the application
-/// reads as an email address: an attendee's name and never a way to reach them. The recogniser
-/// reads an ASCII address with a dotted domain, so an address written another way passes.
+/// reads as an email address: an attendee's name and never a way to reach them.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AttendeeName(String);
 

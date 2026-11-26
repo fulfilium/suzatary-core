@@ -160,6 +160,23 @@ mod tests {
         assert!(!shown.contains("10.1.2.3"), "{shown}");
     }
 
+    /// The attack: an address written so that a model reads it and an ASCII pattern does not.
+    #[test]
+    fn an_address_written_in_any_script_or_spacing_is_hidden() {
+        for written in [
+            "josé@example.test",
+            "ada@exämple.test",
+            "ada\u{200b}@\u{200b}example.test",
+            "ada @ example.test",
+            "ada\u{ff20}example.test",
+            "\"ada lovelace\"@example.test",
+            "ada@[192.0.2.1]",
+        ] {
+            let shown = Excerpt::of(&format!("failed for {written} twice")).to_string();
+            assert_eq!(shown, format!("failed for {ADDRESS} twice"), "{written}");
+        }
+    }
+
     #[test]
     fn a_long_failure_keeps_its_end_and_a_long_message_its_start() {
         let long = format!("{}the reason", "x".repeat(10_000));
@@ -209,6 +226,40 @@ mod tests {
             let text = format!("{before} {user}@mail.example.org {after}");
             prop_assert!(!Excerpt::tail(&text, most).as_str().contains('@'));
             prop_assert!(!Excerpt::head(&text, most).as_str().contains('@'));
+        }
+    }
+
+    /// The recogniser's time over the excerpt of a long message: 2 MB of mixed-script prose with an
+    /// address every 4 KB. Printed as a measurement; run with `--release --ignored --nocapture`.
+    #[test]
+    #[ignore = "a measurement, run by hand"]
+    fn the_recogniser_over_a_long_message_measured() {
+        let paragraph = "Ada wrote that the box was slow. Привет, мир. 你好，世界。 Done at 12:30; see https://x.example/a?b=c. ";
+        let address = "ada@mail.example.test";
+        let mut message = String::new();
+        while message.len() < 2_000_000 {
+            for _ in 0..40 {
+                message.push_str(paragraph);
+            }
+            message.push_str(address);
+            message.push(' ');
+        }
+        for (what, run) in [
+            (
+                "replace_addresses",
+                &(|| drop(suzatary_address::replace_addresses(&message, ADDRESS))) as &dyn Fn(),
+            ),
+            ("Excerpt::of", &|| drop(Excerpt::of(&message))),
+        ] {
+            let started = std::time::Instant::now();
+            for _ in 0..5 {
+                run();
+            }
+            println!(
+                "{what}: {:?} per pass over {} bytes",
+                started.elapsed() / 5,
+                message.len()
+            );
         }
     }
 }

@@ -6,5 +6,8 @@
 mod attendee_name;
 mod email;
 
+#[cfg(test)]
+mod laws;
+
 pub use attendee_name::{AttendeeName, MAX_NAME, NotAName};
-pub use email::{holds_address, replace_addresses};
+pub use email::{Address, Join, addresses, holds_address, replace_addresses};

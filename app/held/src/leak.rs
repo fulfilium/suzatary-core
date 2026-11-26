@@ -702,12 +702,6 @@ static HOME: LazyLock<Regex> = LazyLock::new(|| {
 static TAILNET: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"([a-z0-9\-]+)\.ts\.net").expect("a valid pattern"));
 
-/// An email address, lowercased.
-static EMAIL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[a-z0-9._%+\-]+@([a-z0-9\-]+(?:\.[a-z0-9\-]+)*\.[a-z][a-z]+)")
-        .expect("a valid pattern")
-});
-
 /// The end of a line that a URL's userinfo continues: `scheme://user`.
 static USERINFO: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-z][a-z0-9+.\-]*://[^/ ]*$").expect("a valid pattern"));
@@ -778,13 +772,33 @@ fn tailnet(line: &str) -> bool {
         .any(|found| !matches!(&found[1], "example" | "tailnet"))
 }
 
-/// An address outside the reserved domains, and not a URL's userinfo.
+/// An address a reader would copy into a mail client, outside the reserved domains and not a
+/// URL's userinfo. An address with white space beside its at sign is no leak here: a file's
+/// `@ ` is a decorator, a doc tag or a version pin far more often than a person's address.
 fn addressed(line: &str) -> bool {
-    EMAIL.captures_iter(line).any(|found| {
-        let whole = found.get(0).expect("a match has a whole");
-        let userinfo = USERINFO.is_match(&line[..whole.start()]);
-        !userinfo && !reserved(&found[1]) && whole.as_str() != "noreply@anthropic.com"
+    suzatary_address::addresses(line).any(|found| {
+        let range = found.range();
+        found.join() == suzatary_address::Join::Tight
+            && top_level_end(found.domain()).is_some_and(|domain| !reserved(domain))
+            && !USERINFO.is_match(&line[..range.start])
+            && &line[range] != "noreply@anthropic.com"
     })
+}
+
+/// `domain` up to the end of the letters that start its last label, when there are two or more,
+/// as a top-level domain has and a package version (`serde@1.0.1`) has not.
+fn top_level_end(domain: &str) -> Option<&str> {
+    let (dot, last) = domain
+        .char_indices()
+        .rev()
+        .find(|(_, c)| ['.', '．', '。', '｡'].contains(c))?;
+    let start = dot + last.len_utf8();
+    let letters: Vec<char> = domain[start..]
+        .chars()
+        .take_while(|c| c.is_alphabetic())
+        .collect();
+    (letters.len() >= 2)
+        .then(|| &domain[..start + letters.iter().map(|c| c.len_utf8()).sum::<usize>()])
 }
 
 /// The example domains RFC 2606 and 6761 reserve, and any whose first label is `example`.
@@ -828,6 +842,10 @@ mod tests {
             concat!("/ho", "me/zzother/x").to_owned(),
             concat!("peer.zznet", ".ts.net").to_owned(),
             concat!("mail zz@realm", ".example-mail.com").to_owned(),
+            concat!("zz@пример", ".realm.example-mail.com").to_owned(),
+            concat!("иван@realm", ".example-mail.com").to_owned(),
+            concat!("\"zz zz\"@realm", ".example-mail.com").to_owned(),
+            concat!("zz@realm\u{200B}", ".example-mail.com").to_owned(),
         ] {
             assert!(leaks(&all, &leak), "{leak}");
         }
@@ -838,6 +856,8 @@ mod tests {
             "box.example.ts.net and peer.tailnet.ts.net",
             "https://user@calendar.example.org",
             "Co-Authored-By: Claude <noreply@anthropic.com>",
+            "serde@1.0.1 and a decorator @ foo.bar and zz @ realm.example-mail",
+            "ада@пример.test, \"a b\"@example.test",
             "private.md without the docs",
         ] {
             assert!(!leaks(&all, clean), "{clean}");
