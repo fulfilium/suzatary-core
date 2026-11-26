@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('59747c31552b96f29c7ce8abe178bf2800840215bddbc79d7f07d3edaa189149',), event=Governs(decision='mailreads', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/mail', 'app/server')))

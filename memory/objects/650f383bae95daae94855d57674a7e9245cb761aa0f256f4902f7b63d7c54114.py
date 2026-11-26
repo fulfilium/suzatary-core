@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('6ac6e4fa826b8bd5ad6b26d3fcd68c16af0381645e59060e7948e5912d3cd73a',), event=Governs(decision='remembercard', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/inbox', 'app/secretary')))

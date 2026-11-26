@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('c137b2d4127640fa24700275a201d716e5d5c3efb3fe7a5d85caf7298c1e80d4',), event=Governs(decision='protondrive', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/secretary',)))

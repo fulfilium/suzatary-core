@@ -5,9 +5,10 @@
 //! Not a `decision` todo, which is a choice awaiting the owner's tap: a recorded decision is one
 //! already made. Its registers: the [`Statement`] (discrete, so two concurrent revisions are a
 //! conflict shown whole), the [`Life`] (inflationary, so a withdrawn decision never stands again)
-//! and the links it supersedes (grow-only, read by union); what a decision MEANS at a moment is
+//! and the links it supersedes and the areas it governs (grow-only, read by union); what a decision MEANS at a moment is
 //! the [`Ledger`], a function of the object set.
 
+mod area;
 mod draft;
 mod event;
 mod id;
@@ -17,17 +18,22 @@ mod refused;
 mod registers;
 mod statement;
 mod store;
+mod summaries;
 mod view;
 
+pub use area::Area;
 pub use draft::{DECIDE, Draft};
-pub use event::{DecisionEvent, DecisionVocabulary, Said, decided, revised, withdrawn};
+pub use event::{
+    DecisionEvent, DecisionVocabulary, Said, decided, governs, revised, summarized, withdrawn,
+};
 pub use id::DecisionId;
 pub use ledger::{Decision, Held, Ledger, Withdrawal};
 pub use life::Life;
 pub(crate) use refused::NotADecision;
 pub(crate) use registers::DecisionRegisters;
-pub use registers::{ContentRegister, LifeRegister};
+pub use registers::{ContentRegister, LifeRegister, SummaryRegister};
 pub use statement::Statement;
 pub use store::Decisions;
+pub use summaries::Summaries;
 pub(crate) use view::DecisionsPage;
 pub use view::{Shown, Standing, document};

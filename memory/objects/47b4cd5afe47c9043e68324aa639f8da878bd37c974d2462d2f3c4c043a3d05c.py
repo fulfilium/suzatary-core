@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('69630d09c413be5bb245aef860e0815944dd1f13fefa1107e32dcb149f768dc9',), event=Governs(decision='compactasking', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/digest',)))

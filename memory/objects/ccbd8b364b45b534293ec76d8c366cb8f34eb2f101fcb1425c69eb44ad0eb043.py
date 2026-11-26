@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('f7ba405a0109ee47842a54968353c08660b34253ac429b2562ed17a6625d3190',), event=Governs(decision='connections', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/cli', 'app/connect')))

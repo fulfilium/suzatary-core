@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('1204644eeec85ae20613d9419240238f282c6719f343e3d86bf7b89f7299eb76',), event=Governs(decision='frameworklanguages', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/pages', 'app/tiles', 'app/viewtree', 'web')))

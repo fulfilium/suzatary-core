@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('f5ef173e3b9ddb0b96fe1fbf8a4ce65a4060f67a2088090a1f16081de48fd45b',), event=Governs(decision='sealedwordsstay', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/store', 'app/stores')))

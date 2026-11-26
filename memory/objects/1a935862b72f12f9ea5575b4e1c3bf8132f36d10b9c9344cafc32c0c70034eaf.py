@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('a541bc68275c827d512e60d5c690da24cc2bedf87452f7f1620e33783bdca2a1',), event=Governs(decision='sharedgitconfig', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('scripts',)))

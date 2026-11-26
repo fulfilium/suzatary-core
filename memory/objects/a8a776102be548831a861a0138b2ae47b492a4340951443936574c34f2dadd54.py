@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('376c0d1f2a3c8d5393957f0702432c9614204f87b5d6b0584e478953327b2cf2',), event=Governs(decision='worktreenotsandbox', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('scripts',)))

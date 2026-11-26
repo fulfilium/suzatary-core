@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('baa9cb749476ca7ca4a7e0c31d055875b8c8f8dbe2f3f63928a6f21cb60bd4f8',), event=Governs(decision='claudealone', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/io-model', 'app/secretary')))

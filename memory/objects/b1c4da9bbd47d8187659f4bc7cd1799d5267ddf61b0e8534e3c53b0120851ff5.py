@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('82e36d3eac58917e92082d69538f1d7769fc15ea3b840a727dbf5766c625eaa0',), event=Governs(decision='designsystem', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('scripts', 'templates', 'web')))

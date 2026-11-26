@@ -14,6 +14,8 @@ mod card_words;
 mod chain_set;
 #[path = "conversational_rules.rs"]
 mod conversational_rules;
+#[path = "decision_brief.rs"]
+mod decision_brief;
 #[path = "digest.rs"]
 mod digest;
 #[path = "digest_order.rs"]

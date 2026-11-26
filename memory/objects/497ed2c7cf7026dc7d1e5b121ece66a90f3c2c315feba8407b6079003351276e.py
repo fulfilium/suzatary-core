@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('66f6531aab2aa6ef543b0c6491a7ab5f64f00a699122692a628d8df42a97aeb0',), event=Governs(decision='opensweep', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/secretary', 'app/triage')))

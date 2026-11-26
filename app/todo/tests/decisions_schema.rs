@@ -20,7 +20,7 @@ use proptest::prelude::*;
 use suzatary_record::record::MarkupSource;
 use suzatary_store::store::linearised;
 use suzatary_todo::decisions::{
-    self, DecisionEvent, DecisionId, DecisionVocabulary, Ledger, Life, Statement,
+    self, Area, DecisionEvent, DecisionId, DecisionVocabulary, Ledger, Life, Statement, Summaries,
 };
 
 type Disk = EventStore<DecisionEvent, Everything>;
@@ -71,6 +71,15 @@ fn ada() -> Actor {
     Actor::new("ada").expect("an actor")
 }
 
+fn area(part: usize) -> Area {
+    Area::new(format!("app/part{part}")).expect("an area")
+}
+
+/// A node of the decision log, by a name the tests choose.
+fn node_of(n: usize) -> Hash {
+    Hash::of_bytes(format!("node {n}").as_bytes())
+}
+
 /// What a writer does: decide a new decision linking to earlier ones, revise a standing one
 /// adding links to earlier ones, or withdraw a standing one.
 #[derive(Debug, Clone)]
@@ -78,6 +87,8 @@ enum Step {
     Decide(u64, Vec<usize>),
     Revise(usize, u64, Vec<usize>),
     Withdraw(usize),
+    Govern(usize, Vec<usize>),
+    Summarize(usize, u64),
 }
 
 fn steps() -> impl Strategy<Value = Vec<Step>> {
@@ -88,6 +99,9 @@ fn steps() -> impl Strategy<Value = Vec<Step>> {
             2 => (0usize..40, any::<u64>(), links())
                 .prop_map(|(pick, seed, links)| Step::Revise(pick, seed, links)),
             1 => (0usize..40).prop_map(Step::Withdraw),
+            1 => (0usize..40, proptest::collection::vec(0usize..5, 1..3))
+                .prop_map(|(pick, areas)| Step::Govern(pick, areas)),
+            1 => (0usize..6, any::<u64>()).prop_map(|(node, seed)| Step::Summarize(node, seed)),
         ],
         1..30,
     )
@@ -136,7 +150,19 @@ fn history(script: &[Step], from: usize) -> Vec<DecisionEvent> {
                     );
                 }
             }
-            Step::Revise(..) | Step::Withdraw(_) => {}
+            Step::Govern(pick, areas) if decided > 0 => {
+                let which = pick % decided;
+                if !withdrawn.contains(&which) {
+                    let areas = areas.iter().map(|part| area(*part)).collect();
+                    events
+                        .push(decisions::governs(id(which), now, ada(), areas).expect("an event"));
+                }
+            }
+            Step::Summarize(node, seed) => events.push(
+                decisions::summarized(&node_of(*node), now, ada(), &format!("Summary {seed}"))
+                    .expect("an event"),
+            ),
+            Step::Revise(..) | Step::Withdraw(_) | Step::Govern(..) => {}
         }
     }
     events
@@ -157,6 +183,11 @@ fn objects(store: &Disk) -> Vec<(Hash, Envelope<DecisionEvent>)> {
 fn read(objects: Vec<(Hash, Envelope<DecisionEvent>)>) -> Ledger {
     let nodes: Vec<Node<DecisionEvent>> = Dag::from_iter(objects).nodes().expect("a prodrome");
     Ledger::of(&nodes)
+}
+
+fn summaries(objects: Vec<(Hash, Envelope<DecisionEvent>)>) -> Summaries {
+    let nodes: Vec<Node<DecisionEvent>> = Dag::from_iter(objects).nodes().expect("a prodrome");
+    Summaries::of(&nodes)
 }
 
 /// `objects` in an order a replica could receive them, every parent before its child.
@@ -292,6 +323,7 @@ proptest! {
         let whole = read(all.clone());
         let arrived = arrival(&all, seed);
         prop_assert_eq!(&read(arrived.clone()), &whole);
+        prop_assert_eq!(summaries(arrived.clone()), summaries(all.clone()));
         let gone = out_of_force(&whole);
         let mut held = Vec::new();
         for end in 1..=arrived.len() {
@@ -409,14 +441,14 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
         let n: usize = of.as_str()["decision".len()..].parse().expect("a number");
         id(n + offset)
     };
-    let decision = moved(prodrome_data::schema::Schema::key(event));
+    let decision = || moved(prodrome_data::schema::Schema::key(event));
     let when = prodrome_data::schema::Schema::at(event);
     match event.body() {
         suzatary_todo::decisions::Said::Decided {
             statement,
             supersedes,
         } => decisions::decided(
-            decision,
+            decision(),
             when,
             ada(),
             statement.clone(),
@@ -426,15 +458,20 @@ fn rename(event: &DecisionEvent, offset: usize) -> DecisionEvent {
             statement,
             supersedes,
         } => decisions::revised(
-            decision,
+            decision(),
             when,
             ada(),
             statement.clone(),
             supersedes.iter().map(moved).collect(),
         ),
         suzatary_todo::decisions::Said::Withdrawn { reason } => {
-            decisions::withdrawn(decision, when, ada(), reason.as_str())
+            decisions::withdrawn(decision(), when, ada(), reason.as_str())
         }
+        suzatary_todo::decisions::Said::Governs { areas } => {
+            decisions::governs(decision(), when, ada(), areas.clone())
+        }
+        // A summary names a node of the log, which no replica renames.
+        suzatary_todo::decisions::Said::Summarized { .. } => Ok(event.clone()),
     }
     .expect("an event")
 }
@@ -452,7 +489,37 @@ fn the_stored_names_are_pinned() {
         Decided(decision, at, actor, title, body, rationale, supersedes)
         Revised(decision, at, actor, title, body, rationale, supersedes)
         Withdrawn(decision, at, actor, reason)
+        Governs(decision, at, actor, areas)
+        Summarized(decision, at, actor, words)
         Decide(id, title, body, rationale, supersedes)
         ",
     );
+}
+
+/// A summary is no decision, and an area never changes what a decision says: both only add to the
+/// reading of a node or of the areas.
+#[test]
+fn a_summary_and_an_area_add_to_the_reading_and_decide_nothing() {
+    let store = written(&[
+        decisions::decided(id(1), at(1), ada(), statement(1), BTreeSet::new()).expect("an event"),
+    ]);
+    let before = read(objects(&store.0));
+    for event in [
+        decisions::governs(id(1), at(2), ada(), BTreeSet::from([area(1)])).expect("an event"),
+        decisions::governs(id(1), at(3), ada(), BTreeSet::from([area(2)])).expect("an event"),
+        decisions::summarized(&node_of(1), at(4), ada(), "A line.").expect("an event"),
+    ] {
+        store.0.append(event).expect("allowed");
+    }
+    let all = objects(&store.0);
+    let after = read(all.clone());
+    assert_eq!(after.len(), before.len());
+    let decision = after.get(&id(1)).expect("decided");
+    assert_eq!(
+        decision.statement(),
+        before.get(&id(1)).expect("decided").statement()
+    );
+    assert_eq!(decision.areas, BTreeSet::from([area(1), area(2)]));
+    assert_eq!(summaries(all.clone()).get(&node_of(1)), Some("A line."));
+    assert_eq!(summaries(all).get(&node_of(2)), None);
 }

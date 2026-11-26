@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('af382f1b062d4a49ced39e74d6e288f4d8d8c9df1a095344258995f66f34f3e8',), event=Governs(decision='prefetchinputs', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('nix', 'scripts')))

@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('1413b38d727949a406c73e62e0e13c060a18908a4bbc2867f852efdc5fca5007',), event=Governs(decision='actswake', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/pages', 'web')))

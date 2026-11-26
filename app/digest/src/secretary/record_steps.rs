@@ -20,6 +20,7 @@
 
 use prodrome_digest::{Leaf, Measure, Node, Part, Tree, Waters};
 
+use crate::secretary::conversations_log::Conversations;
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view::{self, LINE_BYTES, Shown, VIEW_BYTES};
@@ -133,6 +134,7 @@ pub(crate) fn split(
     let Some(tree) = digest.tree() else {
         return Split::default();
     };
+    let log = Conversations::new(digest, entries);
     let lines = leaves(tree.root());
     let at = frozen_point(&lines, steps.step, |line| {
         if told::line_in_words(&digest.label(line), shows) {
@@ -149,7 +151,7 @@ pub(crate) fn split(
                 .into_iter()
                 .filter_map(|part| {
                     let node = named(&prefix, &part)?;
-                    digest_view::shown_node(digest, entries, part, node, shows)
+                    digest_view::shown_node(&log, part, node, shows)
                 })
                 .collect()
         })
@@ -161,7 +163,7 @@ pub(crate) fn split(
                 node: node.name().clone(),
                 span: node.span(),
             };
-            digest_view::shown_node(digest, entries, part, node, shows)
+            digest_view::shown_node(&log, part, node, shows)
         })
         .collect();
     Split { frozen, tail }

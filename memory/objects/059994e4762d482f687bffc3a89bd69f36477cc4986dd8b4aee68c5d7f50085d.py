@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('0fec20353d2af56b7661597b7e2f7e77826ee6887da77853e268bd7300c93a2f',), event=Governs(decision='onequery', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/todo', 'app/wasm')))

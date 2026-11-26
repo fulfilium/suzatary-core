@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('d376c7eedd9bc64275744070dedf5c2c32d1c9bed743dfe3e0a607bf8d82645c',), event=Governs(decision='warningsaretodos', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/cards',)))

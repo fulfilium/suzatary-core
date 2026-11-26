@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('07b61cd73a717a6b7603b7593e1073d2cefa7db9065b5eef903175d7fdb0542c',), event=Governs(decision='cheapgate', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/tooling', 'scripts')))

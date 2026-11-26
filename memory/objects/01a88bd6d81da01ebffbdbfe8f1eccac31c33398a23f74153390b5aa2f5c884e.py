@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('c0b9eeb90624c22dc951066249707bb88217e12c943ca370fbfa61127492f8c4',), event=Governs(decision='hookspath', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('scripts',)))

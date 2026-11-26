@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('b0e3ab6ca6c2b0b37b88dd90f3128fa5374900f194685d8e3a5ba85bc0ba26a5',), event=Governs(decision='lawsat20000', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app',)))

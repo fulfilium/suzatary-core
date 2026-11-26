@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('3ed214c037a5e8d418539892573e4bd65ed0a62e3b71de209379c34a06782466',), event=Governs(decision='budgetcountsshown', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/digest',)))

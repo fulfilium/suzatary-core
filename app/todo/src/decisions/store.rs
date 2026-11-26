@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use prodrome_data::event::{Actor, Hash};
 use prodrome_data::literal::Datetime;
 
-use super::{DecisionEvent, DecisionId, Draft, Ledger, Statement};
+use super::{Area, DecisionEvent, DecisionId, Draft, Ledger, Statement, Summaries};
 use suzatary_base::capability::Typeset;
 use suzatary_base::refusal::{Refusal, shown};
 use suzatary_store::store::Prodrome;
@@ -22,6 +22,46 @@ pub struct Decisions<'a> {
 impl Decisions<'_> {
     pub fn ledger(&self) -> Result<Ledger, Refusal> {
         Ok(Ledger::of(&self.store.nodes()?))
+    }
+
+    /// The summaries written for the digest's nodes.
+    pub fn summaries(&self) -> Result<Summaries, Refusal> {
+        Ok(Summaries::of(&self.store.nodes()?))
+    }
+
+    /// Sum up the digest's node `node` as `words`.
+    ///
+    /// # Errors
+    /// [`Refusal::bad_request`] for words that are not one trimmed line.
+    pub fn summarize(
+        &self,
+        node: &Hash,
+        words: &str,
+        at: Datetime,
+        actor: &Actor,
+    ) -> Result<Hash, Refusal> {
+        let event = super::summarized(node, at, actor.clone(), words)
+            .map_err(|refused| Refusal::bad_request(refused.to_string()))?;
+        Ok(self.store.append(event)?)
+    }
+
+    /// Name the parts of the tree a standing decision governs, beside those it already does.
+    ///
+    /// # Errors
+    /// [`Refusal::not_found`] for an id never decided; [`Refusal::conflict`] for a withdrawn one;
+    /// [`Refusal::bad_request`] for no area.
+    pub fn govern(
+        &self,
+        id: &DecisionId,
+        areas: BTreeSet<Area>,
+        at: Datetime,
+        actor: &Actor,
+    ) -> Result<Hash, Refusal> {
+        let _hold = self.store.locked()?;
+        standing(&self.ledger()?, id)?;
+        let event = super::governs(id.clone(), at, actor.clone(), areas)
+            .map_err(|refused| Refusal::bad_request(refused.to_string()))?;
+        Ok(self.store.append(event)?)
     }
 
     /// Record a new decision, its body through the markup door.

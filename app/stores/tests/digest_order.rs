@@ -11,6 +11,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_digest::secretary::compaction::{Compaction, Reading};
+use suzatary_digest::secretary::conversations_log::Conversations;
 use suzatary_digest::secretary::digest::Digest;
 use suzatary_digest::secretary::digest_census::Census;
 use suzatary_digest::secretary::digest_label::Label;
@@ -136,7 +137,11 @@ proptest! {
             prop_assert_eq!(old.digest().summary(node.name()), new.digest().summary(node.name()));
             let handle = format!("{}+{}", node.span().start, node.span().len());
             let shown = |reading: &Reading| {
-                digest_view::opened(reading.digest(), &reading.entries(), &handle, |_| true)
+                digest_view::opened(
+                    &Conversations::new(reading.digest(), &reading.entries()),
+                    &handle,
+                    |_| true,
+                )
             };
             prop_assert_eq!(shown(&old), shown(&new));
         }

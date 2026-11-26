@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('8b57a01013971abddaf0db0f03a06b72656545e3cb8b8ca9807b7dd752d53af3',), event=Governs(decision='syncfixpoint', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/store', 'app/stores')))

@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('2bf9c62bf26d74941f6b83f99b96d4080abce70c701d2e91996baf46efde52dc',), event=Governs(decision='lockedwords', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/held', 'app/lines', 'app/memory')))

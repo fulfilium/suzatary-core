@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('a372bd5d536425f98cce802aaed88ebc8c99a24265d29f97331f3d661715a062',), event=Governs(decision='derivedflag', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/inbox', 'app/store')))

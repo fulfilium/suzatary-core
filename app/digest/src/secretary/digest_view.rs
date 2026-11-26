@@ -4,12 +4,10 @@
 //! Every part prints on exactly one line, so a part's words cannot reach past its own line, and
 //! a marker at the head of a line fences what follows it on that line.
 
-use std::collections::BTreeMap;
-
 use prodrome_data::event::Hash;
 use prodrome_digest::{Measure as _, Node, Part};
 
-use crate::secretary::digest::Digest;
+use crate::log::{Kinded, Log};
 use crate::secretary::digest_label::{Kind, Label};
 use crate::secretary::digest_line::Line;
 use suzatary_conversations::secretary::model::Turn;
@@ -20,21 +18,21 @@ use suzatary_conversations::secretary::turn_shape::TurnShape;
 use suzatary_inbox::secretary::stamp::Stamp;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Shown {
+pub struct Shown<L = Label> {
     pub part: Part,
     /// The join of what the part stands for.
-    pub label: Label,
-    pub body: Body,
+    pub label: L,
+    pub body: Body<L>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Body {
+pub enum Body<L = Label> {
     Said(String),
     /// A summary: words a compactor derived from the lines beneath it, nobody's own.
     Derived(Line),
     /// A part its reader is not shown the words of, by its kinds.
-    Hidden(Label),
-    Unsummarised(Label),
+    Hidden(L),
+    Unsummarised(L),
 }
 
 /// The most bytes one rendered or opened line holds; a longer one is cut and says so.
@@ -43,54 +41,50 @@ pub const LINE_BYTES: usize = 4_096;
 /// The most bytes of the record a call is told, before it is cut to the newest lines that fit.
 pub const VIEW_BYTES: usize = 131_072;
 
-/// The view of `digest` under `budget` bytes: a part `shows` reads as its words, any other
+/// The view of `log` under `budget` bytes: a part `shows` reads as its words, any other
 /// hidden by its kinds.
 #[must_use]
-pub fn view(
-    digest: &Digest,
-    entries: &BTreeMap<&Hash, &Entry>,
-    budget: usize,
-    shows: fn(&Label) -> bool,
-) -> Vec<Shown> {
+pub fn view<G: Log>(log: &G, budget: usize, shows: fn(&G::Label) -> bool) -> Vec<Shown<G::Label>> {
     let budget = u64::try_from(budget).unwrap_or(u64::MAX);
-    let Some(view) = digest.view(budget) else {
+    let Some(view) = log.view(budget) else {
         return Vec::new();
     };
     view.parts
         .into_iter()
         .filter_map(|part| {
-            let node = digest.node(&part.node)?;
-            shown_node(digest, entries, part, node, shows)
+            let node = log.node(&part.node)?;
+            shown_node(log, part, node, shows)
         })
         .collect()
 }
 
 /// One part of a view, `node`, as a reader that `shows` is shown it; the one rule every view of
 /// the digest shows a part by.
-pub(crate) fn shown_node(
-    digest: &Digest,
-    entries: &BTreeMap<&Hash, &Entry>,
+pub(crate) fn shown_node<G: Log>(
+    log: &G,
     part: Part,
-    node: &Node<Label>,
-    shows: fn(&Label) -> bool,
-) -> Option<Shown> {
-    let label = digest.label(node);
-    let body = shown_as(label, shows, || said(digest, entries, node))?;
+    node: &Node<G::Label>,
+    shows: fn(&G::Label) -> bool,
+) -> Option<Shown<G::Label>> {
+    let label = log.label(node);
+    let body = shown_as(label, shows, || said(log, node))?;
     Some(Shown { part, label, body })
 }
+
+/// The join of the labels of the parts a zoom shows, and the parts.
+pub type Opened<L> = (L, Vec<Shown<L>>);
 
 /// What lies beneath the lines `handle` names (`first+lines`), a part `reads` admits as it is
 /// and any other hidden by its kinds, with the join of the shown parts' labels. `None` for a
 /// handle naming no lines.
 #[must_use]
-pub fn opened(
-    digest: &Digest,
-    entries: &BTreeMap<&Hash, &Entry>,
+pub fn opened<G: Log>(
+    log: &G,
     handle: &str,
-    reads: fn(&Label) -> bool,
-) -> Option<(Label, Vec<Shown>)> {
-    let nodes = digest.tree()?.cover(span_of(handle)?)?;
-    let beneath: Vec<&Node<Label>> = match nodes.as_slice() {
+    reads: fn(&G::Label) -> bool,
+) -> Option<Opened<G::Label>> {
+    let nodes = log.tree()?.cover(span_of(handle)?)?;
+    let beneath: Vec<&Node<G::Label>> = match nodes.as_slice() {
         [node] => {
             let mut node = *node;
             while let [only] = node.children() {
@@ -106,18 +100,18 @@ pub fn opened(
     };
     let label = beneath
         .iter()
-        .map(|child| digest.label(child))
+        .map(|child| log.label(child))
         .filter(&reads)
-        .fold(Label::empty(), |label, child| label.join(&child));
+        .fold(G::Label::empty(), |label, child| label.join(&child));
     let shown = beneath
         .into_iter()
         .map(|child| {
-            let label = digest.label(child);
+            let label = log.label(child);
             let body = shown_as(label, reads, || {
                 Some(if child.is_leaf() {
-                    Body::Said(cut(&whole(entries.get(digest.line(child.name()))?)))
+                    Body::Said(cut(&log.whole(child.name())?))
                 } else {
-                    said(digest, entries, child).unwrap_or(Body::Unsummarised(*child.measure()))
+                    said(log, child).unwrap_or(Body::Unsummarised(*child.measure()))
                 })
             })?;
             Some(Shown {
@@ -131,12 +125,12 @@ pub fn opened(
 }
 
 /// What stands for a part labelled `label` to a reader that `reads`: its words, or else its
-/// kinds alone. The one rule every rendering of the digest shows a part by.
-pub(crate) fn shown_as(
-    label: Label,
-    reads: fn(&Label) -> bool,
-    words: impl FnOnce() -> Option<Body>,
-) -> Option<Body> {
+/// kinds alone. The one rule every rendering of a log shows a part by.
+pub(crate) fn shown_as<L>(
+    label: L,
+    reads: fn(&L) -> bool,
+    words: impl FnOnce() -> Option<Body<L>>,
+) -> Option<Body<L>> {
     if reads(&label) {
         words()
     } else {
@@ -147,12 +141,12 @@ pub(crate) fn shown_as(
 /// The node whose summary `handle` names. `None` for a handle naming no node that shows a
 /// summary, so nothing a reader is not shown can be named.
 #[must_use]
-pub fn summarized(digest: &Digest, handle: &str) -> Option<Hash> {
-    let &[mut node] = digest.tree()?.cover(span_of(handle)?)?.as_slice() else {
+pub fn summarized<G: Log>(log: &G, handle: &str) -> Option<Hash> {
+    let &[mut node] = log.tree()?.cover(span_of(handle)?)?.as_slice() else {
         return None;
     };
     loop {
-        if digest.summary(node.name()).is_some() {
+        if log.summary(node.name()).is_some() {
             return Some(node.name().clone());
         }
         let [only] = node.children() else {
@@ -168,20 +162,18 @@ fn span_of(handle: &str) -> Option<std::ops::Range<usize>> {
     Some(first..first.checked_add(lines.parse().ok()?)?)
 }
 
-fn part(node: &Node<Label>) -> Part {
+fn part<L>(node: &Node<L>) -> Part {
     Part {
         node: node.name().clone(),
         span: node.span(),
     }
 }
 
-fn said(digest: &Digest, entries: &BTreeMap<&Hash, &Entry>, node: &Node<Label>) -> Option<Body> {
+fn said<G: Log>(log: &G, node: &Node<G::Label>) -> Option<Body<G::Label>> {
     if node.is_leaf() {
-        entries
-            .get(digest.line(node.name()))
-            .map(|entry| Body::Said(rendered(entry)))
+        log.line(node.name()).map(Body::Said)
     } else {
-        digest.summary(node.name()).cloned().map(Body::Derived)
+        log.summary(node.name()).cloned().map(Body::Derived)
     }
 }
 
@@ -208,7 +200,7 @@ pub fn fit_earliest(shown: Vec<String>, budget: usize) -> Vec<String> {
     lines
 }
 
-impl Body {
+impl<L: Kinded + Copy> Body<L> {
     /// Its one line, with no handle.
     #[must_use]
     pub fn text(&self, lines: usize) -> String {
@@ -217,11 +209,12 @@ impl Body {
             Body::Derived(line) => line.as_str().to_owned(),
             Body::Hidden(label) => format!(
                 "({lines} lines that may hold others' words, not shown here: {})",
-                kinds(*label)
+                label.kinds()
             ),
-            Body::Unsummarised(label) => {
-                format!("({lines} lines not summarised yet: {})", kinds(*label))
-            }
+            Body::Unsummarised(label) => match label.kinds().as_str() {
+                "" => format!("({lines} lines not summarised yet)"),
+                kinds => format!("({lines} lines not summarised yet: {kinds})"),
+            },
         }
     }
 }

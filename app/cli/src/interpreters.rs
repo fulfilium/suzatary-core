@@ -646,10 +646,7 @@ impl Compact for CompactorModel {
         &self,
         ask: &suzatary_digest::secretary::compact_ask::Ask,
     ) -> Result<String, ModelError> {
-        self.ask(
-            &ForModel::of(suzatary_digest::secretary::compact_ask::PROMPT),
-            ForModel::of(&ask.text()),
-        )
+        self.ask(&ForModel::of(ask.prompt()), ForModel::of(&ask.text()))
     }
 }
 

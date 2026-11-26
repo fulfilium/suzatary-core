@@ -34,6 +34,18 @@ impl DecisionId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The key a summary of the digest's node `node` is written under: `n` and the node's name
+    /// cut to fit an id, so the summary is an event of the decisions' schema with no key of its
+    /// own. No decision reads under it.
+    #[must_use]
+    pub fn of_node(node: &prodrome_data::event::Hash) -> Self {
+        Self(
+            std::iter::once('n')
+                .chain(node.as_str().chars().take(63))
+                .collect(),
+        )
+    }
 }
 
 impl fmt::Display for DecisionId {

@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('c787c278a862a1acfa71cb28f75d44e33409209feb3eb43ef3e948678da980e8',), event=Governs(decision='versionreading', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/release', 'app/tooling')))

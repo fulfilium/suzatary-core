@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('cb184ed42ca6731ebb18c6ad56468786c6f3076db87fd9e497fdfab126f03843',), event=Governs(decision='pinsemantics', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app',)))

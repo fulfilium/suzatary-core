@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('debdac900a2a23e2f5baaaa6d2e81423f274f0b06d4406a5538227ac625baa56',), event=Governs(decision='tworoots', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/cli',)))

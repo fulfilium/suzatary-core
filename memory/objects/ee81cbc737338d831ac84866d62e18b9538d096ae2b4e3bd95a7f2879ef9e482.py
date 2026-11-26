@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('31934ff510adcea324d2abd4524b7a67417660272064426aa3c70f82d8052d6c',), event=Governs(decision='untrustedrequired', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/signatures', 'app/store')))

@@ -4534,6 +4534,7 @@ dependencies = [
  "suzatary-memory",
  "suzatary-signatures",
  "suzatary-store",
+ "suzatary-todo",
  "suzatary-topics",
  "suzatary-triage",
  "thiserror",

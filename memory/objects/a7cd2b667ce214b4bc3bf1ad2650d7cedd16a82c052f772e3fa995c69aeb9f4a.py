@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('f842885b9a49c88a8a90a40a665e3bf76ab5910aa02f27e73f4c45dce2f47b37',), event=Governs(decision='modelbootstrap', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/connect', 'app/io-model')))

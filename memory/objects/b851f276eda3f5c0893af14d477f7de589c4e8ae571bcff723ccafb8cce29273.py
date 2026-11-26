@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('56c1f773b8854acc75d6d912674ae83c32a8f33cc309ae02c4ac2254cdb0e036',), event=Governs(decision='boundarycost', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/wasm', 'web')))

@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('7e9641aabec2496ef0623ee0312b609c5c6e6f7132fa4d1c0945fb0308c237be',), event=Governs(decision='oneowner', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app',)))

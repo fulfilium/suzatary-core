@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('88dd5423138d75ba766c6ab304f60d511c7c63b4d06aaa20b54259aad29ee39c',), event=Governs(decision='sessionnamed', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/cli', 'app/secretary')))

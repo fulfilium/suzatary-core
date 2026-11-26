@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('7acdb131fc3781b07efdff76eaa23770b59f3e7b5af43e9e366c02bfabba1f6d',), event=Governs(decision='wordsowed', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/held', 'app/lines')))

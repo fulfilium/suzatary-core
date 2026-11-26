@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('cef62a77286dda12a35600c7f0e7a0f1f9d07e34bf639406ca2f502720d615c0',), event=Governs(decision='tsstyle', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('docs', 'web')))

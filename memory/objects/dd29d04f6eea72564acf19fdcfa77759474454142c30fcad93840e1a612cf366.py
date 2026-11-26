@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('7fd935eeb140a519f94083be9e59ff4813d0fc95748165eeca84f39a90b2fb1b',), event=Governs(decision='onebrowserevaluator', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/wasm', 'web')))

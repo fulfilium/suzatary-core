@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('a419d2a828fa5fd8570b1bf2932a8f8699811cfeb74270ae5c60141bd788047d',), event=Governs(decision='prodromedependency', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/Cargo.toml', 'app/wasm')))

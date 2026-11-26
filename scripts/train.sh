@@ -107,6 +107,31 @@ growth_of() {
   done <<<"$body"
 }
 
+# PR <n>'s `Lesson:` lines, one a line, each led by the PR.
+lessons_of() {
+  local body line
+  body="$("$gh" pr view "$1" --json body --jq .body)" || return 1
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    [[ "$line" =~ ^[[:space:]]*Lesson:[[:space:]]*(.+)$ ]] || continue
+    echo "#$1 ${BASH_REMATCH[1]}"
+  done <<<"$body"
+}
+
+# The `Lesson:` lines of every PR that landed above <base>, under the heading that tells the main
+# session what to do with each. A PR whose description cannot be read is named, and the land goes on.
+print_lessons() {
+  local commit pr lessons=()
+  for commit in $(git rev-list --first-parent --reverse "$1..HEAD"); do
+    for pr in $(prs_of "$commit"); do
+      mapfile -t -O "${#lessons[@]}" lessons < <(lessons_of "$pr" || echo "#$pr its description could not be read, so its lessons are not shown")
+    done
+  done
+  ((${#lessons[@]})) || return 0
+  printf 'lessons proposed by the landed PRs: record each with `suzatary decision record --store memory`, or decline it, now:\n'
+  printf '  %s\n' "${lessons[@]}"
+}
+
 # PR <n>'s growth lines, ready to follow its other trailers.
 grown() { sed '/^$/d' <<<"${growth_lines[$1]}"; }
 
@@ -606,6 +631,8 @@ land() {
     die "the train is built again: scripts/train.sh gate, then land. Nothing landed."
   fi
   local version tag=()
+  local before
+  before="$(git rev-parse origin/master)"
   # A refusal exits this substitution, and its failure stops the land here.
   version="$(checked_release)"
   # One atomic push of master and v<version>; a refusal leaves the train as it was.
@@ -624,6 +651,7 @@ land() {
   local landed
   landed="$(git rev-parse HEAD)"
   printf 'landed: master is %s%s\n' "$landed" "${version:+, tagged v$version}"
+  print_lessons "$before" || true
   # In order: code, core, roadmap. The roadmap pins core's row, so it is recorded last.
   "$tool" publish "$landed" \
     || die "master landed at ${landed:0:12}, and its public tree was not published, so no deploy can run it yet; scripts/train.sh publish, once the cause above is mended, then records its release."

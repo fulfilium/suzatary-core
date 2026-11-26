@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('ccc88d9b068dff86e9edbfb223d572fb7f89474096191655db5ce4da32764916',), event=Governs(decision='deviceerasure', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/secretary', 'web')))

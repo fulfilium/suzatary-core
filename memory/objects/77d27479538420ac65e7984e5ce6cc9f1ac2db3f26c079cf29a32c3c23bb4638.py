@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('050e314621a7a925034cb073b70e346493bce88320d5d80a31c31f8e9cd55651',), event=Governs(decision='invisiblecoupling', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/tooling',)))

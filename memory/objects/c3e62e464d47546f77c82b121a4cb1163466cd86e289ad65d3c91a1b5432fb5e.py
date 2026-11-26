@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('3816db98c201268f7c5143312cfac6dd177a851539a29ed024ced3f558d179a4',), event=Governs(decision='closedworldmarkup', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/record', 'app/secretary')))

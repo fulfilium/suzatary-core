@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('3ba31c0d15d68efb4544066b68714391af02f4fe3b33e9c7f29c2aa35175105f',), event=Governs(decision='mergegate', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/tooling', 'scripts')))

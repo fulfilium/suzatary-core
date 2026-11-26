@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('d5aa027c4bbaf6f225669c4655d0a133f98e3bd14c610aba00f78a345a6b6c57',), event=Governs(decision='rootsrefresh', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('nix', 'scripts')))

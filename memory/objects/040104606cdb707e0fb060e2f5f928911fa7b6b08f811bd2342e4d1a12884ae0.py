@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('187ea538550a08dcd6bcb930a283ff6151ccb78c113175229fac1353b9cda1c5',), event=Governs(decision='digests', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/digest', 'app/memory')))

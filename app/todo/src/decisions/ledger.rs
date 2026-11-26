@@ -1,14 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use prodrome_dag::registers::{Node, fold};
-use prodrome_data::event::Actor;
+use prodrome_data::event::{Actor, Hash};
 use prodrome_data::fold::Order;
 use prodrome_data::literal::Datetime;
 use prodrome_data::policy::Everything;
 use prodrome_data::schema::Schema as _;
 use prodrome_data::stamp::Stamp;
 
-use super::{DecisionEvent, DecisionId, DecisionRegisters, Said, Statement};
+use super::{Area, DecisionEvent, DecisionId, DecisionRegisters, Said, Statement};
 
 /// Every decision the history holds, as one value: its statement, its life and its links.
 ///
@@ -37,7 +37,10 @@ pub struct Decision {
     /// order.
     pub decided: Datetime,
     pub supersedes: BTreeSet<DecisionId>,
+    /// The parts of the tree it governs.
+    pub areas: BTreeSet<Area>,
     pub withdrawn: Option<Withdrawal>,
+    written: Vec<Hash>,
 }
 
 /// A withdrawal, as its event wrote it.
@@ -272,8 +275,17 @@ impl Decision {
                     by: stamp.event.actor().clone(),
                     reason: reason.clone(),
                 }),
-                Said::Decided { .. } | Said::Revised { .. } => None,
+                Said::Decided { .. }
+                | Said::Revised { .. }
+                | Said::Governs { .. }
+                | Said::Summarized { .. } => None,
             });
+        let written = registers
+            .content
+            .reading::<super::ContentRegister>()
+            .into_iter()
+            .map(|stamp| stamp.name.clone())
+            .collect();
         (!statements.is_empty()).then(|| Self {
             statements,
             decided,
@@ -282,7 +294,9 @@ impl Decision {
                 .iter()
                 .map(|id| (*id).clone())
                 .collect(),
+            areas: registers.areas.iter().map(|area| (*area).clone()).collect(),
             withdrawn,
+            written,
         })
     }
 
@@ -297,6 +311,12 @@ impl Decision {
     #[must_use]
     pub fn statement(&self) -> &Statement {
         &self.statements[0]
+    }
+
+    /// The objects that wrote its statements, which name what it said: a restatement changes them.
+    #[must_use]
+    pub fn written(&self) -> &[Hash] {
+        &self.written
     }
 
     /// Whether two concurrent revisions both stand.

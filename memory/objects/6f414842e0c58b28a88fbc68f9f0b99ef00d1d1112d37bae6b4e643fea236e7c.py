@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('ee533f17216def64b5152c86878caa9f372bbf8f38a784ecbeaa41b3e36887f5',), event=Governs(decision='typedtooling', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/tooling', 'scripts')))

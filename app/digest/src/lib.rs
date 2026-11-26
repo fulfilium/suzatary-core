@@ -3,6 +3,13 @@
 
 #![forbid(unsafe_code)]
 
+pub mod decisions {
+    pub mod about;
+    pub mod brief;
+    pub mod decision_log;
+    pub mod summarizing;
+}
+pub mod log;
 pub mod model_name;
 pub mod secretary {
     pub mod caused;
@@ -13,6 +20,7 @@ pub mod secretary {
     pub mod compacting;
     pub mod compaction;
     pub mod compactor;
+    pub mod conversations_log;
     pub mod digest;
     pub mod digest_census;
     pub mod digest_event;

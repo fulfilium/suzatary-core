@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('7bc7f800c5e11cb68c58214e3fa0be669139a590cf640973233e98d893356cf3',), event=Governs(decision='typstfirst', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/record', 'web')))

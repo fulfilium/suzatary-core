@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('a5dc739a47730f664975c6e1dcee7dfbbe656cbd590eb9a0ea65e0c55ce03f3c',), event=Governs(decision='secretaryproposes', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/cli', 'app/inbox', 'app/secretary')))

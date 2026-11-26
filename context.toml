@@ -320,7 +320,7 @@ scripts = []
 name = "digest"
 path = "app/digest"
 shape = "crate"
-depends = ["base", "connect", "conversations", "held", "inbox", "lines", "memory", "prodrome-dag", "prodrome-data", "prodrome-digest", "prodrome-memo", "signatures", "store", "topics", "triage"]
+depends = ["base", "connect", "conversations", "held", "inbox", "lines", "memory", "prodrome-dag", "prodrome-data", "prodrome-digest", "prodrome-memo", "signatures", "store", "todo", "topics", "triage"]
 scripts = []
 
 [[unit]]

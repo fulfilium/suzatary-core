@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('48e2fe5da49c01d28193c7ec2c4720c62125062498f0bd9d462a2158fa668550',), event=Governs(decision='roadmappinscode', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/tooling', 'scripts')))

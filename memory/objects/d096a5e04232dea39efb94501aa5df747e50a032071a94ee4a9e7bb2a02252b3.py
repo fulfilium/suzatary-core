@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('a135432e8042d65afe3f1195fb4e3c78d4b8290264083a52c98af825aa429a31',), event=Governs(decision='rustlanguage', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app',)))

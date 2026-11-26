@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('d40ba1d6c4e95427616f6eaafef3fd0a0a201ee8ba725cc89890f593a3b56851',), event=Governs(decision='tailscaleserve', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/server', 'scripts')))

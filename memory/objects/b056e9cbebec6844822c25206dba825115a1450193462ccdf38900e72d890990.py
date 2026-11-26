@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('385356ffe6d557bc75d4fc2cd14954d04560d5181b89cabcb2d237ce59904e57',), event=Governs(decision='scriptedrefuses', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/testkit',)))

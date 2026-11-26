@@ -26,6 +26,7 @@ suzatary-inbox.workspace = true
 suzatary-conversations.workspace = true
 suzatary-lines.workspace = true
 suzatary-topics.workspace = true
+suzatary-todo.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -33,7 +34,7 @@ serde_json.workspace = true
 chrono.workspace = true
 
 [features]
-nothing = ["suzatary-base/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-triage/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing"]
+nothing = ["suzatary-base/nothing", "suzatary-store/nothing", "suzatary-signatures/nothing", "suzatary-held/nothing", "suzatary-memory/nothing", "suzatary-triage/nothing", "suzatary-connect/nothing", "suzatary-inbox/nothing", "suzatary-conversations/nothing", "suzatary-lines/nothing", "suzatary-topics/nothing", "suzatary-todo/nothing"]
 
 [dev-dependencies]
 suzatary-digest = { path = ".", features = ["nothing"] }

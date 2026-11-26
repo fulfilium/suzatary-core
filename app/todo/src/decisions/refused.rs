@@ -13,4 +13,10 @@ pub enum NotADecision {
     /// A decision naming itself among what it supersedes.
     #[error("{0} cannot supersede itself")]
     Itself(String),
+    /// An area that is no relative path.
+    #[error("an area is a relative path of letters, digits, `-`, `_`, `.` and `/`, got {0:?}")]
+    Area(String),
+    /// A summary that is empty, not trimmed or broken over lines.
+    #[error("a summary is one trimmed line of words")]
+    Summary,
 }

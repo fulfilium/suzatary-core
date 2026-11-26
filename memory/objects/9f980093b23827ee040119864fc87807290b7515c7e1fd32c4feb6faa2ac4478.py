@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('57c99267bbd674173a3bf8ea6dd725c2ac56a983640edd4773c9d319266a7319',), event=Governs(decision='nokeptreading', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/store', 'app/stores')))

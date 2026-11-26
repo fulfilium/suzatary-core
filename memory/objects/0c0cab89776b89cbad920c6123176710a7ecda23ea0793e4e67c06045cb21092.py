@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('25c413ef7094cdb1943b73caaef212450c2f4cc80c4a785fc1e60210954d48f5',), event=Governs(decision='onefencedpath', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/cli', 'app/secretary')))

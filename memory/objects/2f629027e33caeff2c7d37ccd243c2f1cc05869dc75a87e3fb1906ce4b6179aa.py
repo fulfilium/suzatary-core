@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('12c38f122364d2cfd49fafe47388b1393203211545237b70282f7fa9529271ad',), event=Governs(decision='ordercausal', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/store', 'app/todo')))

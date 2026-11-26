@@ -11,6 +11,8 @@ use std::sync::LazyLock;
 use prodrome_data::event::Hash;
 use prodrome_digest::Measure as _;
 
+use crate::log::Log;
+use crate::secretary::conversations_log::Conversations;
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Kinds, Label};
 use crate::secretary::digest_line::{Line, NODE_BYTES};
@@ -21,6 +23,9 @@ use suzatary_conversations::secretary::store::Entry;
 use suzatary_conversations::secretary::taint::Taint;
 
 pub const PROMPT: &str = include_str!("compact.md");
+
+/// What the compactor is told when the log is the project's decisions in force.
+pub const DECISIONS_PROMPT: &str = include_str!("decisions_compact.md");
 
 /// How a node is asked for its summary, as a rule whose version each summary records.
 #[derive(Debug)]
@@ -175,8 +180,16 @@ impl Beside {
     }
 }
 
+/// The log a question is about, which says what the compactor is told.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Subject {
+    Conversations,
+    Decisions,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ask {
+    subject: Subject,
     log: Vec<String>,
     span: Vec<String>,
     /// How each earlier answer did not fit, in order.
@@ -198,9 +211,28 @@ impl Ask {
     #[must_use]
     pub fn new(log: Vec<String>, span: Vec<String>) -> Self {
         Self {
+            subject: Subject::Conversations,
             log,
             span,
             tries: Vec::new(),
+        }
+    }
+
+    /// A question about the decisions in force.
+    #[must_use]
+    pub fn of_decisions(log: Vec<String>, span: Vec<String>) -> Self {
+        Self {
+            subject: Subject::Decisions,
+            ..Self::new(log, span)
+        }
+    }
+
+    /// The whole system prompt a question about this log is sent under.
+    #[must_use]
+    pub fn prompt(&self) -> &'static str {
+        match self.subject {
+            Subject::Conversations => PROMPT,
+            Subject::Decisions => DECISIONS_PROMPT,
         }
     }
 
@@ -257,10 +289,10 @@ impl Ask {
         text
     }
 
-    /// What sending it costs: the bytes of [`PROMPT`] and of [`Ask::text`].
+    /// What sending it costs: the bytes of its prompt and of [`Ask::text`].
     #[must_use]
     pub fn bytes(&self) -> u64 {
-        u64::try_from(PROMPT.len() + self.text().len()).unwrap_or(u64::MAX)
+        u64::try_from(self.prompt().len() + self.text().len()).unwrap_or(u64::MAX)
     }
 
     /// The question for `node` of `digest`, and what it is written from. `None` for a node the
@@ -288,17 +320,16 @@ impl Ask {
             })
             .collect::<Option<_>>()?;
         let reads = Beside::of(asked.measure()).reads();
-        Some((Self::new(log(digest, entries, reads), span), over))
+        Some((
+            Self::new(shown_log(&Conversations::new(digest, entries), reads), span),
+            over,
+        ))
     }
 }
 
-/// The view under [`VIEW_BYTES`] shown to a reader that `reads`, its earliest parts kept.
-fn log(
-    digest: &Digest,
-    entries: &BTreeMap<&Hash, &Entry>,
-    reads: fn(&Label) -> bool,
-) -> Vec<String> {
-    let shown = digest_view::view(digest, entries, VIEW_BYTES, reads)
+/// The view of `log` under [`VIEW_BYTES`] shown to a reader that `reads`, its earliest parts kept.
+pub(crate) fn shown_log<G: Log>(log: &G, reads: fn(&G::Label) -> bool) -> Vec<String> {
+    let shown = digest_view::view(log, VIEW_BYTES, reads)
         .into_iter()
         .map(|shown| shown.body.text(shown.part.span.len()))
         .collect();

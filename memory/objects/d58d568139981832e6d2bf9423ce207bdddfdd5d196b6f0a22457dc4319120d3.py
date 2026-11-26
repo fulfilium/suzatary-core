@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('4cc86b57e1edac01dd285ffe1c73c08f9da2d3a3bbe17dcf6867b0af42abece3',), event=Governs(decision='handparser', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app',)))

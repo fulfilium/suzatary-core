@@ -4,7 +4,7 @@ use prodrome_data::event::Actor;
 use prodrome_data::literal::{Datetime, ProdromeError, Value};
 
 use super::registers::{DecisionRegister, DecisionRegisters};
-use super::{DecisionId, NotADecision, Statement};
+use super::{Area, DecisionId, NotADecision, Statement};
 use prodrome_data::literal::codec::{Constructor, Fields, Literal};
 use prodrome_data::schema::headed::{Body, Constructors, Event};
 use suzatary_record::record::MarkupSource;
@@ -29,6 +29,11 @@ pub enum Said {
     },
     /// It no longer holds, and nothing replaces it.
     Withdrawn { reason: String },
+    /// It governs these parts of the tree, beside those it already governed: no statement is
+    /// restated, so no summary of the decisions goes stale.
+    Governs { areas: BTreeSet<Area> },
+    /// The digest's node that `decision` names ([`DecisionId::of_node`]) is summed up in one line.
+    Summarized { words: String },
 }
 
 /// Decision `decision` decided by `actor`.
@@ -80,13 +85,40 @@ pub fn withdrawn(
     Event::new(decision, at, actor, Said::Withdrawn { reason })
 }
 
+/// Decision `decision` governs `areas`, beside those it already governed.
+pub fn governs(
+    decision: DecisionId,
+    at: Datetime,
+    actor: Actor,
+    areas: BTreeSet<Area>,
+) -> Result<DecisionEvent, NotADecision> {
+    Event::new(decision, at, actor, Said::Governs { areas })
+}
+
+/// The node `node` of the digest of the decisions in force, summed up as `words`, which must be one
+/// trimmed line.
+pub fn summarized(
+    node: &prodrome_data::event::Hash,
+    at: Datetime,
+    actor: Actor,
+    words: &str,
+) -> Result<DecisionEvent, NotADecision> {
+    let words = words.to_owned();
+    Event::new(
+        DecisionId::of_node(node),
+        at,
+        actor,
+        Said::Summarized { words },
+    )
+}
+
 impl Said {
     /// The statement a `Decided` or `Revised` makes.
     #[must_use]
     pub fn statement(&self) -> Option<&Statement> {
         match self {
             Said::Decided { statement, .. } | Said::Revised { statement, .. } => Some(statement),
-            Said::Withdrawn { .. } => None,
+            Said::Withdrawn { .. } | Said::Governs { .. } | Said::Summarized { .. } => None,
         }
     }
 
@@ -95,7 +127,7 @@ impl Said {
     pub fn supersedes(&self) -> Option<&BTreeSet<DecisionId>> {
         match self {
             Said::Decided { supersedes, .. } | Said::Revised { supersedes, .. } => Some(supersedes),
-            Said::Withdrawn { .. } => None,
+            Said::Withdrawn { .. } | Said::Governs { .. } | Said::Summarized { .. } => None,
         }
     }
 }
@@ -128,10 +160,14 @@ const REVISED: Constructor = (
 );
 /// `Withdrawn(decision, at, actor, reason)`.
 const WITHDRAWN: Constructor = ("Withdrawn", &["decision", "at", "actor", "reason"]);
+/// `Governs(decision, at, actor, areas)`.
+const GOVERNS: Constructor = ("Governs", &["decision", "at", "actor", "areas"]);
+/// `Summarized(decision, at, actor, words)`.
+const SUMMARIZED: Constructor = ("Summarized", &["decision", "at", "actor", "words"]);
 /// The constructors, in print order.
-const SIGNATURES: &[Constructor] = &[DECIDED, REVISED, WITHDRAWN];
+const SIGNATURES: &[Constructor] = &[DECIDED, REVISED, WITHDRAWN, GOVERNS, SUMMARIZED];
 
-/// The decisions' whitelist: three constructors and nothing else, since no event nests a term.
+/// The decisions' whitelist: five constructors and nothing else, since no event nests a term.
 pub type DecisionVocabulary = Constructors<Said>;
 
 fn invalid(failed: impl std::fmt::Display) -> ProdromeError {
@@ -159,15 +195,22 @@ impl Body for Said {
     const EVENTS: &'static [Constructor] = SIGNATURES;
 
     /// A statement supersedes in both registers, so a restatement of a withdrawn decision is
-    /// refused by the life's order; a withdrawal only in the life. The links accumulate and
-    /// supersede nothing.
+    /// refused by the life's order; a withdrawal only in the life. The links and the areas
+    /// accumulate and supersede nothing; a summary supersedes in the summary register alone.
     fn writes(&self) -> impl Iterator<Item = DecisionRegister> {
-        let statement = matches!(self, Said::Decided { .. } | Said::Revised { .. })
-            .then_some(DecisionRegister::Content);
-        statement.into_iter().chain([DecisionRegister::Life])
+        let registers: &[DecisionRegister] = match self {
+            Said::Decided { .. } | Said::Revised { .. } => {
+                &[DecisionRegister::Content, DecisionRegister::Life]
+            }
+            Said::Withdrawn { .. } => &[DecisionRegister::Life],
+            Said::Governs { .. } => &[],
+            Said::Summarized { .. } => &[DecisionRegister::Summary],
+        };
+        registers.iter().copied()
     }
 
-    /// A decision never supersedes itself, and a withdrawal's reason is trimmed and not empty.
+    /// A decision never supersedes itself, a withdrawal's reason is trimmed and not empty, a
+    /// `Governs` names an area, and a summary is one trimmed line.
     fn admits(decision: &DecisionId, said: &Said) -> Result<(), NotADecision> {
         match said {
             Said::Decided { supersedes, .. } | Said::Revised { supersedes, .. }
@@ -178,7 +221,19 @@ impl Body for Said {
             Said::Withdrawn { reason } if reason.is_empty() || *reason != reason.trim() => {
                 Err(NotADecision::Empty("reason"))
             }
-            Said::Decided { .. } | Said::Revised { .. } | Said::Withdrawn { .. } => Ok(()),
+            Said::Governs { areas } if areas.is_empty() => Err(NotADecision::Empty("areas")),
+            Said::Summarized { words }
+                if words.is_empty()
+                    || *words != words.trim()
+                    || words.chars().any(char::is_control) =>
+            {
+                Err(NotADecision::Summary)
+            }
+            Said::Decided { .. }
+            | Said::Revised { .. }
+            | Said::Withdrawn { .. }
+            | Said::Governs { .. }
+            | Said::Summarized { .. } => Ok(()),
         }
     }
 
@@ -193,6 +248,8 @@ impl Body for Said {
                 supersedes,
             } => (REVISED, stated(statement, supersedes)),
             Said::Withdrawn { reason } => (WITHDRAWN, vec![reason.to_value()]),
+            Said::Governs { areas } => (GOVERNS, vec![areas.to_value()]),
+            Said::Summarized { words } => (SUMMARIZED, vec![words.to_value()]),
         }
     }
 
@@ -214,6 +271,11 @@ impl Body for Said {
             "Decided" => decided(decision, at, actor, statement()?, fields.get("supersedes")?),
             "Revised" => revised(decision, at, actor, statement()?, fields.get("supersedes")?),
             "Withdrawn" => withdrawn(decision, at, actor, &fields.get::<String>("reason")?),
+            "Governs" => governs(decision, at, actor, fields.get("areas")?),
+            "Summarized" => {
+                let words = fields.get::<String>("words")?;
+                Event::new(decision, at, actor, Said::Summarized { words })
+            }
             other => {
                 return Err(prodrome_data::literal::codec::no_arm(Self::NAME, other));
             }

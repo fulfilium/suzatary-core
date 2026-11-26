@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('c16ba985717eabaec7fa0fd5412b096f9799d185c6e99e68ad5e2e605ca921b4',), event=Governs(decision='seamfeature', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app',)))

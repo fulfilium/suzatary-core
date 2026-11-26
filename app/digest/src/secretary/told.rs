@@ -12,11 +12,13 @@ use std::fmt::Write as _;
 use std::ops::Range;
 
 use prodrome_data::event::Hash;
-use prodrome_digest::{Measure as _, Tree};
+use prodrome_digest::{Measure, Tree};
 
 use serde_json::{Value, json};
 
+use crate::log::Kinded;
 use crate::secretary::compaction::Reading;
+use crate::secretary::conversations_log::Conversations;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view::{self, Body, Shown};
 use crate::secretary::record_steps::{self, Room};
@@ -216,8 +218,7 @@ pub(crate) fn spanned_lines(
     match room {
         Room::Whole(budget) => Lines {
             frozen: prepared(digest_view::view(
-                reading.digest(),
-                &entries,
+                &Conversations::new(reading.digest(), &entries),
                 budget,
                 reader,
             )),
@@ -353,10 +354,10 @@ fn cut(lines: &[&Spanned], budget: usize) -> (usize, Option<String>) {
 
 /// The parts as lines, each led by its handle, a summary fenced as derived, and each run of parts
 /// not shown merged into one line.
-fn lines(shown: &[Shown]) -> Vec<Spanned> {
+pub(crate) fn lines<L: Measure + Kinded + Copy>(shown: &[Shown<L>]) -> Vec<Spanned> {
     let mut lines = Vec::new();
-    let mut hidden: Option<(Range<usize>, Label)> = None;
-    let close = |hidden: &mut Option<(Range<usize>, Label)>, lines: &mut Vec<Spanned>| {
+    let mut hidden: Option<(Range<usize>, L)> = None;
+    let close = |hidden: &mut Option<(Range<usize>, L)>, lines: &mut Vec<Spanned>| {
         if let Some((span, label)) = hidden.take() {
             lines.push((
                 span.clone(),
@@ -365,7 +366,7 @@ fn lines(shown: &[Shown]) -> Vec<Spanned> {
                     span.start,
                     span.len(),
                     span.len(),
-                    digest_view::kinds(label)
+                    label.kinds()
                 ),
             ));
         }
@@ -497,14 +498,18 @@ fn facts(facts: &[Remembered]) -> String {
 pub fn zoom(reading: &Reading, handle: &str, shows: fn(&Label) -> bool) -> Result<Value, Refusal> {
     let entries = reading.entries();
     let handle = handle.trim();
-    let (label, beneath) = digest_view::opened(reading.digest(), &entries, handle, shows)
-        .ok_or_else(|| {
-            Refusal::not_found(format!(
-                "no part of the record spans {}: a handle is `first+lines`, as the record shows \
+    let (label, beneath) = digest_view::opened(
+        &Conversations::new(reading.digest(), &entries),
+        handle,
+        shows,
+    )
+    .ok_or_else(|| {
+        Refusal::not_found(format!(
+            "no part of the record spans {}: a handle is `first+lines`, as the record shows \
                  it",
-                suzatary_base::refusal::shown(handle)
-            ))
-        })?;
+            suzatary_base::refusal::shown(handle)
+        ))
+    })?;
     Ok(json!({
         "handle": handle,
         "taint": label.taint.as_str(),

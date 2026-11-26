@@ -4,6 +4,12 @@ You are a coding agent working on Suzatary's Rust and TypeScript. Follow this fi
 change under `app/` or `web/`, and for every comment, document, commit message and pull request
 that you write.
 
+Before you plan, run `suzatary decision brief --store memory --about <path>` once for each path your
+task names, and read its output. It prints the project's memory: the decisions that name your
+paths whole, and every other decision as one line. Without an installed binary, run
+`cargo run --manifest-path app/Cargo.toml -q --bin suzatary -- decision brief …`. "The project's
+memory" below says how to zoom into a line.
+
 Read these files too:
 
 - [`CLAUDE.md`](CLAUDE.md) is the project's constitution. It contains the rules for security,
@@ -20,18 +26,29 @@ The project's decisions and lessons are in `memory/`, a store of recorded decisi
 says what was decided, who decided it, when, and why. `CLAUDE.md` names a rule's decision as
 `(→ id)`. It is not the secretary's memory, which is the `memory/` of the data tree.
 
-1. Before you change a mechanism, run `suzatary decision list --store memory --grep <words>`.
+1. The brief ends in a record of every decision in force, one line a part, each led by a handle
+   (`first+lines`). To open a part, run `suzatary decision zoom <handle> --store memory`. A line
+   after `derived:` is a model's summary of the decisions under it, so it can be wrong.
+   `--budget <tokens>` (6,000 by default) sets how much the brief prints.
+2. Before you change a mechanism, run `suzatary decision list --store memory --grep <words>`.
    It lists the decisions whose title, body or rationale holds every word.
-2. To read one decision whole, run `suzatary decision show <id> --store memory`.
-3. Without an installed binary, run the same verbs as
+3. To read one decision whole, run `suzatary decision show <id> --store memory`.
+4. Without an installed binary, run the same verbs as
    `cargo run --manifest-path app/Cargo.toml -q --bin suzatary -- decision …`.
-4. Do not write to `memory/` yourself. To propose a lesson, put it on its own line of your pull
+5. Do not write to `memory/` yourself. To propose a lesson, put it on its own line of your pull
    request's description, for example `Lesson: a clean rebase can still fail to compile`. The
-   main session records the lesson, or not, when it reviews the pull request.
-5. The main session records with `suzatary decision record|revise|withdraw --store memory`,
+   main session records the lesson, or not, when it reviews the pull request. After a land,
+   `scripts/train.sh land` prints each `Lesson:` line of the landed pull requests.
+6. The main session records with `suzatary decision record|revise|withdraw --store memory`,
    with `--at` set to the date the decision was made. The actor is `owner` or `assistant`,
    never a name. `memory/` is published with the code, so a decision holds nothing personal.
    Each new decision is a new published path, which the main session admits at publish.
+7. A decision names the parts of the tree it governs with `--area <path>` (repeat it), for example
+   `--area app/tiles`. The brief shows a decision whole when its area holds or lies in a path
+   your task names, or when its title, body or rationale holds that path or word.
+8. After it records, the main session runs `suzatary decision summarize --store memory`. A model
+   writes one summary line for each span of decisions that has none, and each is stored in
+   `memory/` beside the decisions. No coding session runs it, and the brief never calls a model.
 
 ## Commands
 

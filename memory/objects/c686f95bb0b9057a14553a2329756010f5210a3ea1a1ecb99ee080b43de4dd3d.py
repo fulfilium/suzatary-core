@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('5ceea0b9a7cc874ded809a9ea8ab327b7186286a740c038129721fcba7aef127',), event=Governs(decision='storemarks', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/store', 'app/stores', 'scripts')))

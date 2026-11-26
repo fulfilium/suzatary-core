@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('b4091dcd8cdff8ba20c5989ae501e2129d63f6f07cc29c7e6b0326e79c1097a4',), event=Governs(decision='twochains', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/cli', 'scripts')))

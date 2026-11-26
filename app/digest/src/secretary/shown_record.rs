@@ -18,6 +18,7 @@ use prodrome_digest::{Node, Part, Tree};
 use serde_json::{Value, json};
 
 use crate::secretary::compaction::Reading;
+use crate::secretary::conversations_log::Conversations;
 use crate::secretary::digest_label::Label;
 use crate::secretary::digest_view;
 use crate::secretary::told::{self, Told};
@@ -109,8 +110,7 @@ impl<S: Shows> ShownRecord<S> {
     #[must_use]
     pub fn summaries(&self, budget: usize) -> Vec<(Part, crate::secretary::digest_line::Line)> {
         digest_view::view(
-            self.reading.digest(),
-            &self.reading.entries(),
+            &Conversations::new(self.reading.digest(), &self.reading.entries()),
             budget,
             S::shows,
         )

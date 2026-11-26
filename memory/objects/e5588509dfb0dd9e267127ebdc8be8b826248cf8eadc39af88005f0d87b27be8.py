@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('c9eaeda5311c77329bfbb6b505a8ca56f279e1b25cf036a60796a0f65614d376',), event=Governs(decision='vault', at=datetime(2026, 11, 25, 0, 0, 0), actor='assistant', areas=('app/held', 'app/secretary')))
