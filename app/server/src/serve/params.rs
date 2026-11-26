@@ -22,17 +22,23 @@ impl Params for () {
 pub(crate) struct Asked {
     segments: Vec<(String, String)>,
     query: HashMap<String, String>,
+    agent: Option<String>,
 }
 
 impl Asked {
     #[must_use]
-    pub(crate) fn of(segments: &RawPathParams, query: HashMap<String, String>) -> Self {
+    pub(crate) fn of(
+        segments: &RawPathParams,
+        query: HashMap<String, String>,
+        agent: Option<&str>,
+    ) -> Self {
         Self {
             segments: segments
                 .iter()
                 .map(|(name, value)| (name.to_owned(), value.to_owned()))
                 .collect(),
             query,
+            agent: agent.map(str::to_owned),
         }
     }
 
@@ -52,6 +58,12 @@ impl Asked {
             .find(|(name, _)| name == key)
             .map(|(_, value)| value.as_str())
             .ok_or_else(|| Refusal::internal(format!("this route matched without a {key} segment")))
+    }
+
+    /// The request's `User-Agent`, when it sent one as text.
+    #[must_use]
+    pub(crate) fn agent(&self) -> Option<&str> {
+        self.agent.as_deref()
     }
 
     #[must_use]

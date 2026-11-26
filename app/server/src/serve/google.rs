@@ -4,13 +4,14 @@
 //! §10.12) and the gate's actor, which must be the actor who tapped.
 
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use suzatary_base::capability::Datetime;
 use suzatary_io_mail::google::Grant;
 
 use axum::response::Redirect;
 use suzatary_base::capability::Entropy;
 use suzatary_base::refusal::Refusal;
-use suzatary_cards::secretary::google_sign_in::{self, Begun, Open, Taken, Then};
+use suzatary_cards::secretary::google_sign_in::{self, Begun, Open, Outcome, Taken, Then, Via};
 use suzatary_google::google::{Callback, RedirectUri, Scopes, State as Drawn, Verifier};
 use suzatary_inbox::secretary::inbox::ProposalId;
 use suzatary_inbox::secretary::responded::{Done, Performed, Tried};
@@ -152,6 +153,7 @@ impl google_sign_in::Consents for Consenting {
                 link,
                 until,
                 then,
+                via: Via::Browser,
             },
         );
         Performed::Tried(Tried::Running {
@@ -172,14 +174,31 @@ impl Params for Callback {
     }
 }
 
-pub(crate) struct Card(ProposalId);
+pub(crate) struct Card {
+    id: ProposalId,
+    via: Via,
+}
 
 impl Params for Card {
     fn parse(asked: &Asked, _: &Chained) -> Result<Self, Refusal> {
-        ProposalId::new(asked.segment("card")?)
-            .map(Card)
-            .map_err(|refused| Refusal::bad_request(refused.to_string()))
+        let id = ProposalId::new(asked.segment("card")?)
+            .map_err(|refused| Refusal::bad_request(refused.to_string()))?;
+        Ok(Card {
+            id,
+            via: Via::of_agent(asked.agent()),
+        })
     }
+}
+
+/// Runs `work` and logs how long it took, never what it handled.
+fn timed<T>(step: &str, work: impl FnOnce() -> T) -> T {
+    let began = Instant::now();
+    let done = work();
+    tracing::info!(
+        "google sign-in: {step} in {} ms",
+        began.elapsed().as_millis()
+    );
+    done
 }
 
 /// `GET /api/oauth/google/consent/{card}`: redirects the tapping actor to Google's consent page.
@@ -189,8 +208,8 @@ impl Params for Card {
 /// when the card holds no consent open.
 pub(crate) fn consent(call: &Call<Reader, Card, ()>) -> Result<Redirect, Refusal> {
     let by = actor_of(&call.state.deployment, &call.admitted)?;
-    let table = call.state.consenting.table();
-    let Some(begun) = table.begun(&call.params.0) else {
+    let mut table = call.state.consenting.table();
+    let Some(begun) = table.opened(&call.params.id, call.params.via) else {
         return Err(Refusal::not_found(
             "this card holds no sign-in with Google open: tap Sign in with Google to open one",
         ));
@@ -200,6 +219,12 @@ pub(crate) fn consent(call: &Call<Reader, Card, ()>) -> Result<Redirect, Refusal
             "this sign-in with Google was opened by someone else",
         ));
     }
+    tracing::info!(
+        "google sign-in: consent opened: card {}, actor {}, from the {}",
+        begun.card.as_str(),
+        by.as_str(),
+        call.params.via.kind()
+    );
     Ok(Redirect::to(&begun.link))
 }
 
@@ -213,6 +238,13 @@ pub(crate) fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Re
     let by = actor_of(&state.deployment, &call.admitted)?;
     let consenting = &state.consenting;
     let now = state.first.caps.secretary.clock.now();
+    tracing::info!(
+        "google sign-in: callback received: {}",
+        match &call.params {
+            Callback::Code { .. } => "a code",
+            Callback::Refused { .. } => "a refusal",
+        }
+    );
     let taken = consenting
         .table()
         .take(call.params.state(), &by, instant_of(now));
@@ -250,7 +282,7 @@ pub(crate) fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Re
         Then::Retry { card, consent } => Some((card.clone(), begun.by.clone(), *consent)),
         Then::Ended => None,
     });
-    ended(state, &card, now, performed.clone())?;
+    timed("card ended", || ended(state, &card, now, performed.clone()))?;
     if let Some(calendars) = kept {
         state.checks.check(&calendars);
         state.notice();
@@ -279,6 +311,16 @@ pub(crate) fn callback(call: &Call<Reader, Callback, ()>) -> Result<Redirect, Re
         }
         None => BACK.to_owned(),
     };
+    let back = match taken.begun().map(|begun| begun.via) {
+        Some(Via::App) => {
+            tracing::info!("google sign-in: redirect to the app");
+            google_sign_in::app_link(&card, Outcome::of(&taken, &performed))
+        }
+        Some(Via::Browser) | None => {
+            tracing::info!("google sign-in: redirect to the web app");
+            back
+        }
+    };
     match taken {
         Taken::NotYours(_) => Err(Refusal::forbidden(
             "this sign-in with Google was begun by someone else, so nothing was kept",
@@ -299,13 +341,15 @@ fn exchanged(
     begun: &Begun,
     code: &google::Code,
 ) -> Performed {
-    let read = google.exchange(
-        &begun.client,
-        code,
-        &begun.verifier,
-        &begun.redirect,
-        &begun.account,
-    );
+    let read = timed("code exchanged", || {
+        google.exchange(
+            &begun.client,
+            code,
+            &begun.verifier,
+            &begun.redirect,
+            &begun.account,
+        )
+    });
     let (performed, kept) = google_sign_in::exchanged(begun, read);
     let Some(kept) = kept else {
         return performed;
@@ -330,7 +374,7 @@ fn exchanged(
             refresh: kept.refresh.clone(),
             parts: kept.parts.clone(),
         };
-        if let Err(failed) = google.mailbox(&grant) {
+        if let Err(failed) = timed("mailbox read", || google.mailbox(&grant)) {
             return not_sent(format!(
                 "Google granted it, and reading {}'s mail through it failed ({failed}), so \
                  nothing was kept and lieer reads its mail as before; tap Sign in with Google to \
@@ -340,9 +384,11 @@ fn exchanged(
         }
     }
     let name = google::grant_name(&begun.account);
-    let stored = suzatary_connect::settings::Settable::mint(&state.settables(), &name)
-        .map_err(|failed| failed.to_string())
-        .and_then(|name| state.secrets.write_secret(&name, &kept.print()));
+    let stored = timed("grant stored", || {
+        suzatary_connect::settings::Settable::mint(&state.settables(), &name)
+            .map_err(|failed| failed.to_string())
+            .and_then(|name| state.secrets.write_secret(&name, &kept.print()))
+    });
     if let Err(failed) = stored {
         return not_sent(format!(
             "Google granted it, and the secret store did not keep it: {failed}; tap Sign in with \

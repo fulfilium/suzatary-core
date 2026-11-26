@@ -60,7 +60,7 @@ where
 
 /// `polled` over one chain's heads.
 pub(crate) async fn events(AxumState(state): AxumState<State>, raw: RawPathParams) -> Response {
-    match state.bound(Asked::of(&raw, HashMap::new()).chain()) {
+    match state.bound(Asked::of(&raw, HashMap::new(), None).chain()) {
         Ok(bound) => polled(
             move || {
                 let tips = bound.caps.secretary.chain.tips();
@@ -96,7 +96,7 @@ pub(crate) async fn conversation(
     AxumState(state): AxumState<State>,
     raw: RawPathParams,
 ) -> Response {
-    let id = match conversation_named(&Asked::of(&raw, HashMap::new())) {
+    let id = match conversation_named(&Asked::of(&raw, HashMap::new(), None)) {
         Ok(id) => id,
         Err(refusal) => return refused(&refusal),
     };

@@ -1,61 +1,29 @@
 /*
  * SUZATARY ON ANDROID IS A PORTAL, NOT A SECOND CLIENT.
  *
- * The API is the product (suzatary/webapp.py) and web/ is its one client. This
- * app opens that client at the box's tailnet address and then gets out of the
- * way: it holds no fold, no fulfillment, no chain verifier and no HTML. Every
- * one of those already exists exactly once, and a Java copy of any of them
- * would be the duplicate-evaluator failure the repo has already retired twice
- * (typst's evalSpec, 2026-09-02; the browser never computing a fulfillment).
+ * The app opens the web client at the box's tailnet address and holds no fold,
+ * no fulfillment, no chain verifier and no HTML: each exists once, in the box
+ * or the web app, and a Java copy would be a second evaluator.
  *
- * IDENTITY IS THE TAILNET'S. The app carries no credential and no token. The
- * server admits a peer because `tailscale whois` names its Tailscale login
- * (instance.WEB_VIEWERS / WEB_ACTORS), so a request from this WebView and a
- * request from Chrome on the same phone are the same actor, and removing the
- * device from the tailnet removes this app's access with it. Nothing here
- * needs revoking separately, because nothing here was ever granted separately.
- * HOW the WebView reaches the tailnet is a Route (android/route/): the phone's
- * own network, or a tailnet node inside this app; either way the box sees a
- * device of the owner's login.
+ * IDENTITY IS THE TAILNET'S. The app carries no credential and no token: the
+ * box admits a peer because `tailscale whois` names its login, so this WebView
+ * and Chrome on the same phone are the same actor, and removing the device from
+ * the tailnet removes the app. HOW the WebView reaches the tailnet is a Route
+ * (android/route/).
  *
- * WHEN NATIVE WOULD BE EARNED: only OS integration a browser cannot do — a
- * share-sheet target that files a todo, a home-screen widget, a notification on
- * a tip move. Each of those is a native SHELL over the same HTTP API. None of
- * them is a reason to reimplement the semantics on this side.
+ * NATIVE ONLY FOR OS INTEGRATION a browser cannot do: deep links, the share
+ * target, push and the widget. Each is a shell over the same HTTP API. A link
+ * or a share is handed to the web app as an address (the route is in the
+ * fragment, which no intent filter reads and the box never sees), and this
+ * class parses none of it into a todo, a route or a fetch.
  *
- * THE FIRST OF THOSE ARRIVED AS DEEP LINKS (2026-09-05). Being the thing that
- * opens https://<your-box>.<tailnet>.ts.net/#/todo/<id> is exactly OS integration
- * a browser cannot grant itself, and it stays a shell: the intent's URI is not
- * parsed into a todo id, a route or a fetch — it is handed to the WebView
- * whole, fragment and all, and the web app's own router reads it. This class
- * still knows nothing about what a todo is.
- *
- * THE SHARE TARGET IS THE SAME TRICK POINTED THE OTHER WAY (2026-09-10).
- * Sharing a link or a sentence from any app on the phone opens this one on the
- * add form with the text in it — OS integration a browser cannot grant itself,
- * and still a shell: what this class does with a share is spell it as
- * `#/add?text=…&title=…` and hand the WebView that URL. It does not parse a
- * URL out of the text, does not decide what a todo's body is, and posts
- * nothing. The write is the one every other todo takes — `POST /api/author`
- * builds the event, the replica in the page seals it — because a second
- * authoring path is a second set of rules about what a todo is.
- *
- * AND THE ROUTE IS IN THE FRAGMENT, for the same reason the deep links are: a
- * fragment never reaches a server, so what the owner shared is not something the
- * box has been told, and no intent filter can match on it either. The text is
- * carried as TEXT — capped, URL-encoded once, never composed into markup or
- * script — so there is no path by which a shared string is parsed as anything.
- *
- * THE BOX IS THE PROFILE'S OR THE PERSON'S (Box). An APK whose profile names
- * a box opens it at once; the generic APK shows the pairing screen first, and
+ * THE BOX IS THE PROFILE'S OR THE PERSON'S (Box). An APK whose profile names a
+ * box opens it at once; the generic APK shows the pairing screen first, and
  * keeps the name only once that box has answered Pairing. Until then nothing
  * loads, no route opens and no push is asked for.
  *
- * THIS CLASS AUTHORS NO HTML. webapp.py serves plain text and JSON and lets the
- * one bundle do the rendering; the same rule one client further out means the
- * failure screen below is Android widgets, not a string of markup handed to the
- * WebView. There is therefore no path by which anything this app composes gets
- * parsed as a document.
+ * THIS CLASS AUTHORS NO HTML: the failure screen is Android widgets, so nothing
+ * this app composes is parsed as a document.
  */
 package com.bmabsout.suzatary;
 
@@ -109,24 +77,36 @@ public final class MainActivity extends Activity {
     private static final String SCHEME = "suzatary";
 
     /**
-     * The add form, as an address under the box's home page
-     * (`web/src/shell/route.ts`'s `add` arm). Written here and nowhere else,
-     * like the `suzatary://` mapping above and for the same reason: a second
-     * spelling of a route is a second route.
+     * What this WebView adds to its user agent, which the box reads on a Google
+     * consent (`google_sign_in::APP_AGENT`): a consent opened from here ends
+     * with a link only this app handles, where a browser's ends on the web.
+     * A page cannot set a navigation's user agent, and a client that sends this
+     * word by hand gains only a redirect for its own callback.
      */
+    private static final String AGENT = "SuzataryPortal";
+
+    /** The box's route that sends the owner to Google (`suzatary_google::google::CONSENT`). */
+    private static final String CONSENT = "/api/oauth/google/consent/";
+
+    /**
+     * The authority of the link the box ends a consent with:
+     * `suzatary://google/<card>/<outcome>`. It carries a card and a word, never
+     * a code, token, address or account, so opening it by hand shows a page and
+     * nothing else.
+     */
+    private static final String GOOGLE = "google";
+
+    private static final java.util.regex.Pattern CARD = java.util.regex.Pattern.compile("[A-Za-z0-9_-]{1,64}");
+
+    private static final java.util.List<String> OUTCOMES = java.util.Arrays.asList("done", "refused", "not-open");
+
+    /** The add form's address under the box's home page (`web/src/shell/route.ts`). */
     private static final String ADD = "#/add";
 
     /**
-     * How much shared text this app will carry into a URL, and how much of a
-     * subject.
-     *
-     * CUT, NOT REFUSED. A share is a link or a sentence; somebody sharing a
-     * whole article is not something a todo's action line can hold, and the
-     * useful thing to do with the overflow is drop it and put the sheet on
-     * screen with what fits — the owner finishes it there, with a keyboard. The
-     * cap is also what keeps a hostile app from handing this one a megabyte to
-     * percent-encode. The same reasoning and the same shape as
-     * PushReceiver.MAX_TEXT, one door over.
+     * How much shared text and subject this app carries into a URL. The overflow
+     * is cut, not refused, and the cap stops a hostile app from handing over a
+     * megabyte to percent-encode.
      */
     private static final int MAX_SHARED = 1000;
 
@@ -150,15 +130,9 @@ public final class MainActivity extends Activity {
     private boolean foreground;
 
     /**
-     * What load() last asked for, https and fragment and all. The retry button
-     * reloads THIS rather than the URL the error reports,
-     * because a fragment is never sent to the server and so never comes back
-     * in an error — and the fragment is the whole address of a deep link.
-     *
-     * A restored WebView (restoreState) does not go through load(), so after a
-     * process death this reads the home page while the screen shows wherever
-     * the history left off. That is the behaviour this app had before deep
-     * links existed, and it costs one page rather than a wrong page.
+     * What load() last asked for, fragment and all. The retry button reloads THIS,
+     * since a fragment never reaches the server and so never comes back in an
+     * error. A restored WebView does not go through load().
      */
     private String current;
 
@@ -209,6 +183,7 @@ public final class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setMediaPlaybackRequiresUserGesture(true);
+        s.setUserAgentString(s.getUserAgentString() + " " + AGENT);
         web.setWebViewClient(new Portal());
         web.setWebChromeClient(new Chooser());
 
@@ -241,8 +216,7 @@ public final class MainActivity extends Activity {
     /**
      * THE TOKEN GOES TO THE PAGE, which reports it signed: this app holds no
      * device key. postWebMessage delivers only to a main frame at the box's
-     * origin, so no other page reads the token, and no JavaScript interface
-     * is exposed. Before a box is kept there is no origin to hand it to.
+     * origin, and no JavaScript interface is exposed.
      */
     private void handToken() {
         String token = Push.token(this);
@@ -315,11 +289,7 @@ public final class MainActivity extends Activity {
         super.onStop();
     }
 
-    /**
-     * Ask the typed box, off the main thread, and keep it once it answers.
-     * The box is kept only from Pairing's answer, so a typo or a stranger's
-     * name is never this app's box.
-     */
+    /** Ask the typed box off the main thread; it is kept only from Pairing's answer. */
     private void pair() {
         final String host = Box.hostOf(typed.getText());
         if (host == null) {
@@ -381,22 +351,10 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * The runtime half of POST_NOTIFICATIONS (API 33+). Asked ONCE per launch
-     * and only while it is unanswered; the OS itself stops showing the dialog
-     * after two refusals, so there is no counter to keep here and no way for
-     * this to become nagging.
-     *
-     * The system dialog says nothing about what the notifications are, so the
-     * one line that does is shown BEFORE the second ask —
-     * shouldShowRequestPermissionRationale is true exactly when the owner has
-     * already said no once, which is the only moment a reason is worth reading.
-     * A toast rather than a screen: this app authors no HTML and, one step
-     * further, no UI it can avoid.
-     *
-     * The permission string is spelled out rather than taken from
-     * Manifest.permission, which only exists from API 33 — a compile-time
-     * constant would be inlined and work, but the literal is the same string
-     * the manifest declares and can be grepped against it.
+     * The runtime half of POST_NOTIFICATIONS (API 33+), asked once per launch
+     * while unanswered. The rationale shows before the second ask, which is when
+     * shouldShowRequestPermissionRationale turns true. The permission string is
+     * spelled out because Manifest.permission only exists from API 33.
      */
     private void askToNotify() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
@@ -413,17 +371,9 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * A link tapped — OR A SHARE MADE — while the app is already running.
-     * singleTask means this is the SAME activity and the same WebView, so the
-     * page is loaded into what is already on screen. setIntent keeps
-     * getIntent() honest for a later recreation, which is the only reason the
-     * launch intent is read twice.
-     *
-     * A share arriving here is the COMMON case, not the exception: the app is
-     * usually already open somewhere behind the sharer. It needs no arm of its
-     * own because `targetOf` answers for both actions — one function decides
-     * what an intent names, whether the process was just started or not, and
-     * "a share is handled twice differently" is a bug this shape cannot have.
+     * A link tapped or a share made while the app runs. singleTask reuses this
+     * activity and its WebView; `targetOf` decides what the intent names, for a
+     * fresh process and a running one alike.
      */
     @Override
     protected void onNewIntent(Intent intent) {
@@ -485,6 +435,9 @@ public final class MainActivity extends Activity {
         if (!SCHEME.equals(data.getScheme())) {
             return null;
         }
+        if (GOOGLE.equals(data.getAuthority())) {
+            return signedIn(data);
+        }
         String authority = data.getEncodedAuthority();
         String path = data.getEncodedPath();
         String route = (authority == null ? "" : authority) + (path == null ? "" : path);
@@ -495,32 +448,26 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * A SHARE, SPELLED AS THE ADD FORM'S ADDRESS.
-     *
-     * `ACTION_SEND` carries two extras and they are not the same thing:
-     * EXTRA_TEXT is what was shared — a URL from a browser, a selection from a
-     * reader — and EXTRA_SUBJECT is the page's own title when the sharer had
-     * one. Both travel as `#/add`'s query fields and `draft.sharedBody` on the
-     * other side decides what they MEAN together, because "what a todo's body
-     * is" is a rule the app has exactly one copy of and it is not in Java.
-     *
-     * getCharSequenceExtra AND NOT getStringExtra. EXTRA_TEXT is declared as a
-     * CharSequence, and an app that shares styled text puts a Spanned in it —
-     * getStringExtra returns null for that, so a naive read silently loses the
-     * share and opens the home page. CONFIDENCE: HIGH; the extra's type is in
-     * Android's own documentation, and toString() is the documented way to
-     * take the characters out of a Spanned.
-     *
-     * Uri.encode ONCE, and with no allowed set: it percent-encodes everything
-     * outside the unreserved characters, which is exactly `&`, `=`, `#`, `%`,
-     * `?`, `/` and a space — every character that is structure in the URL this
-     * builds. `decodeURIComponent` on the other side is its inverse
-     * (`web/test/route.test.ts` round-trips a URL with all of them in it).
-     * Encoding twice would put `%2520` in a todo, which is the failure this
-     * comment exists to prevent someone "fixing" back in.
-     *
-     * A share with nothing in it opens the app, rather than an empty form: an
-     * intent this app cannot read is not a reason to show a blank sheet.
+     * THE END OF A GOOGLE CONSENT: `suzatary://google/<card>/<outcome>` opens the
+     * inbox with that card open, where the card shows how the sign-in ended. The
+     * outcome word is checked and then not needed, since the card's own state is
+     * the answer; a link that is not well formed opens the home page. Nothing in
+     * the link is sent anywhere, and the card is encoded into the fragment.
+     */
+    private String signedIn(Uri data) {
+        java.util.List<String> parts = data.getPathSegments();
+        if (parts.size() != 2 || !CARD.matcher(parts.get(0)).matches() || !OUTCOMES.contains(parts.get(1))) {
+            return box.https();
+        }
+        return box.https() + "#/inbox?open=" + Uri.encode(parts.get(0));
+    }
+
+    /**
+     * A share, spelled as the add form's address: EXTRA_TEXT and EXTRA_SUBJECT
+     * travel as `#/add` query fields, and the web app decides what they mean.
+     * They are read as CharSequence, since styled text is a Spanned that
+     * getStringExtra drops. Uri.encode runs once, with no allowed set, because
+     * the web side decodes once. A share with nothing in it opens the app.
      */
     private String shared(Intent intent) {
         String text = capped(intent.getCharSequenceExtra(Intent.EXTRA_TEXT), MAX_SHARED);
@@ -747,6 +694,9 @@ public final class MainActivity extends Activity {
 
     private final class Portal extends WebViewClient {
 
+        /** The last page asked of the box was its consent route, so the next one outside is Google's. */
+        private boolean consenting;
+
         /**
          * The app's origin stays in the WebView; everything else — a mailto:
          * link in a triaged message, an http link out of a todo — goes to the
@@ -756,7 +706,17 @@ public final class MainActivity extends Activity {
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
             if (box.host.equals(url.getHost())) {
+                String path = url.getPath();
+                consenting = path != null && path.startsWith(CONSENT);
                 return false;
+            }
+            // The page the box's consent route redirects to is Google's, which
+            // refuses to run in a WebView: it opens as a Custom Tab, and the
+            // box's callback brings the owner back by the link above.
+            boolean google = consenting;
+            consenting = false;
+            if (google && Tab.open(MainActivity.this, url)) {
+                return true;
             }
             try {
                 startActivity(new Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

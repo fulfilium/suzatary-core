@@ -149,7 +149,11 @@ async fn serve<W: Guarded, P: Params, B: Body, O: Outcome>(
     let query = Query::try_from_uri(&parts.uri)
         .map_err(|failed| Refusal::bad_request(failed.body_text()))?
         .0;
-    let asked = Asked::of(&segments, query);
+    let agent = parts
+        .headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|value| value.to_str().ok());
+    let asked = Asked::of(&segments, query, agent);
     let chain = state.bound(asked.chain())?;
     let params = P::parse(&asked, &chain)?;
     // A chain's route writes that chain; a box route can reach every chain, so its device must

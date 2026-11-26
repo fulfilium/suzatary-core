@@ -193,8 +193,13 @@ fn unfollowing() -> ureq::Agent {
 }
 
 fn redirected(url: &str) -> (u16, String) {
+    redirected_as(url, "a browser")
+}
+
+fn redirected_as(url: &str, agent: &str) -> (u16, String) {
     let answered = unfollowing()
         .get(url)
+        .header("user-agent", agent)
         .call()
         .expect("the request completes");
     let location = answered
@@ -208,6 +213,11 @@ fn redirected(url: &str) -> (u16, String) {
 
 /// The client kept, then the sign-in tapped: its consent's link.
 fn consent(serving: &Serving) -> String {
+    consent_as(serving, "a browser").0
+}
+
+/// The same, opened by a client sending `agent`: the link and the card's id.
+fn consent_as(serving: &Serving, agent: &str) -> (String, String) {
     let base = &serving.base;
     let client = card(&setup(base), "google_client", "standing")
         .expect("the box files the client's card while no client is kept");
@@ -226,9 +236,10 @@ fn consent(serving: &Serving) -> String {
         .as_str()
         .expect("the card draws the consent as its button");
     assert!(path.starts_with(suzatary_google::google::CONSENT), "{path}");
-    let (status, link) = redirected(&format!("{base}{path}"));
+    let (status, link) = redirected_as(&format!("{base}{path}"), agent);
     assert_eq!(status, 303, "the box sends the browser on to Google");
-    link
+    let card = path.strip_prefix(suzatary_google::google::CONSENT);
+    (link, card.expect("the consent's path").to_owned())
 }
 
 fn second_writer_gets(base: &str, path: &str) -> (u16, String) {
@@ -375,6 +386,70 @@ fn the_sign_in_keeps_the_grant_once_and_a_replayed_callback_is_refused() {
     for kept in ["fake-refresh", fake_google::CLIENT_SECRET] {
         assert!(!handed.contains(kept), "{kept} in {handed}");
     }
+}
+
+/// A consent opened from the app ends on the link only the app handles, naming the card and how
+/// it ended and nothing else; a browser's ends on the web, whatever its callback sends.
+#[test]
+fn an_app_consent_ends_on_the_apps_link_and_a_browser_one_on_the_web() {
+    let state_of = |link: &str| {
+        link.split('&')
+            .find_map(|pair| pair.strip_prefix("state="))
+            .expect("a state")
+            .to_owned()
+    };
+    let declining = serving("google-app-return", None);
+    let (link, card) = consent_as(&declining, "Mozilla/5.0 (Linux; wv) SuzataryPortal");
+    let declined = format!(
+        "{}/api/oauth/google/callback?state={}&error=access_denied",
+        declining.base,
+        state_of(&link)
+    );
+    let (status, location) = redirected(&declined);
+    assert_eq!(status, 303);
+    assert_eq!(location, format!("suzatary://google/{card}/refused"));
+
+    let done = serving("google-app-done", None);
+    let (link, card) = consent_as(&done, "Mozilla/5.0 (Linux; wv) SuzataryPortal");
+    let callback = consented(&done, &link);
+    let (status, location) = redirected(&callback);
+    assert_eq!(status, 303);
+    assert_eq!(location, format!("suzatary://google/{card}/done"));
+    for held in ["code", "state", "fake", "example.test", ADA] {
+        assert!(!location.contains(held), "{held} in {location}");
+    }
+
+    let browser = serving("google-app-browser", None);
+    let (link, _) = consent_as(&browser, "a browser");
+    let (_, location) = redirected_as(&consented(&browser, &link), "SuzataryPortal");
+    assert_eq!(
+        location, "/#/inbox",
+        "the callback's own agent decides nothing"
+    );
+}
+
+/// The app's marker opens nothing: a consent that is not open is still refused, and a callback
+/// with no open consent is still a 400, not a redirect to the app.
+#[test]
+fn the_apps_marker_without_an_open_consent_changes_nothing() {
+    let serving = serving("google-app-forged", None);
+    let missing = format!(
+        "{}{}p0000000000000000000000000000000",
+        serving.base,
+        suzatary_google::google::CONSENT
+    );
+    let (status, _) = redirected_as(&missing, "SuzataryPortal");
+    assert_eq!(status, 404);
+    let (status, location) = redirected_as(
+        &format!(
+            "{}/api/oauth/google/callback?state=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk&code=4%2Ffake-code-1",
+            serving.base
+        ),
+        "SuzataryPortal",
+    );
+    assert_eq!(status, 400);
+    assert_eq!(location, "");
+    assert_eq!(serving.fake.exchanges(), 0);
 }
 
 /// A callback carrying another writer's state closes that consent and keeps nothing, so not even

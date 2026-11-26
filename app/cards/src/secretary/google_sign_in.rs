@@ -43,6 +43,74 @@ pub struct Begun {
     pub until: NaiveDateTime,
     /// What the callback does beside ending `card`.
     pub then: Then,
+    /// Where the consent was last opened, which decides where its callback sends the owner.
+    pub via: Via,
+}
+
+/// The client a consent was opened from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Via {
+    Browser,
+    /// The portal app's web view, which adds [`APP_AGENT`] to its user agent.
+    App,
+}
+
+/// The word the portal app adds to its web view's user agent (`MainActivity.java`).
+pub const APP_AGENT: &str = "SuzataryPortal";
+
+impl Via {
+    /// A request's client. A browser can send any agent, so this decides only where the owner
+    /// who tapped the card lands; the actor and the state still gate the callback.
+    #[must_use]
+    pub fn of_agent(agent: Option<&str>) -> Self {
+        match agent {
+            Some(agent) if agent.split_whitespace().any(|word| word == APP_AGENT) => Via::App,
+            Some(_) | None => Via::Browser,
+        }
+    }
+
+    /// What a log line calls this client.
+    #[must_use]
+    pub fn kind(self) -> &'static str {
+        match self {
+            Via::Browser => "browser",
+            Via::App => "app",
+        }
+    }
+}
+
+/// How a callback ended its card, as the app's link says it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    Done,
+    Refused,
+    NotOpen,
+}
+
+impl Outcome {
+    #[must_use]
+    pub fn of(taken: &Taken, performed: &Performed) -> Self {
+        match (taken, performed) {
+            (Taken::Lapsed(_), _) => Outcome::NotOpen,
+            (_, Performed::Done(_)) => Outcome::Done,
+            (_, Performed::Tried(_)) => Outcome::Refused,
+        }
+    }
+
+    fn word(self) -> &'static str {
+        match self {
+            Outcome::Done => "done",
+            Outcome::Refused => "refused",
+            Outcome::NotOpen => "not-open",
+        }
+    }
+}
+
+/// The link only the app handles (`AndroidManifest.xml`): the card and the outcome, and nothing
+/// a consent holds.
+#[must_use]
+pub fn app_link(card: &ProposalId, outcome: Outcome) -> String {
+    format!("suzatary://google/{}/{}", card.as_str(), outcome.word())
 }
 
 /// What a kept grant is for beside its sign-in card.
@@ -70,6 +138,7 @@ impl std::fmt::Debug for Begun {
             .field("link", &"<redacted>")
             .field("until", &self.until)
             .field("then", &self.then)
+            .field("via", &self.via)
             .finish()
     }
 }
@@ -90,6 +159,18 @@ pub enum Taken {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Open(BTreeMap<State, Begun>);
 
+impl Taken {
+    /// The consent the callback found, whoever it belonged to.
+    #[must_use]
+    pub fn begun(&self) -> Option<&Begun> {
+        match self {
+            Taken::Unknown => None,
+            Taken::Lapsed(begun) | Taken::NotYours(begun) => Some(begun),
+            Taken::Yours(begun) => Some(begun),
+        }
+    }
+}
+
 impl Begun {
     /// Whether `card` is its sign-in card or the card it performs again.
     #[must_use]
@@ -104,6 +185,13 @@ impl Open {
     pub fn open(&mut self, state: State, begun: Begun) {
         self.0.retain(|_, held| held.card != begun.card);
         self.0.insert(state, begun);
+    }
+
+    /// Marks the consent `card` began as opened from `via`, and returns it.
+    pub fn opened(&mut self, card: &ProposalId, via: Via) -> Option<&Begun> {
+        let begun = self.0.values_mut().find(|begun| begun.names(card))?;
+        begun.via = via;
+        Some(begun)
     }
 
     /// The consent `card` began or is retried by, held past its lapse until read.
@@ -326,6 +414,7 @@ mod tests {
                 link: format!("https://accounts.google.com/o/oauth2/v2/auth?card={card_n}"),
                 until: at(10),
                 then: Then::Ended,
+                via: Via::Browser,
             },
         )
     }
@@ -397,6 +486,30 @@ mod tests {
             assert!(!printed.contains(begun.verifier.expose()), "{printed}");
             assert!(!printed.contains("GOCSPX-x"), "{printed}");
         }
+    }
+
+    /// The app's word marks a consent only as a whole word of the agent, and the consent a card
+    /// holds takes the client it was last opened from.
+    #[test]
+    fn a_consent_takes_the_client_it_was_last_opened_from() {
+        assert_eq!(Via::of_agent(Some("Mozilla/5.0 SuzataryPortal")), Via::App);
+        for agent in [
+            None,
+            Some(""),
+            Some("Mozilla/5.0"),
+            Some("NotSuzataryPortal"),
+        ] {
+            assert_eq!(Via::of_agent(agent), Via::Browser, "{agent:?}");
+        }
+        let mut open = Open::default();
+        let (state, begun) = begun(1, "ada");
+        open.open(state, begun);
+        assert_eq!(
+            open.opened(&card(1), Via::App).map(|begun| begun.via),
+            Some(Via::App)
+        );
+        assert_eq!(open.opened(&card(2), Via::App), None);
+        assert_eq!(open.begun(&card(1)).map(|begun| begun.via), Some(Via::App));
     }
 
     /// A card tapped again holds one consent: the earlier state finds nothing.

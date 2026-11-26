@@ -117,7 +117,9 @@
                  steal: a custom scheme belongs to whoever claims it, so this
                  filter is for the places an App Link cannot reach — a notes
                  app that does not linkify a tailnet name, a QR code, an `am
-                 start` from adb. It is deliberately NOT what the briefing
+                 start` from adb. The box also ends a Google consent opened in
+                 a Custom Tab with `suzatary://google/<card>/<outcome>`, which
+                 only this filter can deliver. It is deliberately NOT what the briefing
                  emits: an unverified scheme is a link that dies when the app
                  is not installed, and the https URL still opens the page in a
                  browser. MainActivity maps these onto the https URL above. -->
@@ -128,30 +130,11 @@
                 <data android:scheme="suzatary" />
             </intent-filter>
 
-            <!-- THE SHARE SHEET (MainActivity.shared, 2026-09-10). This is
-                 what puts Suzatary in the row of apps a browser, a reader or a
-                 notes app offers when the owner shares a link — the second piece
-                 of OS integration a browser cannot grant itself, after the
-                 deep links above.
-
-                 text/plain ONLY, and no ACTION_SEND_MULTIPLE. What this app
-                 can do with a share is put its words in the add form; an image
-                 or a file is not a todo's action line, and declaring a type
-                 this app would then drop on the floor would be worse than not
-                 appearing in that sheet at all.
-
-                 BROWSABLE is deliberately ABSENT, unlike the two filters
-                 above: those are for URLs, which a browser hands out, and a
-                 share is never one. DEFAULT is what makes an implicit
-                 ACTION_SEND resolve here, and it is the whole of what a share
-                 target needs.
-
-                 The activity is the target rather than a receiver of its own
-                 because a share OPENS the app on a form — there is nothing to
-                 do in the background, and a second component would need its
-                 own copy of the URL rule this activity already owns. It
-                 arrives at onNewIntent when the app is already up, which is
-                 the usual case and needs no code of its own. -->
+            <!-- THE SHARE SHEET: text/plain only, because a share's words go into
+                 the add form and an image or file has no place there. BROWSABLE is
+                 absent since a share is never a URL a browser hands out. The
+                 activity is the target, so a share arrives at onNewIntent like a
+                 link. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -186,26 +169,11 @@
             </intent-filter>
         </receiver>
 
-        <!-- THE HOME-SCREEN WIDGET (Widget.java, 2026-09-10). The fourth piece
-             of OS integration, after deep links, push and the share target,
-             and the same shape as all three: a native shell over the same HTTP
-             API, holding nothing the web app already holds.
-
-             exported="false", which is what the platform's own sample says for
-             a widget provider and is safe because the AppWidget host is the
-             SYSTEM: it binds this component by name rather than resolving a
-             broadcast, so nothing else on the phone can drive it. That also
-             makes Widget.refresh's explicit-component intent from our own
-             package the only other way in.
-
-             The ACTION_APPWIDGET_UPDATE filter is what a provider is: the
-             system sends it on the schedule res/xml/widget_info.xml names, and
-             PushReceiver sends it when the box wakes the app because the chain
-             moving is exactly when these five rows are wrong.
-
-             The meta-data resource is not optional decoration — it is where
-             the sizes, the layout and the period live, and a receiver without
-             it is not a widget at all. -->
+        <!-- THE HOME-SCREEN WIDGET (Widget.java). exported="false" is safe because
+             the AppWidget host is the system and binds this component by name.
+             PushReceiver also sends ACTION_APPWIDGET_UPDATE when the chain moves.
+             The provider meta-data holds the sizes, the layout and the period;
+             without it the receiver is not a widget. -->
         <receiver
             android:name=".Widget"
             android:exported="false"

@@ -1,11 +1,8 @@
 package com.bmabsout.suzatary;
 
 import android.app.Activity;
-import android.content.ActivityNotFoundException;
-import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
-import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -220,21 +217,13 @@ final class Route implements Reach {
         });
     }
 
-    /**
-     * Tailscale's sign-in page, in the browser. The session extra asks for a
-     * Custom Tab (the protocol's documented key, with no session) from a
-     * browser that has them; any other opens the page as a plain link.
-     */
+    /** Tailscale's sign-in page, in the browser; where none opens it, the screen shows the link. */
     private void signIn(String url) {
         Uri page = Uri.parse(url);
         if (!"https".equals(page.getScheme())) {
             return;
         }
-        Bundle tab = new Bundle();
-        tab.putBinder("android.support.customtabs.extra.SESSION", null);
-        try {
-            activity.startActivity(new Intent(Intent.ACTION_VIEW, page).putExtras(tab));
-        } catch (ActivityNotFoundException e) {
+        if (!Tab.open(activity, page)) {
             body.setText(url);
         }
     }
