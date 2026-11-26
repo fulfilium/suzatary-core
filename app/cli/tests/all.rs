@@ -152,6 +152,8 @@ mod this_box;
 mod todos;
 #[path = "typeset.rs"]
 mod typeset;
+#[path = "warm_erase.rs"]
+mod warm_erase;
 #[path = "web.rs"]
 mod web;
 #[path = "worker.rs"]
