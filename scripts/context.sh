@@ -14,6 +14,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ "${1:-}" == calibrate ]]; then
   exec "$("$root/scripts/app-build.sh" --fixture)" context --repo "$root" "$@"
 fi
-target="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/train/context"
+# The target `train.sh check` shares: neither takes the lock.
+target="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/train/tool-check"
 cargo build --quiet --locked -p suzatary-tooling --manifest-path "$root/app/Cargo.toml" --target-dir "$target"
 exec "$target/debug/train" context --repo "$root" "$@"

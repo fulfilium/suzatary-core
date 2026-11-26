@@ -78,7 +78,6 @@ case "${SUZATARY_GATE_BUILDS:-}" in
   *) echo "merge-gate.sh: SUZATARY_GATE_BUILDS is cache or unset, not $SUZATARY_GATE_BUILDS" >&2; exit 64 ;;
 esac
 unset SUZATARY_GATE_BUILDS
-# The wasm build the web steps read (gate.yml's lanes set it).
 case "${SUZATARY_WASM:=optimised}" in
   optimised | development) ;;
   *) echo "merge-gate.sh: SUZATARY_WASM is optimised or development, not $SUZATARY_WASM" >&2; exit 64 ;;
@@ -127,7 +126,6 @@ if [[ -n "${SUZATARY_GATE_EVIDENCE:-}" ]] && ((!list)); then
   mkdir -p "$SUZATARY_GATE_EVIDENCE" && chmod 700 "$SUZATARY_GATE_EVIDENCE" || exit 75
   evidence_head="$(git rev-parse HEAD)" && evidence_head="${evidence_head:0:12}" || exit 75
 fi
-# evidence <step> <code>, in run_step's scope (its $SUZATARY_E2E_SHOTS).
 evidence() {
   local dir="$SUZATARY_E2E_SHOTS"
   if (($2 == 0)); then rm -rf "$dir"; return; fi
@@ -140,7 +138,6 @@ evidence() {
   echo "$dir" >"$logs/$1.evidence"
 }
 
-# Needs a Nix shell, whose PATH names the tools the keys cover.
 keeping() {
   [[ -n "${IN_NIX_SHELL:-}${SUZATARY_GATE_RUN:-}" ]] || { echo "outside a nix shell"; return 1; }
   git rev-parse --verify --quiet HEAD >/dev/null || { echo "no HEAD"; return 1; }
@@ -613,7 +610,6 @@ step tree changelog       unkept history  changelog_entry
 # Every derived figure against what the commit messages since the merge base declare.
 step history growth       unkept history  scripts/context.sh growth
 
-lane=live
 # Kept by the code that reads the data and, under the train, by the stores' digest it hands
 # (SUZATARY_GATE_DATA); merge_gate.rs holds the list to the paths their sources name.
 live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/address app/base app/record app/release
@@ -626,11 +622,14 @@ live_reads=(CLAUDE.md app/Cargo.toml app/Cargo.lock app/wit app/address app/base
   web/static/style.css)
 for module in "${live_modules[@]}"; do live_reads+=("app/cli/tests/$module.rs"); done
 live_only="only:$(IFS=,; echo "${live_reads[*]}")"
+# Lanes of their own, not `heavy`: their test runs overlap, and cargo's lock lets one compile at a time.
 if ((${#live_pins[@]})); then
+  lane=live-pins
   step live live            $live_only stores cargo_app test -q --workspace --test live
-  heavy live
 fi
+lane=live-all
 step live live-all        $live_only stores cargo_app test -q --workspace --test all -- "${live_modules[@]/%/::}"
+lane=live-guards
 # The guards that read beyond the public tree (merge_gate.rs holds the list); gate.yml judges the
 # rest. Unkept: the leak guard reads every tracked file.
 mapfile -t box_guards < <(grep -v '^#' app/cli/tests/guards/on-the-box.txt)
@@ -662,6 +661,7 @@ web_live() (
   public_fixture || exit
   scripts/build-web.sh >/dev/null && SUZATARY_E2E_LIVE="$instance" scripts/web-e2e.sh "${live_scenes[@]}"
 )
+lane=live-web
 step live web-live        all-but:android,docs,memory,$cli_only stores,runners web_live
 lane=deploy
 # The deploy's build, so the deploy of this commit finds every output in the store. The two steps
@@ -688,7 +688,7 @@ public_check() (
 step live public-check    unkept stores  public_check
 
 # In the order they take the machine: the one with the most work behind it in its lane first.
-heavy build web-inputs public-tree clippy clippy-fixture doc live-all live-guards web-live deploy-build
+heavy build web-inputs public-tree clippy clippy-fixture doc web-live deploy-build
 
 ((list)) && exit 0
 
