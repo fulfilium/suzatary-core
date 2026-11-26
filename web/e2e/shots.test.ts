@@ -482,6 +482,23 @@ const painted = async (page: Page): Promise<void> => {
 /** What the router puts on screen when it knows nothing about a hash. */
 const LOST = `document.querySelector("#view .pagetitle")?.textContent === "No such page"`;
 
+/** What a page that could not load says: the loader's own line when no build ran, or a page's "Could not load". */
+const FAILED = `(document.documentElement.dataset["started"] === "refused" || [...document.querySelectorAll(".problem")].some((p) => (p.textContent ?? "").startsWith("Could not load")))`;
+
+/** What a load the box answered can fail on: the controlling worker and its build, each registration, the build served now. */
+const BROWSER_STATE = `(async () => {
+  const strip = (w) => (w === null ? null : w.state + " " + w.scriptURL.replace(location.origin, ""));
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  return {
+    at: location.href,
+    started: document.documentElement.dataset["started"] ?? null,
+    said: [...document.querySelectorAll(".problem")].map((p) => p.textContent),
+    controller: navigator.serviceWorker.controller === null ? null : navigator.serviceWorker.controller.scriptURL.replace(location.origin, ""),
+    registrations: registrations.map((r) => ({ scope: r.scope.replace(location.origin, ""), installing: strip(r.installing), waiting: strip(r.waiting), active: strip(r.active) })),
+    served: await fetch("/b/current", { cache: "no-store" }).then((r) => r.text(), (e) => "unreadable: " + String(e)),
+  };
+})()`;
+
 /**
  * ⚠️ Asked only once the mount has settled: `navigate` returns when the location is right and the app's routing is a
  * promise after that, so a bare read would answer about the previous page.
@@ -492,6 +509,15 @@ const routed = async (page: Page, ready: string): Promise<boolean> => {
 };
 
 const app = await suite("shots");
+await app.journal();
+// A page that says it could not load fails the wait it is in at once, with the state of the browser.
+app.page.endWaitsWhen({
+  when: FAILED,
+  error: async () => {
+    const state = await app.page.evaluate<unknown>(BROWSER_STATE).catch((e: unknown) => `unreadable: ${String(e)}`);
+    return new Error(`the page could not load\n  browser state ${JSON.stringify(state)}`);
+  },
+});
 
 // The widths the audit reads a page at: a phone, a small laptop and a wide window.
 for (const [size, label] of [
@@ -526,7 +552,6 @@ for (const [size, label] of [
         }
         taken += 1;
       }
-      // The scene's own claim: it photographed something, and the last page it visited is one this app knows.
       assert.ok(taken > 0, "the gallery is empty — nothing this suite asked for was routed");
       assert.equal(await app.page.evaluate<boolean>(LOST), false);
     });

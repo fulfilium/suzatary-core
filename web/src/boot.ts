@@ -14,7 +14,6 @@ document.documentElement.dataset["booting"] = ""
 // The Android app's push token, held for the app's module, which may be imported after the app sends it.
 pushtoken.hold()
 
-// The list's fold, the first thing the app reads on the chain this browser last read.
 primed.start(primed.fold(remembered()))
 
 const at = (b: string, file: string): string => new URL(shell.under(b, file), document.baseURI).href
@@ -47,9 +46,8 @@ void loader.start(
     load: b =>
       import(at(b, "app.js")).then(
         () => true,
-        () => false,
+        (e: unknown) => (console.error(`boot: build ${b} refused`, e), false),
       ),
-    // The page holds nothing of a build's, so the loader draws its own line.
     said: text => {
       document.documentElement.dataset["started"] = "refused"
       const p = document.createElement("p")

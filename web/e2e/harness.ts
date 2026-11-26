@@ -368,7 +368,9 @@ export async function suite(prefix: string, size: readonly [number, number] = PH
             // A browser that has died cannot photograph itself; the original failure is the one to report.
           }
           const said = error instanceof Error ? error.message : String(error);
-          throw new Error(`${said}\n  screenshot: ${path}`);
+          const failedLoads = journal === null ? [] : (await journal).refusals();
+          const refusals = failedLoads.length === 0 ? "" : `\n  loads the browser failed:\n${failedLoads.join("\n")}`;
+          throw new Error(`${said}${refusals}\n  screenshot: ${path}`);
         }
       });
     },

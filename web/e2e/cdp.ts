@@ -83,6 +83,9 @@ function flags(profile: string, scrollbars: Scrollbars = "Hidden"): string[] {
     "--no-default-browser-check",
     "--disable-extensions",
     "--disable-background-networking",
+    // ⚠️ Background networking off still leaves the component updater, which a minute in installs the revocation list and the
+    // root store; each reconfigures the certificate verifier and fails the TLS handshakes in flight with ERR_CERT_VERIFIER_CHANGED.
+    "--disable-component-update",
     // A document kept in the back/forward cache keeps its event streams open against Chromium's six sockets per host,
     // and every later request queues forever.
     "--disable-features=BackForwardCache",
@@ -301,6 +304,9 @@ export class Page {
   /** The network `network` last set, which every worker attached later is given too; null is the box's own. */
   private networkOn: Conditions | null = null;
 
+  /** What every wait ends with, as a failure, once the page says it is true (`endWaitsWhen`); null when nothing does. */
+  private ending: { readonly when: string; readonly error: () => Promise<Error> } | null = null;
+
   /** The sentence `refuse` answers with. */
   private refusal = "";
 
@@ -403,6 +409,14 @@ export class Page {
   }
 
   /**
+   * From now on, a wait whose expression is false while `when` is true in the page throws what `error` makes, at its next
+   * poll: a page that has said it failed will not draw what the wait is for. `null` takes it away.
+   */
+  endWaitsWhen(ending: { readonly when: string; readonly error: () => Promise<Error> } | null): void {
+    this.ending = ending;
+  }
+
+  /**
    * Poll until the expression is truthy. ⚠️ The expression may be a promise: `Promise.resolve(…).then(Boolean)` awaits
    * it, where a bare `Boolean(aPromise)` is true on the first poll.
    */
@@ -417,13 +431,16 @@ export class Page {
     const until = Date.now() + timeout;
     let last = "";
     for (;;) {
+      let ended = false;
       try {
         if (await this.evaluate<boolean>(`Promise.resolve(${expression}).then(Boolean)`)) return;
         last = "it stayed false";
+        ended = this.ending !== null && (await this.evaluate<boolean>(this.ending.when));
       } catch (error: unknown) {
         // A navigation mid-poll destroys the context, so a throw is retried until the timeout.
         last = error instanceof Error ? error.message : String(error);
       }
+      if (ended && this.ending !== null) throw await this.ending.error();
       if (Date.now() >= until) throw new Error(`waited ${timeout}ms for ${expression}\n  last: ${last}`);
       await sleep(interval);
     }
@@ -1002,6 +1019,8 @@ export class Page {
   async journal(): Promise<Journal> {
     const t0 = Date.now();
     const lines: string[] = [];
+    // The lines that say something failed: a load the page did not cut off, a worker's error, an error the page printed.
+    const refused: string[] = [];
     const add = (line: string): void => void lines.push(`${String(Date.now() - t0).padStart(6)} ${line}`);
     const urls = new Map<string, string>();
     // What was sent and has neither finished nor failed: a stream stays here for its whole life.
@@ -1018,26 +1037,55 @@ export class Page {
       add(`> ${r?.method ?? "?"} ${url}`);
     });
     this.connection.on("Network.responseReceived", (p) => {
-      const r = p["response"] as { status?: number } | undefined;
-      add(`< ${r?.status ?? "?"} ${urls.get(String(p["requestId"])) ?? "?"}`);
+      const r = p["response"] as { status?: number; fromServiceWorker?: boolean; serviceWorkerResponseSource?: string; fromDiskCache?: boolean } | undefined;
+      const by = r?.fromServiceWorker === true ? ` by the worker (${r.serviceWorkerResponseSource ?? "?"})` : r?.fromDiskCache === true ? " from the disk cache" : "";
+      add(`< ${r?.status ?? "?"} ${urls.get(String(p["requestId"])) ?? "?"}${by}`);
     });
     this.connection.on("Network.loadingFinished", (p) => add(`. done ${ended(String(p["requestId"]))}`));
-    this.connection.on("Network.loadingFailed", (p) =>
-      add(`! ${String(p["errorText"] ?? "failed")} ${ended(String(p["requestId"]))}`),
-    );
+    this.connection.on("Network.loadingFailed", (p) => {
+      const said = [
+        String(p["errorText"] ?? "failed"),
+        p["canceled"] === true ? "canceled" : "",
+        typeof p["blockedReason"] === "string" ? `blocked: ${p["blockedReason"]}` : "",
+        p["corsErrorStatus"] === undefined ? "" : `cors: ${JSON.stringify(p["corsErrorStatus"])}`,
+        `as ${String(p["type"] ?? "?")}`,
+      ].filter((part) => part !== "");
+      const line = `! ${said.join(", ")} ${ended(String(p["requestId"]))}`;
+      add(line);
+      if (p["canceled"] !== true) refused.push(line);
+    });
+    this.connection.on("ServiceWorker.workerRegistrationUpdated", (p) => {
+      const all = (p["registrations"] as { registrationId?: string; scopeURL?: string; isDeleted?: boolean }[] | undefined) ?? [];
+      for (const g of all) add(`worker registration ${g.registrationId ?? "?"} ${g.scopeURL ?? "?"}${g.isDeleted === true ? " deleted" : ""}`);
+    });
+    this.connection.on("ServiceWorker.workerVersionUpdated", (p) => {
+      const all = (p["versions"] as { versionId?: string; registrationId?: string; scriptURL?: string; runningStatus?: string; status?: string }[] | undefined) ?? [];
+      for (const v of all) add(`worker version ${v.versionId ?? "?"} of ${v.registrationId ?? "?"} ${(v.scriptURL ?? "?").replace(/^https?:\/\/[^/]+/, "")} ${v.status ?? "?"} ${v.runningStatus ?? "?"}`);
+    });
+    this.connection.on("ServiceWorker.workerErrorReported", (p) => {
+      const e = p["errorMessage"] as { errorMessage?: string; sourceURL?: string; lineNumber?: number } | undefined;
+      const line = `worker error ${e?.errorMessage ?? "?"} at ${e?.sourceURL ?? "?"}:${e?.lineNumber ?? "?"}`;
+      add(line);
+      refused.push(line);
+    });
     this.connection.on("Network.eventSourceMessageReceived", (p) =>
       add(`~ ${urls.get(String(p["requestId"])) ?? "?"} ${String(p["data"] ?? "")}`),
     );
     this.connection.on("Runtime.consoleAPICalled", (p) => {
       const args = (p["args"] as { value?: unknown; description?: string }[] | undefined) ?? [];
-      add(`console.${String(p["type"])} ${args.map((a) => (a.value !== undefined ? String(a.value) : (a.description ?? ""))).join(" ")}`);
+      const line = `console.${String(p["type"])} ${args.map((a) => (a.value !== undefined ? String(a.value) : (a.description ?? ""))).join(" ")}`;
+      add(line);
+      if (p["type"] === "error") refused.push(line);
     });
     this.connection.on("Runtime.exceptionThrown", (p) => {
       const d = p["exceptionDetails"] as { exception?: { description?: string }; text?: string } | undefined;
-      add(`exception ${d?.exception?.description ?? d?.text ?? ""}`);
+      const line = `exception ${d?.exception?.description ?? d?.text ?? ""}`;
+      add(line);
+      refused.push(line);
     });
     await this.command("Network.enable", {});
-    return { mark: (step) => add(`# ${step}`), lines: () => [...lines], inFlight: () => [...open.values()].sort() };
+    await this.command("ServiceWorker.enable", {});
+    return { mark: (step) => add(`# ${step}`), lines: () => [...lines], refusals: () => [...refused], inFlight: () => [...open.values()].sort() };
   }
 
   /** Every service worker stopped, as a browser stops an idle one: whatever it held in memory is gone. */
@@ -1262,6 +1310,8 @@ export interface TraceEvent {
 export interface Journal {
   readonly mark: (step: string) => void;
   readonly lines: () => string[];
+  /** The lines that say a load failed, as the browser said it: what `lines` holds of a failure, and no more. */
+  readonly refusals: () => string[];
   /** The requests sent and not yet finished or failed, a stream among them for as long as it is open. A request a
    * reload cut off stays listed, since CDP reports no end for it. */
   readonly inFlight: () => string[];
