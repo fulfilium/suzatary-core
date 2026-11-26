@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('4957402b9d18eb1a412303f5ec12a581324dba52341de0ddc6055e987470bfb3',), event=Governs(decision='namecoverage', at=datetime(2026, 11, 26, 0, 0, 0), actor='assistant', areas=('docs', 'scripts')))

@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('fe349a097de5b4dad7b2b23655b31ee7c60f83e849570360fb5fea4aaf97b6d0',), event=Governs(decision='neversecretexpand', at=datetime(2026, 11, 26, 0, 0, 0), actor='assistant', areas=('app', 'scripts')))

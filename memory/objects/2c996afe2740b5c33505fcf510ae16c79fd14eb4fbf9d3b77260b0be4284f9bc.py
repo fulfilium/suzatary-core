@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('826aa1c76d8c4efe9d9862b0fcc1c6be80450781939ff72fc7ae60004acc8fed',), event=Governs(decision='watchersexit', at=datetime(2026, 11, 26, 0, 0, 0), actor='assistant', areas=('scripts',)))

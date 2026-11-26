@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('1d711a4fed010a3e58bbbcceef427fb3405904536499eb0ff3aec83202ed8883',), event=Governs(decision='stopfixrounds', at=datetime(2026, 11, 26, 0, 0, 0), actor='assistant', areas=('app', 'web')))
