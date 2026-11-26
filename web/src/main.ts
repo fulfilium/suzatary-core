@@ -7,6 +7,8 @@ import chrome from "./shell/chrome";
 import beacon from "./app/beacon";
 import pushtoken from "./app/pushtoken";
 import wipe from "./app/wipe";
+import lease from "./app/lease";
+import kv from "./app/kv";
 import rendered from "./app/rendered";
 import asked from "./app/asked";
 import d from "./wire/decoder";
@@ -48,7 +50,7 @@ import heads from "./prodrome/heads";
 import { hearTheme, restoreTheme, theme } from "./app/theme";
 import { store } from "./app/store";
 import type { Unsent } from "./wire/generated/pages";
-import { elsewhere, ensureFold, foldHeld, foldWhere, forgetChainReplica, keepObjects, refetchFold, resetChain, restoreChain, restoreFold, shellAsksAfter, signingHere, sync, unsent, watchReplica, watchUnsent } from "./prodrome/sync";
+import { elsewhere, ensureFold, foldHeld, foldWhere, forgetChainReplica, keepObjects, refetchFold, resetChain, restoreChain, restoreFold, shellAsksAfter, signingHere, owed, sync, unsent, watchReplica, watchUnsent } from "./prodrome/sync";
 import signer from "./prodrome/signer";
 import http from "./wire/http";
 import clock from "./algebra/clock";
@@ -388,6 +390,16 @@ const wiping = wipe.page({ ...wipe.browser, stuck: () => app.dispatch({ type: "U
 http.whenGone(wiping.gone);
 // A wipe a reload cut short is finished before this load opens anything.
 wiping.resume();
+// A device that has not heard the box for `lease.DAYS` wipes the way a revoked one does, unless it holds a write the box
+// has not taken: it is asked only once the lease has lapsed, and again whenever the page is shown.
+const lapse = async (): Promise<void> => {
+  const heard = lease.read(kv.local.get(lease.KEY));
+  if (lease.lapsed(heard, Date.now()) && lease.wipes(heard, Date.now(), await owed())) wiping.gone();
+};
+void lapse();
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void lapse();
+});
 // This tab holds the same replica in memory and must not write it back.
 window.addEventListener("storage", (e) => {
   if (e.key === wipe.MARK) wiping.heard();

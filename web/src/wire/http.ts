@@ -4,6 +4,7 @@ import type d from "./decoder"
 import lo from "../algebra/lo"
 import payload from "./generated/payload"
 import kv from "../app/kv"
+import lease from "../app/lease"
 import inflight from "../app/inflight"
 import primed from "../app/primed"
 import wait from "./wait"
@@ -185,6 +186,7 @@ export namespace http {
       const [response, had] = await answer(path, timer.signal)
       if (response.status === GONE) gone()
       if (response.status === OUTDATED) stale()
+      if (response.ok || response.status === NOT_MODIFIED) lease.heard()
       if (response.status === NOT_MODIFIED && had !== undefined) {
         keep(path, had)
         return had.text

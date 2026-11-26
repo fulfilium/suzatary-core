@@ -160,6 +160,8 @@ export namespace questions {
     // it.
     Search: { q: { readonly q: string }; a: SearchPayload }
     Left: { q: Record<never, never>; a: excluded.T }
+    // What this device holds that the box has not taken, over every chain, topic store and own line.
+    Owed: { q: Record<never, never>; a: number }
     // The device's rendered blocks: the worker alone reads and writes them.
     Blocks: { q: { readonly keys: readonly string[] }; a: (string | null)[] }
     KeepBlocks: { q: { readonly pairs: readonly (readonly [string, string])[] }; a: string[] }
@@ -510,6 +512,11 @@ export namespace questions {
         // Asked after a reading, so it says at least what that reading left out.
         case "Left":
           return excluded.join(excludedOf(proposals()), linesLeft(held))
+        case "Owed":
+          return Promise.all([
+            Promise.all(chains.held().map(c => chains.ready(c.name))).then(cs => cs.reduce((n, c) => n + unsentIn(c.store).losses.length, 0)),
+            stores.owed(),
+          ]).then(([a, b]) => a + b)
         case "Blocks":
           return blocks.get(q.keys)
         case "KeepBlocks":

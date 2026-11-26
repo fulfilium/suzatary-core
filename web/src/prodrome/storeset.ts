@@ -61,6 +61,8 @@ export namespace storeset {
     readonly acted: (lines: readonly string[]) => Promise<void>
     // Each own line refused for good, with words, of a topic the box refused (`[Waiting]`).
     readonly refused: () => string
+    // How many objects the topic stores and the own lines hold that the box has not taken, each restored first.
+    readonly owed: () => Promise<number>
     // The stores this device writes of which it keeps an earlier build's copy aside.
     readonly earlier: () => Promise<readonly stores.Written[]>
   }
@@ -167,20 +169,17 @@ export namespace storeset {
     // A hand-over that failed is said, and the next sync tries it again.
     const failed = (name: stores.Written) => (e: unknown): void =>
       say({ type: "Refused", why: `This tab's ${name === "lines" ? LINE : NOUNS[name]} writes were not handed over (${lo.reason(e)}); the next sync tries again.` })
-    // A line another tab of the device kept is taken and handed over here too: the box answers `already` to the second.
-    // Only when the row brought something new: a wake over a line this tab already holds, refused as another tab saw it
-    // refused, hands nothing over again.
+    // A line another tab kept is handed over here too (the box answers `already` to the second), only when the row
+    // brought something new.
     ownlines.heard(() => void lines.ownHeard().then(fresh => (fresh ? writes.handOver("lines") : undefined)).catch(failed("lines")))
-    // Every other hand-over of the lines reads the device's row first, so a line another tab kept and whose wake this tab
-    // missed goes with it, not at the next load.
+    // Every other hand-over of the lines reads the device's row first, so a missed wake waits for no load.
     const handOverLines = (): Promise<void> => lines.ownHeard().then(() => writes.handOver("lines"))
 
     // Which stores a reading has asked for so far: a reconnect pulls those alone.
     let wanted: "None" | Scope = "None"
 
-    // The inbox beside the lines, so a reading waits on neither behind the other, and again once the lines are pulled: a
-    // pull begun after theirs holds every proposal they name, as the box files a record before its line. The topic
-    // stores beside them after their hand-over, and the asks after those posts.
+    // The inbox beside the lines, and again once the lines are pulled, since the box files a proposal before the line
+    // naming it. The topic stores beside them after their hand-over, and the asks after those posts.
     const all = (): Promise<boolean> => {
       wanted = "All"
       const topicPulls = Promise.all(
@@ -193,8 +192,7 @@ export namespace storeset {
         ),
       )
       const asked = topicPulls.then(ts => asks.sync.want().then(a => ts.every(t => t) && a))
-      // The row was read as the lines were restored, so the hand-over takes what it holds. A refusal the load found that
-      // the person was not told of yet is said once the lines are pulled, their words with it.
+      // A refusal the load found that the person was not told of yet is said once the lines are pulled, their words with it.
       const linesPulled = lines.engine.sync.restored
         .get()
         .then(() => writes.handOver("lines"))
@@ -228,8 +226,7 @@ export namespace storeset {
       )
     const readies: { readonly [S in Scope]: once.T<void> } = { Inbox: readyOf(SCOPES.Inbox, inboxOnly), All: readyOf(SCOPES.All, all) }
 
-    // Each event planned for `w`, sealed, signed and kept in one move; handed over behind the answer, so no round trip is
-    // waited on.
+    // Each event planned for `w`, sealed, signed and kept in one move; handed over behind the answer.
     const write = async (w: topics.Write, at: string, actor: string): Promise<void> => {
       const name = topics.store(w)
       const measured = async <A>(step: string, f: () => A | Promise<A>): Promise<A> => {
@@ -249,10 +246,9 @@ export namespace storeset {
       void writes.handOver(name).catch(failed(name))
     }
 
-    // Sealed in the worker: the first seal compiles the scrub's patterns, paid off the page's thread. A rename, a question,
-    // a stop, an `Again` and a topic begun with its question are answered at once and handed over behind the answer, all
-    // a seal made in one post. A setup is answered once the box holds it, since what a page does next (the setup's note)
-    // is the box's.
+    // Sealed in the worker, so the first seal's compiling of the scrub's patterns is off the page's thread. A rename, a
+    // question, a stop, an `Again` and a topic begun with its question are answered at once and handed over behind the
+    // answer. A setup is answered once the box holds it, since what a page does next (the setup's note) is the box's.
     const seal = async (line: sealing.Sealing, at: string, actor: string): Promise<sealing.Sealed> => {
       const start = performance.now()
       // Each part of a seal timed on its own (`seal:*`), so a slow Send says which part it waited on.
@@ -263,14 +259,12 @@ export namespace storeset {
         return a
       }
       await part("ready", () => readies.All.get())
-      // A SEAL, one step under the device's lock: the device's row read into the core (its records, then the acts), the
-      // core's seal, which asks whether the conversation is held with no wait before it, so a reset that lands meanwhile
-      // is seen, then the new lines signed, and the lines and their signatures kept in one write of the row, which
-      // publishes their move. The seal answers once that write is done: no draw sees a line kept and not signed, and the
-      // answer leaves before any page has read the move. A line rests on what every other tab of the device wrote: the
-      // device's lines are one chain, which no later line of the box reorders. Where the lock is not had (no Web Locks,
-      // or a holder frozen past `ownlines.LOCK_MS`) this is per tab: two tabs sealing at once write two lines that rest
-      // on nothing of each other, read by their clocks as two devices' are.
+      // A SEAL, one step under the device's lock: the device's row read into the core, the core's seal (which asks
+      // whether the conversation is held with no wait before it, so a reset that lands meanwhile is seen), the new lines
+      // signed, and lines and signatures kept in one write of the row, which publishes their move. The seal answers once
+      // that write is done: no draw sees a line kept and not signed. A line rests on every other tab's lines, the
+      // device's lines being one chain. Without the lock (no Web Locks, or a holder frozen past `ownlines.LOCK_MS`)
+      // this is per tab: two tabs sealing at once write two lines resting on nothing of each other.
       //
       // A seal answers which: sealed, or not sealed for a cause a pull may cure (a conversation the tab does not hold:
       // opened a moment ago, by another device, or a reset that landed meanwhile; one resting on a line the tab does not
@@ -343,6 +337,12 @@ export namespace storeset {
       seal,
       acted,
       refused: () => held.refused_elsewhere(),
+      owed: async () => {
+        await Promise.all(WRITTEN.map(name => topicStores[name].sync.sync.restored.get()))
+        await lines.ownHeard()
+        const names: readonly stores.Written[] = [...WRITTEN, "lines"]
+        return names.reduce((n, name) => n + writes.owed(name), 0)
+      },
       earlier: async () => {
         const kept = await Promise.all([
           lines.earlier().then((e): stores.Written[] => (e ? ["lines"] : [])),

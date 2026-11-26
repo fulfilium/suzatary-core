@@ -18,9 +18,8 @@
  * class parses none of it into a todo, a route or a fetch.
  *
  * THE BOX IS THE PROFILE'S OR THE PERSON'S (Box). An APK whose profile names a
- * box opens it at once; the generic APK shows the pairing screen first, and
- * keeps the name only once that box has answered Pairing. Until then nothing
- * loads, no route opens and no push is asked for.
+ * box opens it at once; the generic APK shows the pairing screen and keeps the
+ * name only once that box has answered Pairing: until then nothing loads.
  *
  * THIS CLASS AUTHORS NO HTML: the failure screen is Android widgets, so nothing
  * this app composes is parsed as a document.
@@ -44,6 +43,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
+import android.view.WindowManager;
 import android.webkit.HttpAuthHandler;
 import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
@@ -69,19 +69,15 @@ import java.io.IOException;
 public final class MainActivity extends Activity {
 
     /**
-     * The unverifiable half of the link surface (AndroidManifest.xml):
-     * `suzatary://todo/<id>` is the same page as the box's home page plus
-     * "#/todo/<id>", for the places that cannot linkify a tailnet name. The mapping lives here
-     * and nowhere else, so the scheme cannot come to mean a second thing.
+     * The unverifiable half of the link surface (AndroidManifest.xml): `suzatary://todo/<id>` is
+     * the box's home page plus "#/todo/<id>". The mapping lives here and nowhere else.
      */
     private static final String SCHEME = "suzatary";
 
     /**
-     * What this WebView adds to its user agent, which the box reads on a Google
-     * consent (`google_sign_in::APP_AGENT`): a consent opened from here ends
-     * with a link only this app handles, where a browser's ends on the web.
-     * A page cannot set a navigation's user agent, and a client that sends this
-     * word by hand gains only a redirect for its own callback.
+     * What this WebView adds to its user agent, which the box reads on a Google consent
+     * (`google_sign_in::APP_AGENT`): a consent opened from here ends with a link only this app
+     * handles. A client that sends the word by hand gains only a redirect for its own callback.
      */
     private static final String AGENT = "SuzataryPortal";
 
@@ -89,10 +85,8 @@ public final class MainActivity extends Activity {
     private static final String CONSENT = "/api/oauth/google/consent/";
 
     /**
-     * The authority of the link the box ends a consent with:
-     * `suzatary://google/<card>/<outcome>`. It carries a card and a word, never
-     * a code, token, address or account, so opening it by hand shows a page and
-     * nothing else.
+     * The authority of the link the box ends a consent with: `suzatary://google/<card>/<outcome>`.
+     * It carries a card and a word, never a code, token, address or account.
      */
     private static final String GOOGLE = "google";
 
@@ -103,11 +97,7 @@ public final class MainActivity extends Activity {
     /** The add form's address under the box's home page (`web/src/shell/route.ts`). */
     private static final String ADD = "#/add";
 
-    /**
-     * How much shared text and subject this app carries into a URL. The overflow
-     * is cut, not refused, and the cap stops a hostile app from handing over a
-     * megabyte to percent-encode.
-     */
+    /** How much shared text and subject this app carries into a URL; the overflow is cut, so a hostile app cannot hand over a megabyte to encode. */
     private static final int MAX_SHARED = 1000;
 
     private static final int MAX_SUBJECT = 200;
@@ -129,31 +119,19 @@ public final class MainActivity extends Activity {
     /** Between onStart and onStop: a box paired then opens its route at once. */
     private boolean foreground;
 
-    /**
-     * What load() last asked for, fragment and all. The retry button reloads THIS,
-     * since a fragment never reaches the server and so never comes back in an
-     * error. A restored WebView does not go through load().
-     */
+    /** What load() last asked for, fragment and all: the retry button reloads THIS, since an error never carries the fragment back. A restored WebView does not go through load(). */
     private String current;
 
     /** The way to the box (android/route/), opened while the activity is in the foreground. */
     private Route route;
 
-    /**
-     * The first page — a link, a restored history, or home — until the route
-     * reaches the box; null once it has been shown. Nothing loads before then,
-     * since a page asked for over a route that is not up is a page that fails.
-     */
+    /** The first page (a link, a restored history, or home) until the route reaches the box; null once shown. Nothing loads before then. */
     private Runnable first;
 
     /** The request code of the one file chooser this app starts. */
     private static final int CHOOSE_FILES = 2;
 
-    /**
-     * The page waiting on the system picker, or null. It is answered exactly
-     * once on every path, cancel included: an unanswered callback leaves the
-     * page's file input dead until the WebView is rebuilt.
-     */
+    /** The page waiting on the system picker, or null: answered exactly once on every path, cancel included, or its file input stays dead. */
     private ValueCallback<Uri[]> choosing;
 
     /** Hands each token Play Services gives to the page; held here, since preferences hold listeners weakly. */
@@ -170,16 +148,15 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(final Bundle saved) {
         super.onCreate(saved);
+        // No screenshot of a page and no thumbnail of it in Recents: a page shows mail and held values.
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
 
         web = new WebView(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
-        // localStorage IS the app's offline cache (web/src/app/cache.ts): the last
-        // fold, slim and dated. Without DOM storage the app has no local-first
-        // half at all and a dropped tailnet is a blank screen.
+        // localStorage IS the app's offline cache (web/src/app/cache.ts): without DOM storage a dropped tailnet is a blank screen.
         s.setDomStorageEnabled(true);
-        // Nothing in web/ reads a file or a content:// URI, so the WebView may
-        // not either. Narrowing a capability nobody uses costs nothing.
+        // Nothing in web/ reads a file or a content:// URI, so the WebView may not either.
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setMediaPlaybackRequiresUserGesture(true);
@@ -213,11 +190,7 @@ public final class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    /**
-     * THE TOKEN GOES TO THE PAGE, which reports it signed: this app holds no
-     * device key. postWebMessage delivers only to a main frame at the box's
-     * origin, and no JavaScript interface is exposed.
-     */
+    /** THE TOKEN GOES TO THE PAGE, which reports it signed: this app holds no device key. postWebMessage delivers only to a main frame at the box's origin. */
     private void handToken() {
         String token = Push.token(this);
         if (box == null || token == null) {
@@ -234,10 +207,8 @@ public final class MainActivity extends Activity {
     /** The box is known: the first page waits for the route, and push is asked for. */
     private void begin(final Bundle saved) {
         current = box.https();
-        // A link the OS handed us wins over restored state: the process may
-        // have been killed while the app sat on some other page, and the thing
-        // the owner just tapped is what he asked for. With no link, a restore
-        // keeps the page and the scroll; with neither, the app opens home.
+        // A link the OS handed us wins over restored state; with none, a restore keeps the page and
+        // the scroll; with neither, the app opens home.
         final String target = targetOf(getIntent());
         first = new Runnable() {
             @Override
@@ -258,11 +229,8 @@ public final class MainActivity extends Activity {
             }
         });
 
-        // PUSH IS A STARTUP ERRAND, NOT A SERVICE. Opening the app is the only
-        // moment this process is reliably alive, so it is when the token is
-        // refreshed; between two launches nothing of ours runs at all. Off the
-        // main thread because SharedPreferences is disk and startService is
-        // IPC, and named so a stray trace says whose thread it was.
+        // PUSH IS A STARTUP ERRAND, NOT A SERVICE: the token is refreshed when the app opens, off the
+        // main thread because SharedPreferences is disk and startService is IPC.
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -351,10 +319,9 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * The runtime half of POST_NOTIFICATIONS (API 33+), asked once per launch
-     * while unanswered. The rationale shows before the second ask, which is when
-     * shouldShowRequestPermissionRationale turns true. The permission string is
-     * spelled out because Manifest.permission only exists from API 33.
+     * The runtime half of POST_NOTIFICATIONS (API 33+), asked once per launch while unanswered,
+     * with the rationale before the second ask. The permission string is spelled out because
+     * Manifest.permission only exists from API 33.
      */
     private void askToNotify() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
@@ -370,11 +337,7 @@ public final class MainActivity extends Activity {
         requestPermissions(new String[] {permission}, 1);
     }
 
-    /**
-     * A link tapped or a share made while the app runs. singleTask reuses this
-     * activity and its WebView; `targetOf` decides what the intent names, for a
-     * fresh process and a running one alike.
-     */
+    /** A link tapped or a share made while the app runs: singleTask reuses this activity, and `targetOf` decides what the intent names. */
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
@@ -399,20 +362,11 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * The page an incoming intent names, or null if it names none.
-     *
-     * An https URL for this host is loaded AS GIVEN — the fragment is where
-     * `#/todo/<id>` lives and dropping it would land every link on the home
-     * list. The custom scheme is rewritten: `suzatary://todo/<id>` is
-     * authority "todo" and path "/<id>", which is exactly the route the web
-     * app's hash router reads, so the two spellings are one page by
-     * construction rather than by a table of cases. Encoded forms are used
-     * throughout: an id that needed escaping must stay escaped.
-     *
-     * Any other host is refused rather than loaded. A filter this app declares
-     * is not the only way an intent arrives here, and a WebView pointed at a
-     * stranger's page by a stranger's intent is the one thing this class must
-     * not do.
+     * The page an incoming intent names, or null if it names none. An https URL for this host
+     * loads AS GIVEN, fragment included, since `#/todo/<id>` lives there; `suzatary://todo/<id>`
+     * is rewritten to the same route, encoded forms kept. Any other host is refused: a filter is
+     * not the only way an intent arrives, and a stranger's intent must not point the WebView at a
+     * stranger's page.
      */
     private String targetOf(Intent intent) {
         if (intent == null) {
@@ -448,11 +402,9 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * THE END OF A GOOGLE CONSENT: `suzatary://google/<card>/<outcome>` opens the
-     * inbox with that card open, where the card shows how the sign-in ended. The
-     * outcome word is checked and then not needed, since the card's own state is
-     * the answer; a link that is not well formed opens the home page. Nothing in
-     * the link is sent anywhere, and the card is encoded into the fragment.
+     * THE END OF A GOOGLE CONSENT: `suzatary://google/<card>/<outcome>` opens the inbox with that
+     * card open. The outcome word is checked and not needed, since the card's own state is the
+     * answer; a link not well formed opens the home page.
      */
     private String signedIn(Uri data) {
         java.util.List<String> parts = data.getPathSegments();
@@ -463,11 +415,9 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * A share, spelled as the add form's address: EXTRA_TEXT and EXTRA_SUBJECT
-     * travel as `#/add` query fields, and the web app decides what they mean.
-     * They are read as CharSequence, since styled text is a Spanned that
-     * getStringExtra drops. Uri.encode runs once, with no allowed set, because
-     * the web side decodes once. A share with nothing in it opens the app.
+     * A share, spelled as the add form's address: EXTRA_TEXT and EXTRA_SUBJECT travel as `#/add`
+     * query fields. They are read as CharSequence, since getStringExtra drops styled text, and
+     * encoded once, because the web side decodes once.
      */
     private String shared(Intent intent) {
         String text = capped(intent.getCharSequenceExtra(Intent.EXTRA_TEXT), MAX_SHARED);
@@ -622,11 +572,7 @@ public final class MainActivity extends Activity {
         return Math.round(units * getResources().getDisplayMetrics().density);
     }
 
-    /**
-     * A WebView opens no picker for `<input type="file">` on its own: without
-     * this the composer's attach button did nothing in the app. The system
-     * picker hands back content:// grants, so no storage permission is asked.
-     */
+    /** A WebView opens no picker for `<input type="file">` on its own. The system picker hands back content:// grants, so no storage permission is asked. */
     private final class Chooser extends WebChromeClient {
         @Override
         public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
@@ -697,11 +643,7 @@ public final class MainActivity extends Activity {
         /** The last page asked of the box was its consent route, so the next one outside is Google's. */
         private boolean consenting;
 
-        /**
-         * The app's origin stays in the WebView; everything else — a mailto:
-         * link in a triaged message, an http link out of a todo — goes to the
-         * system, which is where a link to somewhere else belongs.
-         */
+        /** The app's origin stays in the WebView; every other link goes to the system. */
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
@@ -710,9 +652,8 @@ public final class MainActivity extends Activity {
                 consenting = path != null && path.startsWith(CONSENT);
                 return false;
             }
-            // The page the box's consent route redirects to is Google's, which
-            // refuses to run in a WebView: it opens as a Custom Tab, and the
-            // box's callback brings the owner back by the link above.
+            // Google's page refuses to run in a WebView: it opens as a Custom Tab, and the box's callback
+            // returns by the link above.
             boolean google = consenting;
             consenting = false;
             if (google && Tab.open(MainActivity.this, url)) {
@@ -721,9 +662,7 @@ public final class MainActivity extends Activity {
             try {
                 startActivity(new Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             } catch (ActivityNotFoundException e) {
-                // Nothing on the phone handles the scheme. Staying put is the
-                // only honest outcome; swallowing the exception keeps a bad
-                // link from killing the app.
+                // Nothing on the phone handles the scheme: stay put rather than crash on a bad link.
             }
             return true;
         }

@@ -451,6 +451,26 @@ test("law: the inbox and the topics read from a warm load what they read cold, a
   assert.ok(seen.frames > 0 && seen.snapshots > 0 && seen.writes > 0, `the reloads read frames (${seen.frames}) and a snapshot (${seen.snapshots}), and the tabs wrote (${seen.writes})`)
 })
 
+test("what a device holds that the box has not taken is counted for the lease, and is none once the box has taken it", async () => {
+  fakeIndexedDB()
+  proposals = inbox.length
+  topicStores = { topics: [begun("topics")], "topic-aliases": [begun("topic-aliases")] }
+  holds = order.length
+  const t = tab()
+  assert.equal(await t.ask({ type: "Pull" }), true)
+  assert.equal(await t.ask({ type: "Owed" }), 0)
+  down = true
+  try {
+    await t.ask({ type: "Topic", write: { type: "Add", target: "round:default/0", topic: "travel" }, at: "2026-11-03T08:10:00", actor: "owner" })
+    assert.equal(await t.ask({ type: "Owed" }), 1, "a topic write the box has not taken is owed")
+  } finally {
+    down = false
+  }
+  assert.equal(await t.ask({ type: "Pull" }), true)
+  assert.equal(await t.ask({ type: "Owed" }), 0, "once the box has taken it, nothing is owed")
+  await settled()
+})
+
 test("a tab another tab's landing wakes reads it with no pull of its own, and with every wake lost reads it at its next pull", async () => {
   for (const lost of [false, true]) {
     const device = fakeIndexedDB()

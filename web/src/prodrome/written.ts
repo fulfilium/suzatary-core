@@ -38,6 +38,8 @@ export namespace written {
     // `events` written into `name` as this tab's own and kept in one frame with their signatures, so no reading holds
     // them unsigned; throws, nothing held, where the frame was not kept.
     readonly own: (name: N, store: Appends, events: readonly string[], kept: (frame: Uint8Array) => Promise<void>) => Promise<Signed<string>>
+    // How many objects `name` holds that the box has not taken.
+    readonly owed: (name: N) => number
     // What `name` holds unsent, signed and posted; an answer kept, a refusal said.
     readonly handOver: (name: N) => Promise<void>
     // A move of `name` the caller made, kept; each newly refused write said once, in the box's words.
@@ -249,7 +251,7 @@ export namespace written {
       }
     }
 
-    return { signatures, own, handOver, settled: (name, step) => entry(name).exclusive(() => settled(entry(name), step)), said }
+    return { signatures, own, owed: name => read("unsent", Unsent(entry(name).store.unsent())).flat().length, handOver, settled: (name, step) => entry(name).exclusive(() => settled(entry(name), step)), said }
   }
 }
 export default written

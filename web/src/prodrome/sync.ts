@@ -113,6 +113,9 @@ const readUnsent = serial.of(async (): Promise<void> => {
   )
 })
 
+/** How many acts and lines this device holds that the box has not taken, over everything it keeps. */
+export const owed = (): Promise<number> => ask({ type: "Owed" }, "Shell")
+
 /** A switch of chain: what was read of the previous one is dropped; the fold resets to an unloaded page. */
 export function forgetChainReplica(): void {
   unsentNow.dispatch(NONE)
