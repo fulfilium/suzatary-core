@@ -200,6 +200,12 @@ mod tests {
     }
 
     #[test]
+    fn a_text_the_html_export_drops_from_still_compiles() {
+        let html = text("kept #circle(radius: 1cm)").expect("a warning is not a refusal");
+        assert!(html.contains("kept") && !html.contains("circle"), "{html}");
+    }
+
+    #[test]
     fn only_an_error_refuses_and_an_unknown_severity_is_not_guessed() {
         let said = |severity: &str| {
             format!(

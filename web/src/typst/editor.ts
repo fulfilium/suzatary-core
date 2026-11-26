@@ -92,6 +92,7 @@ export namespace editor {
     const hint = el("p", { class: "typedhover", "aria-live": "polite" })
     const problems = el("ul", { class: "typedproblems", role: "status" })
     const preview = el("div", { class: "typedpreview rich", "aria-label": "preview" })
+    const dropped = el("ul", { class: "typeddropped", role: "status" })
 
     const dispatch = (e: edit.Event): void => {
       const was = s
@@ -121,6 +122,8 @@ export namespace editor {
       )
       const ps = edit.problems(s)
       if (was === null || edit.problems(was) !== ps) problems.replaceChildren(...ps.map(p => el("li", null, edit.line(s.source, p))))
+      const ds = edit.dropped(s)
+      if (was === null || edit.dropped(was) !== ds) dropped.replaceChildren(...ds.map(p => el("li", null, edit.line(s.source, p))))
       menu.hidden = s.offer === null
       if (was === null || was.offer !== s.offer || was.chosen !== s.chosen)
         menu.replaceChildren(
@@ -196,7 +199,7 @@ export namespace editor {
     input.addEventListener("blur", () => dispatch({ type: "Closed" }))
 
     draw(null)
-    const node = el("div", { class: "typed" }, el("div", { class: "typedfield" }, shade, input), menu, hint, problems, preview)
+    const node = el("div", { class: "typed" }, el("div", { class: "typedfield" }, shade, input), menu, hint, problems, preview, dropped)
     return {
       node,
       paint: v => {

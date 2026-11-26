@@ -8,7 +8,7 @@ export namespace edit {
   // Every offset is UTF-16, the unit a textarea's selection counts in.
   export type Span = { readonly from: number; readonly to: number; readonly tag: string }
   export type Diagnostic = { readonly message: string; readonly hints: readonly string[]; readonly from: number | null; readonly to: number | null }
-  export type Checked = { readonly type: "Html"; readonly html: string } | { readonly type: "Failed"; readonly diagnostics: readonly Diagnostic[] }
+  export type Checked = { readonly type: "Html"; readonly html: string; readonly warnings: readonly Diagnostic[] } | { readonly type: "Failed"; readonly diagnostics: readonly Diagnostic[] }
   export type Item = { readonly label: string; readonly insert: string; readonly cursor: number; readonly detail: string | null }
   export type Offer = { readonly from: number; readonly items: readonly Item[] }
 
@@ -32,8 +32,8 @@ export namespace edit {
   // The key the text is compiled under, in the worker and on the box alike.
   export const MAIN = "/main.typ"
 
-  export const fold = <R>(c: Checked, on: { html: (html: string) => R; failed: (ds: readonly Diagnostic[]) => R }): R =>
-    c.type === "Html" ? on.html(c.html) : on.failed(c.diagnostics)
+  export const fold = <R>(c: Checked, on: { html: (html: string, warnings: readonly Diagnostic[]) => R; failed: (ds: readonly Diagnostic[]) => R }): R =>
+    c.type === "Html" ? on.html(c.html, c.warnings) : on.failed(c.diagnostics)
 
   export const failed = (message: string): Checked => ({ type: "Failed", diagnostics: [{ message, hints: [], from: null, to: null }] })
 
@@ -48,14 +48,31 @@ export namespace edit {
   })
   const compiled = d.json(d.obj<{ html: string | null; diagnostics: Said[] }>({ html: d.nullable(d.str), diagnostics: d.arr(said) }))
 
+  // Typst prints this with every HTML compile; it is about the export, not about the text.
+  const EXPERIMENTAL = "html export is under active development and incomplete"
+
+  const SHAPES: readonly string[] = ["rect", "square", "circle", "ellipse", "line", "polygon", "curve", "path"]
+
+  // The reason the HTML export drops an element, in the owner's words.
+  const because = (element: string): string =>
+    SHAPES.includes(element) ? "shapes have no HTML form" : element === "place" ? "placed content has no HTML form" : element === "h" || element === "v" ? "fixed spacing has no HTML form" : "it has no HTML form"
+
+  const IGNORED = /^(\S+) was ignored during HTML export$/
+
+  // Typst's "ignored" warning in the owner's terms; any other warning keeps Typst's words.
+  const plain = (x: Diagnostic): Diagnostic => {
+    const element = IGNORED.exec(x.message)?.[1]
+    return element === undefined ? x : { ...x, message: `${element} is not shown: ${because(element)}`, hints: [] }
+  }
+
   // A warning is not a failure; a diagnostic about another file than the text marks nothing in it.
   export const checked = (text: string): Checked => {
     const r = compiled(text)
     if (r.type === "Error") return failed(`typst-wasm answered an unexpected shape: ${r.e}`)
-    const errors = r.v.diagnostics
-      .filter(x => x.severity === "error")
-      .map(x => (x.file === MAIN ? { message: x.message, hints: x.hints, from: x.from, to: x.to } : { message: x.message, hints: x.hints, from: null, to: null }))
-    return r.v.html !== null && errors.length === 0 ? { type: "Html", html: r.v.html } : errors.length === 0 ? failed("typst produced no document") : { type: "Failed", diagnostics: errors }
+    const located = (x: Said): Diagnostic => (x.file === MAIN ? { message: x.message, hints: x.hints, from: x.from, to: x.to } : { message: x.message, hints: x.hints, from: null, to: null })
+    const errors = r.v.diagnostics.filter(x => x.severity === "error").map(located)
+    const warnings = r.v.diagnostics.filter(x => x.severity === "warning" && x.message !== EXPERIMENTAL).map(x => plain(located(x)))
+    return r.v.html !== null && errors.length === 0 ? { type: "Html", html: r.v.html, warnings } : errors.length === 0 ? failed("typst produced no document") : { type: "Failed", diagnostics: errors }
   }
 
   export const spans = (text: string): readonly Span[] =>
@@ -142,6 +159,10 @@ export namespace edit {
   // What typst says is wrong with the text the editor holds now; nothing while it has not said.
   export const problems = (s: State): readonly Diagnostic[] =>
     s.check === null || s.check.source !== s.source ? [] : fold(s.check.checked, { html: () => [], failed: ds => ds })
+
+  // What the compile dropped from the text the editor holds now; the text still saves.
+  export const dropped = (s: State): readonly Diagnostic[] =>
+    s.check === null || s.check.source !== s.source ? [] : fold(s.check.checked, { html: (_, ws) => ws, failed: () => [] })
 
   // The source in runs, shaded once the worker has shaded this very text and plain until then.
   export const drawn = (s: State): readonly Run[] =>

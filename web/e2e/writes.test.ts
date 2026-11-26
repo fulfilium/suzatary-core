@@ -262,6 +262,7 @@ app.scene("the editor highlights markup, previews it live, refuses what does not
     timeout: 20000,
   });
   await app.page.waitFor(`document.querySelector(".editbox .typedpreview strong")?.textContent === "passport"`, { timeout: 20000 });
+  assert.ok(await app.page.evaluate<boolean>(`document.querySelector(".editbox .typeddropped li") === null`), "a text with nothing dropped shows no warning");
 
   await typeInto(".editbox .draftbody", "Renew the *passport* ] today");
   await app.page.waitFor(`document.querySelector(".editbox .typedproblems li")?.textContent?.startsWith("1:22: unexpected closing bracket") === true`, {
@@ -277,13 +278,18 @@ app.scene("the editor highlights markup, previews it live, refuses what does not
     timeout: 8000,
   });
 
-  await typeInto(".editbox .draftbody", "Renew the *passport* today");
-  await app.page.waitFor(`document.querySelector(".editbox .typedproblems li") === null`, { timeout: 20000 });
+  const dropping = "Renew the *passport* #circle(radius: 1cm) today";
+  await typeInto(".editbox .draftbody", dropping);
+  await app.page.waitFor(
+    `document.querySelector(".editbox .typeddropped li")?.textContent === "1:23: circle is not shown: shapes have no HTML form"`,
+    { timeout: 20000 },
+  );
+  assert.ok(await app.page.evaluate<boolean>(`document.querySelector(".editbox .typedproblems li") === null`), "a warning is no error");
   await app.page.click(".editbox .addbtn");
   await app.page.waitFor(`document.querySelector(".todoview .todobody strong")?.textContent === "passport"`, { timeout: 8000 });
   // The chain holds the markup as written, once the push the page drew ahead of has landed.
   await app.page.waitFor(
-    `fetch("/api/todo/${id}").then((r) => r.json()).then((b) => b.entry.authored.body === "Renew the *passport* today")`,
+    `fetch("/api/todo/${id}").then((r) => r.json()).then((b) => b.entry.authored.body === ${JSON.stringify(dropping)})`,
     { timeout: 15000 },
   );
   // The row's HTML is the box's, carried by its fold: rendered when the box adopted the object, read on the next fetch.

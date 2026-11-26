@@ -65,7 +65,7 @@ test("an answer about a text the editor no longer holds changes nothing", () =>
   }))
 
 test("a failed compile keeps the last page that compiled, marked stale", () => {
-  const ok = edit.step(edit.step(edit.of(""), { type: "Typed", source: "*a*" }), { type: "Checked", source: "*a*", checked: { type: "Html", html: "<p>a</p>" } })
+  const ok = edit.step(edit.step(edit.of(""), { type: "Typed", source: "*a*" }), { type: "Checked", source: "*a*", checked: { type: "Html", html: "<p>a</p>", warnings: [] } })
   assert.equal(edit.stale(ok), false)
   const broken = edit.step(edit.step(ok, { type: "Typed", source: "*a* ]" }), { type: "Checked", source: "*a* ]", checked: check("*a* ]") })
   assert.equal(broken.shown, "<p>a</p>")
@@ -99,4 +99,19 @@ test("a refusal names where in the text typst stopped", () => {
   const c = check("Renew #html.elem(\"b\")[x]")
   assert.equal(c.type, "Failed")
   assert.deepEqual(c.type === "Failed" ? c.diagnostics.map(x => edit.line("Renew #html.elem(\"b\")[x]", x)) : [], ["1:8: unknown variable: html"])
+})
+
+test("a compile says what the HTML export dropped, in the owner's terms, and a clean text says nothing", () => {
+  const held = (source: string): edit.State => {
+    const s = edit.step(edit.of(""), { type: "Typed", source })
+    return edit.step(s, { type: "Checked", source, checked: check(source) })
+  }
+  const lines = (source: string): readonly string[] => edit.dropped(held(source)).map(w => edit.line(source, w))
+  assert.deepEqual(lines("a #circle(radius: 1cm) b"), ["1:4: circle is not shown: shapes have no HTML form"])
+  assert.deepEqual(lines("#place(top)[x]"), ["1:2: place is not shown: placed content has no HTML form"])
+  assert.deepEqual(lines("#grid(columns: 2)[a][b]"), ["1:2: grid is not shown: it has no HTML form"])
+  assert.deepEqual(lines("*a* and _b_"), [])
+  assert.equal(held("#circle()").check?.checked.type, "Html")
+  assert.deepEqual(edit.dropped(held("#circle() ]")), [])
+  assert.equal(edit.problems(held("#circle() ]")).length, 1)
 })

@@ -23,7 +23,7 @@ class LoopingWorker {
   }
   postMessage(m: edit.Asked): void {
     this.posted.push(m)
-    const answer: edit.Answer = { type: "Check", checked: { type: "Html", html: "<p>fine</p>" } }
+    const answer: edit.Answer = { type: "Check", checked: { type: "Html", html: "<p>fine</p>", warnings: [] } }
     if (this.posted.length === 1) queueMicrotask(() => this.listeners.forEach(f => f({ data: { id: m.id, answer } })))
   }
   terminate(): void {
@@ -39,7 +39,7 @@ test("a compile past two seconds terminates the worker and is answered as a refu
   Object.assign(globalThis, { window: globalThis, Worker: LoopingWorker })
   t.mock.timers.enable({ apis: ["setTimeout"] })
   const first = await editor.effects.ask({ type: "Check", source: "= Fine" })
-  assert.deepEqual(first, { type: "Check", checked: { type: "Html", html: "<p>fine</p>" } })
+  assert.deepEqual(first, { type: "Check", checked: { type: "Html", html: "<p>fine</p>", warnings: [] } })
   let answer: edit.Answer | null = null
   void editor.effects.ask({ type: "Check", source: "#let f(x) = f(x)\n#f(1)" }).then(a => (answer = a))
   t.mock.timers.tick(1999)
