@@ -3,6 +3,7 @@
 
 use super::gate_list::steps;
 use super::merge_gate::MADE_AND_READ;
+use super::workflows::code;
 use super::{Scratch, repo};
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::Command;
@@ -191,14 +192,6 @@ fn gate_yml_e2e_jobs_are_every_part_once() {
     );
 }
 
-fn code(rel: &str) -> String {
-    read(rel)
-        .lines()
-        .filter(|line| !line.trim_start().starts_with('#'))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// The lines under `on:`, trimmed.
 fn trigger(body: &str) -> Vec<&str> {
     body.lines()
@@ -209,25 +202,6 @@ fn trigger(body: &str) -> Vec<&str> {
         .collect()
 }
 
-/// Every `uses:` names its action by a commit, or names an action of this tree, whose own
-/// `uses:` do.
-fn assert_pinned(body: &str) {
-    for line in body.lines().filter(|l| l.contains("uses: ")) {
-        if let Some(local) = line.split_once("uses: ./").map(|(_, path)| path.trim()) {
-            assert_pinned(&code(&format!("{local}/action.yml")));
-            continue;
-        }
-        let pin = line
-            .rsplit_once('@')
-            .map(|(_, at)| at.split_whitespace().next());
-        assert!(
-            pin.flatten()
-                .is_some_and(|sha| sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit())),
-            "pinned by commit: {line}"
-        );
-    }
-}
-
 /// The values of a `<key>: ` the text spells, each once per spelling.
 fn values<'a>(body: &'a str, key: &str) -> BTreeSet<&'a str> {
     body.lines()
@@ -235,8 +209,8 @@ fn values<'a>(body: &'a str, key: &str) -> BTreeSet<&'a str> {
         .collect()
 }
 
-/// No pull request event, a read-only token, a checkout with no credential, every action pinned
-/// by commit, no binary cache pushed and the Actions cache restored, never saved.
+/// No pull request event, a read-only token, a checkout with no credential, no binary cache pushed
+/// and the Actions cache restored, never saved.
 #[test]
 fn gate_yml_runs_on_a_gate_branch_alone_holding_no_secret() {
     let body = code(".github/workflows/gate.yml");
@@ -249,7 +223,6 @@ fn gate_yml_runs_on_a_gate_branch_alone_holding_no_secret() {
     );
     assert!(!body.contains(": write"), "and no job asks to write");
     assert!(body.contains("persist-credentials: false"));
-    assert_pinned(&body);
     assert!(!body.contains("secrets."), "no secret");
     assert!(!body.contains("cachix-action"), "no Cachix action");
     assert!(!body.contains("cachix push"), "no push to the Cachix");
@@ -286,7 +259,6 @@ fn gate_store_yml_saves_the_one_store_on_master() {
     assert!(!store.contains("secrets."), "no secret");
     assert!(!store.contains("cachix push") && !store.contains("cachix-action"));
     assert!(store.contains("persist-credentials: false"));
-    assert_pinned(&store);
     assert_eq!(store.matches(": write").count(), 1, "one permission writes");
     assert!(store.contains("      contents: read\n      actions: write\n"));
     let workflows = std::fs::read_dir(repo().join(".github/workflows")).expect("the workflows");
@@ -367,7 +339,6 @@ fn gate_passes_yml_hands_each_gate_the_passes_of_the_last() {
     );
     assert!(!passes.contains("pull_request"));
     assert!(!passes.contains("secrets."), "no secret");
-    assert_pinned(&passes);
     assert!(passes.contains("      contents: read\n      actions: write\n"));
     assert_eq!(
         values(&passes, "restore-keys"),
@@ -480,28 +451,6 @@ fn gate_yml_restores_the_dependency_build_gate_store_saves() {
     assert!(
         at(&action, "target-deps.sh") < at(&action, "uses: actions/cache/save@"),
         "the members' units dropped, then saved"
-    );
-}
-
-/// Including the Pages workflow `prodrome init --public` writes.
-#[test]
-fn gate_workflows_pass_actionlint() {
-    let out = Command::new("actionlint")
-        .args([
-            ".github/workflows/gate.yml",
-            ".github/workflows/gate-store.yml",
-            ".github/workflows/gate-passes.yml",
-            ".github/workflows/publication.yml",
-            "app/cli/src/commands/prodrome/roadmap.pages.yml",
-        ])
-        .current_dir(repo())
-        .output()
-        .expect("actionlint runs (the .#triage shell carries it)");
-    assert!(
-        out.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
     );
 }
 

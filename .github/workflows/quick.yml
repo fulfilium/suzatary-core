@@ -20,6 +20,9 @@ on:
 concurrency:
   group: quick-${{ github.sha }}
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_TARGET_DIR: ${{ github.workspace }}/app/target
@@ -35,14 +38,17 @@ jobs:
       check: ${{ steps.check.outputs.cache-hit }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # the commit-message check replays the whole pushed range
+          persist-credentials: false
 
       - name: Every commit message is a claim about its diff
+        env:
+          BEFORE: ${{ github.event.before }}
         run: |
-          if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && git cat-file -e "${{ github.event.before }}" 2>/dev/null; then
-            range="${{ github.event.before }}..${{ github.sha }}"
+          if [ "$BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE" 2>/dev/null; then
+            range="$BEFORE..$GITHUB_SHA"
           else
             range="HEAD~5..HEAD"
           fi
@@ -54,7 +60,7 @@ jobs:
         run: scripts/ci-names.sh | tee -a "$GITHUB_OUTPUT"
 
       - id: check
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with: { path: .verdict, key: 'verdict-check-${{ steps.name.outputs.rust }}', lookup-only: true }
 
   check:
@@ -65,8 +71,13 @@ jobs:
       run:
         shell: nix develop .#rust --command bash -euo pipefail {0}
     steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+        with:
+          extra_nix_config: |
+            max-jobs = auto
       - id: target
         uses: ./.github/actions/cargo-target
         with: { for: quick, mode: restore }
@@ -94,5 +105,5 @@ jobs:
         with: { for: quick, mode: save, hit: '${{ steps.target.outputs.hit }}' }
 
       - run: echo '${{ github.run_id }}' > .verdict
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with: { path: .verdict, key: 'verdict-check-${{ needs.plan.outputs.rust }}' }

@@ -16,10 +16,11 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch: {}
 
-# gh release upload writes to this repo's releases and nothing else needs a
-# token at all.
+
+# Every job reads only, except `publish` and `unchanged`, which write the release. Only `sign` holds
+# the signing key, and it receives the unsigned APK and nothing else from the build.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   decide:
@@ -28,17 +29,21 @@ jobs:
       build: ${{ steps.decide.outputs.build }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Decide
         id: decide
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if [ "${{ github.ref_type }}" != tag ]; then echo "build=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$REF_TYPE" != tag ]; then echo "build=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${GITHUB_SHA}^" 2>/dev/null || true)
           major() { echo "${1#v}" | cut -d. -f1; }
-          if [ -z "$previous" ] || [ "$(major "$previous")" != "$(major "${{ github.ref_name }}")" ]; then
+          if [ -z "$previous" ] || [ "$(major "$previous")" != "$(major "$REF_NAME")" ]; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           elif git diff --quiet "$previous" "$GITHUB_SHA" -- android nix/apk.nix nix/apk-profile.nix web/static/icon-512.png; then
             echo "::notice::The Android shell is unchanged since $previous and the major is the same, so no APK."
@@ -47,26 +52,34 @@ jobs:
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
 
-  apk:
+  # Builds the unsigned APK and decides whether it differs from the published one. No secret.
+  build:
     needs: decide
     if: needs.decide.outputs.build == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.gate.outputs.changed }}
+      version: ${{ steps.gate.outputs.version }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # versionCode is the commit count (flake.nix), so a shallow clone
           # would silently produce a version lower than the last release and
           # an APK the phone refuses to install as an update.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
+        uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+        with:
+          extra_nix_config: |
+            max-jobs = auto
 
       # A hit on the primary key means this exact APK was built before; the
       # restore prefix is flake.lock alone, so an android/ change reuses the SDK.
       - name: Cache Nix store
-        uses: nix-community/cache-nix-action@v7
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
         with:
           primary-key: apk-${{ runner.os }}-${{ hashFiles('flake.lock', 'nix/apk.nix', 'nix/apk-profile.nix', 'android/**') }}
           restore-prefixes-first-match: apk-${{ runner.os }}-${{ hashFiles('flake.lock') }}
@@ -90,15 +103,13 @@ jobs:
             nix build --impure --print-build-logs .#apk-profiled-unsigned --out-link result-apk
 
       # The reproducible artefact, kept whether or not signing proceeds, so a
-      # box that can sign fetches it and signs with the vaulted key.
+      # box that can sign fetches it and signs with the vaulted key. The APK
+      # alone, which is all `sign` receives.
       - name: Keep the unsigned APK as a workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: suzatary-unsigned
-          path: |
-            result-apk/suzatary-unsigned.apk
-            result-apk/suzatary-unsigned.apk.sha256
-            result-apk/version
+          path: result-apk/suzatary-unsigned.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -128,10 +139,33 @@ jobs:
           fi
           echo "version=$(cat result-apk/version)" >> "$GITHUB_OUTPUT"
 
+  # The only job that names the key: it builds the signer before the build's artifact arrives,
+  # restores no cache, and its token reads only.
+  sign:
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+
+      - name: Build the signer
+        run: nix build --print-build-logs .#apk-sign --out-link "$RUNNER_TEMP/signer"
+
+      - name: The unsigned APK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: suzatary-unsigned
+          path: ${{ runner.temp }}/unsigned
+
       # The key, which this repo must not contain, is demanded only when there is
       # something to publish, so a fork or an unchanged run never fails for it.
       - name: Sign the APK
-        if: steps.gate.outputs.changed == 'true'
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -149,19 +183,46 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$keystore"
           SUZATARY_KEYSTORE="$keystore" \
           SUZATARY_KEYSTORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \
-            nix run .#apk-sign -- result-apk/suzatary-unsigned.apk suzatary.apk
+            "$RUNNER_TEMP/signer/bin/suzatary-sign-apk" "$RUNNER_TEMP/unsigned/suzatary-unsigned.apk" "$RUNNER_TEMP/suzatary.apk"
 
-      # The unsigned hash rides along because the change gate reads it on the
-      # next run.
+      - name: Keep the signed APK for publishing
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: suzatary-signed
+          path: ${{ runner.temp }}/suzatary.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  # Publishes the signed APK. Holds the release token and no key, and checks out nothing.
+  publish:
+    needs: [build, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: The signed APK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: suzatary-signed
+          path: signed
+
+      - name: The unsigned APK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: suzatary-unsigned
+          path: unsigned
+
+      # The unsigned hash rides along because the change gate reads it on the next run.
       - name: Publish the APK to the release
-        if: steps.gate.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           SUZATARY_PORTAL_HOST: ${{ vars.SUZATARY_PORTAL_HOST }}
-          VERSION: ${{ steps.gate.outputs.version }}
+          VERSION: ${{ needs.build.outputs.version }}
           TARGET: ${{ github.ref_type == 'tag' && github.ref_name || 'app' }}
         run: |
           set -euo pipefail
+          (cd unsigned && sha256sum suzatary-unsigned.apk > suzatary-unsigned.apk.sha256)
           notes=$(printf '%s\n' \
             "Suzatary for Android — a WebView portal onto https://$SUZATARY_PORTAL_HOST/." \
             "" \
@@ -176,18 +237,24 @@ jobs:
               || gh release create "$TARGET" --title "Suzatary $VERSION" --notes "$notes"
           fi
           gh release upload "$TARGET" \
-            suzatary.apk \
-            result-apk/suzatary-unsigned.apk.sha256 \
+            signed/suzatary.apk \
+            unsigned/suzatary-unsigned.apk.sha256 \
             --clobber
           gh release edit "$TARGET" --notes "$notes"
 
-      # So the tag is never release-less and the fallback has a reason to read.
+  # So the tag is never release-less and the fallback has a reason to read. No checkout, no secret.
+  unchanged:
+    needs: build
+    if: needs.build.outputs.changed == 'false' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
       - name: Record an unchanged APK on the version's release
-        if: steps.gate.outputs.changed == 'false' && github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-          SUZATARY_PORTAL_HOST: ${{ vars.SUZATARY_PORTAL_HOST }}
-          VERSION: ${{ steps.gate.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
           TARGET: ${{ github.ref_name }}
         run: |
           set -euo pipefail

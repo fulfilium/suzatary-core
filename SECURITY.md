@@ -65,6 +65,10 @@ the mechanism that holds it. *Irreversibles* covers what is human-only.
 - **Plugins hold only their imports.** A WebAssembly plugin reaches the world
   through the host's `fetch`, limited to the origins its manifest declares,
   and never holds a credential.
+- **CI.** Every action runs at a commit id, its version in a comment. To update a pin, take the
+  tag's commit from `git ls-remote <repo> <tag> <tag>^{}` (the `^{}` line if any) and read the
+  diff between the two releases.
+  One job names the APK key; it holds no write token and receives only the unsigned APK.
 
 ## What is in scope
 
