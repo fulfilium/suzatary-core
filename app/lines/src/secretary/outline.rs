@@ -54,8 +54,8 @@ pub struct Rounds {
     said: Vec<Datetime>,
     /// Each proposal line, in the order made.
     proposals: Vec<Proposed>,
-    /// The turns that are the box's own notes ([`Step::Noted`]), which say no words a list reads.
-    noted: BTreeSet<Hash>,
+    /// The turns whose step says no words a list reads ([`Step::says_nothing`]).
+    wordless: BTreeSet<Hash>,
     /// The slot keys of every line a round may read.
     keys: BTreeMap<Hash, Vec<KeyName>>,
     /// The reseals of each slot, by the slot's first key.
@@ -97,7 +97,9 @@ impl Voices {
             Step::Opened { .. }
             | Step::Asks
             | Step::Edits
+            | Step::Acts
             | Step::Answers
+            | Step::Works
             | Step::Rewound { .. }
             | Step::Again { .. }
             | Step::Proposed
@@ -166,13 +168,13 @@ impl Rounds {
     }
 
     /// The line of each live turn that may say words a list reads, newest first: every one but
-    /// the box's own notes, the one kind of turn the skeleton says says none.
+    /// those the skeleton says say none.
     pub fn newest(&self) -> impl Iterator<Item = &Hash> {
         self.live
             .iter()
             .rev()
             .flat_map(|round| round.turns.iter().rev().map(|(_, line)| line))
-            .filter(|line| !self.noted.contains(*line))
+            .filter(|line| !self.wordless.contains(*line))
     }
 
     /// Every line whose words `round` reads: the title's and its turns' ([`Rounds::reads`]).
@@ -263,7 +265,7 @@ pub(crate) fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
     let mut erasures: BTreeMap<KeyName, BTreeSet<Hash>> = BTreeMap::new();
     for (place, line) in ordered {
         match line.step {
-            Step::Asks | Step::Edits | Step::Noted | Step::Answers => {
+            Step::Asks | Step::Edits | Step::Noted | Step::Acts | Step::Answers | Step::Works => {
                 turn_at[place] = Some(turns.len());
                 turns.push((line.at, line.step, line.name));
             }
@@ -322,9 +324,9 @@ pub(crate) fn of_steps(id: &ConversationId, lines: &[Line<'_>]) -> Outline {
         title: title.clone(),
         said: turns.iter().map(|(at, _, _)| *at).collect(),
         proposals: proposed,
-        noted: turns
+        wordless: turns
             .iter()
-            .filter(|(_, step, _)| **step == Step::Noted)
+            .filter(|(_, step, _)| step.says_nothing())
             .map(|(_, _, line)| (*line).clone())
             .collect(),
         keys,
@@ -343,7 +345,7 @@ fn live(turns: &[(Datetime, &Step, &Hash)], aside: &BTreeSet<usize>) -> Vec<Roun
     let mut rounds: Vec<Round> = Vec::new();
     for (count, (turn, &(at, step, line))) in live.enumerate() {
         match rounds.last_mut() {
-            Some(round) if count > 0 && *step == Step::Answers => {
+            Some(round) if count > 0 && (*step == Step::Answers || *step == Step::Works) => {
                 round.turns.push((turn, line.clone()));
                 round.voices = round.voices.and(Voices::of(step));
             }

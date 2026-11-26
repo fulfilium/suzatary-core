@@ -158,8 +158,8 @@ and the words of a few lines (`app/lines/src/secretary/row.rs`): the title, the 
 which the inbox joins) and the last live turn that says words, found newest first, since an act, a model
 turn with calls or a blank text says none. A conversation's kind is in its opening's unsealed shape, and
 the skeleton's step carries it, so no row's kind waits on words. The walk's first step reads the newest
-live turn that may say words (every turn but the box's own notes, which the skeleton marks) beside the
-title and the proposals, and each later step one turn more; `HeldLines::part`
+live turn that may say words (a person's turn or a model's with no calls; the skeleton's step says
+`Noted`, `Acts` or `Works` of every other, so none is fetched) beside the title and the proposals, and each later step one turn more; `HeldLines::part`
 reads each step as a part of its own through the one memoised fold, a round of the stream and a row
 alike, so a list read again over the same lines opens no sealed word. Until a row's lines are held it
 says "Not on this device yet", with its turns, its instant and how many lines are to come (exact

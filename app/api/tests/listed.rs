@@ -178,17 +178,21 @@ fn conversation_of(node: &suzatary_lines::wire::lines::SkeletonNode) -> Option<&
     }
 }
 
-/// Whether the newest live turn of `stored` that is not the box's own note (the one kind of turn
-/// the skeleton says says no words) says words a list reads: where it does, the skeleton decides
-/// the row's lines, and one fetch of what the row says it lacks reads it.
+/// Whether the newest live turn of `stored` that the skeleton does not say says no words (a
+/// person's turn, or a model's with no calls) says words a list reads: where it does, the
+/// skeleton decides the row's lines, and one fetch of what the row says it lacks reads it.
 fn newest_says(stored: &Stored) -> bool {
     use suzatary_conversations::secretary::model::Turn;
-    use suzatary_inbox::secretary::stamp::Stamp;
     stored
         .live()
         .into_iter()
         .rev()
-        .find(|(_, said)| !matches!((&said.turn, &said.by), (Turn::Act { .. }, Some(Stamp::Box))))
+        .find(|(_, said)| match &said.turn {
+            // An erased turn's shape stays, so the skeleton cannot tell it from the turn it was.
+            Turn::Person { .. } | Turn::Erased { .. } => true,
+            Turn::Model { calls, .. } => calls.is_empty(),
+            Turn::Tool { .. } | Turn::Act { .. } => false,
+        })
         .is_some_and(|(_, said)| {
             suzatary_conversations::secretary::search::words(&said.turn).is_some()
         })

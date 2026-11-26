@@ -507,7 +507,9 @@ fn retired<'n>(
             | Step::Asks
             | Step::Edits
             | Step::Noted
+            | Step::Acts
             | Step::Answers
+            | Step::Works
             | Step::Rewound { .. }
             | Step::Proposed
             | Step::Coding { .. }

@@ -25,15 +25,20 @@ pub enum Step {
     Opened {
         kind: Option<suzatary_conversations::secretary::store::Kind>,
     },
-    /// A turn that opens a round: a person's, an act's, or the act a stop reads as.
+    /// A turn that opens a round: a person's.
     Asks,
     /// An edit's own question: `Asks`, and takes up the `Again` it rests on.
     Edits,
     /// The box's own note, an act it composed from its own state: it opens a round as an act
     /// does, and a round of nothing but such notes is no round of the owner's.
     Noted,
-    /// A turn that goes on with the round before it: the model's, or a verb's.
+    /// An act of anyone else's, or the act a stop reads as: it opens a round and says no words.
+    Acts,
+    /// A model turn with no calls: it goes on with the round before it.
     Answers,
+    /// A turn that goes on with the round before it and says no words: a verb's answer, or a
+    /// model turn with calls.
+    Works,
     /// Sets aside every turn from `to` on.
     Rewound {
         /// The first turn set aside.
@@ -87,6 +92,29 @@ impl Step {
         *self == Step::Edits
     }
 
+    /// Whether a turn of this step says no words a list reads
+    /// ([`suzatary_conversations::secretary::search::words`]), whatever its words. A turn of
+    /// another step may still say none: its text may be blank.
+    #[must_use]
+    pub fn says_nothing(&self) -> bool {
+        match self {
+            Step::Noted | Step::Acts | Step::Works => true,
+            Step::Opened { .. }
+            | Step::Asks
+            | Step::Edits
+            | Step::Answers
+            | Step::Rewound { .. }
+            | Step::Proposed
+            | Step::Coding { .. }
+            | Step::Titled
+            | Step::Resealed { .. }
+            | Step::Erased { .. }
+            | Step::Still
+            | Step::Again { .. }
+            | Step::Began { .. } => false,
+        }
+    }
+
     /// The step of a line shaped `shape`, as `Stored::fold` folds the line.
     #[must_use]
     pub fn of(shape: &LineShape) -> Self {
@@ -95,15 +123,15 @@ impl Step {
             LineShape::SetUp { .. } => Step::Opened {
                 kind: Some(suzatary_conversations::secretary::store::Kind::Topic),
             },
-            LineShape::Said { turn, by, saying } => match turn {
-                TurnShape::Act { .. } if *by == Some(Stamp::Box) => Step::Noted,
-                TurnShape::Person { .. } | TurnShape::Act { .. } => match saying {
-                    Saying::Plain => Step::Asks,
-                    Saying::Edit => Step::Edits,
-                },
-                TurnShape::Model { .. } | TurnShape::Tool { .. } => Step::Answers,
+            LineShape::Said { turn, by, saying } => match (turn, saying) {
+                (TurnShape::Act { .. }, _) if *by == Some(Stamp::Box) => Step::Noted,
+                (TurnShape::Act { .. }, Saying::Plain) => Step::Acts,
+                (TurnShape::Person { .. } | TurnShape::Act { .. }, Saying::Edit) => Step::Edits,
+                (TurnShape::Person { .. }, Saying::Plain) => Step::Asks,
+                (TurnShape::Model { calls, .. }, _) if calls.is_empty() => Step::Answers,
+                (TurnShape::Model { .. } | TurnShape::Tool { .. }, _) => Step::Works,
             },
-            LineShape::Stopped { .. } => Step::Asks,
+            LineShape::Stopped { .. } => Step::Acts,
             LineShape::Rewound { to, .. } => Step::Rewound { to: *to },
             LineShape::Proposed { .. } => Step::Proposed,
             LineShape::Coding { proposal, .. } => Step::Coding {

@@ -132,14 +132,16 @@ enum StepForm {
     Began { covers: Vec<Name>, run: String },
     Again { question: Name, how: String },
     Edits,
+    Acts,
+    Works,
 }
 
 impl snapshot::Held for LineReplica {
     type Given = Given;
-    /// 5: the landed row and the pending pieces, each with its nodes (each line's writer among
+    /// 6: the landed row and the pending pieces, each with its nodes (each line's writer among
     /// them, and an opening's kind), keys, words and frontier, every name as its 32 bytes, and
     /// the husks, each line's print with its words dropped.
-    const FORM: u32 = 5;
+    const FORM: u32 = 6;
 
     fn given(&self) -> Given {
         Given {
@@ -298,7 +300,9 @@ fn step_form(step: &Step) -> StepForm {
         Step::Asks => StepForm::Asks,
         Step::Edits => StepForm::Edits,
         Step::Noted => StepForm::Noted,
+        Step::Acts => StepForm::Acts,
         Step::Answers => StepForm::Answers,
+        Step::Works => StepForm::Works,
         Step::Rewound { to } => StepForm::Rewound { to: *to },
         Step::Proposed => StepForm::Proposed,
         Step::Coding { proposal } => StepForm::Coding {
@@ -340,7 +344,9 @@ fn step_of(form: StepForm) -> Result<Step, String> {
         StepForm::Asks => Step::Asks,
         StepForm::Edits => Step::Edits,
         StepForm::Noted => Step::Noted,
+        StepForm::Acts => Step::Acts,
         StepForm::Answers => Step::Answers,
+        StepForm::Works => Step::Works,
         StepForm::Rewound { to } => Step::Rewound { to },
         StepForm::Proposed => Step::Proposed,
         StepForm::Coding { proposal } => Step::Coding { proposal },
