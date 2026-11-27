@@ -45,7 +45,8 @@ of one child has one workspace and draws no crumb row of its own.
 `act(tiles, Act) -> Tiles` is total and keeps the tree well formed (`Tiles::check`):
 
 - `Open(page)`: a page shown already is focused; one of the focused leaf's kind replaces it; a
-  pinned page docks at the end; any other opens beside the focused leaf, by the policy.
+  pinned page docks at the end; any other opens beside the focused leaf, by the policy. A leaf
+  whose only sibling is a pinned leaf keeps its page's share, as a leaf alone does.
 - `Below(page)`: the focused leaf becomes a node down, with the page below it.
 - `Close`, `Focus(id)`, `Move(dir)`, `Resize { before, after, shares }`.
 - `Put { leaf, beside, edge }`: the leaf takes the place next to the leaf `beside` on `edge`

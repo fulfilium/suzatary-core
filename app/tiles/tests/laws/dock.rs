@@ -5,7 +5,7 @@ use proptest::prelude::*;
 use tiles::{Act, Id, Leaf, Node, Page, Part, Pin, Tiles, Tree, act};
 
 use super::page::{Kind, Pg, pg};
-use super::runs::{Made, Mix, apply, run, run_of, states};
+use super::runs::{Made, apply, run, states};
 
 /// The pages of the tree without the leaf `gone`, each node left with one child replaced by it:
 /// what `Release` must give, read apart from it.
@@ -259,10 +259,6 @@ pub(super) fn before_end(t: &Tiles<Pg>) -> Option<Id> {
     None
 }
 
-/// Erasure, over the runs this law was first stated for (`Mix::Master`: weights of one to three, no
-/// put): it fails on rare runs at any count, because an `Open` beside a node that the held page
-/// kept from collapsing reads a share that the tree without the page does not have. 1 run in 300 on
-/// master and 4 in 600 here fail at 256 cases; 20,000 cases fail it. It waits for a fix of `Open`.
 /// Erasure: a page held at the end of the workspace a person acts in changes none of their acts.
 /// Any act from a free leaf, `Close` among them, the held page then taken away, gives the tree
 /// the same act gives without it, the policy's `most` among the rules it reads. The law reaches its comparison
@@ -274,11 +270,7 @@ fn a_held_page_changes_no_act_of_a_person() {
     let mut runner = proptest::test_runner::TestRunner::new(config);
     let (reached, acted) = (std::cell::Cell::new(0u32), std::cell::Cell::new(0u32));
     let result = runner.run(
-        &(
-            run_of(Mix::Master),
-            side(),
-            prop::collection::vec(person(), 1..6),
-        ),
+        &(run(), side(), prop::collection::vec(person(), 1..6)),
         |((home, _m, first, steps), p, acts)| {
             let mut any = false;
             for (_, _, t, _) in states(home, first, &steps) {
@@ -322,4 +314,35 @@ fn a_held_page_changes_no_act_of_a_person() {
         acted.get()
     );
     assert!(reached.get() * 2 >= total, "{} of {total}", reached.get());
+}
+
+/// A leaf the held page keeps in a node of its own, with the share its old node gave it, opens a
+/// page as the bare leaf does: with its page's share. From one list, a `Below`, a `Close` of the
+/// list and an `Open` found this.
+#[test]
+fn an_open_beside_the_only_free_leaf_ignores_the_share_it_had() {
+    use tiles::{Axis, Fit, Policy, Share};
+    let home = Node::of(
+        Axis::Across,
+        Fit::Never,
+        Part::new(Share::ONE, Tree::Leaf(pg(Kind::List, 0))),
+    );
+    let bare = Tiles::new(home, Policy::default()).expect("a home of one list");
+    let held = act(bare.clone(), Act::Hold(pg(Kind::Side, 0)));
+    let (mut a, mut b) = (bare, held);
+    for step in [
+        Act::Below(pg(Kind::Column, 0)),
+        Act::Close,
+        Act::Open(pg(Kind::Slide, 0)),
+    ] {
+        for t in [&mut a, &mut b] {
+            let first = t.root().focus.tree.leaves()[0].id();
+            if matches!(step, Act::Close) {
+                *t = act(t.clone(), Act::Focus(first));
+            }
+            *t = act(t.clone(), step.clone());
+        }
+        let docked = end(&b).map(Leaf::id).expect("the page stays held");
+        assert_eq!(without(b.root(), docked), pages(&a), "after {step:?}");
+    }
 }

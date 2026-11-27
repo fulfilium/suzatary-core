@@ -12,7 +12,9 @@ use super::tree::Tree;
 /// Opens a page beside the focused leaf, in the leaf's node if that node fits and is not the
 /// root, else in a new node across that wraps the leaf. The page stands right after the leaf and
 /// takes the focus; `rule` says what becomes of the free children after it. A pinned leaf here
-/// stands alone in its workspace (`origin` moved off any other): the page goes before it.
+/// stands alone in its workspace (`origin` moved off any other): the page goes before it. A free
+/// leaf whose only sibling is a pinned leaf keeps the share its page gives, as the leaf does that
+/// the node would collapse to without the pinned one.
 pub(crate) fn beside<L: Tile>(root: Node<L>, new: L, share: Share, rule: Beside) -> Node<L> {
     descend(root, |h| match (h.at, h.fit, h.leaf.pin()) {
         (Level::Below, Fit::Fits, Pin::Free) => within(h, new, share, rule),
@@ -34,6 +36,8 @@ fn within<L: Tile>(h: Hole<L>, new: L, share: Share, rule: Beside) -> Node<L> {
         after,
         ..
     } = h;
+    let only_free = before.is_empty() && after.iter().all(docked);
+    let s = if only_free { leaf.share() } else { s };
     let (after, share) = match rule {
         Beside::Replace => {
             let (pinned, free): (Vec<_>, Vec<_>) = after.into_iter().partition(pinned);
@@ -146,6 +150,11 @@ pub(crate) fn wrap<L: Tile>(axis: Axis, leaf: L, new: L, opened: Share) -> Tree<
             ..fresh
         },
     })
+}
+
+/// A child that is a pinned leaf.
+fn docked<L: Tile>(part: &Part<L>) -> bool {
+    matches!(&part.tree, Tree::Leaf(l) if l.pin() == Pin::Pinned)
 }
 
 /// A child that holds a pinned leaf.
