@@ -998,6 +998,25 @@ app.scene("search finds what was said and a hit opens its conversation", async (
   );
 });
 
+/** The composer stands in view where the stream opens, on a phone and at a desk. It runs after the topic scenes: its round joins them. */
+app.scene("a question typed at the stream's foot is answered in the stream, under the topic chosen", async () => {
+  const inView = `(() => { const r = document.querySelector(".secretarystream .composebox")?.getBoundingClientRect(); return r !== undefined && r.top >= 0 && r.bottom <= innerHeight })()`;
+  for (const size of [DESKTOP, PHONE]) {
+    await app.resize(size);
+    await app.page.navigate(`${WRITE_BASE}/#/secretary?topics=garden`);
+    await app.page.waitFor(`document.querySelector(".secretarystream .composebox") !== null && document.querySelector(".streamround") !== null`, { timeout: 15000 });
+    await app.page.waitFor(inView, { timeout: 8000 });
+  }
+  const mine = `[...document.querySelectorAll(".streamrounds .streamround")].find((r) => r.querySelector(".streamasked")?.textContent.includes("what is in the garden composer"))`;
+  await app.page.type(".secretarystream .composebox", "what is in the garden composer");
+  await app.page.click(".secretarystream .composesend");
+  await app.page.waitFor(`${mine}?.querySelector(".roundtopic")?.textContent === "garden"`, { timeout: 20000 });
+  await app.page.waitFor(`${mine}?.querySelector(".answerblock, .turntext:not(.streamasked)")?.textContent.includes("Nothing has changed since the last briefing.") === true`, { timeout: 20000 });
+  assert.equal(await app.page.evaluate<string>(`document.querySelector(".secretarystream .composebox").value`), "", "kept, the box empties");
+  assert.ok(await app.page.evaluate<boolean>(inView), "the page is still at its end, the composer in view");
+  await photographed("stream-composer-phone");
+});
+
 app.scene("at a desk the conversations stand beside the conversation, and on a phone the crumb above it is the list", async () => {
   await app.resize(DESKTOP);
   await app.page.navigate(`${WRITE_BASE}/#/secretary/default`);

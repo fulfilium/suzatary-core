@@ -4,6 +4,7 @@ use crate::part::Mark;
 use crate::part::Tag;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use suzatary_base::conversation_id::DEFAULT;
 use suzatary_topics::secretary::topics::provenance::Provenance;
 use suzatary_topics::secretary::topics::topic::Topic;
 use suzatary_topics::wire::topics::Speaker;
@@ -23,6 +24,8 @@ use viewtree::{Key, Node, Printed, Program, view};
 use crate::answer::{self, Dressable, Dressed};
 use crate::chats::{self, Search, Searching};
 use crate::chrome::{self, Chips, Chrome, Masthead, Shape, Status, link, mark, pie, prose};
+use crate::composer::{self, Composer};
+use crate::conversation::Spoken;
 use crate::part::Who;
 use crate::places::Place;
 use crate::runtime::{
@@ -48,6 +51,9 @@ pub enum Hold {
     Stream,
     Found,
     Scroll,
+    Draft,
+    /// The newest page of rounds, whatever the filter: where a question sent under topics is found.
+    Placed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
@@ -60,6 +66,8 @@ pub enum Ask {
     /// The owner's next day.
     Day,
     Slice,
+    Composer(composer::Asking),
+    Said(Box<Spoken>),
 }
 
 /// A topic write's follow-up once the tab's replica holds it: a rename of a topic the filter
@@ -167,7 +175,16 @@ pub struct Model {
     at_end: bool,
     sheet: Sheet,
     search: Searching,
+    composer: Composer,
+    /// The questions sent under topics whose rounds the reading does not hold yet.
+    tagging: Vec<Tagging>,
     now: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Tagging {
+    text: String,
+    topics: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -185,6 +202,7 @@ pub enum Msg {
     Submit,
     Close,
     Searched(String),
+    Composer(composer::Ev),
 }
 
 #[derive(Debug)]
@@ -253,6 +271,7 @@ impl Program for Secretary {
     type Flags = Flags;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
+        let (composer, draft) = Composer::of(DEFAULT.as_str(), &[]);
         let m = Model {
             context: flags.context,
             chosen: filter(flags.topics),
@@ -264,6 +283,8 @@ impl Program for Secretary {
             at_end: true,
             sheet: Sheet::Closed,
             search: Searching::default(),
+            composer,
+            tagging: Vec::new(),
             now: flags.now,
         };
         let effects = vec![
@@ -271,6 +292,10 @@ impl Program for Secretary {
             Effect::Watch {
                 ask: Hold::Scroll,
                 local: Local::Scroll,
+            },
+            Effect::Watch {
+                ask: Hold::Draft,
+                local: draft,
             },
             day(&m),
         ];
@@ -321,6 +346,10 @@ impl Program for Secretary {
                 Vec::new()
             }
             Msg::Searched(words) => m.search.typed(words, Ask::Search),
+            Msg::Composer(ev) => {
+                let outs = m.composer.update(ev);
+                composed(m, outs)
+            }
         }
     }
 
@@ -357,7 +386,14 @@ impl Program for Secretary {
             Search::On { q, found, .. } => {
                 vec![view! { Div "chatbody" [chats::hits(q, found, &m.context.offsets, today(m))] }]
             }
-            Search::Off => stream(m),
+            Search::Off => {
+                let mut body = stream(m);
+                body.push(
+                    composer::view(&m.composer, &m.context.reach, m.context.keys)
+                        .map(Msg::Composer),
+                );
+                body
+            }
         };
         chrome::page(chrome, status, body)
     }
@@ -381,6 +417,86 @@ fn update_write(m: &mut Model, topic: String) -> Vec<Effect> {
     }
 }
 
+/// The composer's outs: a question is sealed into the default conversation. Nothing runs here to
+/// stop, and no question is chosen to edit.
+fn composed(m: &mut Model, outs: Vec<composer::Out>) -> Vec<Effect> {
+    let (mut effects, then) = composer::effects(outs, Ask::Composer);
+    for t in then {
+        match t {
+            composer::Then::Send(sent) => effects.extend(say(m, &sent)),
+            composer::Then::Stop | composer::Then::Up => {}
+        }
+    }
+    effects
+}
+
+/// A question asked in the default conversation, under the topics chosen: the filter would hide
+/// its round until it carries them, so the round is found in the newest page and tagged.
+fn say(m: &mut Model, sent: &composer::Sent) -> Vec<Effect> {
+    let mut effects = Vec::new();
+    if !m.chosen.is_empty() {
+        m.tagging.push(Tagging {
+            text: sent.text.clone(),
+            topics: m.chosen.clone(),
+        });
+        effects.push(Effect::Watch {
+            ask: Hold::Placed,
+            local: Local::Stream {
+                chosen: Vec::new(),
+                pages: 1,
+            },
+        });
+    }
+    effects.push(Effect::Core {
+        ask: Ask::Said(Box::new(Spoken::from(sent))),
+        question: runtime::Core::Line {
+            line: runtime::Sealing::Say {
+                conversation: DEFAULT.as_str().to_owned(),
+                question: runtime::Asking::of(sent),
+            },
+        },
+    });
+    effects
+}
+
+/// A question kept in the tab empties the box; one refused comes back into it, with why.
+fn kept(m: &mut Model, spoken: Spoken, answer: Answer) -> Vec<Effect> {
+    let Err(e) = answered::<runtime::Sealed>(answer) else {
+        let outs = m.composer.sealed();
+        return composed(m, outs);
+    };
+    m.tagging.retain(|t| t.text != spoken.text);
+    let outs = m.composer.failed(spoken.into());
+    let mut effects = composed(m, outs);
+    effects.push(Effect::Toast { words: e });
+    effects
+}
+
+/// Each question waiting to be tagged whose round the newest page holds takes its topics.
+fn tag(m: &mut Model, stream: &Stream) -> Vec<Effect> {
+    let mut effects = Vec::new();
+    for t in std::mem::take(&mut m.tagging) {
+        let round = stream
+            .rounds
+            .iter()
+            .rev()
+            .find(|r| r.conversation == DEFAULT.as_str() && r.opening.text == t.text);
+        match round {
+            Some(r) => {
+                for topic in &t.topics {
+                    let write = TopicWrite::Add {
+                        target: r.target.clone(),
+                        topic: topic.clone(),
+                    };
+                    effects.extend(wrote(write, Wrote { renamed: None }));
+                }
+            }
+            None => m.tagging.push(t),
+        }
+    }
+    effects
+}
+
 fn host(m: &mut Model, input: Input) -> Vec<Effect> {
     match input {
         Input::Context(c) => {
@@ -391,29 +507,7 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             ask: Hold::Stream,
             reading,
             ..
-        } => {
-            let before = rounds(m);
-            m.stream = read(reading);
-            let Reading::Val { .. } = m.stream else {
-                return Vec::new();
-            };
-            let now = (m.chosen.clone(), m.pages);
-            let to = match &m.drawn {
-                None => Some(Scroll::End),
-                Some((chosen, _)) if *chosen != m.chosen => Some(Scroll::End),
-                Some(_) if m.at_end => Some(Scroll::End),
-                Some((_, pages)) if *pages < m.pages => Some(Scroll::Keep),
-                Some(_) => None,
-            };
-            let first = m
-                .drawn
-                .as_ref()
-                .is_none_or(|(chosen, _)| *chosen != m.chosen);
-            m.shown.read(first, before, rounds(m));
-            m.drawn = Some(now);
-            m.placing = to;
-            drawn(m)
-        }
+        } => streamed(m, reading),
         Input::Held {
             ask: Hold::Found,
             reading,
@@ -422,6 +516,22 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             m.search.found(reading);
             Vec::new()
         }
+        Input::Held {
+            ask: Hold::Draft,
+            reading,
+            ..
+        } => {
+            m.composer.held(reading);
+            Vec::new()
+        }
+        Input::Held {
+            ask: Hold::Placed,
+            reading,
+            ..
+        } => match read::<StreamRead>(reading) {
+            Reading::Val { v } => tag(m, &v.stream),
+            Reading::Loading | Reading::Error { .. } => Vec::new(),
+        },
         Input::Held {
             ask: Hold::Scroll,
             reading,
@@ -456,11 +566,47 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             vec![day(m)]
         }
         Input::Answered {
+            ask: Ask::Composer(c),
+            answer,
+        } => {
+            let outs = m.composer.answered(c, answer);
+            composed(m, outs)
+        }
+        Input::Answered {
+            ask: Ask::Said(spoken),
+            answer,
+        } => kept(m, *spoken, answer),
+        Input::Answered {
             ask: Ask::Topic(w),
             answer,
         } => topic_answered(m, &w, answer),
         Input::Heard { ask, .. } | Input::Opened { ask } | Input::Lost { ask } => match ask {},
     }
+}
+
+/// The stream read anew: drawn, and the box placed where the reader is or the filter moved it.
+fn streamed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
+    let before = rounds(m);
+    m.stream = read(reading);
+    let Reading::Val { .. } = m.stream else {
+        return Vec::new();
+    };
+    let now = (m.chosen.clone(), m.pages);
+    let to = match &m.drawn {
+        None => Some(Scroll::End),
+        Some((chosen, _)) if *chosen != m.chosen => Some(Scroll::End),
+        Some(_) if m.at_end => Some(Scroll::End),
+        Some((_, pages)) if *pages < m.pages => Some(Scroll::Keep),
+        Some(_) => None,
+    };
+    let first = m
+        .drawn
+        .as_ref()
+        .is_none_or(|(chosen, _)| *chosen != m.chosen);
+    m.shown.read(first, before, rounds(m));
+    m.drawn = Some(now);
+    m.placing = to;
+    drawn(m)
 }
 
 fn rounds(m: &Model) -> usize {
@@ -769,4 +915,194 @@ fn sheet(m: &Model, bar: &[TopicInUse]) -> Option<Node<Msg>> {
 
 fn escape(Key { name, .. }: Key) -> Option<Msg> {
     (name == "Escape").then_some(Msg::Close)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::{Gate, Keys, Opens, Text};
+    use serde_json::json;
+    use viewtree::Runtime;
+
+    fn page(topics: &[&str]) -> Runtime<Secretary> {
+        let context = Context {
+            gate: Gate::Writes,
+            reach: Reach::Writes,
+            offsets: Vec::new(),
+            keys: Keys::Touch,
+            opens: Opens::Over,
+            categories: Vec::new(),
+            clock: None,
+        };
+        let topics = topics.iter().map(|t| (*t).to_owned()).collect();
+        Runtime::<Secretary>::start(Flags {
+            context,
+            topics,
+            now: 0,
+        })
+        .0
+    }
+
+    fn typed_and_sent(rt: &mut Runtime<Secretary>, words: &str) -> Vec<Effect> {
+        rt.step(Msg::Composer(composer::Ev::Typed(words.to_owned())));
+        rt.step(Msg::Composer(composer::Ev::Send)).1
+    }
+
+    fn sealed(rt: &mut Runtime<Secretary>, words: &str) -> Vec<Effect> {
+        let spoken = Spoken {
+            text: words.to_owned(),
+            references: Vec::new(),
+            files: Vec::new(),
+            mode: composer::Mode::Asking,
+        };
+        let body = Text::printed(&json!({"conversation": "default"}));
+        rt.step(Msg::Host(Box::new(Input::Answered {
+            ask: Ask::Said(Box::new(spoken)),
+            answer: Answer::Done { body },
+        })))
+        .1
+    }
+
+    fn placed(rt: &mut Runtime<Secretary>, words: &[&str]) -> Vec<Effect> {
+        let rounds: Vec<_> = words
+            .iter()
+            .enumerate()
+            .map(|(turn, text)| {
+                json!({
+                    "target": format!("round:default/{turn}"),
+                    "conversation": "default",
+                    "title": "Secretary",
+                    "turn": turn,
+                    "opening": {"index": turn, "text": text, "at": "2026-11-26T09:00:00Z",
+                        "attempt": "current", "gone": null, "who": "person",
+                        "references": [], "attachments": [], "queued": false},
+                    "asked": {"by": "person"},
+                    "answer": null,
+                    "topics": [],
+                    "room": 3,
+                })
+            })
+            .collect();
+        let read = json!({
+            "read": {"stream": {"rounds": rounds, "total": rounds.len()}, "bar": {"topics": []}},
+            "html": {},
+            "drawn": [],
+        });
+        rt.step(Msg::Host(Box::new(Input::Held {
+            ask: Hold::Placed,
+            reading: Reading::Val {
+                v: Answer::Done {
+                    body: Text::printed(&read),
+                },
+            },
+            behind: None,
+        })))
+        .1
+    }
+
+    fn lines(effects: &[Effect]) -> Vec<runtime::Sealing> {
+        effects
+            .iter()
+            .filter_map(|e| match e {
+                Effect::Core {
+                    question: runtime::Core::Line { line },
+                    ..
+                } => Some(line.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn tags(effects: &[Effect]) -> Vec<TopicWrite> {
+        effects
+            .iter()
+            .filter_map(|e| match e {
+                Effect::Act {
+                    act: Act::Topic { write },
+                    ..
+                } => Some(write.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A question typed at the foot is sealed into the default conversation; with no topic
+    /// chosen the stream already shows its round, so nothing is watched or tagged.
+    #[test]
+    fn a_question_is_asked_in_the_default_conversation() {
+        let mut rt = page(&[]);
+        let effects = typed_and_sent(&mut rt, "  water the ferns ");
+        assert_eq!(
+            lines(&effects),
+            [runtime::Sealing::Say {
+                conversation: "default".to_owned(),
+                question: runtime::Asking {
+                    text: "water the ferns".to_owned(),
+                    references: Vec::new(),
+                    files: Vec::new(),
+                },
+            }]
+        );
+        assert!(!effects.iter().any(|e| matches!(
+            e,
+            Effect::Watch {
+                ask: Hold::Placed,
+                ..
+            }
+        )));
+        sealed(&mut rt, "water the ferns");
+        assert!(rt.model().composer.empty(), "kept, the box empties");
+        assert!(placed(&mut rt, &["water the ferns"]).is_empty());
+    }
+
+    /// Under topics the filter would hide the new round, so it takes them once the newest page
+    /// holds it, and only then.
+    #[test]
+    fn a_question_sent_under_topics_takes_them_when_its_round_is_read() {
+        let mut rt = page(&["garden", "trip"]);
+        let effects = typed_and_sent(&mut rt, "water the ferns");
+        assert!(effects.iter().any(|e| matches!(
+            e,
+            Effect::Watch {
+                ask: Hold::Placed,
+                ..
+            }
+        )));
+        sealed(&mut rt, "water the ferns");
+        assert!(tags(&placed(&mut rt, &["an older question"])).is_empty());
+        assert_eq!(
+            tags(&placed(&mut rt, &["an older question", "water the ferns"])),
+            ["garden", "trip"].map(|topic| TopicWrite::Add {
+                target: "round:default/1".to_owned(),
+                topic: topic.to_owned(),
+            })
+        );
+        assert!(
+            tags(&placed(&mut rt, &["an older question", "water the ferns"])).is_empty(),
+            "tagged once"
+        );
+    }
+
+    /// A question the tab refuses comes back into the box, and its round is never tagged.
+    #[test]
+    fn a_refused_question_returns_to_the_box_untagged() {
+        let mut rt = page(&["garden"]);
+        typed_and_sent(&mut rt, "water the ferns");
+        let spoken = Spoken {
+            text: "water the ferns".to_owned(),
+            references: Vec::new(),
+            files: Vec::new(),
+            mode: composer::Mode::Asking,
+        };
+        let (_, effects) = rt.step(Msg::Host(Box::new(Input::Answered {
+            ask: Ask::Said(Box::new(spoken)),
+            answer: Answer::Refused {
+                status: 400,
+                words: "say something".to_owned(),
+            },
+        })));
+        assert!(effects.iter().any(|e| matches!(e, Effect::Toast { .. })));
+        assert!(!rt.model().composer.empty(), "its words are back");
+        assert!(tags(&placed(&mut rt, &["water the ferns"])).is_empty());
+    }
 }

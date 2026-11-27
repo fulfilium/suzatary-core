@@ -103,6 +103,30 @@ pub struct Spoken {
     pub mode: composer::Mode,
 }
 
+impl From<&composer::Sent> for Spoken {
+    fn from(sent: &composer::Sent) -> Self {
+        Spoken {
+            text: sent.text.clone(),
+            references: sent.references.clone(),
+            files: sent.files.iter().map(|f| f.id.clone()).collect(),
+            mode: sent.mode.clone(),
+        }
+    }
+}
+
+/// What the composer takes back of a question refused: its words, chips and mode, no files.
+impl From<Spoken> for composer::Sent {
+    fn from(spoken: Spoken) -> Self {
+        composer::Sent {
+            text: spoken.text,
+            references: spoken.references,
+            files: Vec::new(),
+            attachments: Vec::new(),
+            mode: spoken.mode,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "ConversationStream")]
 pub enum Stream {
@@ -659,12 +683,7 @@ fn say(m: &mut Model, sent: &composer::Sent) -> Vec<Effect> {
         Anchor::Asking(n) => Anchor::Asking(n + 1),
         Anchor::Newest | Anchor::Question(_) | Anchor::Drifted => Anchor::Asking(1),
     };
-    let spoken = Spoken {
-        text: sent.text.clone(),
-        references: sent.references.clone(),
-        files: sent.files.iter().map(|f| f.id.clone()).collect(),
-        mode: sent.mode.clone(),
-    };
+    let spoken = Spoken::from(sent);
     m.sent = Some(sent.text.clone());
     // Sealed in the tab and drawn at once; the box's acceptance of the line is its answer. An edit
     // asks the question the person chose to edit again, in these words.
@@ -1805,13 +1824,7 @@ fn answered_said(m: &mut Model, spoken: Spoken, refused: Option<String>) -> Vec<
             Anchor::Asking(_) => Anchor::Newest,
             a @ (Anchor::Newest | Anchor::Question(_) | Anchor::Drifted) => a,
         };
-        let outs = m.composer.failed(composer::Sent {
-            text: spoken.text,
-            references: spoken.references,
-            files: Vec::new(),
-            attachments: Vec::new(),
-            mode: spoken.mode,
-        });
+        let outs = m.composer.failed(spoken.into());
         let mut effects = composed(m, outs);
         effects.push(Effect::Toast { words: e });
         return effects;

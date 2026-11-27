@@ -3878,17 +3878,21 @@ h1[tabindex="-1"]:focus {
 /* ON THE CONVERSATION PAGE THE DOCUMENT IS THE SCROLL BOX, and a sent question is held at its top with a window's
    room under it for the answer, so a composer in the flow would drop off the screen. It sticks to the foot instead:
    above the phone's tab bar, and at the window's edge on a wide screen. */
-.conversation {
+.conversation,
+.secretarystream {
   /* What of the window stands over the page's foot: the phone's tab bar, where the document scrolls. A tile drawn
      beside another scrolls itself and ends above the bar, and the wide chrome has none. */
   --covered: calc(var(--tabbar) + env(safe-area-inset-bottom));
 }
 
-.tiled .conversation {
+.tiled .conversation,
+.tiled .secretarystream {
   --covered: 0px;
 }
 
-.conversation > .pagebody > .compose {
+/* The stream's composer stands at the foot the same way, where the page opens. */
+.conversation > .pagebody > .compose,
+.secretarystream > .pagebody > .compose {
   position: sticky;
   bottom: var(--covered);
   z-index: 2;
@@ -3902,7 +3906,8 @@ h1[tabindex="-1"]:focus {
 }
 
 @media (min-width: 62rem) {
-  .conversation {
+  .conversation,
+  .secretarystream {
     --covered: 0px;
   }
 }
