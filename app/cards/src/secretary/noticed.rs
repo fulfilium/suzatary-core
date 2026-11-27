@@ -8,7 +8,6 @@ use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
 use suzatary_connect::secrets::SecretState;
 use suzatary_connect::settings::Settable;
-use suzatary_conversations::secretary::store::Entry;
 use suzatary_health::health::Healths;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::ProposalId;
@@ -18,6 +17,7 @@ use suzatary_inbox::secretary::proposer::Proposer;
 use suzatary_inbox::secretary::responded::Withdrawal;
 use suzatary_lines::parts;
 use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::spoken::noted;
 use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_store::store::Prodrome;
 use suzatary_topics::secretary::filed::{self, Filing};
@@ -182,7 +182,7 @@ impl Owed {
                 conversations::append(
                     conversations,
                     conversation,
-                    &Entry::noted(at, why.clone(), vec![card.clone()]),
+                    &noted(at, why.clone(), vec![card.clone()]),
                 )
             })?;
             let reasons = Reasons::new(

@@ -18,6 +18,7 @@ use crate::secretary::held_lines::HeldLines;
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::line_shape::LineShape;
 use crate::secretary::sequence;
+use crate::secretary::spoken::Plain;
 use crate::wire::lines::LineWriter;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::SessionId;
@@ -533,7 +534,7 @@ impl Transcript {
         run: &RunId,
         now: Datetime,
         confirms: &Confirms<'_>,
-    ) -> Entry {
+    ) -> Plain {
         let turn_of = |line: usize| self.turns.iter().position(|&at| at == line);
         let judged = |line: usize| -> Option<Taint> {
             let said = &self.stored.turns[turn_of(line)?];
@@ -1732,16 +1733,40 @@ pub fn writer() -> Actor {
 pub fn start(
     conversations: Conversations<'_>,
     id: &ConversationId,
+    first: &Plain,
+) -> Result<(), StoreError> {
+    let _held = conversations.lines.locked()?;
+    vacant(conversations, id)?;
+    write(conversations, id, 0, first)
+}
+
+/// `first` opening conversation `id` as an older box wrote it, for tests and fixtures
+/// ([`push_older`]).
+///
+/// # Errors
+/// [`StoreError::Taken`] for an id already started.
+#[cfg(any(test, feature = "nothing", feature = "fixture"))]
+pub fn start_older(
+    conversations: Conversations<'_>,
+    id: &ConversationId,
     first: &Entry,
 ) -> Result<(), StoreError> {
     let _held = conversations.lines.locked()?;
+    vacant(conversations, id)?;
+    sealed(conversations, id, 0, |id, actor, held, entropy| {
+        LineEvent::older(id, actor, held, first, entropy)
+    })
+}
+
+/// Whether no line of conversation `id` is held yet.
+fn vacant(conversations: Conversations<'_>, id: &ConversationId) -> Result<(), StoreError> {
     if keys(conversations)?.contains(id) {
         return Err(StoreError::Taken {
             what: "conversation",
             name: id.to_string(),
         });
     }
-    write(conversations, id, 0, first)
+    Ok(())
 }
 
 /// Begin a new conversation with `first`, its id a function of that line ([`LineEvent::begun_id`]);
@@ -1752,7 +1777,7 @@ pub fn start(
 /// or the schema refuses.
 pub fn begin(
     conversations: Conversations<'_>,
-    first: &Entry,
+    first: &Plain,
 ) -> Result<ConversationId, StoreError> {
     let _held = conversations.lines.locked()?;
     let (line, opens) = LineEvent::begin(writer(), first, conversations.entropy)
@@ -1779,7 +1804,7 @@ pub fn begin(
 pub fn push(
     conversations: Conversations<'_>,
     id: &ConversationId,
-    entry: &Entry,
+    entry: &Plain,
 ) -> Result<(), StoreError> {
     let _held = conversations.lines.locked()?;
     let held = read(conversations, id)?.lines().len();
@@ -1837,7 +1862,7 @@ pub fn push_retired(
 pub fn push_owed(
     conversations: Conversations<'_>,
     id: &ConversationId,
-    owed: impl FnOnce(&Transcript) -> Option<Entry>,
+    owed: impl FnOnce(&Transcript) -> Option<Plain>,
 ) -> Result<bool, StoreError> {
     let _held = conversations.lines.locked()?;
     let reading = read(conversations, id)?;
@@ -1853,7 +1878,7 @@ fn write(
     conversations: Conversations<'_>,
     id: &ConversationId,
     held: usize,
-    entry: &Entry,
+    entry: &Plain,
 ) -> Result<(), StoreError> {
     sealed(conversations, id, held, |id, actor, held, entropy| {
         LineEvent::write(id, actor, held, entry, entropy)
@@ -1868,7 +1893,7 @@ fn write_line(
     line: &BoxLine,
 ) -> Result<(), StoreError> {
     match line {
-        BoxLine::Entry(entry) => write(conversations, id, held, entry),
+        BoxLine::Plain(entry) => write(conversations, id, held, entry),
         BoxLine::Answer(answer) => sealed(conversations, id, held, |id, actor, held, entropy| {
             LineEvent::answered(id, actor, held, answer, entropy)
         }),

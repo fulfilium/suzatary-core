@@ -387,11 +387,11 @@ fn a_review(root: &Path) -> anyhow::Result<()> {
         &id,
         &Entry::Said {
             at,
-            turn: suzatary_conversations::secretary::model::Turn::Person {
-                text: sweep_prompt()?,
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: suzatary_lines::secretary::spoken::Spoken::person(
+                sweep_prompt()?,
+                Vec::new(),
+                Vec::new(),
+            ),
             by: None,
         },
     )?;
@@ -1420,7 +1420,7 @@ fn bulk_lines(
     transcript::start(
         conversations,
         &ConversationId::new("bulk-0")?,
-        &bulk_entry(0, 0, fpl::datetime_of(start)?),
+        &bulk_opening(0, fpl::datetime_of(start)?),
     )?;
     let mut events: Vec<LineEvent> = Vec::new();
     let writer = Actor::new(suzatary_secretary::secretary::WRITES_AS.actor())?;
@@ -1437,7 +1437,7 @@ fn bulk_lines(
             written += 1;
             // Every line a second after the one before, all before now, so none is dated in the future.
             let at = fpl::datetime_of(start + Duration::seconds(i64::from(written)))?;
-            let entry = bulk_entry(n, line, at);
+            let entry = bulk_line(n, line, at);
             let held = u32::try_from(line)?;
             let (event, keys) = sealed.write(
                 id.clone(),
@@ -1450,7 +1450,7 @@ fn bulk_lines(
                 conversations.keys.set(&key.name(), key)?;
             }
             if share > 0 {
-                let words = suzatary_lines::secretary::line_shape::split(&entry)
+                let words = suzatary_lines::secretary::line_shape::split(&entry.entry())
                     .and_then(|(_, words)| words)
                     .unwrap_or_default();
                 let before = slots.len();
@@ -1487,51 +1487,62 @@ fn bulk_lines(
     appended(conversations.lines, events)
 }
 
+/// The opening of the bulk conversation `n`, written at `at`.
+fn bulk_opening(
+    n: usize,
+    at: prodrome_data::literal::Datetime,
+) -> suzatary_lines::secretary::spoken::Plain {
+    use suzatary_conversations::secretary::store::{Entry, Kind};
+    use suzatary_memory::secretary::words::Words;
+    Entry::Opened {
+        at,
+        title: Words::kept(format!("Bulk conversation {n}")),
+        model: "scripted/fixture".to_owned(),
+        kind: Kind::Topic,
+    }
+}
+
 /// Line `line` of the bulk conversation `n`, written at `at`: its opening, then a person's
-/// question and a model's answer of about 6 kB in three blocks, alternating.
-fn bulk_entry(
+/// question and a model's answer of about 6 kB in three blocks, alternating. A bulk conversation
+/// holds the owner's stamped questions and the box's answers to them, and nothing from outside:
+/// each answer's call was sent only those, so it carries clean.
+fn bulk_line(
     n: usize,
     line: usize,
     at: prodrome_data::literal::Datetime,
-) -> suzatary_conversations::secretary::store::Entry {
-    use suzatary_conversations::secretary::model::Turn;
-    use suzatary_conversations::secretary::store::{Entry, Kind};
-    use suzatary_memory::secretary::words::Words;
+) -> suzatary_lines::secretary::answer::BoxLine {
+    use suzatary_conversations::secretary::store::Entry;
+    use suzatary_conversations::secretary::taint::Taint;
+    use suzatary_lines::secretary::answer::{Answer, BoxLine};
+    use suzatary_lines::secretary::spoken::Spoken;
     if line == 0 {
-        Entry::Opened {
-            at,
-            title: Words::kept(format!("Bulk conversation {n}")),
-            model: "scripted/fixture".to_owned(),
-            kind: Kind::Topic,
-        }
+        BoxLine::Plain(bulk_opening(n, at))
     } else if line % 2 == 1 {
-        Entry::Said {
+        BoxLine::Plain(Entry::Said {
             at,
-            turn: Turn::Person {
-                text: format!(
+            turn: Spoken::person(
+                format!(
                     "Question {line} sur le permis n° 4821, posée à nouveau — 確認してください。"
                 ),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+                Vec::new(),
+                Vec::new(),
+            ),
             by: Some("ada".into()),
-        }
+        })
     } else {
-        Entry::Said {
+        BoxLine::Answer(Answer::replied(
             at,
-            turn: Turn::Model {
-                text: [0, 1, 2]
-                    .map(|part| {
-                        format!(
-                            "Réponse {line}, partie {part} : le registre a le formulaire du 25/10. "
-                        )
-                        .repeat(30)
-                    })
-                    .join("\n\n"),
-                calls: Vec::new(),
-            },
-            by: None,
-        }
+            [0, 1, 2]
+                .map(|part| {
+                    format!(
+                        "Réponse {line}, partie {part} : le registre a le formulaire du 25/10. "
+                    )
+                    .repeat(30)
+                })
+                .join("\n\n"),
+            Vec::new(),
+            Taint::Clean,
+        ))
     }
 }
 
@@ -1765,13 +1776,13 @@ pub enum Sealed {
 }
 
 impl Sealed {
-    /// Line `entry` of `id`, written as `writer` holding `held` lines, its slots sealed so.
+    /// Line `line` of `id`, written as `writer` holding `held` lines, its slots sealed so.
     fn write(
         self,
         id: suzatary_base::conversation_id::ConversationId,
         writer: prodrome_data::event::Actor,
         held: u32,
-        entry: &suzatary_conversations::secretary::store::Entry,
+        line: &suzatary_lines::secretary::answer::BoxLine,
         entropy: &dyn suzatary_base::capability::Entropy,
     ) -> Result<
         (
@@ -1782,23 +1793,19 @@ impl Sealed {
     > {
         use suzatary_lines::secretary::answer::BoxLine;
         use suzatary_lines::secretary::line_event::LineEvent;
-        match self {
-            // A bulk conversation holds the owner's stamped questions and the box's answers to
-            // them, and nothing from outside: each answer's call was sent only those, so it
-            // carries clean.
-            Sealed::Current => match BoxLine::of(
-                entry.clone(),
-                suzatary_conversations::secretary::taint::Taint::Clean,
-            ) {
-                BoxLine::Answer(answer) => LineEvent::answered(id, writer, held, &answer, entropy),
-                BoxLine::Entry(entry) => LineEvent::write(id, writer, held, &entry, entropy),
-            },
-            Sealed::Unversioned => LineEvent::written_under(
+        match (self, line) {
+            (Sealed::Current, BoxLine::Answer(answer)) => {
+                LineEvent::answered(id, writer, held, answer, entropy)
+            }
+            (Sealed::Current, BoxLine::Plain(entry)) => {
+                LineEvent::write(id, writer, held, entry, entropy)
+            }
+            (Sealed::Unversioned, line) => LineEvent::written_under(
                 &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
                 id,
                 writer,
                 held,
-                entry,
+                &line.entry(),
                 entropy,
             ),
         }

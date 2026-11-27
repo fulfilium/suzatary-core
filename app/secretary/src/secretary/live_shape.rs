@@ -23,8 +23,9 @@ use suzatary_digest::secretary::digests::{Digests, compactor};
 use suzatary_digest::secretary::memories::ReadMemories;
 use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_lines::nothing::Counting;
-use suzatary_lines::secretary::answer::BoxLine;
-use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::answer::{Answer, BoxLine};
+use suzatary_lines::secretary::line_event::{LineEvent, NotALine};
+use suzatary_lines::secretary::spoken::{Spoken, try_map_turn};
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
@@ -169,6 +170,36 @@ impl Shape {
     }
 }
 
+/// `entry` as the box writes it: a model's turn carrying `carries`, and any other turn as it is;
+/// a turn whose words are gone has none to write.
+fn lined(entry: &Entry, carries: Taint) -> Result<BoxLine, NotALine> {
+    let spoken = |turn: Turn| match turn {
+        Turn::Person {
+            text,
+            references,
+            attachments,
+        } => Ok(Spoken::person(text, references, attachments)),
+        Turn::Tool {
+            verb,
+            answer,
+            outcome,
+            files,
+        } => Ok(Spoken::tool(verb, answer, outcome, files)),
+        Turn::Act { text, references } => Ok(Spoken::act(text, references)),
+        Turn::Model { .. } | Turn::Erased { .. } => Err(turn),
+    };
+    match entry.clone() {
+        Entry::Said {
+            at,
+            turn: Turn::Model { text, calls },
+            ..
+        } => Ok(BoxLine::Answer(Answer::replied(at, text, calls, carries))),
+        other => try_map_turn(other, spoken)
+            .map(BoxLine::Plain)
+            .map_err(|_| NotALine::Gone),
+    }
+}
+
 impl Stores {
     /// `entry` as line `held` of conversation `id`, written as the box writes it: under its own
     /// actor, so the owner's stamp stands with no claim to judge it (a tab's line no claim judged
@@ -189,11 +220,11 @@ impl Stores {
             suzatary_lines::secretary::transcript::writer(),
             u32::try_from(held).expect("few lines"),
         );
-        let (line, keys) = match BoxLine::of(entry.clone(), carries) {
+        let (line, keys) = match lined(entry, carries).expect("a line") {
             BoxLine::Answer(answer) => {
                 LineEvent::answered(id.clone(), writer, held, &answer, &self.lines.entropy)
             }
-            BoxLine::Entry(entry) => {
+            BoxLine::Plain(entry) => {
                 LineEvent::write(id.clone(), writer, held, &entry, &self.lines.entropy)
             }
         }

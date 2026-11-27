@@ -362,11 +362,7 @@ pub fn end(
         conversations::append(
             conversations,
             &asked.conversation,
-            &suzatary_conversations::secretary::store::Entry::noted(
-                at,
-                said,
-                vec![asked.clone().into()],
-            ),
+            &suzatary_lines::secretary::spoken::noted(at, said, vec![asked.clone().into()]),
         )?;
     }
     Ok(Some(asked.conversation))

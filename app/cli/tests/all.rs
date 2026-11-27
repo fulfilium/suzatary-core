@@ -128,8 +128,6 @@ mod secretary;
 #[path = "secretary_cli.rs"]
 mod secretary_cli;
 #[cfg(feature = "fixture")]
-#[path = "seeds.rs"]
-mod seeds;
 #[path = "sign_in.rs"]
 mod sign_in;
 #[path = "signatures.rs"]

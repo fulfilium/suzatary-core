@@ -1,16 +1,16 @@
 //! A coding session's lines in its conversation: each change is an [`Entry::Coding`] line
-//! and a [`Turn::Act`], so the secretary reads what became of the session it proposed.
+//! and a [`Spoken::act`], so the secretary reads what became of the session it proposed.
 
 use suzatary_base::capability::Datetime;
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_inbox::coding::{Fired, Seen, Session, Step};
 use suzatary_inbox::secretary::stamp::stamp;
 use suzatary_lines::secretary::conversations;
 use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::spoken::Spoken;
 
 /// One session a poll moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -230,13 +230,13 @@ fn written(
         id,
         &Entry::Said {
             at,
-            turn: Turn::Act {
+            turn: Spoken::act(
                 text,
-                references: vec![Reference::Proposal(ProposalRef {
+                vec![Reference::Proposal(ProposalRef {
                     conversation: id.clone(),
                     index,
                 })],
-            },
+            ),
             by: None,
         },
     )

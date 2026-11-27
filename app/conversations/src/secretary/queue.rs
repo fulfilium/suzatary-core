@@ -298,12 +298,13 @@ mod tests {
     /// The box's own notes wake no model, and the owner's next turn is sent with them, in order.
     #[test]
     fn the_boxs_notes_wait_for_the_owners_turn() {
-        let noted = |at: &str, text: &str| {
-            Entry::noted(
-                crate::secretary::store::instant(at),
-                text.to_owned(),
-                Vec::new(),
-            )
+        let noted = |at: &str, text: &str| Entry::Said {
+            at: crate::secretary::store::instant(at),
+            turn: Turn::Act {
+                text: text.to_owned(),
+                references: Vec::new(),
+            },
+            by: Some(suzatary_inbox::secretary::stamp::Stamp::Box),
         };
         let mut lines = vec![
             opened(),

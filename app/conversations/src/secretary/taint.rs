@@ -436,13 +436,14 @@ mod tests {
     /// writes the memory, and none of them opens a round as his.
     #[test]
     fn the_boxs_own_notes_leave_his_round_clean() {
-        let noted = |text: &str| {
-            Entry::noted(
-                suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
-                    .expect("an instant"),
-                text.to_owned(),
-                Vec::new(),
-            )
+        let noted = |text: &str| Entry::Said {
+            at: suzatary_base::capability::Datetime::new(2026, 9, 25, 9, 0, 0, 0)
+                .expect("an instant"),
+            turn: Turn::Act {
+                text: text.to_owned(),
+                references: Vec::new(),
+            },
+            by: Some(Stamp::Box),
         };
         let now = stored(vec![
             noted("Ada dismissed proposal 35: not now"),

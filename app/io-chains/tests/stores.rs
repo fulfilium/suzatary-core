@@ -14,8 +14,8 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::drive_path::DriveFailure;
 use suzatary_base::drive_path::DrivePath;
 use suzatary_connect::cast::CAST;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
+use suzatary_conversations::secretary::taint::Taint;
 use suzatary_digest::secretary::digests::Digests;
 use suzatary_digest::secretary::memories::Memories;
 use suzatary_health::health::plugin::PluginName;
@@ -26,8 +26,11 @@ use suzatary_io_chains::plugin_store::PluginStore;
 use suzatary_io_local::attachments::AttachmentStore;
 use suzatary_io_local::blobs::Blobs;
 use suzatary_io_local::pdftotext::Pdftotext;
+use suzatary_lines::secretary::answer::{Answer, BoxLine};
+use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::held_lines;
 use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::transcript;
 use suzatary_mail::mail::dedup_key::DedupKey;
 use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
@@ -354,15 +357,15 @@ fn conversations(root: &Path, asked: &inbox::ProposalId) {
         &morning,
         &Entry::Said {
             at: at(12, 1),
-            turn: Turn::Person {
-                text: "what is due".to_owned(),
-                references: vec![
+            turn: Spoken::person(
+                "what is due".to_owned(),
+                vec![
                     format!("todo:life/{}", CAST.todos.urgent.id)
                         .parse()
                         .expect("a reference"),
                 ],
-                attachments: Vec::new(),
-            },
+                Vec::new(),
+            ),
             by: None,
         },
     )
@@ -956,29 +959,50 @@ fn ics() -> PluginName {
 }
 
 /// Line `k` of a long conversation: a person's turn on odd lines, a long answer on even ones.
-pub(crate) fn said(k: usize) -> Entry {
-    Entry::Said {
-        at: at(
+pub(crate) fn said(k: usize) -> BoxLine {
+    said_at(
+        k,
+        at(
             9 + u32::try_from(k / 60).expect("few"),
             u32::try_from(k % 60).expect("few"),
         ),
-        turn: if k % 2 == 1 {
-            Turn::Person {
-                text: format!("line {k}: {}", "a sentence of what was said ".repeat(6)),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            }
-        } else {
-            Turn::Model {
-                text: format!(
-                    "= Answer {k}\n\n{}",
-                    "A paragraph of the answer. ".repeat(300)
-                ),
-                calls: Vec::new(),
-            }
-        },
-        by: Some("ada".into()),
+        300,
+    )
+}
+
+/// Line `k` as [`said`] makes it, at `at`, an answer of `paragraphs` paragraphs.
+fn said_at(k: usize, at: Datetime, paragraphs: usize) -> BoxLine {
+    if k % 2 == 1 {
+        BoxLine::Plain(Entry::Said {
+            at,
+            turn: Spoken::person(
+                format!("line {k}: {}", "a sentence of what was said ".repeat(6)),
+                Vec::new(),
+                Vec::new(),
+            ),
+            by: Some("ada".into()),
+        })
+    } else {
+        // A model's turn is written with its carry; these answers quote nobody.
+        BoxLine::Answer(Answer::replied(
+            at,
+            format!(
+                "= Answer {k}\n\n{}",
+                "A paragraph of the answer. ".repeat(paragraphs)
+            ),
+            Vec::new(),
+            Taint::Clean,
+        ))
     }
+}
+
+/// `line` appended to conversation `id`.
+fn push_line(stores: Conversations<'_>, id: &ConversationId, line: &BoxLine) {
+    match line {
+        BoxLine::Plain(entry) => transcript::push(stores, id, entry),
+        BoxLine::Answer(answer) => transcript::answer(stores, id, answer),
+    }
+    .expect("said");
 }
 
 /// `conversations` conversations of `per` lines each, from `said`, written into `lines` with
@@ -1007,10 +1031,21 @@ pub(crate) fn conversations_at_scale(
             let Some((id, k)) = written.next() else {
                 return Ok(None);
             };
-            let entry = if k == 0 { opening.clone() } else { said(k) };
+            let line = if k == 0 {
+                BoxLine::Plain(opening.clone())
+            } else {
+                said(k)
+            };
             let held = u32::try_from(k).expect("few");
-            let (line, kept) = LineEvent::write(id.clone(), writer.clone(), held, &entry, &entropy)
-                .expect("a line");
+            let (line, kept) = match &line {
+                BoxLine::Plain(entry) => {
+                    LineEvent::write(id.clone(), writer.clone(), held, entry, &entropy)
+                }
+                BoxLine::Answer(answer) => {
+                    LineEvent::answered(id.clone(), writer.clone(), held, answer, &entropy)
+                }
+            }
+            .expect("a line");
             for key in &kept {
                 suzatary_store::store::Doc::set(keys, &key.name(), key)?;
             }
@@ -1068,7 +1103,7 @@ fn digest_at_scale() {
     time("digest, warm", &|| {
         digests(warm).reads().read().expect("reads");
     });
-    transcript::push(stores(warm), &ids[0], &said(500)).expect("said");
+    push_line(stores(warm), &ids[0], &said(500));
     time("digest, after one new line", &|| {
         digests(warm).reads().read().expect("reads");
     });
@@ -1111,25 +1146,7 @@ fn lines_for_a_tab() {
             u32::try_from(k / 60 % 60).expect("few"),
         )
     };
-    let said = |k: usize| Entry::Said {
-        at: second(k),
-        turn: if k % 2 == 1 {
-            Turn::Person {
-                text: format!("line {k}: {}", "a sentence of what was said ".repeat(6)),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            }
-        } else {
-            Turn::Model {
-                text: format!(
-                    "= Answer {k}\n\n{}",
-                    "A paragraph of the answer. ".repeat(8)
-                ),
-                calls: Vec::new(),
-            }
-        },
-        by: Some("ada".into()),
-    };
+    let said = |k: usize| said_at(k, second(k), 8);
     let ids: Vec<ConversationId> = (1..=4)
         .map(|n| ConversationId::new(format!("2026-10-09-{n}")).expect("a slug"))
         .collect();
@@ -1148,7 +1165,7 @@ fn lines_for_a_tab() {
     }
     for k in 1..1_150 {
         for id in &ids {
-            transcript::push(stores, id, &said(k)).expect("said");
+            push_line(stores, id, &said(k));
         }
     }
     let read = transcript::read(stores, &ids[0]).expect("reads");
@@ -1345,7 +1362,7 @@ fn digest_nodes_at_scale() {
         });
     }
     let first = ConversationId::new("2026-10-09-1").expect("a slug");
-    transcript::push(digests.lines, &first, &said(301)).expect("said");
+    push_line(digests.lines, &first, &said(301));
     time("resumed, right after one line", &mut || {
         transcript::resumed(
             digests.lines,
@@ -1440,11 +1457,11 @@ fn a_rules_change_over_a_stored_digest() {
         for k in 0..12 {
             let entry = Entry::Said {
                 at: at(10, u32::try_from(k).expect("few")),
-                turn: Turn::Person {
-                    text: format!("Your verification code is {}. fee", code(k)),
-                    references: Vec::new(),
-                    attachments: Vec::new(),
-                },
+                turn: Spoken::person(
+                    format!("Your verification code is {}. fee", code(k)),
+                    Vec::new(),
+                    Vec::new(),
+                ),
                 by: None,
             };
             transcript::push(stores(opened), &codes, &entry).expect("said");
@@ -1603,11 +1620,7 @@ fn two_handles_as(
             &id,
             &Entry::Said {
                 at: at(10, k),
-                turn: Turn::Person {
-                    text: format!("line {k}"),
-                    references: Vec::new(),
-                    attachments: Vec::new(),
-                },
+                turn: Spoken::person(format!("line {k}"), Vec::new(), Vec::new()),
                 by: Some("ada".into()),
             },
         )
@@ -1639,11 +1652,11 @@ fn said_through(lines: &'static Lines, dir: &Path) -> impl Fn(u32) {
             &id,
             &Entry::Said {
                 at: at(10, k),
-                turn: Turn::Person {
-                    text: format!("line {k}, from the other handle"),
-                    references: Vec::new(),
-                    attachments: Vec::new(),
-                },
+                turn: Spoken::person(
+                    format!("line {k}, from the other handle"),
+                    Vec::new(),
+                    Vec::new(),
+                ),
                 by: Some("ada".into()),
             },
         )

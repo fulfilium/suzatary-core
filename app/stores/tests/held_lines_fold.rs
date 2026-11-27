@@ -10,6 +10,7 @@ use suzatary_conversations::secretary::store::Kind;
 use suzatary_conversations::secretary::store::{Entry, Stored};
 use suzatary_lines::secretary::held_lines::*;
 use suzatary_lines::secretary::rescrub;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::locked_text::KeyName;
 use suzatary_memory::secretary::words::Words;
@@ -40,7 +41,7 @@ fn prints(held: &InMemory) -> Vec<(Hash, Vec<u8>)> {
         .collect()
 }
 
-fn opened(title: &str) -> Entry {
+fn opened<T>(title: &str) -> Entry<T> {
     Entry::Opened {
         at: Datetime::new(2026, 10, 1, 9, 0, 0, 0).expect("an instant"),
         title: Words::kept(title.to_owned()),
@@ -59,11 +60,11 @@ fn opening_held_lines_scrubs_nothing() {
     for n in 0..40 {
         let said = Entry::Said {
             at: Datetime::new(2026, 10, 1, 9, 1, n, 0).expect("an instant"),
-            turn: model::Turn::Person {
-                text: format!("Merci, voilà la réponse {n} — 確認"),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person(
+                format!("Merci, voilà la réponse {n} — 確認"),
+                Vec::new(),
+                Vec::new(),
+            ),
             by: Some("ada".into()),
         };
         transcript::push(held.conversations(), &id, &said).expect("pushed");

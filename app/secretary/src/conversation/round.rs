@@ -23,6 +23,7 @@ use suzatary_conversations::secretary::taint::Taint;
 use suzatary_conversations::secretary::tool_name::ToolName;
 use suzatary_lines::secretary::answer::{Answer, BoxLine};
 use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::spoken::{Plain, widened};
 use suzatary_lines::secretary::transcript;
 use suzatary_lines::secretary::transcript::Retry;
 
@@ -428,7 +429,7 @@ impl Round {
                     BoxLine::Answer(answer) => {
                         transcript::answer(at.conversations, at.id, answer)?;
                     }
-                    BoxLine::Entry(entry) => transcript::push(at.conversations, at.id, entry)?,
+                    BoxLine::Plain(entry) => transcript::push(at.conversations, at.id, entry)?,
                 }
                 self.appended.push(line.entry());
             }
@@ -441,9 +442,9 @@ impl Round {
         Ok(answering)
     }
 
-    fn append(&mut self, at: &Transcript<'_>, entry: Entry) -> Result<(), Refusal> {
+    fn append(&mut self, at: &Transcript<'_>, entry: Plain) -> Result<(), Refusal> {
         transcript::push(at.conversations, at.id, &entry)?;
-        self.appended.push(entry);
+        self.appended.push(widened(entry));
         Ok(())
     }
 }
@@ -453,7 +454,7 @@ impl Round {
 /// [`Answer::closing`]'s, given what the round had `built`. A stop is not a model's turn.
 fn closing(now: Datetime, why: &Why, built: Built) -> Vec<BoxLine> {
     match why {
-        Why::Stopped(by) => vec![BoxLine::Entry(Entry::Stopped {
+        Why::Stopped(by) => vec![BoxLine::Plain(Entry::Stopped {
             at: now,
             by: by.as_str().to_owned(),
         })],
@@ -588,7 +589,7 @@ mod tests {
         let lines = closing(at(), &Why::Stopped(by), Built::Nothing);
         assert!(matches!(
             lines.as_slice(),
-            [BoxLine::Entry(Entry::Stopped { .. })]
+            [BoxLine::Plain(Entry::Stopped { .. })]
         ));
     }
 }

@@ -5,12 +5,14 @@
 //! == e` for every entry whose words are all here (`line_shape` laws in this file's tests), and a
 //! slot that does not open joins as words gone, never as a sentinel.
 
+use std::borrow::Borrow;
 use std::collections::BTreeSet;
 
 use suzatary_base::conversation_id::{ConversationId, DEFAULT};
 use suzatary_base::repo_ids::CommitId;
 use suzatary_connect::connect::TemplateId;
 use suzatary_conversations::secretary::model::SessionId;
+use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{
     Covered, Decision, Entry, Kind, Namer, Retired, RunId, Scope,
 };
@@ -219,7 +221,7 @@ impl LineShape {
 /// already gone, which is no line to write; `None` for a retired line, which nothing writes.
 #[must_use]
 #[expect(clippy::too_many_lines, reason = "one arm per kind of line")]
-pub fn split(entry: &Entry) -> Option<(LineShape, Option<Vec<LineWords>>)> {
+pub fn split<T: Borrow<Turn>>(entry: &Entry<T>) -> Option<(LineShape, Option<Vec<LineWords>>)> {
     let one = |words: Option<LineWords>| words.map(|words| vec![words]);
     Some(match entry {
         Entry::Opened {
@@ -250,7 +252,7 @@ pub fn split(entry: &Entry) -> Option<(LineShape, Option<Vec<LineWords>>)> {
             })),
         ),
         Entry::Said { turn, by, .. } => {
-            let (turn, words) = turn_shape::split(turn);
+            let (turn, words) = turn_shape::split(turn.borrow());
             (
                 LineShape::Said {
                     turn,
@@ -573,7 +575,7 @@ mod tests {
         assert_eq!(opened("2026-10-11-review"), Kind::Review);
         assert_eq!(opened("2026-10-11-sweep"), Kind::Review);
         assert_eq!(opened("2026-10-11-1"), Kind::Topic);
-        let (shape, _) = split(&Entry::Opened {
+        let (shape, _) = split::<Turn>(&Entry::Opened {
             at: suzatary_base::capability::Datetime::new(2026, 10, 11, 9, 0, 0, 0)
                 .expect("an instant"),
             title: Words::kept("t".to_owned()),

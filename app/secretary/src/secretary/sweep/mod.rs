@@ -5,6 +5,7 @@ pub mod candidates;
 
 use serde_json::{Map, Value};
 use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::spoken::asked_by_the_box;
 
 use super::daily::{Run, begin};
 use super::review::{Noticed, noticed};
@@ -25,7 +26,7 @@ use suzatary_base::refusal::{Refusal, shown as quoted};
 use suzatary_connect::deployment::Deployment;
 use suzatary_connect::settings::Settables;
 use suzatary_conversations::secretary::model::Halt;
-use suzatary_conversations::secretary::store::{Entry, Stored};
+use suzatary_conversations::secretary::store::Stored;
 use suzatary_conversations::secretary::verb_name::Effect;
 use suzatary_inbox::secretary::changes::Act;
 use suzatary_inbox::secretary::proposal::Proposal;
@@ -165,7 +166,7 @@ fn sweep(
     conversations::append(
         caps.conversations,
         &id,
-        &Entry::asked_by_the_box(caps.clock.now(), Daily::Sweep.into(), text, Vec::new()),
+        &asked_by_the_box(caps.clock.now(), Daily::Sweep.into(), text, Vec::new()),
     )?;
 
     // A `complete`/`cancel` may name only the todos this round showed, not any open one.

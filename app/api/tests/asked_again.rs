@@ -19,6 +19,7 @@ use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::DEFAULT;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Entry, Kind, RunId};
+use suzatary_lines::secretary::answer::BoxLine;
 use suzatary_lines::secretary::held_replica::{
     AskedAgain, HeldReplica, NotAnAnswer, Question, Sealing, Whole,
 };
@@ -26,6 +27,7 @@ use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::lines_rule::{LinesRule, SlotKeys};
 use suzatary_lines::secretary::own_line::OwnLine;
 use suzatary_lines::secretary::run::{Held, Runs as _};
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::transcript::{self, Retry, Transcript};
 use suzatary_memory::secretary::words::Words;
 use suzatary_signatures::wire::signatures::RefusalKind;
@@ -267,24 +269,15 @@ impl Boxed {
     }
 }
 
-/// The box's close of a question it will not answer, as `Round::close` writes it.
-/// `entry` as the box writes it, a model's turn carrying nothing from outside.
-fn boxed(entry: Entry) -> suzatary_lines::secretary::answer::BoxLine {
-    suzatary_lines::secretary::answer::BoxLine::of(
-        entry,
+/// The box's close of a question it will not answer, as `Round::close` writes it: a model's turn
+/// carrying nothing from outside.
+fn closing(second: u32, text: &str) -> BoxLine {
+    BoxLine::Answer(suzatary_lines::secretary::answer::Answer::replied(
+        at(second),
+        text.to_owned(),
+        Vec::new(),
         suzatary_conversations::secretary::taint::Taint::Clean,
-    )
-}
-
-fn closing(second: u32, text: &str) -> Entry {
-    Entry::Said {
-        at: at(second),
-        turn: Turn::Model {
-            text: text.to_owned(),
-            calls: Vec::new(),
-        },
-        by: None,
-    }
+    ))
 }
 
 fn question(text: &str) -> Question {
@@ -570,11 +563,7 @@ fn reusing(the_box: &Boxed, craft: Craft, n: u32) -> Option<(OwnLine, Actor)> {
     let entry = match craft {
         Craft::Question | Craft::Edited | Craft::EditedByOther => Entry::Said {
             at: instant,
-            turn: Turn::Person {
-                text: format!("crafted {n}"),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person(format!("crafted {n}"), Vec::new(), Vec::new()),
             by,
         },
         Craft::Stop => Entry::Stopped {
@@ -583,10 +572,7 @@ fn reusing(the_box: &Boxed, craft: Craft, n: u32) -> Option<(OwnLine, Actor)> {
         },
         Craft::Act => Entry::Said {
             at: instant,
-            turn: Turn::Act {
-                text: format!("Ada did {n}"),
-                references: Vec::new(),
-            },
+            turn: Spoken::act(format!("Ada did {n}"), Vec::new()),
             by,
         },
     };
@@ -996,7 +982,7 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
                     at(second),
                     Retry::Allowed,
                     &|_| true,
-                    |_| vec![boxed(closing(second, "The box closed this unanswered."))],
+                    |_| vec![closing(second, "The box closed this unanswered.")],
                 )
                 .expect("claims");
                 if claimed == transcript::Claimed::Began {
@@ -1024,7 +1010,7 @@ fn asked(steps: &[Step]) -> Result<Took, proptest::test_runner::TestCaseError> {
                     the_box.lines.conversations(),
                     &DEFAULT,
                     &held.run,
-                    &[boxed(closing(second, "Here it is."))],
+                    &[closing(second, "Here it is.")],
                 )
                 .expect("answers");
             }
@@ -1398,7 +1384,7 @@ fn a_refused_edit_of_a_question_whose_row_has_not_landed_comes_back_as_an_edit()
         at(2),
         Retry::Allowed,
         &|_| true,
-        |_| vec![boxed(closing(2, "The box closed this unanswered."))],
+        |_| vec![closing(2, "The box closed this unanswered.")],
     )
     .expect("claims");
     assert_eq!(claimed, transcript::Claimed::Began);

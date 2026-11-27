@@ -517,11 +517,11 @@ fn the_agents_reads_of_the_memory_write_no_file() {
         },
         store::Entry::Said {
             at,
-            turn: suzatary_conversations::secretary::model::Turn::Person {
-                text: "Renew the permit before it lapses".to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: suzatary_lines::secretary::spoken::Spoken::person(
+                "Renew the permit before it lapses".to_owned(),
+                Vec::new(),
+                Vec::new(),
+            ),
             by: Some("ada".into()),
         },
     ]

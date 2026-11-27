@@ -15,10 +15,10 @@ use prodrome_store::store::{MemoryStore, Replica as _};
 use prodrome_store::store::frontier::{Frontiers, KEPT, Since, Token};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Entry, Kind};
 use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_memory::secretary::line_words::LineWords;
 use suzatary_memory::secretary::locked_text::TextKey;
 use suzatary_memory::secretary::words::Words;
@@ -76,11 +76,7 @@ pub(crate) fn shaped(long: usize) -> InMemory {
         let text = format!("Question {n} on the permit, asked again.");
         let said = Entry::Said {
             at: at(CONVERSATIONS + 2 * n),
-            turn: Turn::Person {
-                text: text.clone(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person(text.clone(), Vec::new(), Vec::new()),
             by: None,
         };
         let held = count.entry(conversation).or_default();
@@ -189,11 +185,7 @@ fn a_pull_that_lacks_nothing_sends_nothing_and_reads_no_object() {
 
     let said = Entry::Said {
         at: now,
-        turn: Turn::Person {
-            text: "One more.".to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person("One more.".to_owned(), Vec::new(), Vec::new()),
         by: None,
     };
     let count = u32::try_from(1 + 2 * (LINES / CONVERSATIONS)).expect("a count");

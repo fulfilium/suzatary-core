@@ -11,6 +11,7 @@ use suzatary_base::capability::{Datetime, Entropy};
 use suzatary_base::conversation_id::{ConversationId, DEFAULT, Daily, SETUP};
 use suzatary_conversations::secretary::store::{Entry, Kind};
 use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::spoken::Plain;
 use suzatary_memory::secretary::words::Words;
 
 /// Each draw the next number, so two seals of the same words differ.
@@ -55,7 +56,7 @@ fn opening() -> impl Strategy<Value = Opening> {
         })
 }
 
-fn entry(o: &Opening) -> Entry {
+fn entry(o: &Opening) -> Plain {
     let kind = match o.kind {
         0 => Kind::Default,
         1 => Kind::Topic,

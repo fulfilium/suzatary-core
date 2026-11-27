@@ -30,6 +30,7 @@ use suzatary_lines::secretary::line_form::{Husked, LineReplica};
 use suzatary_lines::secretary::line_shape::LineShape;
 use suzatary_lines::secretary::outlines::{Outlines, Parsed};
 use suzatary_lines::secretary::rescrub;
+use suzatary_lines::secretary::spoken::{noted, widened};
 use suzatary_lines::secretary::targets::rounds;
 use suzatary_lines::secretary::transcript;
 use suzatary_lines::secretary::transcript::Transcript;
@@ -1140,11 +1141,11 @@ fn the_box_s_notes_are_left_out_and_the_owner_s_reason_is_drawn() {
     )
     .expect("started");
     let noted = |n: u32| {
-        Entry::noted(
+        widened(noted(
             at(n),
             "Nothing is stored for it yet, so what needs it cannot work.".to_owned(),
             Vec::new(),
-        )
+        ))
     };
     let lines = [
         noted(2),

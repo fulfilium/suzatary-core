@@ -15,6 +15,7 @@ use suzatary_conversations::secretary::store::{Entry, Namer, Title};
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::line_shape::LineShape;
 use suzatary_lines::secretary::sequence::{self, Node, Order};
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::transcript;
 use suzatary_lines::wire::lines::LineWriter;
 use suzatary_memory::secretary::words::Words;
@@ -255,7 +256,6 @@ fn steps() -> impl proptest::strategy::Strategy<Value = Vec<Step>> {
 
 /// A conversation written by `steps`, each turn the box writes dated after every earlier line.
 fn written(steps: &[Step]) -> InMemory {
-    use suzatary_conversations::secretary::model::Turn;
     let lines = InMemory::default();
     let id = crate::known_pull::id(0);
     let at = |second: u32| {
@@ -263,11 +263,7 @@ fn written(steps: &[Step]) -> InMemory {
     };
     let said = |second: u32, text: &str| Entry::Said {
         at: at(second),
-        turn: Turn::Person {
-            text: text.to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()),
         by: None,
     };
     transcript::start(

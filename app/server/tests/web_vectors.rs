@@ -416,7 +416,8 @@ impl<H: Health> Bundle<H> {
     }
 
     fn seed(&self, id: &ConversationId, entries: &[ConversationEntry]) {
-        transcript::start(self.conversations.conversations(), id, &entries[0]).expect("opens");
+        transcript::start_older(self.conversations.conversations(), id, &entries[0])
+            .expect("opens");
         for entry in &entries[1..] {
             transcript::push_older(self.conversations.conversations(), id, entry).expect("pushes");
         }

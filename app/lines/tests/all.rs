@@ -7,6 +7,8 @@ mod conversation_id;
 mod frontier;
 #[path = "line_replica.rs"]
 mod line_replica;
+#[path = "printed.rs"]
+mod printed;
 #[path = "sequence.rs"]
 mod sequence;
 #[path = "snapshot.rs"]

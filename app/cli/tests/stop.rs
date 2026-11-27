@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes, Gate};
 use suzatary_conversations::secretary::store;
+use suzatary_lines::secretary::spoken::Spoken;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -144,11 +145,7 @@ fn a_stop_before_any_round_takes_the_question_closes_it() {
         &store::Entry::Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_conversations::secretary::model::Turn::Person {
-                text: "read every thread".to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person("read every thread".to_owned(), Vec::new(), Vec::new()),
             by: None,
         },
     )

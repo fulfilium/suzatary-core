@@ -176,11 +176,11 @@ fn question(
             u32::try_from(round).unwrap_or(0),
         )
         .expect("an instant"),
-        turn: suzatary_conversations::secretary::model::Turn::Person {
-            text: format!("one more, round {round}"),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: suzatary_lines::secretary::spoken::Spoken::person(
+            format!("one more, round {round}"),
+            Vec::new(),
+            Vec::new(),
+        ),
         by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
             suzatary_inbox::secretary::stamp::Speaker::device(&actor),
         )),

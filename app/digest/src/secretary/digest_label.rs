@@ -30,7 +30,7 @@ pub enum Kind {
     /// A verb's answer.
     Tool,
     Act,
-    /// The box's own note, an act line it composed from its own state ([`Entry::noted`]).
+    /// The box's own note, an act line it composed from its own state (`noted`).
     Noted,
     Proposed,
     Reviewed,

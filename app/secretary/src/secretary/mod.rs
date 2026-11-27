@@ -5,6 +5,8 @@ use prodrome_data::event::Actor;
 use suzatary_base::writer::Writer;
 use suzatary_conversations::secretary::model::Pick;
 use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::spoken::Spoken;
+use suzatary_lines::secretary::spoken::asked_by_the_box;
 use suzatary_signatures::chain_set::Read;
 pub mod answering;
 pub mod briefings;
@@ -124,14 +126,10 @@ pub fn converse(
         &match said.by {
             Asker::Person(Speaker(actor)) => Entry::Said {
                 at: now,
-                turn: Turn::Person {
-                    text,
-                    references,
-                    attachments: Vec::new(),
-                },
+                turn: Spoken::person(text, references, Vec::new()),
                 by: Some(actor.as_str().into()),
             },
-            Asker::Box(round) => Entry::asked_by_the_box(now, round, text, references),
+            Asker::Box(round) => asked_by_the_box(now, round, text, references),
         },
     )?;
     answer(
@@ -316,13 +314,13 @@ fn load_references(
             id,
             &Entry::Said {
                 at: caps.clock.now(),
-                turn: Turn::Tool {
-                    verb: tool_name::ToolName::Reference,
+                turn: Spoken::tool(
+                    tool_name::ToolName::Reference,
                     // The text form first, so the model can name the thing back.
-                    answer: format!("{reference}\n\n{answer}"),
+                    format!("{reference}\n\n{answer}"),
                     outcome,
                     files,
-                },
+                ),
                 by: None,
             },
         )?;
@@ -680,14 +678,14 @@ fn heard(
         &card.conversation,
         &Entry::Said {
             at: clock.now(),
-            turn: Turn::Act {
-                text: suzatary_lines::secretary::act_lines::describe_act(
+            turn: Spoken::act(
+                suzatary_lines::secretary::act_lines::describe_act(
                     &suzatary_base::spelling::capitalised(by.as_str()),
                     verb,
                     words,
                 ),
-                references: vec![card.clone().into()],
-            },
+                vec![card.clone().into()],
+            ),
             by: Some(by.as_str().into()),
         },
     )?;

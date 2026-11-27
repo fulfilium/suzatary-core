@@ -6,6 +6,7 @@
 //! and a slot cannot claim other rules. Nothing in an object is words: the redaction door is
 //! applied in `seal`, before the words are locked.
 
+use std::borrow::Borrow;
 use std::collections::BTreeSet;
 
 use base64::Engine as _;
@@ -18,10 +19,12 @@ use serde::de::DeserializeOwned;
 use crate::secretary::answer::Answer;
 use crate::secretary::line_shape::{self, LineShape};
 use crate::secretary::saying::Saying;
+use crate::secretary::spoken::{Plain, widened};
 use prodrome_data::fold::sole::{One, Only, Whole};
 use prodrome_data::literal::codec::{Constructor, Fields, Literal, no_arm, record};
 use suzatary_base::capability::Entropy;
 use suzatary_base::conversation_id::ConversationId;
+use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_conversations::secretary::store::Said;
 use suzatary_conversations::secretary::taint::{self, Taint};
@@ -116,8 +119,6 @@ pub enum NotALine {
     NoKey(String),
     #[error("an edit's question is a turn said, and this entry is none")]
     Unsaid,
-    #[error("a model's turn is written with what its call was sent, as an answer")]
-    Uncarried,
     #[error("a retired kind of line is never written")]
     Retired,
 }
@@ -142,28 +143,42 @@ impl LineEvent {
 
     /// Line `entry` of `conversation`, written here by `actor` holding `held` lines, each slot of
     /// its words through the redaction door and locked under a key drawn from `entropy`; the keys
-    /// that open them are the only thing to keep. A verb's answer stores its class; a model's
-    /// turn is [`LineEvent::answered`]'s.
+    /// that open them are the only thing to keep. A verb's answer stores its class. No model's
+    /// turn is a [`Plain`] entry; [`LineEvent::answered`] writes one.
+    ///
+    /// ```compile_fail,E0308
+    /// use suzatary_conversations::secretary::model::Turn;
+    /// use suzatary_conversations::secretary::store::Entry;
+    /// use suzatary_lines::secretary::line_event::LineEvent;
+    ///
+    /// fn writes(
+    ///     conversation: suzatary_base::conversation_id::ConversationId,
+    ///     actor: prodrome_data::event::Actor,
+    ///     at: suzatary_base::capability::Datetime,
+    ///     entropy: &dyn suzatary_base::capability::Entropy,
+    /// ) {
+    ///     let model = Entry::Said {
+    ///         at,
+    ///         turn: Turn::Model { text: String::new(), calls: Vec::new() },
+    ///         by: None,
+    ///     };
+    ///     let _ = LineEvent::write(conversation, actor, 0, &model, entropy);
+    /// }
+    /// ```
     pub fn write(
         conversation: ConversationId,
         actor: Actor,
         held: u32,
-        entry: &Entry,
+        entry: &Plain,
         entropy: &dyn Entropy,
     ) -> Result<(Self, Vec<TextKey>), NotALine> {
         let (mut line, words) = Self::unsealed(conversation, actor, held, entry)?;
-        match &mut line.shape {
-            LineShape::Said {
-                turn: TurnShape::Model { .. },
-                ..
-            } => return Err(NotALine::Uncarried),
-            LineShape::Said {
-                turn: TurnShape::Tool { carries, .. },
-                ..
-            } => {
-                *carries = Said::of(entry).map(|said| taint::written(&said));
-            }
-            _ => {}
+        if let LineShape::Said {
+            turn: TurnShape::Tool { carries, .. },
+            ..
+        } = &mut line.shape
+        {
+            *carries = Said::of(&widened(entry.clone())).map(|said| taint::written(&said));
         }
         line.sealed(&words, entropy)
     }
@@ -217,7 +232,7 @@ impl LineEvent {
         conversation: ConversationId,
         actor: Actor,
         held: u32,
-        entry: &Entry,
+        entry: &Plain,
         entropy: &dyn Entropy,
     ) -> Result<(Self, Vec<TextKey>), NotALine> {
         let (mut line, words) = Self::unsealed(conversation, actor, held, entry)?;
@@ -233,7 +248,7 @@ impl LineEvent {
     /// since each slot is bound to it.
     pub fn begin(
         actor: Actor,
-        entry: &Entry,
+        entry: &Plain,
         entropy: &dyn Entropy,
     ) -> Result<(Self, Vec<TextKey>), NotALine> {
         let placeholder = suzatary_base::conversation_id::DEFAULT.clone();
@@ -284,7 +299,7 @@ impl LineEvent {
         conversation: ConversationId,
         actor: Actor,
         held: u32,
-        entry: &Entry,
+        entry: &Entry<impl Borrow<Turn>>,
     ) -> Result<(Self, Vec<LineWords>), NotALine> {
         let (shape, words) = line_shape::split(entry).ok_or(NotALine::Retired)?;
         let words = words.ok_or(NotALine::Gone)?;
@@ -1697,12 +1712,16 @@ mod tests {
                     retired: retired.clone()
                 }
             );
+            let plain: Plain = Entry::Retired {
+                at: at(),
+                retired: retired.clone(),
+            };
             assert!(matches!(
                 LineEvent::write(
                     id(),
                     Actor::new("assistant").expect("an actor"),
                     0,
-                    &entry,
+                    &plain,
                     &Counting::default(),
                 ),
                 Err(NotALine::Retired)
@@ -1827,7 +1846,7 @@ mod tests {
         let back: LineEvent = parse_event(&LineVocabulary, &print).expect("parses");
         assert_eq!(back, line);
         let read = back.entry(&opened_by(&keys));
-        assert_eq!(read, entry);
+        assert_eq!(read, widened(entry.clone()));
         let start = read.start().expect("a set-up line begins a conversation");
         assert_eq!(start.kind, Kind::Topic);
         assert_eq!(start.begun, Begun::SetUp(TemplateId::Gmail));

@@ -37,6 +37,9 @@ use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::line_shape::LineShape;
 use suzatary_lines::secretary::lines_rule::{LinesRule, SlotKeys};
+use suzatary_lines::secretary::spoken::Plain;
+use suzatary_lines::secretary::spoken::Spoken;
+use suzatary_lines::secretary::spoken::widened;
 use suzatary_memory::secretary::locked_text::TextKey;
 use suzatary_memory::secretary::scrubbed_under::ScrubbedUnder;
 use suzatary_memory::secretary::words::Words;
@@ -61,7 +64,7 @@ fn ada() -> Actor {
     Actor::new("device0").expect("an actor")
 }
 
-fn opened(second: u32) -> Entry {
+fn opened<T>(second: u32) -> Entry<T> {
     Entry::Opened {
         at: at(second),
         title: Words::kept("The garden".to_owned()),
@@ -70,7 +73,7 @@ fn opened(second: u32) -> Entry {
     }
 }
 
-fn titled(second: u32, by: &str, title: &str) -> Entry {
+fn titled<T>(second: u32, by: &str, title: &str) -> Entry<T> {
     Entry::Titled {
         at: at(second),
         title: Words::kept(Title::new(title).expect("a title")),
@@ -178,7 +181,7 @@ impl Door {
     }
 
     /// An opening as a tab seals it: its id its own.
-    fn opening(&self, entry: &Entry) -> Posted {
+    fn opening(&self, entry: &Plain) -> Posted {
         let (line, keys) = LineEvent::begin(ada(), entry, &self.entropy).expect("a line");
         self.change(line, keys)
     }
@@ -773,13 +776,13 @@ fn a_tab_s_line_carried_from_elsewhere_is_refused() {
     use suzatary_connect::connect::TemplateId;
     let door = Door::new();
     let elsewhere = Hash::new("a".repeat(64)).expect("a name");
-    let carried = |entry: &Entry, conversation: Option<&str>| {
+    let carried = |entry: &Plain, conversation: Option<&str>| {
         let (line, keys) = match conversation {
             Some(id) => LineEvent::older(
                 ConversationId::new(id).expect("a slug"),
                 ada(),
                 0,
-                entry,
+                &widened(entry.clone()),
                 &door.entropy,
             ),
             None => LineEvent::begin(ada(), entry, &door.entropy),
@@ -850,14 +853,10 @@ impl suzatary_lines::secretary::lines_rule::World for OnADevice {
     }
 }
 
-fn question(second: u32, text: &str) -> Entry {
+fn question<T: From<Spoken>>(second: u32, text: &str) -> Entry<T> {
     Entry::Said {
         at: at(second),
-        turn: Turn::Person {
-            text: text.to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()).into(),
         by: Some(Stamp::Actor(Speaker::device("device0"))),
     }
 }
@@ -873,7 +872,7 @@ fn answer(second: u32) -> Entry {
     }
 }
 
-fn claim(second: u32, covers: &Hash) -> Entry {
+fn claim<T>(second: u32, covers: &Hash) -> Entry<T> {
     Entry::Began {
         at: at(second),
         covers: vec![Covered {
@@ -884,7 +883,7 @@ fn claim(second: u32, covers: &Hash) -> Entry {
     }
 }
 
-fn again(second: u32, question: &Hash, how: Rewind) -> Entry {
+fn again<T>(second: u32, question: &Hash, how: Rewind) -> Entry<T> {
     Entry::Again {
         at: at(second),
         question: question.clone(),
@@ -1639,21 +1638,17 @@ fn law_store(owed: u32) -> (Door, Hash, Hash) {
 }
 
 /// A question dated ten minutes past the box's clock.
-fn ahead() -> Entry {
+fn ahead<T: From<Spoken>>() -> Entry<T> {
     Entry::Said {
         at: Datetime::new(2026, 11, 17, 9, 11, 0, 0).expect("an instant"),
-        turn: Turn::Person {
-            text: "ahead".to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person("ahead".to_owned(), Vec::new(), Vec::new()).into(),
         by: Some(Stamp::Actor(Speaker::device("device0"))),
     }
 }
 
 /// An opening of the one topic every such opening of [`written_beside`] names, in one of two
 /// forms.
-fn topic_opening(form: bool) -> Entry {
+fn topic_opening<T>(form: bool) -> Entry<T> {
     Entry::Opened {
         at: at(5),
         title: Words::kept(if form { "The garden" } else { "The trip" }.to_owned()),
@@ -1663,7 +1658,7 @@ fn topic_opening(form: bool) -> Entry {
 }
 
 /// A Gmail setup's opening: every one of them at one instant names one id.
-fn gmail_setup() -> Entry {
+fn gmail_setup<T>() -> Entry<T> {
     use suzatary_connect::connect::TemplateId;
     Entry::SetUp {
         at: at(6),
@@ -1673,7 +1668,7 @@ fn gmail_setup() -> Entry {
 }
 
 /// The opening of the topic [`written_beside`]'s store holds, in one of two forms: one id.
-fn held_topic(form: bool) -> Entry {
+fn held_topic<T>(form: bool) -> Entry<T> {
     Entry::Opened {
         at: at(7),
         title: Words::kept(if form { "The permit" } else { "The lease" }.to_owned()),

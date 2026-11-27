@@ -15,6 +15,8 @@ use crate::secretary::outline::Rounds;
 use crate::secretary::outlines::{Frontier, Nodes, NotANode, Outlines, Parsed, Scope};
 use crate::secretary::own_line::OwnLine;
 use crate::secretary::row::{self, Row};
+use crate::secretary::spoken::Plain;
+use crate::secretary::spoken::Spoken;
 use crate::wire::lines::{Heads, SkeletonNode, SkeletonPayload};
 use prodrome_data::event::{Actor, Envelope};
 use suzatary_base::answer::Renderable;
@@ -129,7 +131,7 @@ impl Writer<'_> {
         &self,
         conversation: ConversationId,
         held: u32,
-        entry: &Entry,
+        entry: &Plain,
         deps: Vec<Hash>,
     ) -> Result<OwnLine, NotSealed> {
         let (line, keys) =
@@ -142,7 +144,7 @@ impl Writer<'_> {
         &self,
         conversation: ConversationId,
         held: u32,
-        entry: &Entry,
+        entry: &Plain,
         again: &OwnLine,
     ) -> Result<OwnLine, NotSealed> {
         let (line, keys) =
@@ -151,7 +153,7 @@ impl Writer<'_> {
     }
 
     /// `entry` opening a conversation of its own: its id, and the line.
-    fn opening(&self, entry: &Entry) -> Result<(ConversationId, OwnLine), NotSealed> {
+    fn opening(&self, entry: &Plain) -> Result<(ConversationId, OwnLine), NotSealed> {
         let (line, keys) = LineEvent::begin(self.actor.clone(), entry, self.entropy)?;
         Ok((line.begun_id(), self.own(line, &keys, Vec::new())?))
     }
@@ -173,7 +175,7 @@ impl Writer<'_> {
 }
 
 /// A topic's opening under `title`; none leaves it to the title job.
-fn topic(title: Option<Title>, at: Datetime) -> Entry {
+fn topic(title: Option<Title>, at: Datetime) -> Plain {
     Entry::Opened {
         at,
         title: Words::kept(title.map_or_else(String::new, String::from)),
@@ -194,14 +196,10 @@ pub struct Question {
 }
 
 impl Question {
-    fn said(self, at: Datetime, actor: &Actor) -> Entry {
+    fn said(self, at: Datetime, actor: &Actor) -> Plain {
         Entry::Said {
             at,
-            turn: suzatary_conversations::secretary::model::Turn::Person {
-                text: self.text,
-                references: self.references,
-                attachments: self.attachments,
-            },
+            turn: Spoken::person(self.text, self.references, self.attachments),
             by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
                 suzatary_inbox::secretary::stamp::Speaker::at(actor.as_str(), self.seat),
             )),
@@ -550,7 +548,7 @@ impl HeldReplica {
             actor,
             entropy,
         };
-        let onto = |conversation: ConversationId, entry: Entry| {
+        let onto = |conversation: ConversationId, entry: Plain| {
             let (deps, held) = self.heads(&conversation)?;
             writer.line(conversation, held, &entry, deps)
         };

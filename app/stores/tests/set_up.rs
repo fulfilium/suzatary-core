@@ -5,6 +5,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_connect::connect::TemplateId;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_inbox::secretary::stamp::Stamp;
+use suzatary_lines::secretary::spoken::Plain;
 use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::words::Words;
 use suzatary_topics::secretary::rules::{Conversational, RULES};
@@ -109,7 +110,7 @@ fn each_setup_gets_exactly_one_opening_across_restarts() {
 fn only_an_opening_that_names_a_model_names_one() {
     let store = suzatary_stores::stores::conversations::InMemory::default();
     let lines = store.conversations();
-    let begin = |entry: Entry| {
+    let begin = |entry: Plain| {
         let id = transcript::begin(lines, &entry).expect("begun");
         transcript::read(lines, &id)
             .expect("reads")

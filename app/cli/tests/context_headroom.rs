@@ -13,7 +13,6 @@ use suzatary_base::chains::{ChainName, ChainPolicy, Chains};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::persona::Persona;
 use suzatary_connect::deployment::Deployment;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_digest::secretary::compaction::Reading;
 use suzatary_digest::secretary::digest_event::DigestEvent;
@@ -21,6 +20,7 @@ use suzatary_digest::secretary::digest_view::LINE_BYTES;
 use suzatary_digest::secretary::digests::ReadDigests;
 use suzatary_digest::secretary::shown_record::OwnersRecord;
 use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_memory::secretary::memory::{
     Fact, FactId, Kind, MAX_FACT_CHARS, MAX_LIVE, Memory, Origin, Remembered,
 };
@@ -119,11 +119,7 @@ fn full_record(lines: &Lines) -> Reading {
         };
         let entry = Entry::Said {
             at: at(minute),
-            turn: Turn::Person {
-                text: format!("Turn {minute}: {said}"),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person(format!("Turn {minute}: {said}"), Vec::new(), Vec::new()),
             by: Some("ada".into()),
         };
         let (line, keys) =

@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 use crate::secretary::{Call, SecretarySurface};
 use crate::verb::Verb;
 use suzatary_base::refusal::Refusal;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::transcript;
 
 /// Prose set aside for the owner to copy; nothing performs it.
@@ -35,12 +35,12 @@ impl Verb for DraftNote {
             call.conversation,
             &Entry::Said {
                 at: call.caps.clock.now(),
-                turn: Turn::Tool {
-                    verb: crate::secretary::SecretaryVerb::DraftNote.into(),
-                    answer: format!("{}\n\n{}", args.title, args.note),
-                    outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
-                    files: Vec::new(),
-                },
+                turn: Spoken::tool(
+                    crate::secretary::SecretaryVerb::DraftNote.into(),
+                    format!("{}\n\n{}", args.title, args.note),
+                    suzatary_conversations::secretary::outcome::Outcome::Answered,
+                    Vec::new(),
+                ),
                 by: None,
             },
         )?;

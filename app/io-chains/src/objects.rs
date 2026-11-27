@@ -711,8 +711,8 @@ mod tests {
     #[test]
     fn a_conversation_is_written_as_changes_through_the_door() {
         use suzatary_base::conversation_id::ConversationId;
-        use suzatary_conversations::secretary::model::Turn;
         use suzatary_conversations::secretary::store::Entry;
+        use suzatary_lines::secretary::spoken::Spoken;
         use suzatary_lines::secretary::transcript;
 
         let dir = suzatary_testkit::scratch("objects");
@@ -736,11 +736,7 @@ mod tests {
                 &id,
                 &Entry::Said {
                     at: at(1),
-                    turn: Turn::Person {
-                        text: text.to_owned(),
-                        references: Vec::new(),
-                        attachments: Vec::new(),
-                    },
+                    turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()),
                     by: None,
                 },
             )
@@ -1001,8 +997,8 @@ mod tests {
     /// A conversation of 48 lines on disk under `dir`, enough to settle a node of the digest.
     fn spoken(dir: &std::path::Path) -> crate::conversations::ConversationStores {
         use suzatary_base::conversation_id::ConversationId;
-        use suzatary_conversations::secretary::model::Turn;
         use suzatary_conversations::secretary::store::Entry;
+        use suzatary_lines::secretary::spoken::Spoken;
         use suzatary_lines::secretary::transcript;
 
         let lines = lines_at(dir.join("conversations"));
@@ -1018,11 +1014,7 @@ mod tests {
         for m in 1..48 {
             let said = Entry::Said {
                 at: minute(m),
-                turn: Turn::Person {
-                    text: format!("line {m}"),
-                    references: Vec::new(),
-                    attachments: Vec::new(),
-                },
+                turn: Spoken::person(format!("line {m}"), Vec::new(), Vec::new()),
                 by: Some("ada".into()),
             };
             transcript::push(lines.conversations(), &id, &said).expect("pushes");

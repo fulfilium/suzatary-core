@@ -11,12 +11,16 @@ use suzatary_conversations::secretary::store::{Entry, Said, Stored};
 use suzatary_conversations::secretary::taint;
 use suzatary_conversations::secretary::taint::Taint;
 use suzatary_inbox::secretary::acts;
+use suzatary_inbox::secretary::stamp::Stamp;
+use suzatary_lines::secretary::spoken::Plain;
+use suzatary_lines::secretary::spoken::Spoken;
 
 /// One turn of the owner's own words, and where it was said.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Request {
     turn: usize,
-    said: Said,
+    said: Spoken,
+    by: Option<Stamp>,
 }
 
 impl Request {
@@ -28,11 +32,7 @@ impl Request {
         queue::delta(stored)
             .into_iter()
             .rev()
-            .find(|(_, said)| own(said))
-            .map(|(turn, said)| Request {
-                turn,
-                said: said.clone(),
-            })
+            .find_map(|(turn, said)| own(said).map(|own| Request::new(turn, own, said)))
     }
 
     /// Turn `turn` of `stored`, read again when the card is tapped, because the owner can erase
@@ -44,11 +44,7 @@ impl Request {
         stored
             .turns
             .get(turn)
-            .filter(|said| own(said))
-            .map(|said| Request {
-                turn,
-                said: said.clone(),
-            })
+            .and_then(|said| own(said).map(|own| Request::new(turn, own, said)))
             .ok_or_else(|| {
                 Refusal::conflict(format!(
                     "turn {turn} of {} is no longer your own words alone, so no conversation \
@@ -58,6 +54,14 @@ impl Request {
             })
     }
 
+    fn new(turn: usize, said: Spoken, stamped: &Said) -> Self {
+        Request {
+            turn,
+            said,
+            by: stamped.by.clone(),
+        }
+    }
+
     #[must_use]
     pub fn turn(&self) -> usize {
         self.turn
@@ -65,11 +69,11 @@ impl Request {
 
     /// The fresh conversation's first line: the same turn under the same stamp, said at `at`.
     #[must_use]
-    pub fn entry(&self, at: Datetime) -> Entry {
+    pub fn entry(&self, at: Datetime) -> Plain {
         Entry::Said {
             at,
-            turn: self.said.turn.clone(),
-            by: self.said.by.clone(),
+            turn: self.said.clone(),
+            by: self.by.clone(),
         }
     }
 
@@ -82,10 +86,25 @@ impl Request {
     }
 }
 
-/// Whether `said` is a person's words clean on their own: only under the gate's stamp of the
-/// owner, with no file.
-fn own(said: &Said) -> bool {
-    matches!(said.turn, Turn::Person { .. }) && taint::turn(said) == Taint::Clean
+/// `said` as a person's words, where they are clean on their own: only under the gate's stamp of
+/// the owner, with no file.
+fn own(said: &Said) -> Option<Spoken> {
+    match &said.turn {
+        Turn::Person {
+            text,
+            references,
+            attachments,
+        } if taint::turn(said) == Taint::Clean => Some(Spoken::person(
+            text.clone(),
+            references.clone(),
+            attachments.clone(),
+        )),
+        Turn::Person { .. }
+        | Turn::Model { .. }
+        | Turn::Tool { .. }
+        | Turn::Act { .. }
+        | Turn::Erased { .. } => None,
+    }
 }
 
 #[cfg(test)]

@@ -20,6 +20,8 @@ use suzatary_lines::secretary::held_replica::{AskedAgain, HeldReplica, NotAnAnsw
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::lines_rule::{LinesRule, SlotKeys};
 use suzatary_lines::secretary::own_line::OwnLine;
+use suzatary_lines::secretary::spoken::Spoken;
+use suzatary_lines::secretary::spoken::widened;
 use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::words::Words;
 use suzatary_store::admission::Beside as _;
@@ -515,7 +517,6 @@ impl suzatary_lines::secretary::lines_rule::World for OnADevice {
     reason = "one law's three readings of one question"
 )]
 fn a_tab_s_question_reads_as_the_box_s_and_holds_no_number_it_was_typed_with() {
-    use suzatary_conversations::secretary::model::Turn;
     use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
     let typed = "my number is 123-45-6789 and the verification code is 482913.";
     let lines = InMemory::default();
@@ -560,11 +561,7 @@ fn a_tab_s_question_reads_as_the_box_s_and_holds_no_number_it_was_typed_with() {
     // The box sealing the same turn reads alike.
     let entry = Entry::Said {
         at: at(1),
-        turn: Turn::Person {
-            text: typed.to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person(typed.to_owned(), Vec::new(), Vec::new()),
         by: Some(Stamp::Actor(Speaker::device("ada"))),
     };
     let (boxed, box_keys) =
@@ -619,7 +616,7 @@ fn a_tab_s_question_reads_as_the_box_s_and_holds_no_number_it_was_typed_with() {
     .expect("claims");
     let boxed_read = suzatary_conversations::secretary::store::Stored::of(
         &DEFAULT,
-        &[opened, boxed.entry(&opens(&box_keys))],
+        &[widened(opened), boxed.entry(&opens(&box_keys))],
     )
     .expect("a conversation");
     assert_eq!(

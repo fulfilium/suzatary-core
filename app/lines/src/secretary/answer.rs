@@ -1,5 +1,6 @@
 //! A model's turn as the box writes it, always with its call's carry.
 
+use crate::secretary::spoken::{Plain, widened};
 use suzatary_base::capability::Datetime;
 use suzatary_conversations::secretary::model::{ToolCall, Turn};
 use suzatary_conversations::secretary::sentence::{Built, Closing, Outside};
@@ -69,33 +70,20 @@ impl Answer {
     }
 }
 
-/// A line the box writes.
+/// A line the box writes: a model's turn with its carry, or any other line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BoxLine {
     Answer(Answer),
-    /// Any line but a model's turn.
-    Entry(Entry),
+    Plain(Plain),
 }
 
 impl BoxLine {
-    /// `entry`, a model's turn carrying `carries`.
-    #[must_use]
-    pub fn of(entry: Entry, carries: Taint) -> Self {
-        match entry {
-            Entry::Said {
-                at,
-                turn: Turn::Model { text, calls },
-                ..
-            } => BoxLine::Answer(Answer::replied(at, text, calls, carries)),
-            other => BoxLine::Entry(other),
-        }
-    }
-
+    /// The line as the box reads it back.
     #[must_use]
     pub fn entry(&self) -> Entry {
         match self {
             BoxLine::Answer(answer) => answer.entry(),
-            BoxLine::Entry(entry) => entry.clone(),
+            BoxLine::Plain(plain) => widened(plain.clone()),
         }
     }
 }

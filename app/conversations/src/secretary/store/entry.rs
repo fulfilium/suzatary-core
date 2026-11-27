@@ -4,9 +4,7 @@ use super::{Begun, Decision, Kind, Namer, Scope, Start, Title};
 use crate::secretary::model::Turn;
 use serde::Serialize;
 use suzatary_base::capability::Datetime;
-use suzatary_base::reference::Reference;
 use suzatary_connect::connect::TemplateId;
-use suzatary_inbox::secretary::own_round::OwnRound;
 use suzatary_inbox::secretary::stamp::Stamp;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::words::Words;
@@ -15,7 +13,7 @@ use suzatary_memory::secretary::words::Words;
 /// record of a scene, and nothing reads it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "line", rename_all = "lowercase")]
-pub enum Entry {
+pub enum Entry<T = Turn> {
     /// The first line of every file, naming the model behind it.
     Opened {
         #[serde(serialize_with = "stamped")]
@@ -42,7 +40,7 @@ pub enum Entry {
     Said {
         #[serde(serialize_with = "stamped")]
         at: Datetime,
-        turn: Turn,
+        turn: T,
         /// Who stamped it: the actor the gate admitted a `say` or an act as, or the box for a
         /// note of its own; `None` for words the box relays, which `secretary::taint` reads as
         /// "not the owner".
@@ -166,7 +164,7 @@ pub enum Entry {
     },
 }
 
-impl Entry {
+impl<T> Entry<T> {
     /// The title this line gives its conversation: an opening's, or a naming's, which the last
     /// naming in order replaces; `None` for a line that names nothing.
     #[must_use]
@@ -213,7 +211,7 @@ impl Entry {
     }
 }
 
-impl Entry {
+impl<T> Entry<T> {
     /// What this line begins, where it begins a conversation.
     #[must_use]
     pub fn start(&self) -> Option<Start<'_>> {
@@ -253,36 +251,6 @@ impl Entry {
             | Entry::Resealed { .. }
             | Entry::Began { .. }
             | Entry::Again { .. } => None,
-        }
-    }
-
-    /// The box's own act line: words it composed from its own state, carrying nobody else's,
-    /// stamped [`Stamp::Box`] so taint reads it clean and no round counts it the owner's.
-    #[must_use]
-    pub fn noted(at: Datetime, text: String, references: Vec<Reference>) -> Self {
-        Entry::Said {
-            at,
-            turn: Turn::Act { text, references },
-            by: Some(Stamp::Box),
-        }
-    }
-
-    /// The question of one of the box's own rounds, stamped with the round it opens.
-    #[must_use]
-    pub fn asked_by_the_box(
-        at: Datetime,
-        round: OwnRound,
-        text: String,
-        references: Vec<Reference>,
-    ) -> Self {
-        Entry::Said {
-            at,
-            turn: Turn::Person {
-                text,
-                references,
-                attachments: Vec::new(),
-            },
-            by: Some(Stamp::Asking(round)),
         }
     }
 }

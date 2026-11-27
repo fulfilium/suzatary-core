@@ -23,6 +23,7 @@ use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::{
     Decision, Entry, Line, Namer, Rewind, Stored, Title, Unheld,
 };
+use suzatary_conversations::secretary::taint::Taint;
 use suzatary_inbox::coding;
 use suzatary_inbox::secretary::inbox;
 use suzatary_inbox::secretary::inbox::ProposalId;
@@ -31,6 +32,7 @@ use suzatary_inbox::secretary::proposal::{Draft, Proposal, Reasons};
 use suzatary_inbox::secretary::responded::{Done, Responded, Tried};
 use suzatary_inbox::secretary::stamp::stamp;
 use suzatary_lines::nothing::Counting;
+use suzatary_lines::secretary::answer::{Answer, BoxLine};
 use suzatary_lines::secretary::line_event::{LineEvent, LineVocabulary};
 use suzatary_lines::secretary::line_shape;
 use suzatary_lines::secretary::transcript;
@@ -89,7 +91,7 @@ impl Scratch {
 
 /// Line `entry` of conversation `id` as the store keeps it: each slot of its words through the
 /// redaction door, as `LineEvent::write` sends them.
-fn scrubbed(id: &ConversationId, entry: &Entry) -> Entry {
+fn scrubbed(id: &ConversationId, entry: &Entry<impl std::borrow::Borrow<Turn>>) -> Entry {
     let (shape, words) = line_shape::split(entry).expect("a written kind");
     let words = words
         .expect("a line with its words")
@@ -109,7 +111,7 @@ fn weight(entry: &Entry) -> usize {
         .sum()
 }
 
-fn opened() -> Entry {
+fn opened<T>() -> Entry<T> {
     Entry::Opened {
         at: at(0),
         title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
@@ -442,7 +444,8 @@ fn through_the_door(lines: &[Entry]) -> Vec<Entry> {
 /// The lines written into a fresh store, one push each, and read back.
 fn written(lines: &[Entry]) -> (Memory, std::sync::Arc<Transcript>) {
     let memory = Memory::default();
-    transcript::start(memory.conversations(), &id(), &lines[0]).expect("started");
+    assert_eq!(lines[0], opened(), "a conversation opens with its opening");
+    transcript::start(memory.conversations(), &id(), &opened()).expect("started");
     for line in &lines[1..] {
         transcript::push_older(memory.conversations(), &id(), line).expect("pushed");
     }
@@ -578,8 +581,9 @@ fn act(second: u32, owners: bool) -> Entry {
     }
 }
 
-/// A model's turn at `second`: one asking for a call, or an answer, which closes its round.
-fn answer(second: u32, calling: bool) -> Entry {
+/// A model's turn at `second`: one asking for a call, or an answer, which closes its round; it
+/// carries nothing from outside.
+fn answer(second: u32, calling: bool) -> BoxLine {
     let calls = if calling {
         vec![ToolCall {
             verb: "todo_show".into(),
@@ -588,13 +592,12 @@ fn answer(second: u32, calling: bool) -> Entry {
     } else {
         Vec::new()
     };
-    said(
-        second,
-        Turn::Model {
-            text: if calling { "" } else { "done" }.to_owned(),
-            calls,
-        },
-    )
+    BoxLine::Answer(Answer::replied(
+        at(second),
+        if calling { "" } else { "done" }.to_owned(),
+        calls,
+        Taint::Clean,
+    ))
 }
 
 /// Every step of `script` written as the box writes it, through the claim, the join and the
@@ -664,16 +667,9 @@ fn answered_by_rounds(script: &[RoundStep]) -> (std::sync::Arc<Transcript>, Roun
                     continue;
                 };
                 let calling = matches!(step, RoundStep::Call);
-                let written = transcript::push_open(
-                    store,
-                    &id(),
-                    running,
-                    &[suzatary_lines::secretary::answer::BoxLine::of(
-                        answer(second, calling),
-                        suzatary_conversations::secretary::taint::Taint::Clean,
-                    )],
-                )
-                .expect("pushed");
+                let written =
+                    transcript::push_open(store, &id(), running, &[answer(second, calling)])
+                        .expect("pushed");
                 assert_eq!(written, transcript::Answering::Written, "the round is open");
                 if matches!(step, RoundStep::Answer) {
                     model.open = None;

@@ -7,6 +7,8 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::spoken::Plain;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::transcript::Retry;
 use suzatary_lines::secretary::transcript::*;
 use suzatary_memory::secretary::erasure::Erasure;
@@ -23,7 +25,7 @@ fn at(second: u32) -> Datetime {
     Datetime::new(2026, 9, 30, 9, 0, second, 0).expect("an instant")
 }
 
-fn opened() -> Entry {
+fn opened<T>() -> Entry<T> {
     Entry::Opened {
         at: at(0),
         title: suzatary_memory::secretary::words::Words::kept("Morning".to_owned()),
@@ -32,14 +34,10 @@ fn opened() -> Entry {
     }
 }
 
-fn person(second: u32, text: &str) -> Entry {
+fn person<T: From<Spoken>>(second: u32, text: &str) -> Entry<T> {
     Entry::Said {
         at: at(second),
-        turn: Turn::Person {
-            text: text.to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()).into(),
         by: Some("ada".into()),
     }
 }
@@ -422,7 +420,7 @@ proptest::proptest! {
 
 /// One conversation's lines as a tab and the box wrote them, each over the last: an opening by
 /// the box, then each `(writer, entry)` in turn, read with the keys they were sealed under.
-fn written(lines: &[(&str, Entry)]) -> Transcript {
+fn written(lines: &[(&str, Plain)]) -> Transcript {
     let (held, opens) = sealed_lines(lines);
     let writes: Vec<Write<'_>> = held
         .iter()
@@ -437,7 +435,7 @@ fn written(lines: &[(&str, Entry)]) -> Transcript {
 
 /// The digest's reading of the same lines: the taint of the leaf of the line `[writer, …]`
 /// places second, the first after the opening.
-fn digest_taint(lines: &[(&str, Entry)]) -> suzatary_conversations::secretary::taint::Taint {
+fn digest_taint(lines: &[(&str, Plain)]) -> suzatary_conversations::secretary::taint::Taint {
     let (held, opens) = sealed_lines(lines);
     let opened: std::collections::BTreeMap<prodrome_data::event::Hash, Entry> = held
         .iter()
@@ -461,7 +459,7 @@ fn digest_taint(lines: &[(&str, Entry)]) -> suzatary_conversations::secretary::t
     reason = "the lines and their opener, as a reader takes them"
 )]
 fn sealed_lines(
-    lines: &[(&str, Entry)],
+    lines: &[(&str, Plain)],
 ) -> (
     Vec<(
         prodrome_data::event::Hash,
@@ -470,7 +468,7 @@ fn sealed_lines(
     )>,
     impl Fn(&KeyName) -> Words<suzatary_memory::secretary::locked_text::TextKey>,
 ) {
-    let over: Vec<(&str, Entry, Vec<usize>)> = lines
+    let over: Vec<(&str, Plain, Vec<usize>)> = lines
         .iter()
         .enumerate()
         .map(|(at, (writer, entry))| (*writer, entry.clone(), vec![at]))
@@ -485,7 +483,7 @@ fn sealed_lines(
     reason = "the lines and their opener, as a reader takes them"
 )]
 fn sealed_over(
-    lines: &[(&str, Entry, Vec<usize>)],
+    lines: &[(&str, Plain, Vec<usize>)],
 ) -> (
     Vec<(
         prodrome_data::event::Hash,
@@ -542,11 +540,7 @@ fn a_tab_s_turn_reads_tainted_until_every_claim_judged_it_clean() {
     use suzatary_inbox::secretary::stamp::{Speaker, Stamp};
     let asked = Entry::Said {
         at: at(1),
-        turn: Turn::Person {
-            text: "Is the permit due?".to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person("Is the permit due?".to_owned(), Vec::new(), Vec::new()),
         by: Some(Stamp::Actor(Speaker::device("device0"))),
     };
     let question = prodrome_data::event::Hash::new(format!("{:064x}", 2)).expect("a name");
@@ -621,11 +615,7 @@ fn a_stop_ends_the_rounds_before_it_and_none_begun_after_its_take() {
         |at: usize| prodrome_data::event::Hash::new(format!("{:064x}", at + 1)).expect("a name");
     let asked = |second: u32| Entry::Said {
         at: at(second),
-        turn: Turn::Person {
-            text: format!("question {second}"),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person(format!("question {second}"), Vec::new(), Vec::new()),
         by: Some(Stamp::Actor(Speaker::device("device0"))),
     };
     let began = |second: u32, covers: usize, run: u8| Entry::Began {

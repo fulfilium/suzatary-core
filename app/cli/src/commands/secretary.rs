@@ -26,6 +26,9 @@ use suzatary_io_mail::google::{Grants, Inserted};
 use suzatary_io_mail::oauth::{Pending, TokenStore};
 use suzatary_io_sources::drive::ReadOnly;
 use suzatary_io_sources::repos::{Author, Mirrors, Stopped};
+use suzatary_lines::secretary::spoken::Plain;
+use suzatary_lines::secretary::spoken::Spoken;
+use suzatary_lines::secretary::spoken::noted;
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::oauth::{Consent, Protocol};
 use suzatary_secretary::secretary;
@@ -52,7 +55,6 @@ use crate::instance::Instance;
 use suzatary_api::routes;
 use suzatary_base::capability;
 use suzatary_base::refusal::Refusal;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::{model, store};
 use suzatary_google::google;
 use suzatary_held::file_read::FileRead;
@@ -748,12 +750,7 @@ fn web_turn(
         id,
         &Entry::Said {
             at,
-            turn: Turn::Tool {
-                verb: "web".into(),
-                answer,
-                outcome: said,
-                files: Vec::new(),
-            },
+            turn: Spoken::tool("web".into(), answer, said, Vec::new()),
             by: None,
         },
     ) {
@@ -868,13 +865,13 @@ fn append_act_turn(
         id,
         &Entry::Said {
             at,
-            turn: Turn::Act {
+            turn: Spoken::act(
                 text,
-                references: vec![Reference::Proposal(ProposalRef {
+                vec![Reference::Proposal(ProposalRef {
                     conversation: id.clone(),
                     index,
                 })],
-            },
+            ),
             by: None,
         },
     ) {
@@ -892,7 +889,7 @@ fn append_note(
     if let Err(failed) = push(
         conversations.conversations(),
         id,
-        &Entry::noted(at, text, Vec::new()),
+        &noted(at, text, Vec::new()),
     ) {
         tracing::warn!("secretary: could not append a note to conversation {id}: {failed}");
     }
@@ -925,14 +922,14 @@ fn completion<E: std::fmt::Display>(
     slot: &str,
     finished: Result<Result<(), E>, ()>,
     at: capability::Datetime,
-) -> (Performed, Entry) {
+) -> (Performed, Plain) {
     match finished {
         Ok(Ok(())) => {
             tracing::info!("secretary: act auth {named} ended: acted");
             let what = format!("{slot} grant stored for {account}");
             (
                 Performed::Done(Done::Acted { what: what.clone() }),
-                Entry::noted(at, what, Vec::new()),
+                noted(at, what, Vec::new()),
             )
         }
         Ok(Err(failed)) => {
@@ -943,10 +940,7 @@ fn completion<E: std::fmt::Display>(
             let reason = failed.to_string();
             let line = Entry::Said {
                 at,
-                turn: Turn::Act {
-                    text: format!("the act did not finish: {reason}"),
-                    references: Vec::new(),
-                },
+                turn: Spoken::act(format!("the act did not finish: {reason}"), Vec::new()),
                 by: None,
             };
             (Performed::Tried(Tried::NotSent { reason }), line)
@@ -954,7 +948,7 @@ fn completion<E: std::fmt::Display>(
         Err(()) => {
             let reason = format!("the device code for {account} expired before it was used");
             tracing::info!("secretary: act auth {named} ended: the device code expired unused");
-            let line = Entry::noted(at, format!("the act did not finish: {reason}"), Vec::new());
+            let line = noted(at, format!("the act did not finish: {reason}"), Vec::new());
             (Performed::Tried(Tried::NotSent { reason }), line)
         }
     }
@@ -968,7 +962,7 @@ fn append_completion(
     object: &inbox::ProposalId,
     at: capability::Datetime,
     performed: Performed,
-    line: &Entry,
+    line: &Plain,
 ) {
     let by = Actor::new(secretary::WRITES_AS.actor()).expect("assistant is an actor");
     if let Err(failed) = inbox::end(*inbox, object, &by, at, performed) {

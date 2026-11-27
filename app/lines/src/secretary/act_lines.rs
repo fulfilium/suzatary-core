@@ -1,6 +1,8 @@
 //! The lines an act writes into a conversation: a note of who acted and why, and the line that
 //! ends an act a restart left running.
 
+use crate::secretary::spoken::Spoken;
+use crate::secretary::spoken::noted;
 use crate::secretary::{conversations, transcript};
 use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::{Reference, TodoRef};
@@ -38,7 +40,7 @@ pub fn reconcile(
         conversations::append(
             conversations,
             &object.asked.asked.conversation,
-            &Entry::noted(now, RESTARTED.to_owned(), Vec::new()),
+            &noted(now, RESTARTED.to_owned(), Vec::new()),
         )?;
         reconciled += 1;
     }
@@ -84,14 +86,14 @@ pub fn note_act(
         id,
         &Entry::Said {
             at: line.at,
-            turn: suzatary_conversations::secretary::model::Turn::Act {
-                text: describe_act(
+            turn: Spoken::act(
+                describe_act(
                     &suzatary_base::spelling::capitalised(&line.actor),
                     line.verb,
                     note,
                 ),
-                references: vec![line.reference.clone()],
-            },
+                vec![line.reference.clone()],
+            ),
             by: Some(by),
         },
     )

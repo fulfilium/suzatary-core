@@ -1408,11 +1408,13 @@ impl suzatary_server::secretary::routes::Perform for ActRecorder {
 
 /// A performer that begins a Connect card's sign-in through the server's table and records
 /// every other act.
+#[cfg(feature = "fixture")]
 pub struct SignsIn {
     recorded: Arc<ActRecorder>,
     signing: Arc<serve::sign_ins::SignIns>,
 }
 
+#[cfg(feature = "fixture")]
 impl suzatary_server::secretary::routes::Perform for SignsIn {
     fn begin(
         &self,
@@ -2038,7 +2040,7 @@ pub fn topic(
 
 /// A conversation begun by `first`, an opening or a setup, as a tab begins one; its id.
 #[must_use]
-pub fn opening(base: &str, first: &suzatary_conversations::secretary::store::Entry) -> String {
+pub fn opening(base: &str, first: &suzatary_lines::secretary::spoken::Plain) -> String {
     use suzatary_lines::secretary::line_event::LineEvent;
     let (line, keys) = LineEvent::begin(poster(base), first, &Drawing).expect("a line");
     let id = line.conversation().as_str().to_owned();
@@ -2099,15 +2101,15 @@ pub fn question(
     text: &str,
     references: Vec<suzatary_base::reference::Reference>,
     attachments: Vec<suzatary_held::attachment::Attachment>,
-) -> suzatary_conversations::secretary::store::Entry {
+) -> suzatary_lines::secretary::spoken::Plain {
     let by = poster(base);
     suzatary_conversations::secretary::store::Entry::Said {
         at: next_instant(),
-        turn: suzatary_conversations::secretary::model::Turn::Person {
-            text: text.to_owned(),
+        turn: suzatary_lines::secretary::spoken::Spoken::person(
+            text.to_owned(),
             references,
             attachments,
-        },
+        ),
         by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
             suzatary_inbox::secretary::stamp::Speaker::device(by.as_str()),
         )),
@@ -2123,11 +2125,7 @@ pub struct Sealed {
 /// `entry` sealed into conversation `id` by the poster over the heads the box serves, signed by
 /// the owner's phone, as a post's body; nothing is posted.
 #[must_use]
-pub fn sealed(
-    base: &str,
-    id: &str,
-    entry: &suzatary_conversations::secretary::store::Entry,
-) -> Sealed {
+pub fn sealed(base: &str, id: &str, entry: &suzatary_lines::secretary::spoken::Plain) -> Sealed {
     use suzatary_lines::secretary::line_event::LineEvent;
     let mut answer = get(&format!("{base}/api/stores/lines/skeleton"));
     let skeleton = body_json(&mut answer);
@@ -2207,7 +2205,7 @@ pub fn again_line(
     base: &str,
     question: &prodrome_data::event::Hash,
     how: suzatary_conversations::secretary::store::Rewind,
-) -> suzatary_conversations::secretary::store::Entry {
+) -> suzatary_lines::secretary::spoken::Plain {
     suzatary_conversations::secretary::store::Entry::Again {
         at: next_instant(),
         question: question.clone(),
@@ -2232,7 +2230,7 @@ pub fn asked_again(
 fn line_written(
     base: &str,
     id: &str,
-    entry: &suzatary_conversations::secretary::store::Entry,
+    entry: &suzatary_lines::secretary::spoken::Plain,
 ) -> prodrome_data::event::Hash {
     use suzatary_lines::secretary::line_event::LineEvent;
     let (heads, count) = served_heads(base, id);
@@ -2927,6 +2925,7 @@ enum Performer {
     Recording(Box<suzatary_io_chains::conversations::ConversationStores>),
     /// Every act recorded as [`Performer::Recorded`] does, but a Connect card's, which begins a
     /// sign-in through the server's own table, running the `claude` its [`Reaching`] names.
+    #[cfg(feature = "fixture")]
     SigningIn,
     /// `Acting::Real` over a scripted OAuth transport and a one-account
     /// roster, so a test drives the whole device flow through the real route.
@@ -3196,6 +3195,7 @@ impl Server {
     }
 
     /// Reaching its models as `models` says.
+    #[cfg(feature = "fixture")]
     pub fn reaching(self, models: Reaching) -> Self {
         Self { models, ..self }
     }
@@ -3236,6 +3236,7 @@ impl Server {
     }
 
     /// With a performer that begins a tapped Connect card's sign-in for real.
+    #[cfg(feature = "fixture")]
     pub fn signing_in(self) -> Self {
         Self {
             performer: Performer::SigningIn,
@@ -3595,6 +3596,7 @@ fn performer(
     use suzatary_cli::commands::secretary::Acting;
     match chosen {
         Performer::Recorded => Arc::clone(acts) as _,
+        #[cfg(feature = "fixture")]
         Performer::SigningIn => Arc::new(SignsIn {
             recorded: Arc::clone(acts),
             signing,

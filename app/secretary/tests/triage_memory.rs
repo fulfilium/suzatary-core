@@ -33,6 +33,7 @@ use suzatary_digest::secretary::recollection::Recollection;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
 use suzatary_lines::secretary::conversations::ReadConversations;
 use suzatary_lines::secretary::line_event::LineEvent;
+use suzatary_lines::secretary::spoken::{noted, widened};
 use suzatary_memory::secretary::memory::{Fact, Kind, Origin};
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
@@ -300,11 +301,11 @@ fn remembered() -> Stores {
         by: None,
     });
     lines.extend((28..32).map(|minute| person(minute, format!("A last note, number {minute}"))));
-    lines.push(Entry::noted(
+    lines.push(widened(noted(
         at(32),
         "BOXNOTE: not signed in to the mail account".to_owned(),
         Vec::new(),
-    ));
+    )));
     stores.say("lease", &lines);
     stores
         .memories()

@@ -6,6 +6,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_conversations::secretary::model::{Conversation, Model, Turn};
 use suzatary_conversations::secretary::store::Said;
 use suzatary_conversations::secretary::store::{Entry, Kind, Namer, Stored};
+use suzatary_lines::secretary::spoken::Plain;
 use suzatary_lines::secretary::transcript;
 use suzatary_topics::secretary::title::*;
 
@@ -102,27 +103,22 @@ impl Model for Says {
 }
 
 fn lines_of(stored: &Stored) -> Lines {
-    let mut entries = vec![Entry::Opened {
+    let opening: Plain = Entry::Opened {
         at: stored.opened,
         title: stored.title.clone(),
         model: stored.model.clone().unwrap_or_default(),
         kind: stored.kind,
-    }];
-    entries.extend(
-        stored
-            .turns
-            .iter()
-            .map(|Said { at, turn, by }| Entry::Said {
-                at: *at,
-                turn: turn.clone(),
-                by: by.clone(),
-            }),
-    );
+    };
     let lines = suzatary_stores::stores::conversations::InMemory::default();
     let id = ConversationId::new("2026-09-25-1").expect("a slug");
-    transcript::start(lines.conversations(), &id, &entries[0]).expect("opens");
-    for entry in &entries[1..] {
-        transcript::push_older(lines.conversations(), &id, entry).expect("pushes");
+    transcript::start(lines.conversations(), &id, &opening).expect("opens");
+    for Said { at, turn, by } in &stored.turns {
+        let entry = Entry::Said {
+            at: *at,
+            turn: turn.clone(),
+            by: by.clone(),
+        };
+        transcript::push_older(lines.conversations(), &id, &entry).expect("pushes");
     }
     Lines(lines)
 }

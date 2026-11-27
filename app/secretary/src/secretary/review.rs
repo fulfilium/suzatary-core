@@ -21,6 +21,8 @@ use suzatary_conversations::secretary::store::{Decision, Entry, Outcome, Review,
 use suzatary_conversations::secretary::verb_name::Effect;
 use suzatary_inbox::secretary::changes::Changeset;
 use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::spoken::Spoken;
+use suzatary_lines::secretary::spoken::{asked_by_the_box, noted};
 use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_memory::secretary::words::Words;
 
@@ -145,7 +147,7 @@ fn review(
     transcript::push(
         caps.conversations,
         &id,
-        &Entry::asked_by_the_box(
+        &asked_by_the_box(
             caps.clock.now(),
             Daily::Review.into(),
             ASK.to_owned(),
@@ -157,13 +159,13 @@ fn review(
         &id,
         &Entry::Said {
             at: caps.clock.now(),
-            turn: Turn::Tool {
-                verb: SecretaryVerb::TriageCards.into(),
-                answer: serde_json::to_string_pretty(&answered(&listed(chains, deployment)?))
+            turn: Spoken::tool(
+                SecretaryVerb::TriageCards.into(),
+                serde_json::to_string_pretty(&answered(&listed(chains, deployment)?))
                     .unwrap_or_else(|failed| format!("(the cards did not serialise: {failed})")),
-                outcome: suzatary_conversations::secretary::outcome::Outcome::Answered,
-                files: Vec::new(),
-            },
+                suzatary_conversations::secretary::outcome::Outcome::Answered,
+                Vec::new(),
+            ),
             by: None,
         },
     )
@@ -256,7 +258,7 @@ fn note_unreadable(caps: &Secretary<'_>, zone: Zone) -> Result<Option<Push>, Ref
     transcript::push(
         caps.conversations,
         &id,
-        &Entry::noted(caps.clock.now(), text, Vec::new()),
+        &noted(caps.clock.now(), text, Vec::new()),
     )?;
     Ok(Some(Push::Unreadable {
         conversations: count,

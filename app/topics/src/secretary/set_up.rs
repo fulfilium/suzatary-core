@@ -12,6 +12,7 @@ use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Begun, Entry};
 use suzatary_inbox::secretary::stamp::Stamp;
 use suzatary_lines::secretary::conversations::Conversations;
+use suzatary_lines::secretary::spoken::noted;
 use suzatary_lines::secretary::transcript;
 use suzatary_lines::secretary::transcript::Transcript;
 use suzatary_store::store::StoreError;
@@ -46,7 +47,7 @@ pub fn open(
     note: impl FnOnce(TemplateId) -> String,
 ) -> Result<bool, StoreError> {
     transcript::push_owed(conversations, id, |reading| {
-        owed(reading).map(|template| Entry::noted(at, note(template), Vec::new()))
+        owed(reading).map(|template| noted(at, note(template), Vec::new()))
     })
 }
 

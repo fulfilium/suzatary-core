@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use common::{FakeModel, Fakes, Gate};
 use suzatary_conversations::secretary::queue;
+use suzatary_lines::secretary::spoken::Spoken;
 
 fn ada() -> suzatary_base::capability::Login {
     common::login("ada@example.com")
@@ -266,11 +267,7 @@ fn a_tab_s_question_after_a_holder_died_is_answered_without_another_write() {
         &conversation,
         &suzatary_conversations::secretary::store::Entry::Said {
             at: common::now(),
-            turn: suzatary_conversations::secretary::model::Turn::Person {
-                text: "the lost question".to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person("the lost question".to_owned(), Vec::new(), Vec::new()),
             by: None,
         },
     )
@@ -323,7 +320,6 @@ fn a_tab_s_question_after_a_holder_died_is_answered_without_another_write() {
 /// drawn once, as its one turn.
 #[test]
 fn a_question_handed_over_late_is_answered_within_the_bound_and_closed_past_it() {
-    use suzatary_conversations::secretary::model::Turn;
     use suzatary_conversations::secretary::store::Entry;
     let whois = common::FakeWhois::new().naming(common::v4(), ada());
     let fakes = Arc::new(
@@ -338,11 +334,7 @@ fn a_question_handed_over_late_is_answered_within_the_bound_and_closed_past_it()
     let sealed_at = |hour: u32, minute: u32, text: &str| Entry::Said {
         at: prodrome_data::literal::Datetime::new(2026, 9, 2, hour, minute, 0, 0)
             .expect("an instant"),
-        turn: Turn::Person {
-            text: text.to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()),
         by: Some(suzatary_inbox::secretary::stamp::Stamp::Actor(
             suzatary_inbox::secretary::stamp::Speaker::device(common::CAST.owner.actor),
         )),

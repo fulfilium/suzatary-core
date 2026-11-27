@@ -4,13 +4,13 @@
 use serde_json::{Map, Value};
 
 use suzatary_base::refusal::Refusal;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::outcome::Outcome;
 use suzatary_conversations::secretary::tool_name::ToolName;
 use suzatary_held::attachment::AttachmentId;
 use suzatary_held::enclosed::{Enclosed, Enclosure};
 use suzatary_held::file_read::FileRead;
 use suzatary_held::held_value::HeldFile;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_memory::secretary::memory::FactId;
 
 /// The field of a file reading that names the file's source.
@@ -134,14 +134,9 @@ impl VerbAnswer {
     /// The turn a call of `verb` that came to `result` is written down as, a refusal included,
     /// so the model can correct itself.
     #[must_use]
-    pub fn turn(verb: impl Into<ToolName>, result: Result<Self, Refusal>) -> Turn {
+    pub fn turn(verb: impl Into<ToolName>, result: Result<Self, Refusal>) -> Spoken {
         let (answer, outcome, files) = Self::said(result);
-        Turn::Tool {
-            verb: verb.into(),
-            answer,
-            outcome,
-            files,
-        }
+        Spoken::tool(verb.into(), answer, outcome, files)
     }
 
     /// What a call that came to `result` says, how it ended, and the files it hands the model.

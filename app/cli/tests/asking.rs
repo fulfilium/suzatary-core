@@ -9,6 +9,7 @@ use suzatary_conversations::secretary::model::{Halt, Model, Pick, Turn};
 use suzatary_conversations::secretary::queue;
 use suzatary_conversations::secretary::store::Entry;
 use suzatary_lines::secretary::conversations;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::transcript;
 use suzatary_secretary::conversation::round::Sink;
 use suzatary_secretary::secretary::{Answered, Bound, Holder, answer};
@@ -37,11 +38,7 @@ fn asked(caps: &Fakes, text: &str) {
         &Entry::Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 14, 9, 10, 0, 0)
                 .expect("an instant"),
-            turn: Turn::Person {
-                text: text.to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()),
             by: Some("ada".into()),
         },
     )

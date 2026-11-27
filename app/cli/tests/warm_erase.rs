@@ -30,8 +30,8 @@ fn at(minute: u32) -> prodrome_data::literal::Datetime {
 /// box's own writer does.
 #[cfg(feature = "fixture")]
 fn written(instance: &Instance) -> ConversationId {
-    use suzatary_conversations::secretary::model::Turn;
     use suzatary_conversations::secretary::store::{Entry, Kind};
+    use suzatary_lines::secretary::spoken::Spoken;
     let stores = instance.conversation_stores();
     let id = ConversationId::new("2026-10-25-1").expect("a slug");
     let opened = Entry::Opened {
@@ -44,11 +44,7 @@ fn written(instance: &Instance) -> ConversationId {
     for (minute, text) in (1..).zip([ERASED, KEPT]) {
         let said = Entry::Said {
             at: at(minute),
-            turn: Turn::Person {
-                text: text.to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()),
             by: Some("owner".into()),
         };
         transcript::push(stores.conversations(), &id, &said).expect("said");

@@ -22,6 +22,8 @@ use suzatary_digest::secretary::digest_line::Line;
 use suzatary_digest::secretary::digests::Digests;
 use suzatary_digest::secretary::memories::Memories;
 use suzatary_inbox::secretary::inbox_event::InboxEvent;
+use suzatary_lines::secretary::spoken::Spoken;
+use suzatary_lines::secretary::spoken::widened;
 use suzatary_memory::secretary::memory::Fact;
 use suzatary_memory::secretary::memory_event::MemoryEvent;
 use suzatary_memory::secretary::salted_text::{Text, TextName};
@@ -601,11 +603,7 @@ fn an_edit_s_again_is_a_leaf_only_once_its_own_question_takes_it_up() {
     );
     let edited = Entry::Said {
         at: at(1),
-        turn: Turn::Person {
-            text: "ask line 0, edited".to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person("ask line 0, edited".to_owned(), Vec::new(), Vec::new()),
         by: Some("ada".into()),
     };
     let (line, keys) = suzatary_lines::secretary::line_event::LineEvent::edited(
@@ -2535,11 +2533,7 @@ fn a_carried_line_is_leafed_by_the_line_it_carries() {
     use suzatary_lines::secretary::line_event::{LineEvent, LineVocabulary};
     let entry = Entry::Said {
         at: at(0),
-        turn: Turn::Person {
-            text: "the deed".to_owned(),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        },
+        turn: Spoken::person("the deed".to_owned(), Vec::new(), Vec::new()),
         by: Some("ada".into()),
     };
     let the = Box::default();
@@ -2565,7 +2559,7 @@ fn a_carried_line_is_leafed_by_the_line_it_carries() {
         .iter()
         .find(|(_, object)| object.event().is_some())
         .expect("the line");
-    let opened = [(name.clone(), entry)].into();
+    let opened = [(name.clone(), widened(entry))].into();
     let named: Vec<_> = objects
         .iter()
         .map(|(name, object)| (name, object))

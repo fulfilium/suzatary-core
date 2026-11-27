@@ -15,10 +15,12 @@ use proptest::prelude::*;
 use prodrome_store::store::frontier::{Frontiers, Since, Token};
 use suzatary_api::routes::{self, Books, Cut};
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Entry, Kind};
 use suzatary_lines::secretary::line_event::LineEvent;
 use suzatary_lines::secretary::prune;
+use suzatary_lines::secretary::spoken::Plain;
+use suzatary_lines::secretary::spoken::Spoken;
+use suzatary_lines::secretary::spoken::widened;
 use suzatary_lines::secretary::transcript;
 use suzatary_lines::wire::lines::Content;
 use suzatary_memory::secretary::erasure::Erasure;
@@ -78,7 +80,7 @@ impl Writer {
         }
     }
 
-    fn line(&mut self, conversation: usize, entry: &Entry) -> LineEvent {
+    fn line(&mut self, conversation: usize, entry: &Plain) -> LineEvent {
         let held = self.next(conversation);
         let (line, keys) = LineEvent::write(
             id(conversation),
@@ -94,14 +96,14 @@ impl Writer {
 
     /// A line of `conversation`, its words scrubbed under the rules from before lines recorded
     /// them.
-    fn stale(&mut self, conversation: usize, entry: &Entry) -> LineEvent {
+    fn stale(&mut self, conversation: usize, entry: &Plain) -> LineEvent {
         let held = self.next(conversation);
         let (line, keys) = LineEvent::written_under(
             &suzatary_memory::secretary::scrubbed_under::ScrubbedUnder::Unversioned,
             id(conversation),
             Actor::new("assistant").expect("an actor"),
             held,
-            entry,
+            &widened(entry.clone()),
             &self.lines.entropy,
         )
         .expect("a line");
@@ -122,7 +124,7 @@ impl Writer {
         }
     }
 
-    fn said(&mut self, conversation: usize, words: usize) -> Entry {
+    fn said(&mut self, conversation: usize, words: usize) -> Plain {
         self.second += 1;
         if !self.written.contains_key(&conversation) {
             let opened = Entry::Opened {
@@ -134,11 +136,7 @@ impl Writer {
             let line = self.line(conversation, &opened);
             self.lines.lines.append(line).expect("opened");
         }
-        let turn = Turn::Person {
-            text: "a".repeat(words),
-            references: Vec::new(),
-            attachments: Vec::new(),
-        };
+        let turn = Spoken::person("a".repeat(words), Vec::new(), Vec::new());
         Entry::Said {
             at: at(self.second),
             turn,

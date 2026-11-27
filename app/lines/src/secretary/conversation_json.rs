@@ -36,8 +36,8 @@ mod tests {
 
     use super::*;
     use crate::nothing::Counting;
+    use crate::secretary::spoken::Spoken;
     use suzatary_base::conversation_id::ConversationId;
-    use suzatary_conversations::secretary::model::Turn;
     use suzatary_conversations::secretary::store::Entry;
 
     fn said(text: &str, minute: u32) -> LineEvent {
@@ -45,11 +45,7 @@ mod tests {
             .expect("an instant");
         let entry = Entry::Said {
             at,
-            turn: Turn::Person {
-                text: text.to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()),
             by: None,
         };
         LineEvent::write(

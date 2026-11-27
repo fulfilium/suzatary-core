@@ -7,6 +7,7 @@
 use crate::secretary::held_lines::{HeldLines, TheBox};
 use crate::secretary::line_event::LineEvent;
 use crate::secretary::opened::Opened;
+use crate::secretary::spoken::Plain;
 use crate::secretary::transcript;
 use crate::timings::{Phase, timed};
 use suzatary_base::capability::{Datetime, Entropy};
@@ -97,7 +98,7 @@ pub fn start(
     read(conversations, id)
 }
 
-fn opening(model: &dyn Model, title: &str, kind: store::Kind, at: Datetime) -> Entry {
+fn opening(model: &dyn Model, title: &str, kind: store::Kind, at: Datetime) -> Plain {
     Entry::Opened {
         at,
         title: Words::kept(title.to_owned()),
@@ -195,7 +196,7 @@ pub fn list(conversations: Conversations<'_>) -> Result<Vec<Stored>, Refusal> {
 pub fn append(
     conversations: Conversations<'_>,
     id: &ConversationId,
-    entry: &Entry,
+    entry: &Plain,
 ) -> Result<(), Refusal> {
     transcript::push(conversations, id, entry)
         .map_err(|failed| Refusal::internal(failed.to_string()))

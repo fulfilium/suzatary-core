@@ -1,0 +1,14 @@
+opened	Opened(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=0, carried=None, model='a-cli/small', kind='topic', words=1
+titled	Titled(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=1, carried=None, by='{"who":"person","actor":"ada"}', words=1
+person	Said(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=2, carried=None, turn='{"who":"person","references":[],"attachments":[]}', by='ada', words=1
+tool	Said(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=3, carried=None, turn='{"who":"tool","verb":"weather","outcome":{"is":"answered"},"files":[],"carries":"clean"}', by='ada', words=1
+act	Said(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=4, carried=None, turn='{"who":"act","references":[]}', by='ada', words=1
+stopped	Stopped(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=5, carried=None, by='ada')words=0
+rewound	Rewound(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=6, carried=None, to=2, by='ada')words=0
+scoped	Scoped(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=7, carried=None, scope='transcript')words=0
+began	Began(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=8, carried=None, covers=(Covered(line='<hash>', taint='clean'),), run='<hash>')words=0
+again	Again(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=9, carried=None, question='<hash>', how='regenerate', by='ada')words=0
+edited	Edited(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=20, carried=None, turn='{"who":"person","references":[],"attachments":[]}', by='ada', words=1
+begun	Opened(conversation='<hash>', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=0, carried=None, model='', kind='topic', words=1
+answer clean	Said(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=30, carried=None, turn='{"who":"model","calls":[],"carries":"clean"}', by=None, words=1
+answer tainted	Said(conversation='2026-11-03-1', at=datetime(2026, 11, 3, 9, 30, 0), actor='assistant', held=31, carried=None, turn='{"who":"model","calls":[],"carries":"tainted"}', by=None, words=1

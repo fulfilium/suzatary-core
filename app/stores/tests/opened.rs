@@ -2,11 +2,11 @@
 
 use prodrome_data::literal::Datetime;
 use suzatary_base::conversation_id::ConversationId;
-use suzatary_conversations::secretary::model::Turn;
 use suzatary_conversations::secretary::store::{Entry, Kind};
 use suzatary_lines::secretary::conversations::Conversations;
 use suzatary_lines::secretary::held_lines::HeldLines;
 use suzatary_lines::secretary::opened::Opened;
+use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::transcript;
 use suzatary_memory::secretary::erasure::Erasure;
 use suzatary_memory::secretary::words::Words;
@@ -52,11 +52,7 @@ fn an_erasure_leaves_no_words_in_the_fold_or_its_readers() {
         transcript::start(held.conversations(), &id, &opening).expect("started");
         let said = Entry::Said {
             at: at(1),
-            turn: Turn::Person {
-                text: SAID.to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person(SAID.to_owned(), Vec::new(), Vec::new()),
             by: Some("ada".into()),
         };
         transcript::push(held.conversations(), &id, &said).expect("said");

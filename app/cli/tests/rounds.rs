@@ -3,6 +3,7 @@
 
 use crate::common;
 use suzatary_conversations::secretary::store::ConversationState;
+use suzatary_lines::secretary::spoken::Spoken;
 
 use common::{FakeModel, Fakes};
 use suzatary_base::conversation_id::ConversationId;
@@ -129,11 +130,7 @@ fn two_rounds_each_a_fresh_call() {
             &suzatary_conversations::secretary::store::Entry::Said {
                 at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                     .expect("an instant"),
-                turn: suzatary_conversations::secretary::model::Turn::Person {
-                    text: said.to_owned(),
-                    references: Vec::new(),
-                    attachments: Vec::new(),
-                },
+                turn: Spoken::person(said.to_owned(), Vec::new(), Vec::new()),
                 by: None,
             },
         )
@@ -240,11 +237,7 @@ fn said_first(caps: &Fakes) {
         &suzatary_conversations::secretary::store::Entry::Said {
             at: suzatary_base::capability::Datetime::new(2026, 9, 2, 12, 0, 0, 0)
                 .expect("an instant"),
-            turn: suzatary_conversations::secretary::model::Turn::Person {
-                text: "go".to_owned(),
-                references: Vec::new(),
-                attachments: Vec::new(),
-            },
+            turn: Spoken::person("go".to_owned(), Vec::new(), Vec::new()),
             by: None,
         },
     )
@@ -647,11 +640,11 @@ fn a_question_said_during_the_last_answer_is_still_owed() {
                 &id(),
                 &suzatary_conversations::secretary::store::Entry::Said {
                     at: common::now(),
-                    turn: Turn::Person {
-                        text: "and is it the same office?".to_owned(),
-                        references: Vec::new(),
-                        attachments: Vec::new(),
-                    },
+                    turn: Spoken::person(
+                        "and is it the same office?".to_owned(),
+                        Vec::new(),
+                        Vec::new(),
+                    ),
                     by: None,
                 },
             )
@@ -900,11 +893,7 @@ fn a_question_said_during_a_round_joins_it_at_its_next_ask() {
                 &id(),
                 &suzatary_conversations::secretary::store::Entry::Said {
                     at: common::now(),
-                    turn: Turn::Person {
-                        text: "and tomorrow?".to_owned(),
-                        references: Vec::new(),
-                        attachments: Vec::new(),
-                    },
+                    turn: Spoken::person("and tomorrow?".to_owned(), Vec::new(), Vec::new()),
                     by: None,
                 },
             )
@@ -950,11 +939,7 @@ fn an_old_question_beside_a_fresh_one_is_sent_with_it() {
             &id(),
             &suzatary_conversations::secretary::store::Entry::Said {
                 at,
-                turn: Turn::Person {
-                    text: text.to_owned(),
-                    references: Vec::new(),
-                    attachments: Vec::new(),
-                },
+                turn: Spoken::person(text.to_owned(), Vec::new(), Vec::new()),
                 by: None,
             },
         )
@@ -1005,11 +990,11 @@ fn a_question_said_during_another_holder_s_last_ask_is_answered_by_that_holder()
                 &id(),
                 &suzatary_conversations::secretary::store::Entry::Said {
                     at: common::now(),
-                    turn: Turn::Person {
-                        text: "and is it the same office?".to_owned(),
-                        references: Vec::new(),
-                        attachments: Vec::new(),
-                    },
+                    turn: Spoken::person(
+                        "and is it the same office?".to_owned(),
+                        Vec::new(),
+                        Vec::new(),
+                    ),
                     by: None,
                 },
             )

@@ -33,6 +33,7 @@ pub mod secretary {
     pub mod saying;
     pub mod sequence;
     pub mod skew;
+    pub mod spoken;
     pub mod step;
     pub mod targets;
     pub mod transcript;

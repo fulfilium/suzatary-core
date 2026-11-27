@@ -21,8 +21,8 @@ use suzatary_connect::deployment::Deployment;
 use suzatary_connect::secrets::Secrets;
 use suzatary_connect::settings::{Declaration, Help, Verify};
 use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
+use suzatary_conversations::secretary::store::Kind;
 use suzatary_conversations::secretary::store::Lines;
-use suzatary_conversations::secretary::store::{Entry, Kind};
 use suzatary_digest::secretary::memories::{Held, Memories};
 use suzatary_google::google::RedirectUri;
 use suzatary_google::google::ical::Linked;
@@ -45,6 +45,8 @@ use suzatary_inbox::secretary::stamp::Stamp;
 use suzatary_inbox::secretary::tapped::Tapped;
 use suzatary_inbox::secretary::{changes, decide, inbox, responded, stamp};
 use suzatary_lines::secretary::act_lines::ActLine;
+use suzatary_lines::secretary::spoken::Plain;
+use suzatary_lines::secretary::spoken::noted;
 use suzatary_lines::secretary::{conversations, transcript};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_mail::mail::lacking::Lacking;
@@ -277,7 +279,7 @@ impl Draw for Drawn<'_> {
 }
 
 /// A topic begun, `first` after its opening: what an afresh tap begins.
-fn begun(caps: &Server<'_>, title: &str, first: Option<&Entry>) -> Result<ConversationId, Refusal> {
+fn begun(caps: &Server<'_>, title: &str, first: Option<&Plain>) -> Result<ConversationId, Refusal> {
     let at = caps.secretary.clock.now();
     let (id, _) = conversations::begin(
         caps.secretary.conversations,
@@ -1107,7 +1109,7 @@ pub fn retry(
             conversations::append(
                 caps.conversations,
                 &at.conversation,
-                &Entry::noted(
+                &noted(
                     now,
                     format!("Not connected, so nothing was done: {why}."),
                     vec![at.clone().into()],
@@ -1173,7 +1175,7 @@ fn afterwards(
             conversations::append(
                 caps.secretary.conversations,
                 &card.conversation,
-                &Entry::noted(
+                &noted(
                     caps.secretary.clock.now(),
                     format!("Removing {}: {said}.", account.email),
                     vec![card.clone().into()],
