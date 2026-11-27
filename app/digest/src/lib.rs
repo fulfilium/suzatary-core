@@ -17,6 +17,7 @@ pub mod secretary {
     pub mod compact_ask;
     pub mod compact_budget;
     pub mod compact_eval;
+    pub(crate) mod compact_logs;
     pub mod compacting;
     pub mod compaction;
     pub mod compactor;

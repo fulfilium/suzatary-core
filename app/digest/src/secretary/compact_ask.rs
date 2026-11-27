@@ -6,12 +6,13 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use prodrome_data::event::Hash;
 use prodrome_digest::Measure as _;
 
 use crate::log::Log;
+use crate::secretary::compact_logs::Logs;
 use crate::secretary::conversations_log::Conversations;
 use crate::secretary::digest::Digest;
 use crate::secretary::digest_label::{Kind, Kinds, Label};
@@ -146,14 +147,11 @@ fn probe() -> Vec<(Label, Body)> {
 }
 
 /// Which parts of the log a node is asked beside, by its label.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Beside {
-    /// The owner's words alone, so a summary labelled as nothing but theirs is written from
-    /// nothing but theirs.
+    /// The owner's words alone.
     OwnersWords,
-    /// The parts the secretary's call reads in words ([`OwnersAndAnswers`]), so a summary every
-    /// call is shown in words is written from nothing a box's note or a clean verb's answer
-    /// (a connector's or a weather server's words) said.
+    /// The parts the secretary's call reads in words ([`OwnersAndAnswers`]).
     OwnersAndAnswers,
     /// Every clean part, for a node that holds any other clean kind.
     CleanWords,
@@ -182,22 +180,32 @@ impl Beside {
 
 /// The log a question is about, which says what the compactor is told.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Subject {
+pub(crate) enum Subject {
     Conversations,
     Decisions,
+}
+
+/// Whether another call of the burst opens with the same log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sharing {
+    /// The provider is asked to keep the log.
+    Shared,
+    /// Nothing is kept: the call pays plain input.
+    Alone,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ask {
     subject: Subject,
-    log: Vec<String>,
+    log: Arc<[String]>,
     span: Vec<String>,
+    sharing: Sharing,
     /// How each earlier answer did not fit, in order.
     tries: Vec<Unfit>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Unfit {
+pub(crate) enum Unfit {
     Long {
         bytes: usize,
         /// Its first `NODE_BYTES` bytes, at a character's edge.
@@ -209,22 +217,33 @@ pub enum Unfit {
 
 impl Ask {
     #[must_use]
-    pub fn new(log: Vec<String>, span: Vec<String>) -> Self {
+    pub fn new(log: impl Into<Arc<[String]>>, span: Vec<String>) -> Self {
         Self {
             subject: Subject::Conversations,
-            log,
+            log: log.into(),
             span,
+            sharing: Sharing::Alone,
             tries: Vec::new(),
         }
     }
 
     /// A question about the decisions in force.
     #[must_use]
-    pub fn of_decisions(log: Vec<String>, span: Vec<String>) -> Self {
+    pub(crate) fn of_decisions(log: impl Into<Arc<[String]>>, span: Vec<String>) -> Self {
         Self {
             subject: Subject::Decisions,
             ..Self::new(log, span)
         }
+    }
+
+    #[must_use]
+    pub fn shared(self, sharing: Sharing) -> Self {
+        Self { sharing, ..self }
+    }
+
+    #[must_use]
+    pub fn sharing(&self) -> Sharing {
+        self.sharing
     }
 
     /// The whole system prompt a question about this log is sent under.
@@ -241,28 +260,29 @@ impl Ask {
         &self.span
     }
 
+    #[cfg(test)]
     #[must_use]
-    pub fn last(&self) -> Option<&Unfit> {
+    pub(crate) fn last(&self) -> Option<&Unfit> {
         self.tries.last()
     }
 
     #[must_use]
-    pub fn tried(mut self, unfit: Unfit) -> Self {
+    pub(crate) fn tried(mut self, unfit: Unfit) -> Self {
         self.tries.push(unfit);
         self
     }
 
-    /// What the compactor reads after [`PROMPT`]. The log comes first and changes least, so it is
-    /// the prefix a model's cache can keep. A retry adds one note: each earlier answer's size and
-    /// the last one cut at the limit, never an earlier answer's words, so each retry's question
-    /// is a few bytes longer than the last and no two calls of one attempt record one `Asked`.
+    /// The log: the same bytes in every call of a burst that shares it.
     #[must_use]
-    pub fn text(&self) -> String {
-        let mut text = format!(
-            "<log>\n{}\n</log>\n\n<span>\n{}\n</span>\n",
-            self.log.join("\n"),
-            self.span.join("\n")
-        );
+    pub fn opening(&self) -> String {
+        format!("<log>\n{}\n</log>\n\n", self.log.join("\n"))
+    }
+
+    /// The span, then after an answer that did not fit one note: each earlier answer's size and
+    /// the last one cut at the limit, never an earlier answer's words, so a retry is a few bytes longer.
+    #[must_use]
+    pub fn own(&self) -> String {
+        let mut text = format!("<span>\n{}\n</span>\n", self.span.join("\n"));
         let Some(last) = self.tries.last() else {
             return text;
         };
@@ -289,22 +309,32 @@ impl Ask {
         text
     }
 
+    /// [`Ask::opening`], then [`Ask::own`].
+    #[must_use]
+    pub fn text(&self) -> String {
+        self.opening() + &self.own()
+    }
+
     /// What sending it costs: the bytes of its prompt and of [`Ask::text`].
     #[must_use]
     pub fn bytes(&self) -> u64 {
         u64::try_from(self.prompt().len() + self.text().len()).unwrap_or(u64::MAX)
     }
 
-    /// The question for `node` of `digest`, and what it is written from. `None` for a node the
-    /// tree does not hold or a child with no summary to show.
+    /// The question for `node` of `digest`, and what it is written from. `logs` holds the log of
+    /// the burst `node` is asked in, and `owed` how many nodes the burst owes, by the log they
+    /// are shown, `node` among them. `None` for a node the tree does not hold or a child with no
+    /// summary to show.
     #[must_use]
-    pub fn of(
+    pub(crate) fn of(
         digest: &Digest,
         entries: &std::collections::BTreeMap<
             &Hash,
             &suzatary_conversations::secretary::store::Entry,
         >,
         node: &Hash,
+        logs: &mut Logs<Beside>,
+        owed: &BTreeMap<Beside, usize>,
     ) -> Option<(Self, Vec<Hash>)> {
         let asked = digest.node(node)?;
         let over = digest.over(node)?;
@@ -319,11 +349,12 @@ impl Ask {
                 })
             })
             .collect::<Option<_>>()?;
-        let reads = Beside::of(asked.measure()).reads();
-        Some((
-            Self::new(shown_log(&Conversations::new(digest, entries), reads), span),
-            over,
-        ))
+        let beside = Beside::of(asked.measure());
+        let others = owed.get(&beside).map_or(0, |owed| owed.saturating_sub(1));
+        let (log, sharing) = logs.of(beside, others, || {
+            shown_log(&Conversations::new(digest, entries), beside.reads())
+        });
+        Some((Self::new(log, span).shared(sharing), over))
     }
 }
 

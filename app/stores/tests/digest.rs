@@ -2408,7 +2408,6 @@ proptest! {
 /// reaches a summary labelled the owner's. A node over that answer is asked beside it.
 #[test]
 fn an_owners_node_is_asked_beside_the_owners_words_alone() {
-    use suzatary_digest::secretary::compact_ask::Ask;
     use suzatary_digest::secretary::compaction::Reading;
     let the = Box::default();
     let person = |k: usize| Turn::Person {
@@ -2425,11 +2424,10 @@ fn an_owners_node_is_asked_beside_the_owners_words_alone() {
     the.write("a", turns);
     let reading = Reading::of(&the.digests().reads()).expect("reads whole");
     let digest = reading.digest();
-    let entries = reading.entries();
     let tree = digest.tree().expect("lines");
     let (mut owners, mut others) = (0, 0);
     for node in digest.pending() {
-        let (ask, _) = Ask::of(digest, &entries, &node).expect("a question");
+        let (ask, _) = reading.ask(&node).expect("a question");
         let label = tree.node(&node).expect("in the tree").measure();
         if label.is_owners() {
             owners += 1;

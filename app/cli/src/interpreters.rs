@@ -23,9 +23,9 @@ use suzatary_io_mail::junk::SignedIn;
 use suzatary_io_mail::mail_sync::Timer;
 use suzatary_io_mail::older::Notmuched;
 use suzatary_io_mail::older::Servers;
-use suzatary_io_model::model::ClaudeCli;
 use suzatary_io_model::model::Fence;
 use suzatary_io_model::model::TokenSource;
+use suzatary_io_model::model::{Cache, ClaudeCli};
 use suzatary_io_sources::drive::ProtonDrive;
 use suzatary_io_sources::repos::Mirrors;
 use suzatary_io_sources::web::Fetcher;
@@ -35,6 +35,7 @@ use suzatary_conversations::secretary::model::{
     Conversation, Model, ModelError, Pick, Picker, Plain, Reply,
 };
 use suzatary_digest::secretary::compact::Compact;
+use suzatary_digest::secretary::compact_ask::Sharing;
 use suzatary_io_access::secrets::Secretspec;
 use suzatary_io_local::whois::Tailscaled;
 use suzatary_services::drive::WritePort as _;
@@ -633,12 +634,19 @@ impl CompactorModel {
 
     /// [`CompactorModel::ask`], with what the call cost.
     pub fn plain(&self, system: &ForModel, text: ForModel) -> Result<Plain, ModelError> {
+        self.within_room(|| self.asked.plain(system, text))
+    }
+
+    fn within_room<T>(
+        &self,
+        call: impl FnOnce() -> Result<T, ModelError>,
+    ) -> Result<T, ModelError> {
         if !subscription_has_room(&five_hour(&self.allowance), self.reserve) {
             return Err(ModelError::Unreachable(
                 "the subscription is down to the reserve automated jobs never take".to_owned(),
             ));
         }
-        self.door.ask(|| self.asked.plain(system, text))
+        self.door.ask(call)
     }
 }
 
@@ -651,7 +659,16 @@ impl Compact for CompactorModel {
         &self,
         ask: &suzatary_digest::secretary::compact_ask::Ask,
     ) -> Result<Plain, ModelError> {
-        self.plain(&ForModel::of(ask.prompt()), ForModel::of(&ask.text()))
+        let cache = match ask.sharing() {
+            Sharing::Shared => Cache::Keep,
+            Sharing::Alone => Cache::Off,
+        };
+        let (system, opening, own) = (
+            ForModel::of(ask.prompt()),
+            ForModel::of(&ask.opening()),
+            ForModel::of(&ask.own()),
+        );
+        self.within_room(|| self.asked.plain_after(&system, &opening, &own, cache))
     }
 }
 

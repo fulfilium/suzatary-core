@@ -225,6 +225,12 @@ impl ClaudeCli {
         for (name, value) in QUIET {
             cmd = cmd.env(name, value);
         }
+        if let Mode::Plain {
+            cache: Cache::Off, ..
+        } = mode
+        {
+            cmd = cmd.env(NO_CACHE_VAR, "1");
+        }
         if let Some(cwd) = &self.cwd {
             cmd = cmd.cwd(cwd);
         }
@@ -302,7 +308,35 @@ impl ClaudeCli {
     pub fn plain(&self, system: &ForModel, text: ForModel) -> Result<Plain, ModelError> {
         let token = self.ready()?;
         let stdin = stdin_of(text, Blocks::default());
-        let ended = self.ended(&self.command(Mode::Plain { system }, stdin, token.as_ref()))?;
+        let mode = Mode::Plain {
+            system,
+            cache: Cache::Keep,
+        };
+        let ended = self.ended(&self.command(mode, stdin, token.as_ref()))?;
+        let usage = ended.usage.map(TokenUsage::from);
+        reply_of(ended).map(|text| Plain { text, usage })
+    }
+
+    /// [`ClaudeCli::plain`] for a text of two parts: what other calls send too, then what is
+    /// this call's own. With [`Cache::Keep`] the provider keeps the first part for them; with
+    /// [`Cache::Off`] nothing is kept, so the call pays plain input and no write.
+    pub fn plain_after(
+        &self,
+        system: &ForModel,
+        shared: &ForModel,
+        own: &ForModel,
+        cache: Cache,
+    ) -> Result<Plain, ModelError> {
+        let token = self.ready()?;
+        let stdin = match cache {
+            Cache::Keep => stdin_after(shared, own),
+            Cache::Off => stdin_of(
+                ForModel::of(&format!("{}{}", shared.as_str(), own.as_str())),
+                Blocks::default(),
+            ),
+        };
+        let mode = Mode::Plain { system, cache };
+        let ended = self.ended(&self.command(mode, stdin, token.as_ref()))?;
         let usage = ended.usage.map(TokenUsage::from);
         reply_of(ended).map(|text| Plain { text, usage })
     }
@@ -312,7 +346,11 @@ impl ClaudeCli {
     pub fn prompt_tokens(&self, system: &ForModel, text: ForModel) -> Result<u64, ModelError> {
         let token = self.ready()?;
         let stdin = stdin_of(text, Blocks::default());
-        let ended = self.ended(&self.command(Mode::Plain { system }, stdin, token.as_ref()))?;
+        let mode = Mode::Plain {
+            system,
+            cache: Cache::Keep,
+        };
+        let ended = self.ended(&self.command(mode, stdin, token.as_ref()))?;
         let usage = ended
             .usage
             .ok_or_else(|| ModelError::Failed("the model's result carried no usage".to_owned()))?;
@@ -422,8 +460,20 @@ pub enum Mode<'a> {
     /// the file at `system`.
     Stateless { system: &'a Path },
     /// [`ClaudeCli::plain`]: no tools, no session, none of the secretary's framing.
-    Plain { system: &'a ForModel },
+    Plain { system: &'a ForModel, cache: Cache },
 }
+
+/// Whether the provider keeps what a plain call sends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cache {
+    /// The CLI's own marks stand; a call sent in two parts also marks the first.
+    Keep,
+    /// The CLI is told not to cache at all, so every token of the call is plain input.
+    Off,
+}
+
+/// The CLI's switch for all prompt caching.
+const NO_CACHE_VAR: &str = "DISABLE_PROMPT_CACHING";
 
 /// `system` in a file of its own, removed when the returned handle drops.
 fn system_file(system: &ForModel) -> Result<tempfile::NamedTempFile, ModelError> {
@@ -457,7 +507,7 @@ pub fn argv(model: &str, fence: &Fence, mode: Mode<'_>) -> Vec<String> {
             "--system-prompt-file".to_owned(),
             system.display().to_string(),
         ],
-        Mode::Plain { system } => ["--system-prompt".to_owned(), system.as_str().to_owned()],
+        Mode::Plain { system, .. } => ["--system-prompt".to_owned(), system.as_str().to_owned()],
     });
     match mode {
         Mode::Stateless { .. } => built.push("--no-session-persistence".to_owned()),
@@ -502,6 +552,23 @@ pub fn stdin_of(prompt: ForModel, blocks: Blocks) -> Stdin {
     let message = serde_json::json!({
         "type": "user",
         "message": { "role": "user", "content": blocks.content(prompt.as_str()) },
+    });
+    Stdin {
+        args: vec!["--input-format".to_owned(), "stream-json".to_owned()],
+        payload: format!("{message}\n"),
+    }
+}
+
+/// One stream-json user message of two blocks, the call's one cache mark on the first: `shared`
+/// is the same bytes in every call of a burst, `own` is what differs. [`ClaudeCli::plain_after`]'s.
+#[must_use]
+pub fn stdin_after(shared: &ForModel, own: &ForModel) -> Stdin {
+    let text = |text: &ForModel| serde_json::json!({ "type": "text", "text": text.as_str() });
+    let mut marked = text(shared);
+    marked["cache_control"] = serde_json::json!({ "type": "ephemeral", "ttl": "1h" });
+    let message = serde_json::json!({
+        "type": "user",
+        "message": { "role": "user", "content": [marked, text(own)] },
     });
     Stdin {
         args: vec!["--input-format".to_owned(), "stream-json".to_owned()],
@@ -805,7 +872,14 @@ mod tests {
                 "--system-prompt-file",
                 "/run/system.md",
             ),
-            (Mode::Plain { system: &system }, "--system-prompt", "s"),
+            (
+                Mode::Plain {
+                    system: &system,
+                    cache: Cache::Keep,
+                },
+                "--system-prompt",
+                "s",
+            ),
         ] {
             let built = argv("m", &shipped(), mode);
             let after = |flag: &str| {
@@ -856,7 +930,10 @@ mod tests {
             Mode::Stateless {
                 system: Path::new("/run/system.md"),
             },
-            Mode::Plain { system: &system },
+            Mode::Plain {
+                system: &system,
+                cache: Cache::Keep,
+            },
         ] {
             let built = argv("claude-haiku-4-5", &shipped(), mode);
             assert!(!built.iter().any(|arg| arg == "--session-id"));
@@ -1068,6 +1145,7 @@ mod tests {
         let cmd = cli.command(
             Mode::Plain {
                 system: &ForModel::of(PROMPT),
+                cache: Cache::Keep,
             },
             stdin_of(ForModel::of(&text), Blocks::default()),
             None,
@@ -1119,6 +1197,36 @@ mod tests {
         for framing in ["OWNER", "YOU:", "\"say\"", "calls"] {
             assert!(!text.contains(framing), "{framing}");
         }
+    }
+
+    /// A call whose log other calls share sends it as a block of its own with the one mark; a call
+    /// no other shares turns the CLI's caching off and sends one unmarked text.
+    #[test]
+    fn a_shared_log_is_marked_and_a_lone_call_turns_caching_off() {
+        let (shared, own) = (
+            ForModel::of("<log>\nl\n</log>\n\n"),
+            ForModel::of("<span>\ns\n"),
+        );
+        let content = message_of(&stdin_after(&shared, &own))["message"]["content"].clone();
+        assert_eq!(content[0]["text"], shared.as_str());
+        assert!(content[0].get("cache_control").is_some());
+        assert_eq!(content[1]["text"], own.as_str());
+        assert!(content[1].get("cache_control").is_none());
+        let system = ForModel::of("s");
+        let cli = ClaudeCli::new("m", shipped());
+        let env = |cache| {
+            let mode = Mode::Plain {
+                system: &system,
+                cache,
+            };
+            let cmd = cli.command(mode, stdin_of(ForModel::of("t"), Blocks::default()), None);
+            cmd.env
+                .iter()
+                .find(|(name, _)| name == NO_CACHE_VAR)
+                .and_then(|(_, value)| value.clone())
+        };
+        assert_eq!(env(Cache::Off).as_deref(), Some("1".as_ref()));
+        assert_eq!(env(Cache::Keep), None);
     }
 
     /// THE CACHE LAYOUT: the facts and the record, the head, the earlier rounds, the round with

@@ -218,7 +218,10 @@ pub fn run(
             };
             for _ in 0..runs.get() {
                 let ask = Ask::new(
-                    case.log.iter().map(|line| (*line).to_owned()).collect(),
+                    case.log
+                        .iter()
+                        .map(|line| (*line).to_owned())
+                        .collect::<Vec<_>>(),
                     case.span.iter().map(|line| (*line).to_owned()).collect(),
                 );
                 match compactor::compact(compactor, journal, ask, &mut |_| Ok(())) {

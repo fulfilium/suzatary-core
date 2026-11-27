@@ -48,7 +48,7 @@ enum Cli {
 
 /// What a block of a request is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Part {
+pub(crate) enum Part {
     System,
     /// What the CLI sends of its own: a project file, the environment.
     Cli,
@@ -61,7 +61,7 @@ enum Part {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Mark {
+pub(crate) enum Mark {
     None,
     Ours,
     /// One of the CLI's: the system text's (which stands for its two there), and its last.
@@ -69,15 +69,15 @@ enum Mark {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Block {
-    text: String,
-    part: Part,
-    mark: Mark,
+pub(crate) struct Block {
+    pub(crate) text: String,
+    pub(crate) part: Part,
+    pub(crate) mark: Mark,
 }
 
 /// The prompt cache, by the prefix each entry was written for, with when it was last used.
 #[derive(Default)]
-struct Provider {
+pub(crate) struct Provider {
     entries: BTreeMap<Vec<u8>, usize>,
     last: Vec<Block>,
     /// The first turn of the window the call before was sent.
@@ -87,10 +87,10 @@ struct Provider {
 /// One call's input, in bytes: read from the cache, written to it and neither, and the bytes not
 /// read by why.
 #[derive(Debug, Default, Clone)]
-struct Served {
-    read: usize,
-    written: usize,
-    fresh: usize,
+pub(crate) struct Served {
+    pub(crate) read: usize,
+    pub(crate) written: usize,
+    pub(crate) fresh: usize,
     unread: BTreeMap<Cause, usize>,
 }
 
@@ -118,7 +118,7 @@ enum Cause {
 
 impl Provider {
     /// `blocks` served at `now`, a call whose window starts at turn `window`.
-    fn serve(&mut self, blocks: &[Block], now: usize, window: Option<usize>) -> Served {
+    pub(crate) fn serve(&mut self, blocks: &[Block], now: usize, window: Option<usize>) -> Served {
         let marks: Vec<usize> = (0..blocks.len())
             .filter(|at| blocks[*at].mark != Mark::None)
             .collect();
@@ -360,7 +360,7 @@ struct Call {
     tail: usize,
 }
 
-struct Running {
+pub(crate) struct Running {
     stores: Stores,
     cards: InMemory<suzatary_inbox::secretary::inbox_event::InboxEvent>,
     memberships: InMemory<suzatary_topics::secretary::topics::reading::MembershipEvent>,
@@ -370,7 +370,7 @@ struct Running {
 }
 
 impl Running {
-    fn of(shape: Shape) -> Self {
+    pub(crate) fn of(shape: Shape) -> Self {
         Self {
             stores: shape.build(),
             cards: InMemory::default(),
@@ -386,7 +386,7 @@ impl Running {
         }
     }
 
-    fn memories(&self) -> Memories<'_> {
+    pub(crate) fn memories(&self) -> Memories<'_> {
         Memories {
             history: &self.stores.facts,
             texts: &self.stores.words,

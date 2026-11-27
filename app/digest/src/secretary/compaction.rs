@@ -5,7 +5,7 @@
 //! remembering; the write is made under it, which asks again whether the node still waits.
 //! Every step refuses while a store's read left anything out.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -17,8 +17,9 @@ use suzatary_base::call_log::Journal;
 
 use crate::model_name::ModelName;
 use crate::secretary::compact::Compact;
-use crate::secretary::compact_ask::Ask;
+use crate::secretary::compact_ask::{Ask, Beside};
 use crate::secretary::compact_budget::{Budget, Hold};
+use crate::secretary::compact_logs::Logs;
 use crate::secretary::compacting::Compacting;
 use crate::secretary::compactor::{self, Outcome};
 use crate::secretary::digest::{self, Digest};
@@ -84,12 +85,21 @@ impl Reading {
         self.gathered.entries().iter().collect()
     }
 
-    /// The question for `node` and what its summary would be written from.
+    /// The question for `node` on its own, and what its summary would be written from.
     ///
     /// # Errors
     /// [`Refusal::internal`] for a node whose children do not read, which a pending node's do.
-    fn ask(&self, node: &Hash) -> Result<(Ask, Vec<Hash>), Refusal> {
-        Ask::of(&self.digest, &self.entries(), node).ok_or_else(|| {
+    pub fn ask(&self, node: &Hash) -> Result<(Ask, Vec<Hash>), Refusal> {
+        self.ask_in(node, &mut Logs::default(), &BTreeMap::new())
+    }
+
+    fn ask_in(
+        &self,
+        node: &Hash,
+        logs: &mut Logs<Beside>,
+        owed: &BTreeMap<Beside, usize>,
+    ) -> Result<(Ask, Vec<Hash>), Refusal> {
+        Ask::of(&self.digest, &self.entries(), node, logs, owed).ok_or_else(|| {
             Refusal::internal(format!(
                 "node {node} is pending and its children do not read"
             ))
@@ -99,7 +109,10 @@ impl Reading {
     /// What `rule`'s next call would spend; `None` when nothing is owed.
     fn next_call<R: Rung>(&self, rule: &Compaction<R>) -> Result<Option<Spent>, Refusal> {
         rule.due(&self.digest)
-            .map(|(node, _)| Ok(Spent::call(self.ask(&node)?.0.bytes())))
+            .map(|(node, _)| {
+                let (ask, _) = self.ask(&node)?;
+                Ok(Spent::call(ask.bytes()))
+            })
             .transpose()
     }
 }
@@ -341,6 +354,17 @@ fn spent(history: &dyn Prodrome<DigestEvent>) -> Result<Vec<(Datetime, Spent)>, 
         .collect())
 }
 
+/// How many of `owed` are shown each log: the nodes a burst reads one log for.
+fn readers<R>(digest: &Digest, owed: &[(Hash, R)]) -> BTreeMap<Beside, usize> {
+    let mut readers = BTreeMap::new();
+    for (node, _) in owed {
+        if let Some(node) = digest.node(node) {
+            *readers.entry(Beside::of(node.measure())).or_insert(0) += 1;
+        }
+    }
+    readers
+}
+
 /// The nodes some worker holds a [`Claim`] on.
 type Taken = Arc<Mutex<BTreeSet<Hash>>>;
 
@@ -350,6 +374,8 @@ pub struct Paced<'c> {
     rule: Compaction<&'c dyn Compact>,
     budget: Budget,
     taken: Taken,
+    /// The logs of the burst now running, which ends when a round finds nothing to take.
+    burst: Mutex<Logs<Beside>>,
 }
 
 #[derive(Debug)]
@@ -386,6 +412,7 @@ impl<'c> Paced<'c> {
             rule,
             budget,
             taken: Taken::default(),
+            burst: Mutex::default(),
         }
     }
 
@@ -405,15 +432,18 @@ impl<'c> Paced<'c> {
         let mut spent: Vec<_> = reading.digest.attempts().collect();
         let mut chosen = Vec::new();
         let owed = self.rule.owed(&reading.digest);
+        let readers = readers(&reading.digest, &owed);
+        let mut burst = self.burst.lock().unwrap_or_else(PoisonError::into_inner);
         for (node, compact) in owed.into_iter().filter(|(node, _)| !taken.contains(node)) {
             if chosen.len() == free {
                 break;
             }
-            let (ask, over) = reading.ask(&node)?;
+            let (ask, over) = reading.ask_in(&node, &mut burst, &readers)?;
             let first = Spent::call(ask.bytes());
             if self.budget.admits(first) {
                 if let Some(hold) = self.budget.hold(&spent, first, instant_of(now)) {
                     if chosen.is_empty() {
+                        burst.end();
                         return Ok(Round::Held(hold));
                     }
                     break;
@@ -423,6 +453,7 @@ impl<'c> Paced<'c> {
             chosen.push((node, *compact, ask, over));
         }
         if chosen.is_empty() {
+            burst.end();
             return Ok(Round::Idle);
         }
         // Claims are made only here, past every refusal: one dropped while `taken` is locked

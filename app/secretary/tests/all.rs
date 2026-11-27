@@ -6,6 +6,8 @@
 mod cache;
 #[path = "calls.rs"]
 mod calls;
+#[path = "compact_cache.rs"]
+mod compact_cache;
 #[path = "context_cost.rs"]
 mod context_cost;
 #[path = "filed.rs"]
