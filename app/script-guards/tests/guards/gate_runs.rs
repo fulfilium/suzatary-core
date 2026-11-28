@@ -362,16 +362,6 @@ fn merge_gate_runs_only_the_steps_named() {
         ),
         (true, names(&["fmt", "doc", "e2e", "changelog"])),
     );
-    let history: BTreeSet<String> = steps()
-        .into_iter()
-        .filter(|s| s.half == "history")
-        .map(|s| s.name)
-        .collect();
-    assert_eq!(
-        gate.run_args("stub", &["--only-history"], &[]),
-        (true, history),
-        "the history half runs its steps alone"
-    );
     gate.write("red", "clippy\n");
     assert_eq!(
         gate.run_args("stub", &["--no-live", "--steps", "clippy"], &[]),

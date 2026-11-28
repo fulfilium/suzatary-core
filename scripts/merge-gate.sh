@@ -6,11 +6,9 @@
 # heavy step runs. The `quiet` lane runs last, alone: the browser suite's waits are budgets
 # judged on an idle machine.
 #
-# Three halves, each step in exactly one:
+# Two halves, each step in exactly one:
 #   tree     a function of the checked-out tree alone; runs with SUZATARY_INSTANCE naming nothing.
 #   live     the tests that read the owner's data tree, so on the box only.
-#   history  what the commit messages since the merge base with origin/master declare, a check
-#            that compiles nothing.
 #
 # Each step says what it reads beside the tree (`--list`'s second column): `nothing`, or any of
 # `stores` (the owner's stores), `history` (the commits since the merge base) and `runners` (Nix
@@ -27,7 +25,7 @@
 #
 # In `nix develop .#triage -c`:
 #   scripts/merge-gate.sh               every half
-#   scripts/merge-gate.sh --no-live     the tree half (--only-live: the live half; --only-history)
+#   scripts/merge-gate.sh --no-live     the tree half (--only-live: the live half)
 #   scripts/merge-gate.sh --full ...    every step and every unit, no pass read
 #   scripts/merge-gate.sh --nightly ... --full, every zone and the live half's web suite whole
 #   scripts/merge-gate.sh --no-live --steps fmt,doc   those steps alone
@@ -46,22 +44,22 @@
 set -uo pipefail
 
 usage() {
-  echo "usage: scripts/merge-gate.sh [--full | --nightly] [--no-live | --only-live | --only-history] [--steps <name>[,<name>...]] (in any order) | --list" >&2
+  echo "usage: scripts/merge-gate.sh [--full | --nightly] [--no-live | --only-live] [--steps <name>[,<name>...]] (in any order) | --list" >&2
   exit 64
 }
-halves=(tree live history) list=0 full=0 nightly=0 half="" only="" given=$#
+halves=(tree live) list=0 full=0 nightly=0 half="" only="" given=$#
 while (($#)); do
   case "$1" in
     --full) ((!full)) || usage; full=1 ;;
     --nightly) ((!full)) || usage; full=1 nightly=1 ;;
-    --no-live | --only-live | --only-history) [[ -z "$half" ]] || usage; half="$1" ;;
+    --no-live | --only-live) [[ -z "$half" ]] || usage; half="$1" ;;
     --steps) [[ -z "$only" && -n "${2:-}" ]] || usage; only="$2"; shift ;;
     --list) list=1 ;;
     *) usage ;;
   esac
   shift
 done
-case "$half" in --no-live) halves=(tree) ;; --only-live) halves=(live) ;; --only-history) halves=(history) ;; esac
+case "$half" in --no-live) halves=(tree) ;; --only-live) halves=(live) ; ;; esac
 ((!list || (given == 1))) || usage
 # Unset after reading so no key names it: the order changes no verdict.
 case "${SUZATARY_GATE_SERIAL:-}" in
@@ -607,8 +605,6 @@ changelog_entry() {
   echo "changelog: $added rides the change"
 }
 step tree changelog       unkept history  changelog_entry
-# Every derived figure against what the commit messages since the merge base declare.
-step history growth       unkept history  scripts/context.sh growth
 
 # Kept by the code that reads the data and, under the train, by the stores' digest it hands
 # (SUZATARY_GATE_DATA); merge_gate.rs holds the list to the paths their sources name.
@@ -847,10 +843,9 @@ for i in "${!s_name[@]}"; do
   fi
 done
 case "${halves[*]}" in
-  tree) echo "halves: tree ran; live and history skipped (live reads the owner's data tree: --only-live on the box)" >&2 ;;
-  live) echo "halves: live ran; tree and history skipped (--no-live, here or on GitHub's runners)" >&2 ;;
-  history) echo "halves: history ran; tree and live skipped" >&2 ;;
-  *) echo "halves: tree, live and history ran" >&2 ;;
+  tree) echo "halves: tree ran; live skipped (live reads the owner's data tree: --only-live on the box)" >&2 ;;
+  live) echo "halves: live ran; tree skipped (--no-live, here or on GitHub's runners)" >&2 ;;
+  *) echo "halves: tree and live ran" >&2 ;;
 esac
 if ((${#failures[@]})); then
   # A test run's last lines are its passing tail, so the lines naming a failure come first.

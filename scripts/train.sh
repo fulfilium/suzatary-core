@@ -135,22 +135,6 @@ print_lessons() {
 # PR <n>'s growth lines, ready to follow its other trailers.
 grown() { sed '/^$/d' <<<"${growth_lines[$1]}"; }
 
-# Every derived figure of the merged tree recorded and staged by the tool, the wasm limits from
-# origin/master's modules as its publication cached them: no build. On stdout, the figures that moved.
-figures_line() {
-  [[ -e context.toml ]] || return 0
-  local out modules=() files=(context.toml)
-  if [[ -e web/wasm-budget ]]; then
-    files+=(web/wasm-budget)
-    out="$("${SUZATARY_TRAIN_WASM:-$scripts/wasm-modules.sh}" origin/master)" \
-      || die "origin/master's wasm modules could not be fetched (above), so the train is not built."
-    mapfile -t modules <<<"$out"
-  fi
-  out="$("$tool" context --repo "$root" record ${modules[0]:+--wasm "${modules[@]}"})" && git add -- "${files[@]}" \
-    || die "the derived figures of the merged tree could not be measured (above), so the train is not built."
-  echo "The derived figures of the merged tree: ${out:-none moved}"
-}
-
 # Sets `app_bin`: SUZATARY_TRAIN_BIN, else the named commit's app from a cache, else the deployed one.
 app_bin=""
 declare -A app_bins=()
@@ -250,8 +234,7 @@ store_at() {
 # The roadmap commit a cut and a check read: what its origin publishes now.
 tasks_head() { git -C "$roadmap" rev-parse --verify origin/master; }
 
-# The train's last commit: the release the roadmap reads once the train's todos are done, with the
-# derived figures.
+# The train's last commit: the release the roadmap reads once the train's todos are done.
 cut_release() {
   find_roadmap origin/master
   [[ -n "$roadmap" ]] || return 0
@@ -279,12 +262,10 @@ cut_release() {
   # Else the tag would be refused only at land, after the whole gate.
   ! git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null \
     || die "the chain reads $version, and origin has v$version already (a tag no release on master names): the train is not built. Move or delete that tag, or complete a todo so the chain reads past it."
-  # The cut removed every fragment. The figures are recorded last, over exactly what commits.
+  # The cut removed every fragment.
   git add -- CHANGELOG.md app/release.toml && git rm -rq --cached --ignore-unmatch -- changelog.d
-  local said
-  said="$(figures_line)" || exit 1
-  git commit --quiet -m "release: $version" ${said:+-m "$said"} \
-    -m "$(trailers Release "$version" Completes "${todos[*]}" Tasks "$tasks" Figures "$figures")" \
+  git commit --quiet -m "release: $version" \
+    -m "$(trailers Release "$version" Completes "${todos[*]}" Tasks "$tasks")" \
     || die "the release $version did not commit (a hook?)."
   printf 'release %s%s\n' "$version" "$( ((${#todos[@]} == 0)) || printf ', completing %s' "${todos[*]}")"
 }
@@ -435,22 +416,9 @@ build() {
   printf 'train is %s on origin/master %s\n' "$(git rev-parse --short HEAD)" "$(git rev-parse --short origin/master)"
   [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]] \
     || die "no PR merged ($(printf '#%s ' "${prs[@]}")skipped or already on master), so the train is master and there is nothing to gate."
-  local said cut
-  # The train's commit's `Figures:` trailer, where context.toml stands.
-  [[ ! -e context.toml ]] || figures="over origin/master $(git rev-parse --short=12 origin/master)"
-  cut="$(git rev-parse HEAD)"
   cut_release
-  # With no release to say them in, the figures ride a commit of their own: the train's last commit
-  # records them either way, which the growth check reads.
-  if [[ -n "$figures" && "$(git rev-parse HEAD)" == "$cut" ]]; then
-    said="$(figures_line)" || exit 1
-    git commit --quiet --allow-empty -m "figures: the derived figures of the merged tree" -m "$said" \
-      -m "$(trailers Figures "$figures")" \
-      || die "the derived figures did not commit (a hook?)."
-  fi
 }
 
-figures=""
 halves=(tree live)
 
 # reading <var> <commit> [--half <half>] [--full]: <var> := ok, failed, unknown or finding, of one

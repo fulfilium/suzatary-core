@@ -48,8 +48,7 @@ fn all_modules() -> Vec<(String, String)> {
 }
 
 /// Every step's half follows from what it reads beside the tree: the tree half no store and no
-/// commit but in an unkept `changelog`, the live half no commit, and the history half the commits
-/// alone, by a tool that compiles nothing, so its red is never the tree's.
+/// commit but in an unkept `changelog`, and the live half no commit.
 #[test]
 fn merge_gate_every_step_is_in_one_half_and_says_what_it_reads_beside_the_tree() {
     let steps = steps();
@@ -79,9 +78,6 @@ fn merge_gate_every_step_is_in_one_half_and_says_what_it_reads_beside_the_tree()
                         || (step.name == "changelog" && step.reads == "unkept"))
             }
             "live" => !beside.contains("history"),
-            "history" => {
-                beside == BTreeSet::from(["history"]) && step.command == "scripts/context.sh growth"
-            }
             other => panic!("{}'s half is {other:?}", step.name),
         };
         assert!(
@@ -90,7 +86,7 @@ fn merge_gate_every_step_is_in_one_half_and_says_what_it_reads_beside_the_tree()
             step.name, step.half, step.beside
         );
     }
-    for half in ["tree", "live", "history"] {
+    for half in ["tree", "live"] {
         assert!(
             steps.iter().any(|s| s.half == half),
             "no step in the {half} half"

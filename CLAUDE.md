@@ -377,8 +377,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   `worktreenotsandbox`).
 - **The merge gate is `scripts/merge-gate.sh`**, and a branch reaches master
   only through a green run of it (→ `mergegate`). `--no-live` is the tree half,
-  `--only-live` the live half that reads the owner's stores, `--only-history`
-  the check of what the commit messages since the merge base declare; `--list`
+  `--only-live` the live half that reads the owner's stores; `--list`
   names each step's half, what it reads beside the tree, and its reads (→
   `gatehalves`). A step's pass is kept by what it reads, a kept live step's,
   under the train, also by the stores' digest; `memory/` and `docs/` are among
