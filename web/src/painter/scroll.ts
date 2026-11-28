@@ -10,9 +10,11 @@ export namespace scroll {
   export type Scrolled = { readonly by: Mover; readonly at: Place }
 
   // Who moved the box is read from the reader's input, never from the scroll: the box also moves when a page places
-  // something, when its content shrinks, and when the browser anchors it. A scroll within READER_MS of a wheel, touch,
-  // scroll key or press on the scrollbar is the reader's, and so is every scroll following one without a pause (a fling).
-  const READER_MS = 600
+  // something, when its content shrinks, and when the browser anchors it. A scroll within READER_FRAMES drawn frames of a
+  // wheel, touch, scroll key or press on the scrollbar is the reader's, and so is every scroll following one without a
+  // pause (a fling). Frames, not milliseconds: a busy page hears the wheel and the scroll it made long apart in time and
+  // one frame apart in frames.
+  const READER_FRAMES = 36
   const KEYS = new Set(["PageUp", "PageDown", "ArrowUp", "ArrowDown", "Home", "End", " "])
 
   // The page's last move, when it was to a node's top: kept while the room is held and no reader's input came after `at`,
@@ -23,6 +25,8 @@ export namespace scroll {
   type Box = {
     readonly box: Element
     readerAt: number
+    readerFrames: number
+    readerToken: number
     room: number
     last: Scrolled
     placed: Placed
@@ -31,6 +35,20 @@ export namespace scroll {
   }
 
   const boxes = new WeakMap<Element, Box>()
+
+  const heard = (b: Box): void => {
+    const token = ++b.readerToken
+    b.readerAt = performance.now()
+    b.readerFrames = READER_FRAMES
+    const count = (): void => void (b.readerToken === token && --b.readerFrames > 0 && requestAnimationFrame(count))
+    requestAnimationFrame(count)
+  }
+
+  const forgotten = (b: Box): void => {
+    b.readerToken++
+    b.readerAt = Number.NEGATIVE_INFINITY
+    b.readerFrames = 0
+  }
 
   const page = (box: Element): boolean => box === document.scrollingElement
   const target = (box: Element): EventTarget => (page(box) ? window : box)
@@ -96,14 +114,13 @@ export namespace scroll {
     window.addEventListener("keydown", e => {
       const t = e.target
       if (!KEYS.has(e.key) || (t instanceof HTMLElement && t.closest("input, textarea, select, [contenteditable]") !== null)) return
-      const now = performance.now()
       for (let n = t instanceof Element ? t : null; n !== null; n = n.parentElement) {
         const b = boxes.get(n)
-        if (b !== undefined) b.readerAt = now
+        if (b !== undefined) heard(b)
       }
       const doc = document.scrollingElement
       const b = doc === null ? undefined : boxes.get(doc)
-      if (b !== undefined) b.readerAt = now
+      if (b !== undefined) heard(b)
     })
   }
 
@@ -113,20 +130,22 @@ export namespace scroll {
     const b: Box = {
       box,
       readerAt: Number.NEGATIVE_INFINITY,
+      readerFrames: 0,
+      readerToken: 0,
       room: 0,
       last: { by: "page", at: "bottom" },
       placed: ELSEWHERE,
       resized: new ResizeObserver(() => fit(b)),
       ears: new Set(),
     }
-    const read = (): void => void (b.readerAt = performance.now())
+    const read = (): void => heard(b)
     const on = target(box)
     on.addEventListener("wheel", read, { passive: true })
     on.addEventListener("touchmove", read, { passive: true })
     on.addEventListener("pointerdown", e => (e.target === box ? read() : undefined), { passive: true })
     keyed()
     on.addEventListener("scroll", () => {
-      const by: Mover = performance.now() - b.readerAt < READER_MS ? "reader" : "page"
+      const by: Mover = b.readerFrames > 0 ? "reader" : "page"
       if (by === "reader") read()
       // A scroll that leaves the node where it stood on the box is the browser anchoring it; one that moves it is the
       // reader's, a focus's or a find's, and ends the hold. What anchoring misses moves the node without a scroll.
@@ -155,7 +174,7 @@ export namespace scroll {
 
   // A page's move is the page's: it ends the run of scrolls counted as the reader's for following one.
   export const keep = (p: Anchor): void => {
-    of_(p.box).readerAt = Number.NEGATIVE_INFINITY
+    forgotten(of_(p.box))
     p.box.scrollTop = p.box.scrollHeight - p.fromEnd
   }
 
@@ -166,7 +185,7 @@ export namespace scroll {
     const asked = performance.now()
     requestAnimationFrame(() => {
       if (b.readerAt >= asked) return
-      b.readerAt = Number.NEGATIVE_INFINITY
+      forgotten(b)
       elsewhere(b)
       fit(b)
       switch (to.type) {

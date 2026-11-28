@@ -406,7 +406,8 @@ const QUESTION_AT_TOP = `Math.abs([...document.querySelectorAll(".round")].findL
 
 /**
  * A question held at the top stays held when the browser anchors the box, and the reader's own scroll up lets it go.
- * ⚠️ The scene makes the page anchor the box right after the wheel, within `READER_MS`, on every run.
+ * ⚠️ The scene makes the page anchor the box right after the wheel, and hears the wheel's scroll a long time after the
+ * wheel, on every run: the order a busy machine makes, and the reader's scroll is still the reader's.
  */
 app.scene("content drawn above a held question keeps it held, and the reader's scroll up drifts for good", async () => {
   const id = await freshConversation(WRITE_BASE);
@@ -419,26 +420,48 @@ app.scene("content drawn above a held question keeps it held, and the reader's s
   }
   // The third question is held once its send settles, which on a loaded box can be after its answer is drawn.
   await app.page.waitFor(QUESTION_AT_TOP, { timeout: 20000 });
+  // Every step's scroll offset, the held question's top under the header (the anchor) and the content's height, so a
+  // failure says which step moved the reader.
+  const trace: string[] = [];
+  const mark = async (step: string): Promise<void> => {
+    const at = await app.page.evaluate<string>(`(() => {
+      const box = document.scrollingElement ?? document.documentElement;
+      const question = document.querySelectorAll(".round")[2].getBoundingClientRect().top;
+      const header = document.querySelector("body > header").getBoundingClientRect().bottom;
+      const room = document.querySelector(".answerroom");
+      return \`scrollTop \${box.scrollTop}, anchor \${Math.round(question - header)} px under the header, height \${box.scrollHeight}, room \${room.dataset.room}\`;
+    })()`);
+    trace.push(`${step}: ${at}`);
+  };
+  const why = (what: string): string => `${what}\n${trace.join("\n")}`;
   const held = `document.querySelector(".answerroom").hidden === false`;
-  assert.equal(await app.page.evaluate<boolean>(held), true, "the question just sent has room beneath it");
+  await mark("held");
+  assert.equal(await app.page.evaluate<boolean>(held), true, why("the question just sent has room beneath it"));
   await app.page.scrollSettled();
   await app.page.evaluate<void>(`void document.querySelector(".turns").prepend(Object.assign(document.createElement("div"), { style: "height: 2000px" }))`);
   await app.page.scrollSettled();
-  assert.equal(await app.page.evaluate<boolean>(held), true, "content drawn above keeps the question held");
+  await mark("2000 px drawn above");
+  assert.equal(await app.page.evaluate<boolean>(held), true, why("content drawn above keeps the question held"));
   // Two and a half screens up: past a screen above what the box shows, however short the answer under the question.
-  await app.page.wheel(-Math.round((await app.page.evaluate<number>("innerHeight")) * 2.5));
+  const up = Math.round((await app.page.evaluate<number>("innerHeight")) * 2.5);
+  // The page is busy for a second after it hears the wheel, so it hears the scroll that follows long after the wheel.
+  await app.page.evaluate<void>(`void window.addEventListener("wheel", () => { const until = performance.now() + 1000; while (performance.now() < until) {} }, { once: true, passive: true })`);
+  await app.page.wheel(-up);
   await app.page.evaluate<void>(`void document.querySelector(".turns").prepend(Object.assign(document.createElement("div"), { style: "height: 50px" }))`);
+  // The whole wheel done: the question stands the wheel's distance under the header, whatever frames it took.
+  await app.page.waitFor(`document.querySelectorAll(".round")[2].getBoundingClientRect().top - document.querySelector("body > header").getBoundingClientRect().bottom >= ${up - 1}`, { timeout: 8000 });
   await app.page.waitFor(`document.querySelector(".answerroom").hidden === true`, { timeout: 8000 });
-  await app.page.scrollSettled();
+  await mark("the reader's wheel, then 50 px drawn above");
   // Not the scroll offset: a bar above that comes or goes moves the offset while the browser's anchoring keeps the view still.
   const shown = `document.querySelectorAll(".round")[2].getBoundingClientRect().top`;
   const before = await app.page.evaluate<number>(shown);
   void askAtTheTerminal(id, "give me a rendered answer");
   await app.page.waitFor(`document.querySelectorAll(".turnanswer").length === 4`, { timeout: 20000 });
   await app.page.waitFor(`document.querySelector(".newanswerpill").hidden === false`, { timeout: 8000 });
+  await mark("the fourth answer drawn");
   // Within a pixel: the scroll offset is whole pixels, the layout is not.
   const after = await app.page.evaluate<number>(shown);
-  assert.ok(Math.abs(after - before) <= 1, `the reader stays where they went: ${before} then ${after}`);
+  assert.ok(Math.abs(after - before) <= 1, why(`the reader stays where they went: ${before} then ${after}`));
 });
 
 /**
