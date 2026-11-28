@@ -82,6 +82,9 @@ export namespace local {
     (w: Window) => dressed.window(w.id, w.window, app.now().zone, laneOf(w)),
   )
 
+  // The window asked once more, as a reader that has just come asks it.
+  export const againWindow = (id: string, window: Window["window"]): void => windows({ type: "Window", id, window }).again()
+
   type Cards = Extract<Local, { type: "Cards" }>
   const cards = asked.family((c: Cards) => JSON.stringify([c.conversation, c.indices]), (c: Cards) => drawnProposals(c.conversation, c.indices))
 

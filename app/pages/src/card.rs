@@ -2,7 +2,7 @@
 //! text, a yes is confirmed by a second press, and a tap carries an index, never a body.
 
 use crate::part::Tag;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use suzatary_base::topic_target::Target;
 
 use serde::{Deserialize, Serialize};
@@ -139,7 +139,6 @@ impl After {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Out {
-    Watch(Key, Local),
     Keep(Register, serde_json::Value),
     Act(Key, Act, Secret, Then),
     /// Sign the registration of a key, then tap the card.
@@ -154,7 +153,6 @@ pub(crate) enum Out {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Cards {
     uis: BTreeMap<Key, Ui>,
-    watched: BTreeSet<Key>,
     /// Taps whose answer was lost, by the card's signature when tapped.
     lost: BTreeMap<Key, String>,
 }
@@ -322,22 +320,7 @@ impl Cards {
         self.uis.get(key).cloned().unwrap_or_default()
     }
 
-    /// Each watched once; a tap whose answer was lost is said once its row moves.
-    pub(crate) fn seen<'a>(
-        &mut self,
-        rows: impl IntoIterator<Item = (&'a str, &'a ProposalRow)>,
-    ) -> Vec<Out> {
-        let mut out = Vec::new();
-        for (conversation, row) in rows {
-            let key = Key::of(conversation, row);
-            if self.watched.insert(key.clone()) {
-                let r = key.register();
-                out.push(Out::Watch(key, r));
-            }
-        }
-        out
-    }
-
+    /// A tap whose answer was lost is said once its row moves.
     pub(crate) fn settled<'a>(
         &mut self,
         row: impl Fn(&Key) -> Option<&'a ProposalRow>,
@@ -1209,20 +1192,30 @@ pub enum Asking {
     },
 }
 
-pub(crate) fn effects<H, A, S>(
+/// Each card's own register, read while the card is drawn and not once it goes.
+pub(crate) fn listening<'a, H, A, S>(
+    rows: impl IntoIterator<Item = (&'a str, &'a ProposalRow)> + 'a,
+    hold: fn(Key) -> H,
+) -> impl Iterator<Item = crate::runtime::Listens<H, A, S>> + 'a
+where
+    H: 'a,
+{
+    rows.into_iter().map(move |(conversation, row)| {
+        let key = Key::of(conversation, row);
+        let register = key.register();
+        crate::runtime::watch(hold(key), register)
+    })
+}
+
+pub(crate) fn effects<A>(
     outs: Vec<Out>,
-    hold: impl Fn(Key) -> H,
     ask: impl Fn(Asking) -> A,
-) -> (Vec<crate::runtime::Effect<H, A, S>>, Vec<Key>) {
+) -> (Vec<crate::runtime::Effect<A>>, Vec<Key>) {
     use crate::runtime::Effect;
     let mut effects = Vec::new();
     let mut replies = Vec::new();
     for o in outs {
         match o {
-            Out::Watch(key, local) => effects.push(Effect::Watch {
-                ask: hold(key),
-                local,
-            }),
             Out::Keep(register, value) => effects.push(Effect::Keep { register, value }),
             Out::Act(key, act, secret, then) => {
                 let signed = match &act {

@@ -118,15 +118,14 @@ fn a_cancel_runs_once_until_it_is_answered() {
 /// The address carries the query trimmed and the listing's account, encoded as the router reads.
 #[test]
 fn a_search_goes_to_its_address() {
-    let (mut rt, first) = Runtime::<mail::Mail>::start(mail::Flags {
+    let (mut rt, _) = Runtime::<mail::Mail>::start(mail::Flags {
         context: context(true),
         query: String::new(),
         account: "me@example.test".to_owned(),
     });
     assert_eq!(
-        first.effects.first(),
-        Some(&Effect::Hold {
-            ask: mail::Hold::First,
+        rt.active().get(&Slot::Held(mail::Hold::First)),
+        Some(&Sub::Hold {
             path: "/api/mail/inbox?limit=50&account=me%40example.test".to_owned(),
         })
     );

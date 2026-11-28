@@ -12,7 +12,9 @@ use crate::chrome::{self, Chrome, Masthead, Shape, Width};
 use crate::held::Folded;
 use crate::needsyou::{Named, Route};
 use crate::places::Place;
-use crate::runtime::{Answer, Context, Effect, Gate, Input, Local, Never, Opens, read};
+use crate::runtime::{
+    self, Answer, Context, Effect, Gate, Input, Listening, Local, Never, Opens, Slot, read, watch,
+};
 use crate::todoparts::{Acting, Came, Phase, begin, came, finish, said};
 use viewtree::kit::Reading;
 
@@ -23,7 +25,7 @@ pub struct Flags {
     pub chain: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "TypstHold")]
 pub enum Hold {
     Fold,
@@ -89,7 +91,7 @@ pub enum Msg {
 #[derive(Debug)]
 pub enum Typst {}
 
-type Fx = Effect<Hold, Ask>;
+type Fx = Effect<Ask>;
 
 impl Model {
     fn act(&self, todo: &str, acting: Acting) -> Fx {
@@ -106,8 +108,8 @@ impl Program for Typst {
     type Msg = Msg;
     type Effect = Fx;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(f: Flags) -> (Model, Vec<Fx>) {
         let m = Model {
@@ -116,19 +118,16 @@ impl Program for Typst {
             fold: None,
             open: String::new(),
         };
-        (
-            m,
-            vec![
-                Effect::Watch {
-                    ask: Hold::Fold,
-                    local: Local::Fold,
-                },
-                Effect::Watch {
-                    ask: Hold::Route,
-                    local: Local::Route,
-                },
-            ],
-        )
+        (m, Vec::new())
+    }
+
+    fn subscriptions(_: &Model) -> Listening<Hold, Never> {
+        [
+            watch(Hold::Fold, Local::Fold),
+            watch(Hold::Route, Local::Route),
+        ]
+        .into_iter()
+        .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Fx> {
@@ -234,7 +233,7 @@ fn answered(m: &mut Model, ask: Ask, answer: Answer) -> Vec<Fx> {
                 acting,
                 phase,
             };
-            match came::<Hold, Ask, Never>(&m.chain, phase, answer, next) {
+            match came::<Ask>(&m.chain, phase, answer, next) {
                 Came::Seals(seals) => seals,
                 Came::Taken => said(acting, Ask::Undo { todo }),
                 Came::Already => Vec::new(),

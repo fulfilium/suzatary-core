@@ -46,12 +46,12 @@ fn a_card_is_asked_for_what_the_rows_name() {
             &rows_of(rows.iter().map(|(c, i, o)| (*c, *i, open(*o)))),
         )
     };
-    let asked = |effects: Vec<Effect<inbox::Hold, inbox::Ask>>| -> Vec<Value> {
-        effects
+    let asked = |m: &inbox::Model| -> Vec<Value> {
+        inbox::Inbox::subscriptions(m)
             .iter()
-            .map(printed)
-            .filter(|e| e["type"] == "Watch" && e["local"]["type"] == "Cards")
-            .map(|e| json!([e["local"]["conversation"], e["local"]["indices"]]))
+            .map(|(_, source)| printed(source))
+            .filter(|s| s["type"] == "Watch" && s["local"]["type"] == "Cards")
+            .map(|s| json!([s["local"]["conversation"], s["local"]["indices"]]))
             .collect()
     };
     let (mut m, _) = inbox::Inbox::init(inbox::Flags {
@@ -59,20 +59,60 @@ fn a_card_is_asked_for_what_the_rows_name() {
         open: String::new(),
         now: 1_790_000_000_000,
     });
-    let first = inbox::Inbox::update(
+    inbox::Inbox::update(
         &mut m,
         inbox(&[("a", 2, true), ("a", 5, false), ("b", 0, true)]),
     );
-    assert_eq!(asked(first), vec![json!(["a", [2]]), json!(["b", [0]])]);
-    let next = inbox::Inbox::update(
+    assert_eq!(asked(&m), vec![json!(["a", [2]]), json!(["b", [0]])]);
+    inbox::Inbox::update(
         &mut m,
         inbox(&[("a", 2, false), ("a", 7, true), ("b", 0, true)]),
     );
     assert_eq!(
-        asked(next),
-        vec![json!(["a", [2, 7]])],
+        asked(&m),
+        vec![json!(["a", [2, 7]]), json!(["b", [0]])],
         "grown, never shrunk"
     );
+}
+
+/// A card is read while its row is drawn, and stops being read once the row goes, though its
+/// conversation's cards are still read for a tap that settles it.
+#[test]
+fn a_card_that_leaves_is_no_longer_read() {
+    use proptest::strategy::ValueTree as _;
+    use viewtree::Program;
+    let rows = |ids: &[usize]| {
+        answered(
+            inbox::Hold::Rows(Watched::Proposals),
+            &rows_of(ids.iter().map(|i| ("a", *i, json!({"kind": "open"})))),
+        )
+    };
+    let row = proposal(2)
+        .new_tree(&mut proptest::test_runner::TestRunner::deterministic())
+        .expect("a row")
+        .current();
+    let cards_read = |m: &inbox::Model| {
+        inbox::Inbox::subscriptions(m)
+            .iter()
+            .filter(|(slot, _)| matches!(slot, Slot::Held(inbox::Hold::Card(_))))
+            .count()
+    };
+    let (mut m, _) = inbox::Inbox::init(inbox::Flags {
+        context: context(true),
+        open: String::new(),
+        now: 1_790_000_000_000,
+    });
+    inbox::Inbox::update(&mut m, rows(&[2]));
+    inbox::Inbox::update(
+        &mut m,
+        answered(
+            inbox::Hold::Rows(Watched::Cards("a".to_owned())),
+            &json!({"title": "A", "proposals": [row]}),
+        ),
+    );
+    assert_eq!(cards_read(&m), 1, "a drawn card is read");
+    inbox::Inbox::update(&mut m, rows(&[]));
+    assert_eq!(cards_read(&m), 0, "a card whose row went is not");
 }
 
 /// A failed ask of a grown set keeps every card the standing answer drew, and says the problem

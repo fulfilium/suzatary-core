@@ -120,7 +120,7 @@ fn a_card_that_changes_asks_the_overview_again() {
             behind: None,
         }))
     };
-    let again = |effects: &[Effect<settings::Hold, settings::Ask>]| {
+    let again = |effects: &[Effect<settings::Ask>]| {
         effects
             .iter()
             .any(|e| matches!(e, Effect::Again { path } if path == "/api/overview"))
@@ -242,7 +242,7 @@ fn a_grant_answered_after_its_line_moved_still_sends_its_link() {
         conversation: "setup".to_owned(),
         index: 0,
     };
-    let resends = |effects: &[Effect<settings::Hold, settings::Ask>]| {
+    let resends = |effects: &[Effect<settings::Ask>]| {
         effects.iter().any(|e| {
             matches!(e, Effect::Act { ask: settings::Ask::Card(card::Asking::Act { key, .. }), .. } if *key == link)
         })

@@ -21,3 +21,42 @@ proptest! {
         page_laws::<conversations::Conversations>(|| conversations::Flags { context: context(writes), now: 1_790_000_000_000 }, &msgs);
     }
 }
+
+/// A search is listened to from the moment its typing rests until its words change or go, and
+/// before it rests, and after it ends, nothing reads it.
+#[test]
+fn a_search_is_listened_to_between_its_rest_and_its_end() {
+    use conversations::{Hold, Msg};
+    let (mut rt, _) = Runtime::<conversations::Conversations>::start(conversations::Flags {
+        context: context(true),
+        now: 1_790_000_000_000,
+    });
+    let found = Slot::Held(Hold::Found);
+    let rested = |n| {
+        Msg::Host(Box::new(Input::Answered {
+            ask: chats::Asking::Rested(n),
+            answer: Answer::Done {
+                body: Text::printed(&json!(null)),
+            },
+        }))
+    };
+    let searched = |words: &str| Msg::Searched(words.to_owned());
+    rt.send(searched("zephyr"));
+    assert_eq!(rt.active().get(&found), None, "a typing waits for its rest");
+    rt.send(rested(1));
+    assert!(matches!(rt.active().get(&found), Some(Sub::Watch { .. })));
+    rt.send(searched("zephyrs"));
+    assert_eq!(
+        rt.active().get(&found),
+        None,
+        "new words stop the old reading"
+    );
+    rt.send(rested(2));
+    assert!(matches!(rt.active().get(&found), Some(Sub::Watch { .. })));
+    rt.send(searched(""));
+    assert_eq!(
+        rt.active().get(&found),
+        None,
+        "a search that ends reads nothing"
+    );
+}

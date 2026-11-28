@@ -1,13 +1,14 @@
 // A page that is a Rust program (`app/pages`): its patches painted, and every effect of the runtime's sum
 // (`app/pages/src/runtime.rs`) performed here, the same for each page. Nothing here knows a page.
 
-import type { Act, ActName, Answer, Basis as CoreBasis, BriefingAt, CalendarAt, Context, ConversationFlags, ConversationsFlags, Opens, Core, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt, TodoFlags, TodosFlags, TypstFlags, Keyed } from "../wire/generated/pages"
+import type { Act, ActName, Slot, Sub, Answer, Basis as CoreBasis, BriefingAt, CalendarAt, Context, ConversationFlags, ConversationsFlags, Opens, Core, DraftFlags, Effect, InboxFlags, Input, MailFlags, MessageAt, NeedsYouFlags, Nothing, Reading, Secret, SecretaryFlags, SettingsFlags, ThreadAt, TodoFlags, TodosFlags, TypstFlags, Keyed } from "../wire/generated/pages"
 import type { Draw } from "../view/page"
 import http from "../wire/http"
 import d from "../wire/decoder"
 import asked from "../app/asked"
 import app from "../app/app"
 import time from "../app/time"
+import clock from "../algebra/clock"
 import lo from "../algebra/lo"
 import once from "../algebra/once"
 import stream from "../algebra/stream"
@@ -212,7 +213,7 @@ export namespace program {
   }
   export type Page = keyof Args
   type In = Input<unknown, unknown, unknown>
-  type Out = Effect<unknown, unknown, unknown>
+  type Out = Effect<unknown>
 
   // The scroll box is the document's, or one the page draws itself, found once drawn; `lane` is the shell's behind the page;
   // `layer` is where it draws what it marks as the window's (`painter.create`).
@@ -231,14 +232,7 @@ export namespace program {
         const at = `[data-field="${CSS.escape(name)}"]`
         return root.querySelector(at) ?? layer?.querySelector(at) ?? null
       }
-      const held_ = new Map<string, () => void>()
       const timers = new Set<ReturnType<typeof setTimeout>>()
-      const frames = new Set<number>()
-      const hold = (name: unknown, stop: () => void): void => {
-        const k = JSON.stringify(name)
-        held_.get(k)?.()
-        held_.set(k, stop)
-      }
       const drawn = (r: Reading<Answer>): void => (r.type === "Loading" ? undefined : frame.drawn())
       // A move is told in a task of its own, once per burst, the wait measured as `page:heard`; a subscription let go
       // tells nothing more.
@@ -254,60 +248,40 @@ export namespace program {
         return () => ((gone = true), unheard())
       }
       let life: drain.State = placed.shown() === "Hidden" ? drain.HIDDEN : drain.DRAWN
-      // The listeners its subscriptions ask for. No page has a source yet (`Sub` is `Never`), so a `Start` cannot be written and
-      // the one function that would turn a source into a listener has no case.
-      const listeners = subscribed.of<never, never>((_slot, source) => source, life)
-      // What waits for the page to be drawn, the last of each (`drain.slot`).
-      const waiting = new Map<string, [Out, (i: In) => void]>()
       // The keys the page holds, installed again when it is drawn again.
       let keys: KeyTarget | null = null
-      // Gone only after `Left`, which `destroy` steps once the program has started.
-      const lived = (e: drain.Event): void => {
-        life = drain.step(life, e)
-        listeners.follow(life)
-        if (life.type === "Gone") running.destroy()
-      }
-      const handle: run.Handler<In, Out> = (e, send) => {
-        const verdict = drain.verdict(life, e.type)
-        if (verdict === "Drops") return
-        if (verdict === "Waits") {
-          waiting.delete(drain.slot(e))
-          return void waiting.set(drain.slot(e), [e, send])
-        }
-        const write = drain.writes(e.type)
-        if (write) lived("Wrote")
-        const answered = (name: unknown) => (a: Answer): void => {
-          send({ type: "Answered", ask: name, answer: a })
-          if (write) lived("Answered")
-        }
-        switch (e.type) {
+      // A source is turned into its listener here and nowhere else; the slot is the ask its inputs carry.
+      const listen = (slot: Slot<unknown, unknown, unknown>, source: Sub, send: (i: In) => void): (() => void) => {
+        const ask = slot.of
+        switch (source.type) {
           case "Hold": {
-            const q = held(e.path)
+            const q = held(source.path)
             const tell = (): void => {
               const r = q.now()
               drawn(r)
-              send({ type: "Held", ask: e.ask, reading: r, behind: q.behind() })
+              send({ type: "Held", ask, reading: r, behind: q.behind() })
             }
-            hold(e.ask, heard(tell, f => q.hear(f)))
-            return tell()
+            const unheard = heard(tell, f => q.hear(f))
+            tell()
+            return unheard
           }
           case "Watch": {
-            const unwatch = local.watching(e.local, lane)
-            const r = local.of(e.local.type, e.local, box())
+            const unwatch = local.watching(source.local, lane)
+            const r = local.of(source.local.type, source.local, box())
             const tell = (): void => {
               const now = lo.map(r.now(), (body): Answer => ({ type: "Done", body: body.bytes }))
               drawn(now)
-              send({ type: "Held", ask: e.ask, reading: now, behind: null })
+              send({ type: "Held", ask, reading: now, behind: null })
             }
             const unhear = heard(tell, f => r.hear(f))
-            hold(e.ask, () => (unhear(), unwatch()))
-            return tell()
+            tell()
+            return () => (unhear(), unwatch())
           }
-          case "Keep":
-            return local.keep(e.register, e.value)
+          case "Stream":
+            return stream.open(stream.of(source.path), { opened: () => send({ type: "Opened", ask }), gaveUp: () => send({ type: "Lost", ask }), frame: frame => send({ type: "Heard", ask, frame }) }, stream.browser)
           case "Keys": {
-            const press = (key: Keyed) => (): void => send({ type: "Heard", ask: e.ask, frame: JSON.stringify(key) })
-            const on = new Set(e.keys)
+            const press = (key: Keyed) => (): void => send({ type: "Heard", ask, frame: JSON.stringify(key) })
+            const on = new Set(source.keys)
             const target: KeyTarget = {
               ...(on.has("Move") ? { move: (by: number) => press({ type: "Move", by })() } : {}),
               ...(on.has("Open") ? { open: press({ type: "Open" }) } : {}),
@@ -320,19 +294,55 @@ export namespace program {
               ...(on.has("Escape") ? { escape: () => (press({ type: "Escape" })(), true) } : {}),
               within: root,
             }
-            setKeyTarget(target)
             keys = target
-            return hold(e.ask, () => ((keys = keys === target ? null : keys), clearKeyTarget(target)))
+            // A hidden page takes the keys when it is drawn again (`shown`).
+            if (life.type === "Drawn") setKeyTarget(target)
+            return () => ((keys = keys === target ? null : keys), clearKeyTarget(target))
           }
+          case "At":
+            // Answered with the instant at the earliest, so a timer that fires a moment early still reaches it.
+            return clock.wake(clock.at(source.instant), () => send({ type: "Answered", ask, answer: done(Math.max(time.now(), source.instant)) }))
+          case "Frames": {
+            // The next frame is asked before this one is answered: the answer may end the source, which cancels the next.
+            let f = requestAnimationFrame(function tick() {
+              f = requestAnimationFrame(tick)
+              send({ type: "Answered", ask, answer: done(null) })
+            })
+            return () => cancelAnimationFrame(f)
+          }
+        }
+      }
+      const listeners = subscribed.of<Slot<unknown, unknown, unknown>, Sub, In>(listen, life)
+      // What waits for the page to be drawn, the last of each kind.
+      const waiting = new Map<string, [Out, (i: In) => void]>()
+      // Gone only after `Left`, which `destroy` steps once the program has started.
+      const lived = (e: drain.Event): void => {
+        life = drain.step(life, e)
+        listeners.follow(life)
+        if (life.type === "Gone") running.destroy()
+      }
+      const handle: run.Handler<In, Out> = (e, send) => {
+        const verdict = drain.verdict(life, e.type)
+        if (verdict === "Drops") return
+        if (verdict === "Waits") {
+          waiting.delete(e.type)
+          return void waiting.set(e.type, [e, send])
+        }
+        const write = drain.writes(e.type)
+        if (write) lived("Wrote")
+        const answered = (name: unknown) => (a: Answer): void => {
+          send({ type: "Answered", ask: name, answer: a })
+          if (write) lived("Answered")
+        }
+        switch (e.type) {
+          case "Keep":
+            return local.keep(e.register, e.value)
           case "Sync":
             return void storesync.sync()
-          case "Listen":
-            return hold(
-              e.ask,
-              stream.open(stream.of(e.path), { opened: () => send({ type: "Opened", ask: e.ask }), gaveUp: () => send({ type: "Lost", ask: e.ask }), frame: frame => send({ type: "Heard", ask: e.ask, frame }) }, stream.browser),
-            )
           case "Again":
             return held(e.path).again()
+          case "AgainWindow":
+            return local.againWindow(e.id, e.window)
           case "Rendered":
             return void blocks.store.join(e.pairs).catch(() => [])
           case "Get":
@@ -358,10 +368,6 @@ export namespace program {
           case "Timer": {
             const t = setTimeout(() => (timers.delete(t), answered(e.ask)(done(time.now()))), e.after)
             return void timers.add(t)
-          }
-          case "Frame": {
-            const f = requestAnimationFrame(() => (frames.delete(f), answered(e.ask)(done(null))))
-            return void frames.add(f)
           }
           case "Focus": {
             const at = field(e.field)
@@ -438,9 +444,7 @@ export namespace program {
           unheard()
           unplaced()
           unclocked()
-          held_.forEach(stop => stop())
           timers.forEach(t => clearTimeout(t))
-          frames.forEach(f => cancelAnimationFrame(f))
           waiting.clear()
           lived("Left")
         },

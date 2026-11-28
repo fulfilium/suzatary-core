@@ -108,10 +108,10 @@ pub(crate) enum Then {
     Up,
 }
 
-pub(crate) fn effects<H, A, S>(
+pub(crate) fn effects<A>(
     outs: Vec<Out>,
     ask: fn(Asking) -> A,
-) -> (Vec<crate::runtime::Effect<H, A, S>>, Vec<Then>) {
+) -> (Vec<crate::runtime::Effect<A>>, Vec<Then>) {
     use crate::runtime::{Body, Effect};
     let mut effects = Vec::new();
     let mut then = Vec::new();
@@ -182,7 +182,7 @@ fn register(draft: &str) -> Register {
 
 impl Composer {
     #[must_use]
-    pub(crate) fn of(draft: &str, seeded: &[String]) -> (Composer, Local) {
+    pub(crate) fn of(draft: &str, seeded: &[String]) -> Composer {
         let mut references: Vec<String> = Vec::new();
         for r in seeded {
             // A todo named by its genesis is no thing the secretary reads: it reads a chain's.
@@ -193,25 +193,28 @@ impl Composer {
                 references.push(r.clone());
             }
         }
-        (
-            Composer {
-                draft: draft.to_owned(),
-                text: String::new(),
-                references,
-                files: Vec::new(),
-                kept: BTreeMap::new(),
-                mode: Mode::Asking,
-                picks: 0,
-                uploading: Vec::new(),
-                held: BTreeMap::new(),
-                others: Vec::new(),
-                sealing: None,
-                drafted: Drafted::Unread,
-            },
-            Local::Draft {
-                id: draft.to_owned(),
-            },
-        )
+        Composer {
+            draft: draft.to_owned(),
+            text: String::new(),
+            references,
+            files: Vec::new(),
+            kept: BTreeMap::new(),
+            mode: Mode::Asking,
+            picks: 0,
+            uploading: Vec::new(),
+            held: BTreeMap::new(),
+            others: Vec::new(),
+            sealing: None,
+            drafted: Drafted::Unread,
+        }
+    }
+
+    /// The tab's draft this composer's words are kept in.
+    #[must_use]
+    pub(crate) fn watching(&self) -> Local {
+        Local::Draft {
+            id: self.draft.clone(),
+        }
     }
 
     #[must_use]
@@ -677,7 +680,7 @@ mod tests {
             "todo:+3f2a9c1b2d4e/x".to_owned(),
             "not a reference".to_owned(),
         ];
-        let (composer, _) = Composer::of("d", &seeds);
+        let composer = Composer::of("d", &seeds);
         assert_eq!(composer.references, vec!["todo:life/x".to_owned()]);
     }
 
@@ -729,7 +732,7 @@ mod tests {
     /// Typing after a send is the next draft; a failed send comes back only into an empty box.
     #[test]
     fn a_failed_send_comes_back_only_into_an_empty_box() {
-        let (mut c, _) = Composer::of("c", &[]);
+        let mut c = Composer::of("c", &[]);
         c.update(Ev::Typed("first".to_owned()));
         let sent = c
             .update(Ev::Send)
@@ -755,7 +758,7 @@ mod tests {
     #[test]
     fn a_question_stays_in_the_box_until_it_is_kept() {
         let sends = |outs: Vec<Out>| outs.iter().filter(|o| matches!(o, Out::Send(_))).count();
-        let (mut c, _) = Composer::of("c", &[]);
+        let mut c = Composer::of("c", &[]);
         c.update(Ev::Typed("first".to_owned()));
         assert_eq!(sends(c.update(Ev::Send)), 1);
         assert_eq!(c.text, "first", "not kept yet");

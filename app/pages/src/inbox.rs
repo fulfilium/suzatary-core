@@ -14,8 +14,8 @@ use crate::card::{self, Cards, Drawn, Placed, Titles};
 use crate::chrome::{self, Chrome, Masthead, Shape, Status, link};
 use crate::intents::Intents;
 use crate::places::Place;
-use crate::runtime::{self, Context, Local, read};
-use crate::waiting::{CHAINS, Readings, Row, Waiting, Watch, Watched, unheld};
+use crate::runtime::{self, Context, Listening, Local, Never, Slot, read, watch};
+use crate::waiting::{CHAINS, Readings, Row, Waiting, Watched, unheld};
 use crate::zone;
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -27,7 +27,7 @@ pub struct Flags {
     pub now: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "of")]
 #[ts(rename = "InboxHold")]
 pub enum Hold {
@@ -38,7 +38,7 @@ pub enum Hold {
 }
 
 pub type Ask = card::Asking;
-pub(crate) type Effect = runtime::Effect<Hold, Ask>;
+pub(crate) type Effect = runtime::Effect<Ask>;
 pub(crate) type Input = runtime::Input<Hold, Ask>;
 
 /// Reached unfolds its Setup row and scrolls to it once; it stays marked while the page reads.
@@ -82,23 +82,16 @@ pub enum Msg {
 #[derive(Debug)]
 pub enum Inbox {}
 
-fn watch(w: Watch) -> Effect {
-    Effect::Watch {
-        local: w.local,
-        ask: Hold::Rows(w.ask),
-    }
-}
-
 impl Program for Inbox {
     type Model = Model;
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
-        let (readings, watched) = Readings::of(&CHAINS);
+        let readings = Readings::of(&CHAINS);
         let today = zone::day_ms(&flags.context.offsets, flags.now);
         let model = Model {
             context: flags.context,
@@ -115,16 +108,26 @@ impl Program for Inbox {
                 Opening::Pending(flags.open)
             },
         };
-        let mut effects: Vec<Effect> = watched.into_iter().map(watch).collect();
-        effects.push(Effect::Watch {
-            ask: Hold::Intents,
-            local: Local::Intents,
-        });
-        effects.push(Effect::Watch {
-            ask: Hold::Titles,
-            local: Local::Titles,
-        });
-        (model, effects)
+        (model, Vec::new())
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Never> {
+        let rows = m.readings.rows();
+        let cards = card::listening(
+            rows.iter().filter_map(|r| match r {
+                Row::Card(_, c, row) => Some((c.id, *row)),
+                Row::Unresolved(_) => None,
+            }),
+            Hold::Card,
+        );
+        [
+            watch(Hold::Intents, Local::Intents),
+            watch(Hold::Titles, Local::Titles),
+        ]
+        .into_iter()
+        .chain(m.readings.listening(Hold::Rows))
+        .chain(cards)
+        .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Effect> {
@@ -136,10 +139,8 @@ impl Program for Inbox {
                 }
                 Input::Held { ask, reading, .. } => match ask {
                     Hold::Rows(w) => {
-                        let mut effects: Vec<Effect> =
-                            m.readings.held(w, reading).into_iter().map(watch).collect();
-                        effects.extend(seen(m));
-                        effects
+                        m.readings.held(w, reading);
+                        seen(m)
                     }
                     Hold::Card(key) => {
                         if let Reading::Val { v } = read::<serde_json::Value>(reading) {
@@ -266,21 +267,14 @@ fn row_of<'a>(
 
 fn seen(m: &mut Model) -> Vec<Effect> {
     let rows = m.readings.rows();
-    let outs = m.cards.seen(rows.iter().filter_map(|r| match r {
-        Row::Card(_, c, row) => Some((c.id, *row)),
-        Row::Unresolved(_) => None,
-    }));
     let readings = &m.readings;
-    let outs: Vec<card::Out> = outs
-        .into_iter()
-        .chain(m.cards.settled(|k| readings.card(k)))
-        .collect();
+    let outs = m.cards.settled(|k| readings.card(k));
     let opened = m
         .opening
         .key()
         .and_then(|k| rows.iter().find(|r| r.waiting().key() == k))
         .map(|r| (r.setup(), field(*r)));
-    let mut effects = card::effects(outs, Hold::Card, |a| a).0;
+    let mut effects = card::effects(outs, |a| a).0;
     match (&m.opening, opened) {
         (Opening::Pending(k), Some((setup, field))) => {
             m.setup |= setup;
@@ -302,7 +296,7 @@ fn field(r: Row<'_>) -> String {
 }
 
 fn out(outs: Vec<card::Out>) -> Vec<Effect> {
-    let (mut effects, replies) = card::effects(outs, Hold::Card, |a| a);
+    let (mut effects, replies) = card::effects(outs, |a| a);
     // This page has no composer, so Reply opens the conversation with the card attached.
     effects.extend(replies.into_iter().map(|k| {
         Effect::Go {

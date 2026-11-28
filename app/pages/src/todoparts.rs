@@ -245,9 +245,9 @@ pub enum Seal {
 }
 
 #[derive(Debug)]
-pub(crate) enum Came<H, A, S> {
+pub(crate) enum Came<A> {
     /// The box printed it: these seal it.
-    Seals(Vec<Effect<H, A, S>>),
+    Seals(Vec<Effect<A>>),
     Taken,
     /// It was asked already and stands asked.
     Already,
@@ -256,13 +256,13 @@ pub(crate) enum Came<H, A, S> {
 
 /// The first step of an act on `todo`: spelled by the tab's core and sealed, or printed by
 /// the box; `ask` names each phase's answer.
-pub(crate) fn begin<H, A, S>(
+pub(crate) fn begin<A>(
     chain: &str,
     todo: &str,
     acting: Acting,
     note: String,
     ask: impl Fn(Phase) -> A,
-) -> Effect<H, A, S> {
+) -> Effect<A> {
     let printed = |body| crate::authoring::author(ask(Phase::Printed), chain, body);
     match acting {
         Acting::Verb(verb) => match verb.spelled() {
@@ -289,12 +289,12 @@ pub(crate) fn begin<H, A, S>(
     }
 }
 
-pub(crate) fn came<H, A, S>(
+pub(crate) fn came<A>(
     chain: &str,
     phase: Phase,
     answer: crate::runtime::Answer,
     ask: impl Fn(Phase) -> A,
-) -> Came<H, A, S> {
+) -> Came<A> {
     use crate::runtime::{Outcome, Said, answered};
     match phase {
         Phase::Printed => {
@@ -323,7 +323,7 @@ pub(crate) fn came<H, A, S>(
 }
 
 /// An act that can be undone offers its Undo as `undo`; an undo or a redo says nothing.
-pub(crate) fn said<H, A, S>(acting: Acting, undo: A) -> Vec<Effect<H, A, S>> {
+pub(crate) fn said<A>(acting: Acting, undo: A) -> Vec<Effect<A>> {
     match acting {
         Acting::Verb(v) if v.undoable() => vec![Effect::Offer {
             words: v.said().to_owned(),

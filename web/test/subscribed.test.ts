@@ -10,11 +10,13 @@ import type { SubPatch } from "../src/wire/generated/pages";
 import { forAll } from "./gen";
 import type { Rng } from "./gen";
 
+const send = (): void => {};
+
 // A source that records its start and its stop, and the listeners alive: one a source that was started and not stopped.
 const fake = () => {
   const alive = new Set<string>();
   let starts = 0;
-  const t = subscribed.of<number, number>((slot, source) => {
+  const t = subscribed.of<number, number, never>((slot, source) => {
     const id = `${slot}:${source}:${starts++}`;
     alive.add(id);
     return () => void alive.delete(id);
@@ -34,7 +36,7 @@ test("law: the listeners alive are the slots patched in, one each", () =>
     const host = fake();
     const want = new Map<string, number>();
     for (const p of r.array(r.int(30), () => patch(r))) {
-      host.t.apply(p);
+      host.t.apply(p, send);
       if (p.type === "Start") want.set(JSON.stringify(p.slot), p.source);
       else want.delete(JSON.stringify(p.slot));
       assert.deepEqual([...host.t.slots()].sort(), [...want.keys()].sort());
@@ -47,8 +49,8 @@ test("law: the listeners alive are the slots patched in, one each", () =>
 
 test("a Start on a held slot stops the earlier listener first", () => {
   const host = fake();
-  host.t.apply({ type: "Start", slot: 1, source: 7 });
-  host.t.apply({ type: "Start", slot: 1, source: 8 });
+  host.t.apply({ type: "Start", slot: 1, source: 7 }, send);
+  host.t.apply({ type: "Start", slot: 1, source: 8 }, send);
   assert.deepEqual(host.alive(), ["1:8:1"]);
   assert.equal(host.starts(), 2);
 });
@@ -56,17 +58,17 @@ test("a Start on a held slot stops the earlier listener first", () => {
 test("law: a Leaving program keeps no subscription, whatever is patched in after", () =>
   forAll(300, r => {
     const host = fake();
-    host.t.apply({ type: "Start", slot: 0, source: 0 });
+    host.t.apply({ type: "Start", slot: 0, source: 0 }, send);
     host.t.follow(events(["Wrote", "Left"]));
     assert.equal(host.alive().length, 0);
-    for (const p of r.array(r.int(10), () => patch(r))) host.t.apply(p);
+    for (const p of r.array(r.int(10), () => patch(r))) host.t.apply(p, send);
     assert.deepEqual(host.alive(), []);
     assert.deepEqual(host.t.slots(), []);
   }));
 
 test("a program drawn or hidden keeps its subscriptions", () => {
   const host = fake();
-  host.t.apply({ type: "Start", slot: 0, source: 0 });
+  host.t.apply({ type: "Start", slot: 0, source: 0 }, send);
   host.t.follow(events(["Hid"]));
   host.t.follow(events(["Hid", "Showed"]));
   assert.equal(host.alive().length, 1);

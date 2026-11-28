@@ -16,7 +16,9 @@ use viewtree::{Node, Program, view};
 use crate::chrome::{self, Chrome, Masthead, Shape, mark};
 use crate::mailrow::{account, arrived, decided, folder, held, sender, subject, todo};
 use crate::places::{PAGE, Place, Question};
-use crate::runtime::{Body, Context, Effect, Gate, Held, Input, answered, read};
+use crate::runtime::{
+    self, Body, Context, Effect, Gate, Held, Input, Listening, Never, Slot, answered, hold, read,
+};
 use crate::zone::when;
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -29,7 +31,7 @@ pub struct Flags {
     pub account: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "MailHold")]
 pub enum Hold {
     First,
@@ -129,22 +131,12 @@ impl Model {
 impl Program for Mail {
     type Model = Model;
     type Msg = Msg;
-    type Effect = Effect<Hold, Ask>;
+    type Effect = Effect<Ask>;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
-    fn init(flags: Flags) -> (Model, Vec<Effect<Hold, Ask>>) {
-        let effects = vec![
-            Effect::Hold {
-                ask: Hold::First,
-                path: first(&flags),
-            },
-            Effect::Hold {
-                ask: Hold::Watches,
-                path: Question::Watches.path(),
-            },
-        ];
+    fn init(flags: Flags) -> (Model, Vec<Effect<Ask>>) {
         let model = Model {
             typed: flags.query.clone(),
             flags,
@@ -154,10 +146,19 @@ impl Program for Mail {
             more: More::Open,
             cancelling: Vec::new(),
         };
-        (model, effects)
+        (model, Vec::new())
     }
 
-    fn update(m: &mut Model, msg: Msg) -> Vec<Effect<Hold, Ask>> {
+    fn subscriptions(m: &Model) -> Listening<Hold, Never> {
+        [
+            hold(Hold::First, first(&m.flags)),
+            hold(Hold::Watches, Question::Watches.path()),
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    fn update(m: &mut Model, msg: Msg) -> Vec<Effect<Ask>> {
         match msg {
             Msg::Host(input) => answer(m, *input),
             Msg::Typed(words) => {
@@ -245,7 +246,7 @@ impl Program for Mail {
     }
 }
 
-fn answer(m: &mut Model, input: Input<Hold, Ask>) -> Vec<Effect<Hold, Ask>> {
+fn answer(m: &mut Model, input: Input<Hold, Ask>) -> Vec<Effect<Ask>> {
     match input {
         Input::Context(c) => m.flags.context = c,
         Input::Held {

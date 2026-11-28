@@ -10,7 +10,9 @@ use viewtree::{Node, Program};
 
 use crate::chrome::{self, Chrome, Masthead, Shape};
 use crate::places::Place;
-use crate::runtime::{Answer, Behind, Context, Effect, Input, Never, answered};
+use crate::runtime::{
+    self, Answer, Behind, Context, Effect, Input, Listening, Never, Slot, answered, hold,
+};
 use crate::zone::Offset;
 
 pub trait View {
@@ -37,7 +39,7 @@ pub trait View {
 
 pub type Ask = Never;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "OneHold")]
 pub enum Hold {
     Page,
@@ -75,23 +77,23 @@ pub struct One<V>(PhantomData<V>);
 impl<V: View> Program for One<V> {
     type Model = Model<V>;
     type Msg = Msg;
-    type Effect = Effect<Hold, Never>;
+    type Effect = Effect<Never>;
     type Flags = Opened<V::At>;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(Opened { context, at }: Opened<V::At>) -> (Model<V>, Vec<Self::Effect>) {
-        let hold = Effect::Hold {
-            ask: Hold::Page,
-            path: V::path(&at),
-        };
         let m = Model {
             context,
             at,
             reading: Reading::Loading,
             behind: None,
         };
-        (m, vec![hold])
+        (m, Vec::new())
+    }
+
+    fn subscriptions(m: &Model<V>) -> Listening<Hold, Never> {
+        [hold(Hold::Page, V::path(&m.at))].into_iter().collect()
     }
 
     fn update(m: &mut Model<V>, msg: Msg) -> Vec<Self::Effect> {

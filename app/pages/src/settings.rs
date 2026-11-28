@@ -21,7 +21,9 @@ use crate::card::{self, Cards, Drawn, Placed};
 use crate::chrome::{self, Chrome, Masthead, Shape};
 use crate::intents::Intents;
 use crate::places::{Place, Question};
-use crate::runtime::{self, Answer, Body, Context, Gate, Held, Local, read};
+use crate::runtime::{
+    self, Answer, Body, Context, Gate, Held, Listening, Local, Never, Slot, hold, read, watch,
+};
 use crate::waiting::{Readings, Row, Watched};
 use crate::zone::when;
 
@@ -31,7 +33,7 @@ pub struct Flags {
     pub context: Context,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "SettingsHold")]
 pub enum Hold {
     Overview,
@@ -143,7 +145,7 @@ pub enum Ask {
     Run(Act),
     Card(card::Asking),
 }
-pub(crate) type Effect = runtime::Effect<Hold, Ask>;
+pub(crate) type Effect = runtime::Effect<Ask>;
 pub(crate) type Input = runtime::Input<Hold, Ask>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,11 +186,11 @@ impl Program for Settings {
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
-        let (rows, watched) = Readings::of(&[]);
+        let rows = Readings::of(&[]);
         let model = Model {
             context: flags.context,
             overview: Held::loading(),
@@ -200,21 +202,27 @@ impl Program for Settings {
             running: BTreeSet::new(),
             beside: BTreeMap::new(),
         };
-        let watch = |ask, local| Effect::Watch { ask, local };
-        let mut effects = vec![
-            Effect::Hold {
-                ask: Hold::Overview,
-                path: Question::Overview.path(),
-            },
+        (model, Vec::new())
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Never> {
+        let rows = m.rows.rows();
+        let cards = card::listening(
+            rows.iter().filter_map(|r| match r {
+                Row::Card(_, c, row) => Some((c.id, *row)),
+                Row::Unresolved(_) => None,
+            }),
+            Hold::Card,
+        );
+        [
+            hold(Hold::Overview, Question::Overview.path()),
             watch(Hold::Device, Local::Device),
             watch(Hold::Intents, Local::Intents),
-        ];
-        effects.extend(
-            watched
-                .into_iter()
-                .map(|w| watch(Hold::Rows(w.ask), w.local)),
-        );
-        (model, effects)
+        ]
+        .into_iter()
+        .chain(m.rows.listening(Hold::Rows))
+        .chain(cards)
+        .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Effect> {
@@ -242,16 +250,9 @@ impl Program for Settings {
                         // A card the box files changes which line asks for what.
                         Hold::Rows(w) => {
                             let was = shown_cards(m);
-                            let new = m.rows.held(w, reading);
+                            m.rows.held(w, reading);
                             m.pair();
-                            let mut effects: Vec<Effect> = new
-                                .into_iter()
-                                .map(|w| Effect::Watch {
-                                    local: w.local,
-                                    ask: Hold::Rows(w.ask),
-                                })
-                                .collect();
-                            effects.extend(seen(m));
+                            let mut effects = seen(m);
                             if shown_cards(m) != was {
                                 effects.push(again());
                             }
@@ -504,18 +505,12 @@ fn shown_cards(m: &Model) -> Vec<(String, ProposalRow)> {
 }
 
 fn seen(m: &mut Model) -> Vec<Effect> {
-    let rows = m.rows.rows();
-    let outs = m.cards.seen(rows.iter().filter_map(|r| match r {
-        Row::Card(_, c, row) => Some((c.id, *row)),
-        Row::Unresolved(_) => None,
-    }));
     let readings = &m.rows;
-    let settled = m.cards.settled(|k| readings.card(k));
-    out(outs.into_iter().chain(settled).collect())
+    out(m.cards.settled(|k| readings.card(k)))
 }
 
 fn out(outs: Vec<card::Out>) -> Vec<Effect> {
-    card::effects(outs, Hold::Card, Ask::Card).0
+    card::effects(outs, Ask::Card).0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

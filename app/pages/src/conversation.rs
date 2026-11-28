@@ -29,7 +29,8 @@ use crate::part::Who;
 use crate::places::Place;
 use crate::refused;
 use crate::runtime::{
-    self, Act, Answer, Context, Local, Outcome, Reach, Said, Scroll, Secret, Window, answered, read,
+    self, Act, Answer, Context, Listening, Local, Outcome, Reach, Said, Scroll, Secret, Slot,
+    Window, answered, frames, hold, read, stream, watch,
 };
 use crate::slices::Slices;
 use crate::zone;
@@ -59,7 +60,7 @@ pub struct Flags {
     pub at: At,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "of")]
 #[ts(rename = "ConversationHold")]
 pub enum Hold {
@@ -127,13 +128,13 @@ impl From<Spoken> for composer::Sent {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "ConversationStream")]
 pub enum Stream {
     Conversation,
 }
 
-pub(crate) type Effect = runtime::Effect<Hold, Ask, Stream>;
+pub(crate) type Effect = runtime::Effect<Ask>;
 pub type Input = runtime::Input<Hold, Ask, Stream>;
 
 /// A round as the worker groups it, by turn and card indices.
@@ -350,13 +351,10 @@ fn about(at: &At) -> Option<&str> {
     }
 }
 
-fn window(m: &Model) -> Effect {
-    Effect::Watch {
-        ask: Hold::Window,
-        local: Local::Window {
-            id: m.id.clone(),
-            window: m.asked.clone(),
-        },
+fn again_window(m: &Model) -> Effect {
+    Effect::AgainWindow {
+        id: m.id.clone(),
+        window: m.asked.clone(),
     }
 }
 
@@ -438,8 +436,8 @@ impl Program for Conversation {
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Ask, Stream>;
+    type Sub = runtime::Sub;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
         let (id, refs, focus, first) = match &flags.at {
@@ -460,7 +458,7 @@ impl Program for Conversation {
                 None,
             ),
         };
-        let (composer, draft) = Composer::of(&id, &refs);
+        let composer = Composer::of(&id, &refs);
         let mut m = Model {
             context: flags.context,
             at: flags.at,
@@ -498,38 +496,73 @@ impl Program for Conversation {
             },
             None => asking(&m, 0),
         };
-        let mut effects = vec![
-            window(&m),
-            Effect::Listen {
-                ask: Stream::Conversation,
-                path: format!(
-                    "/api/secretary/conversations/{}/stream",
-                    runtime::component(&m.id)
-                ),
-            },
-            Effect::Watch {
-                ask: Hold::Intents,
-                local: Local::Intents,
-            },
-            Effect::Watch {
-                ask: Hold::Titles,
-                local: Local::Titles,
-            },
-            Effect::Watch {
-                ask: Hold::Scroll,
-                local: Local::Scroll,
-            },
-            Effect::Watch {
-                ask: Hold::Draft,
-                local: draft,
-            },
-        ];
+        let mut effects = Vec::new();
         if focus && writes(&m) {
             effects.push(Effect::Focus {
                 field: "compose".to_owned(),
             });
         }
         (m, effects)
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Ask, Stream> {
+        // Each block of the answer streaming in is rendered by the box, and only while it streams.
+        let blocks = match &m.landing {
+            Landing::Streaming(blocks, _) => blocks.as_slice(),
+            Landing::Thinking | Landing::Working(..) | Landing::Done => &[],
+        };
+        let rendered = blocks.iter().map(|(sha, _)| {
+            hold(
+                Hold::Block(sha.clone()),
+                format!(
+                    "/api/secretary/conversations/{}/blocks/{}",
+                    runtime::component(&m.id),
+                    runtime::component(sha)
+                ),
+            )
+        });
+        let cards = match &m.held {
+            Held::Loaded { grouped, .. } => {
+                let id = grouped.payload.id.as_str();
+                card::listening(
+                    grouped.payload.proposals.iter().map(|r| (id, r)),
+                    Hold::Card,
+                )
+                .collect()
+            }
+            Held::Loading
+            | Held::Failed(_)
+            | Held::NotHere(..)
+            | Held::Unheard
+            | Held::Refused(_) => Vec::new(),
+        };
+        // Slices wait for a frame each until the rounds are drawn whole.
+        let slices = (!m.shown.whole(rounds_held(m))).then(|| frames(Ask::Slice));
+        [
+            watch(
+                Hold::Window,
+                Local::Window {
+                    id: m.id.clone(),
+                    window: m.asked.clone(),
+                },
+            ),
+            stream(
+                Stream::Conversation,
+                format!(
+                    "/api/secretary/conversations/{}/stream",
+                    runtime::component(&m.id)
+                ),
+            ),
+            watch(Hold::Intents, Local::Intents),
+            watch(Hold::Titles, Local::Titles),
+            watch(Hold::Scroll, Local::Scroll),
+            watch(Hold::Draft, m.composer.watching()),
+        ]
+        .into_iter()
+        .chain(rendered)
+        .chain(cards)
+        .chain(slices)
+        .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Effect> {
@@ -553,7 +586,7 @@ impl Program for Conversation {
             Msg::Earlier => {
                 m.asked = asking(m, WINDOW);
                 m.keep = true;
-                vec![window(m)]
+                Vec::new()
             }
             Msg::Pill => {
                 m.pill = false;
@@ -788,7 +821,7 @@ fn row<'a>(m: &'a Model, key: &card::Key) -> Option<&'a ProposalRow> {
 }
 
 fn carded(m: &mut Model, outs: Vec<card::Out>) -> Vec<Effect> {
-    let (mut effects, replies) = card::effects(outs, Hold::Card, Ask::Card);
+    let (mut effects, replies) = card::effects(outs, Ask::Card);
     for k in replies {
         let more = m.composer.attach(k.reference());
         effects.extend(composed(m, more));
@@ -884,7 +917,7 @@ fn connected(m: &mut Model, now: Connection) -> Vec<Effect> {
     let was = std::mem::replace(&mut m.connection, now);
     let mut effects = match (now, &m.held) {
         (Connection::Reaching, Held::NotHere(..) | Held::Unheard | Held::Refused(_)) => {
-            vec![window(m)]
+            vec![again_window(m)]
         }
         (Connection::Reaching, Held::Loading | Held::Failed(_) | Held::Loaded { .. })
         | (Connection::Lost, _) => Vec::new(),
@@ -902,21 +935,7 @@ fn heard(m: &mut Model, frame: &str) -> Vec<Effect> {
             // A written turn comes with the replicas, pulled now.
             let turned = matches!(f, Frame::Turn);
             let landing = std::mem::replace(&mut m.landing, Landing::Done).step(f);
-            let mut effects: Vec<Effect> = match &landing {
-                Landing::Streaming(blocks, _) => blocks
-                    .iter()
-                    .filter(|(sha, _)| !m.blocks.contains_key(sha))
-                    .map(|(sha, _)| Effect::Hold {
-                        ask: Hold::Block(sha.clone()),
-                        path: format!(
-                            "/api/secretary/conversations/{}/blocks/{}",
-                            runtime::component(&m.id),
-                            runtime::component(sha)
-                        ),
-                    })
-                    .collect(),
-                Landing::Thinking | Landing::Working(..) | Landing::Done => Vec::new(),
-            };
+            let mut effects = Vec::new();
             if let Landing::Done = landing {
                 m.blocks.clear();
             }
@@ -1017,7 +1036,6 @@ fn windowed(m: &mut Model, reading: Reading<Answer>) -> Vec<Effect> {
             let pinned = asking(m, 0);
             if pinned.from != m.asked.from {
                 m.asked = pinned;
-                effects.push(window(m));
             }
             effects.extend(seen(m));
             effects.extend(taken_back(m));
@@ -1085,11 +1103,7 @@ fn round_words(held: &Held, i: usize) -> usize {
 /// Asks the next slice while rounds are left; after the last, moves the box.
 fn drawn(m: &mut Model) -> Vec<Effect> {
     if !m.shown.whole(rounds_held(m)) {
-        return if m.shown.ask(rounds_held(m)) {
-            vec![Effect::Frame { ask: Ask::Slice }]
-        } else {
-            Vec::new()
-        };
+        return Vec::new();
     }
     let to = m.placing.take();
     let mut effects = moved(m, to);
@@ -1138,14 +1152,11 @@ fn seen(m: &mut Model) -> Vec<Effect> {
     let Held::Loaded { grouped, .. } = &m.held else {
         return Vec::new();
     };
-    let id = grouped.payload.id.clone();
     let rows = grouped.payload.proposals.clone();
-    let mut outs = m.cards.seen(rows.iter().map(|r| (id.as_str(), r)));
-    outs.extend(
-        m.cards
-            .settled(|k| rows.iter().find(|r| r.index == k.index as usize)),
-    );
-    card::effects(outs, Hold::Card, Ask::Card).0
+    let outs = m
+        .cards
+        .settled(|k| rows.iter().find(|r| r.index == k.index as usize));
+    card::effects(outs, Ask::Card).0
 }
 
 fn asked(m: &mut Model, ask: Ask, a: Answer) -> Vec<Effect> {
@@ -1956,12 +1967,8 @@ mod tests {
     /// `msg` stepped, and every slice the page asks for after it answered: what it drew, and the
     /// effects of the last step.
     fn drawn_whole(rt: &mut Runtime<Conversation>, msg: Msg) -> (String, Vec<Effect>) {
-        let (mut patches, mut effects) = rt.step(msg);
-        let mut all = effects.clone();
-        while effects
-            .iter()
-            .any(|e| matches!(e, Effect::Frame { ask: Ask::Slice }))
-        {
+        let (mut patches, mut all) = rt.step(msg);
+        while slicing(rt) {
             let (drawn, more) = rt.step(Msg::Host(Box::new(Input::Answered {
                 ask: Ask::Slice,
                 answer: Answer::Done {
@@ -1969,8 +1976,7 @@ mod tests {
                 },
             })));
             patches.extend(drawn);
-            all.extend(more.iter().cloned());
-            effects = more;
+            all.extend(more);
         }
         let drawn = String::from_utf8_lossy(&viewtree::patch::encode(&patches)).into_owned();
         (drawn, all)
@@ -2294,26 +2300,26 @@ mod tests {
         effects.iter().any(|e| matches!(e, Effect::Scroll { .. }))
     }
 
+    /// Whether the page waits for a frame to draw its next slice.
+    fn slicing(rt: &Runtime<Conversation>) -> bool {
+        rt.active().get(&Slot::Asked(Ask::Slice)).is_some()
+    }
+
     /// `msg` stepped, and every slice it asks for answered: what the page asks once it is drawn.
     fn stepped(rt: &mut Runtime<Conversation>, msg: Msg) -> Vec<Effect> {
-        let slicing = |e: &Effect| matches!(e, Effect::Frame { ask: Ask::Slice });
-        let mut out = Vec::new();
-        let mut next = rt.step(msg).1;
-        loop {
-            let more = next.iter().any(slicing);
-            out.extend(next.into_iter().filter(|e| !slicing(e)));
-            if !more {
-                return out;
-            }
-            next = rt
-                .step(Msg::Host(Box::new(Input::Answered {
+        let mut out = rt.step(msg).1;
+        while slicing(rt) {
+            out.extend(
+                rt.step(Msg::Host(Box::new(Input::Answered {
                     ask: Ask::Slice,
                     answer: Answer::Done {
                         body: Text::printed(&serde_json::Value::Null),
                     },
                 })))
-                .1;
+                .1,
+            );
         }
+        out
     }
 
     fn page() -> Runtime<Conversation> {
@@ -2357,21 +2363,48 @@ mod tests {
     #[test]
     fn the_window_is_held_from_its_first_turn() {
         let mut rt = page();
-        let from = |effects: &[Effect]| {
-            effects.iter().find_map(|e| {
-                if let Effect::Watch {
-                    local: Local::Window { window, .. },
-                    ..
-                } = e
-                {
-                    Some(window.from)
-                } else {
-                    None
-                }
-            })
+        let from = |rt: &Runtime<Conversation>| match rt.active().get(&Slot::Held(Hold::Window)) {
+            Some(runtime::Sub::Watch {
+                local: Local::Window { window, .. },
+            }) => window.from,
+            other => panic!("the window is read: {other:?}"),
         };
-        assert_eq!(from(&rt.step(window(3)).1), Some(Some(0)));
-        assert_eq!(from(&rt.step(window(4)).1), None, "asked once");
+        assert_eq!(from(&rt), None, "the first window starts where it is");
+        let held = rt.send(window(3));
+        assert_eq!(from(&rt), Some(0), "and is pinned to the first turn");
+        assert!(!held.subs.is_empty(), "the pinned window is asked");
+        let grown = rt.send(window(4));
+        assert_eq!(from(&rt), Some(0));
+        assert_eq!(grown.subs, Vec::new(), "a turn more asks nothing again");
+    }
+
+    /// A block of the answer streaming in is rendered by the box while the answer streams, and is
+    /// read no more once the answer is whole.
+    #[test]
+    fn a_block_is_read_only_while_its_answer_streams() {
+        let mut rt = page();
+        let said = |frame: serde_json::Value| {
+            Msg::Host(Box::new(Input::Heard {
+                ask: Stream::Conversation,
+                frame: frame.to_string(),
+            }))
+        };
+        let block = Slot::Held(Hold::Block("s".to_owned()));
+        rt.send(said(json!({"kind": "delta", "text": "a\n\n"})));
+        assert_eq!(
+            rt.active().get(&block),
+            None,
+            "an open block is not rendered"
+        );
+        rt.send(said(
+            json!({"kind": "block", "n": 0, "sha": "s", "source": "a\n\n"}),
+        ));
+        assert!(matches!(
+            rt.active().get(&block),
+            Some(runtime::Sub::Hold { .. })
+        ));
+        rt.send(said(json!({"kind": "turn"})));
+        assert_eq!(rt.active().get(&block), None, "a whole answer reads none");
     }
 
     #[test]

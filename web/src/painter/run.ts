@@ -1,6 +1,6 @@
 // A Rust program in the tab: its patches painted, each effect handed to the host, one input at a time.
 
-import type { Input, SubPatch } from "../wire/generated/pages"
+import type { Input, Slot, Sub, SubPatch } from "../wire/generated/pages"
 import deliver from "./deliver"
 import mailbox from "./mailbox"
 import painter from "./painter"
@@ -18,8 +18,7 @@ export namespace run {
     readonly free: () => void
   }
   export type Handler<I, E> = (effect: E, send: (input: I) => void) => void
-  // No page has a source yet, so a patch is of the empty sum, and only a `Stop` can be written.
-  export type Patched = SubPatch<never, never>
+  export type Patched = SubPatch<Slot<unknown, unknown, unknown>, Sub>
   export type T<I> = { readonly send: (input: I) => void; readonly destroy: () => void }
 
   const named = (input: Input<unknown, unknown, unknown>): string =>
@@ -39,7 +38,7 @@ export namespace run {
     foreign: painter.Foreign,
     blocks: painter.Blocks,
     handle: Handler<I, E>,
-    subscribe: (patch: Patched) => void,
+    subscribe: (patch: Patched, send: (input: I) => void) => void,
     keeps: (effect: E) => boolean,
     gone: ((n: Node) => void) | undefined,
     box: () => Element,
@@ -66,7 +65,7 @@ export namespace run {
         // Its listeners change before any of its effects is performed, so an effect may name one the step starts.
         const s0 = performance.now()
         const patched = parse<Patched>(page.subs())
-        patched.forEach(subscribe)
+        patched.forEach(p => subscribe(p, send))
         measure("page:subs", s0, { patches: patched.length })
         measure("painter:step", t0, { step: name, bytes: bytes.length, effects: effects.length, wasm })
         for (const e of effects) handle(e, send)

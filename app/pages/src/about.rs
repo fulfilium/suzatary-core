@@ -13,9 +13,9 @@ use crate::chrome::{self, Chrome, Masthead, Shape, link};
 use crate::places::{Place, Question};
 use crate::reading::{Nothing, Opened};
 use crate::releases;
-use crate::runtime::{Context, Effect, Held, Input, Never};
+use crate::runtime::{self, Context, Effect, Held, Input, Listening, Never, Slot, hold};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "AboutHold")]
 pub enum Hold {
     About,
@@ -78,28 +78,27 @@ fn version(p: &AboutPayload) -> Node<Msg> {
 impl Program for About {
     type Model = Model;
     type Msg = Msg;
-    type Effect = Effect<Hold, Never>;
+    type Effect = Effect<Never>;
     type Flags = Opened<Nothing>;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(o: Opened<Nothing>) -> (Model, Vec<Self::Effect>) {
-        let hold = |ask, q: Question<'_>| Effect::Hold {
-            ask,
-            path: q.path(),
-        };
         let m = Model {
             context: o.context,
             running: Held::loading(),
             releases: Held::loading(),
         };
-        (
-            m,
-            vec![
-                hold(Hold::About, Question::About),
-                hold(Hold::Releases, Question::Releases),
-            ],
-        )
+        (m, Vec::new())
+    }
+
+    fn subscriptions(_: &Model) -> Listening<Hold, Never> {
+        [
+            hold(Hold::About, Question::About.path()),
+            hold(Hold::Releases, Question::Releases.path()),
+        ]
+        .into_iter()
+        .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Self::Effect> {

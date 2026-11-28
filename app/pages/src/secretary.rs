@@ -29,8 +29,8 @@ use crate::conversation::Spoken;
 use crate::part::Who;
 use crate::places::Place;
 use crate::runtime::{
-    self, Act, Answer, Context, Local, Outcome, Reach, Said, Scroll, Secret, TopicWrite, answered,
-    read,
+    self, Act, Answer, Context, Listening, Local, Outcome, Reach, Said, Scroll, Secret, Slot,
+    TopicWrite, answered, at, frames, read, watch,
 };
 use crate::slices::Slices;
 use crate::zone::{self, recent};
@@ -45,7 +45,7 @@ pub struct Flags {
     pub now: i64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "SecretaryHold")]
 pub enum Hold {
     Stream,
@@ -77,7 +77,7 @@ pub struct Wrote {
     pub renamed: Option<(String, String)>,
 }
 
-pub(crate) type Effect = runtime::Effect<Hold, Ask>;
+pub(crate) type Effect = runtime::Effect<Ask>;
 pub(crate) type Input = runtime::Input<Hold, Ask>;
 
 /// `Local::Stream`, read from its dressed text (`answer::Dressed`).
@@ -216,24 +216,6 @@ fn filter(topics: Vec<String>) -> Vec<String> {
     t
 }
 
-fn watch(m: &Model) -> Effect {
-    Effect::Watch {
-        ask: Hold::Stream,
-        local: Local::Stream {
-            chosen: m.chosen.clone(),
-            pages: m.pages,
-        },
-    }
-}
-
-fn day(m: &Model) -> Effect {
-    let next = zone::next_day_ms(&m.context.offsets, m.now);
-    Effect::Timer {
-        ask: Ask::Day,
-        after: u32::try_from((next - m.now).clamp(0, i64::from(u32::MAX))).unwrap_or(u32::MAX),
-    }
-}
-
 fn today(m: &Model) -> NaiveDate {
     zone::day_ms(&m.context.offsets, m.now)
 }
@@ -269,11 +251,10 @@ impl Program for Secretary {
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Ask>;
+    type Sub = runtime::Sub;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
-        let (composer, draft) = Composer::of(DEFAULT.as_str(), &[]);
         let m = Model {
             context: flags.context,
             chosen: filter(flags.topics),
@@ -285,23 +266,44 @@ impl Program for Secretary {
             at_end: true,
             sheet: Sheet::Closed,
             search: Searching::default(),
-            composer,
+            composer: Composer::of(DEFAULT.as_str(), &[]),
             tagging: Vec::new(),
             now: flags.now,
         };
-        let effects = vec![
-            watch(&m),
-            Effect::Watch {
-                ask: Hold::Scroll,
-                local: Local::Scroll,
-            },
-            Effect::Watch {
-                ask: Hold::Draft,
-                local: draft,
-            },
-            day(&m),
-        ];
-        (m, effects)
+        (m, Vec::new())
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Ask> {
+        // The question just sent is found in the newest page, whatever the filter.
+        let placed = (!m.tagging.is_empty()).then(|| {
+            watch(
+                Hold::Placed,
+                Local::Stream {
+                    chosen: Vec::new(),
+                    pages: 1,
+                },
+            )
+        });
+        // Slices wait for a frame each until the rounds are drawn whole.
+        let slices = (!m.shown.whole(rounds(m))).then(|| frames(Ask::Slice));
+        [
+            Some(watch(
+                Hold::Stream,
+                Local::Stream {
+                    chosen: m.chosen.clone(),
+                    pages: m.pages,
+                },
+            )),
+            Some(watch(Hold::Scroll, Local::Scroll)),
+            Some(watch(Hold::Draft, m.composer.watching())),
+            Some(at(Ask::Day, zone::next_day_ms(&m.context.offsets, m.now))),
+            placed,
+            slices,
+            m.search.listening(Hold::Found),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Effect> {
@@ -310,7 +312,7 @@ impl Program for Secretary {
             Msg::Copy(text) => vec![Effect::Copy { text }],
             Msg::Earlier => {
                 m.pages += 1;
-                vec![watch(m)]
+                Vec::new()
             }
             Msg::Rename(topic) => {
                 m.sheet = Sheet::Renaming {
@@ -386,7 +388,9 @@ impl Program for Secretary {
         };
         let body = match &m.search.search {
             Search::On { q, found, .. } => {
-                vec![view! { Div "chatbody" [chats::hits(q, found, &m.context.offsets, today(m))] }]
+                vec![
+                    view! { Div "chatbody" [chats::hits(q, found.reading(), &m.context.offsets, today(m))] },
+                ]
             }
             Search::Off => {
                 let mut body = stream(m);
@@ -440,13 +444,6 @@ fn say(m: &mut Model, sent: &composer::Sent) -> Vec<Effect> {
         m.tagging.push(Tagging {
             text: sent.text.clone(),
             topics: m.chosen.clone(),
-        });
-        effects.push(Effect::Watch {
-            ask: Hold::Placed,
-            local: Local::Stream {
-                chosen: Vec::new(),
-                pages: 1,
-            },
         });
     }
     effects.push(Effect::Core {
@@ -547,11 +544,10 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
         Input::Answered {
             ask: Ask::Search(chats::Asking::Rested(n)),
             ..
-        } => m.search.rested(n, Hold::Found),
-        Input::Answered {
-            ask: Ask::Search(chats::Asking::Found),
-            ..
-        } => Vec::new(),
+        } => {
+            m.search.rested(n);
+            Vec::new()
+        }
         Input::Answered {
             ask: Ask::Slice, ..
         } => {
@@ -565,7 +561,7 @@ fn host(m: &mut Model, input: Input) -> Vec<Effect> {
             if let Ok(now) = answered::<i64>(answer) {
                 m.now = now;
             }
-            vec![day(m)]
+            Vec::new()
         }
         Input::Answered {
             ask: Ask::Composer(c),
@@ -632,11 +628,7 @@ fn round_words(stream: &Reading<StreamRead>, i: usize) -> usize {
 /// Asks the next slice while rounds are left; after the last, moves the box.
 fn drawn(m: &mut Model) -> Vec<Effect> {
     if !m.shown.whole(rounds(m)) {
-        return if m.shown.ask(rounds(m)) {
-            vec![Effect::Frame { ask: Ask::Slice }]
-        } else {
-            Vec::new()
-        };
+        return Vec::new();
     }
     m.placing
         .take()
@@ -945,6 +937,39 @@ mod tests {
         .0
     }
 
+    /// The source that reads the newest page for a question sent under topics, while one waits.
+    fn placing(rt: &Runtime<Secretary>) -> Option<&runtime::Sub> {
+        rt.active().get(&Slot::Held(Hold::Placed))
+    }
+
+    /// The day boundary is one instant for as long as the page's day lasts, so a step that moves
+    /// nothing of it re-arms nothing, and the instant moves a day when the boundary is reached.
+    #[test]
+    fn the_day_boundary_is_one_instant_until_it_is_reached() {
+        let mut rt = page(&[]);
+        let day = Slot::Asked(Ask::Day);
+        let instant = |rt: &Runtime<Secretary>| match rt.active().get(&day) {
+            Some(runtime::Sub::At { instant }) => *instant,
+            other => panic!("the day is an instant: {other:?}"),
+        };
+        let first = instant(&rt);
+        let moved = rt.send(Msg::Earlier);
+        assert!(
+            !moved
+                .subs
+                .iter()
+                .any(|s| matches!(s, viewtree::SubPatch::Start { slot, .. } if *slot == day)),
+            "a step in the same day arms nothing"
+        );
+        rt.send(Msg::Host(Box::new(Input::Answered {
+            ask: Ask::Day,
+            answer: Answer::Done {
+                body: Text::printed(&first),
+            },
+        })));
+        assert!(instant(&rt) > first, "the next boundary is a day on");
+    }
+
     fn typed_and_sent(rt: &mut Runtime<Secretary>, words: &str) -> Vec<Effect> {
         rt.step(Msg::Composer(composer::Ev::Typed(words.to_owned())));
         rt.step(Msg::Composer(composer::Ev::Send)).1
@@ -1045,13 +1070,7 @@ mod tests {
                 },
             }]
         );
-        assert!(!effects.iter().any(|e| matches!(
-            e,
-            Effect::Watch {
-                ask: Hold::Placed,
-                ..
-            }
-        )));
+        assert!(placing(&rt).is_none());
         sealed(&mut rt, "water the ferns");
         assert!(rt.model().composer.empty(), "kept, the box empties");
         assert!(placed(&mut rt, &["water the ferns"]).is_empty());
@@ -1062,14 +1081,8 @@ mod tests {
     #[test]
     fn a_question_sent_under_topics_takes_them_when_its_round_is_read() {
         let mut rt = page(&["garden", "trip"]);
-        let effects = typed_and_sent(&mut rt, "water the ferns");
-        assert!(effects.iter().any(|e| matches!(
-            e,
-            Effect::Watch {
-                ask: Hold::Placed,
-                ..
-            }
-        )));
+        typed_and_sent(&mut rt, "water the ferns");
+        assert!(placing(&rt).is_some(), "the newest page is read to find it");
         sealed(&mut rt, "water the ferns");
         assert!(tags(&placed(&mut rt, &["an older question"])).is_empty());
         assert_eq!(
@@ -1083,6 +1096,7 @@ mod tests {
             tags(&placed(&mut rt, &["an older question", "water the ferns"])).is_empty(),
             "tagged once"
         );
+        assert!(placing(&rt).is_none(), "and read no more once it is tagged");
     }
 
     /// A question the tab refuses comes back into the box, and its round is never tagged.

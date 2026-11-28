@@ -12,7 +12,7 @@ use crate::chats::{self, Search, Searching};
 use crate::chrome::{self, Chrome, Masthead, Shape, Status, link};
 use crate::needsyou::Route;
 use crate::places::Place;
-use crate::runtime::{self, Context, Effect, Local, read};
+use crate::runtime::{self, Context, Effect, Listening, Local, Never, Slot, read, watch};
 use crate::zone;
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -24,7 +24,7 @@ pub struct Flags {
     pub now: i64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "ConversationsHold")]
 pub enum Hold {
     Chats,
@@ -59,10 +59,10 @@ pub enum Conversations {}
 impl Program for Conversations {
     type Model = Model;
     type Msg = Msg;
-    type Effect = Effect<Hold, Ask>;
+    type Effect = Effect<Ask>;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(f: Flags) -> (Model, Vec<Self::Effect>) {
         let m = Model {
@@ -72,14 +72,18 @@ impl Program for Conversations {
             search: Searching::default(),
             current: None,
         };
-        let watch = |ask, local| Effect::Watch { ask, local };
-        (
-            m,
-            vec![
-                watch(Hold::Chats, Local::Conversations),
-                watch(Hold::Route, Local::Route),
-            ],
-        )
+        (m, Vec::new())
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Never> {
+        [
+            Some(watch(Hold::Chats, Local::Conversations)),
+            Some(watch(Hold::Route, Local::Route)),
+            m.search.listening(Hold::Found),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Self::Effect> {
@@ -110,11 +114,7 @@ impl Program for Conversations {
                 Input::Answered {
                     ask: chats::Asking::Rested(n),
                     ..
-                } => return m.search.rested(n, Hold::Found),
-                Input::Answered {
-                    ask: chats::Asking::Found,
-                    ..
-                } => {}
+                } => m.search.rested(n),
                 Input::Heard { ask, .. } | Input::Opened { ask } | Input::Lost { ask } => {
                     match ask {}
                 }
@@ -146,7 +146,9 @@ impl Program for Conversations {
             Status::Quiet
         };
         let body = match &m.search.search {
-            Search::On { q, found, .. } => chats::hits(q, found, &m.context.offsets, today),
+            Search::On { q, found, .. } => {
+                chats::hits(q, found.reading(), &m.context.offsets, today)
+            }
             Search::Off => chats::view(
                 &m.chats,
                 m.current.as_deref(),

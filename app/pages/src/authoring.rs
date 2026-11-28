@@ -9,7 +9,7 @@ use crate::todoparts::Seal;
 
 /// Ask the box to print `body` for `chain`, answered once as `ask`.
 #[must_use]
-pub(crate) fn author<H, A, S>(ask: A, chain: &str, body: Authoring) -> Effect<H, A, S> {
+pub(crate) fn author<A>(ask: A, chain: &str, body: Authoring) -> Effect<A> {
     Effect::Post {
         ask,
         path: Question::Author(chain).path(),
@@ -18,18 +18,18 @@ pub(crate) fn author<H, A, S>(ask: A, chain: &str, body: Authoring) -> Effect<H,
 }
 
 /// The todo an event is about, and the seals of what the box printed.
-pub(crate) type Sealed<H, A, S> = (String, Vec<Effect<H, A, S>>);
+pub(crate) type Sealed<A> = (String, Vec<Effect<A>>);
 
 /// What the box printed, sealed onto `chain`'s replica in its order (a subtodo's parent revision
 /// after the subtodo), each answered as `ask` names it and its todo; the todo beside them.
 ///
 /// # Errors
 /// The box refused, in its words.
-pub(crate) fn sealed<H, A, S>(
+pub(crate) fn sealed<A>(
     chain: &str,
     answer: Answer,
     ask: impl Fn(&str, Seal) -> A,
-) -> Result<Sealed<H, A, S>, String> {
+) -> Result<Sealed<A>, String> {
     let printed: AuthoredPayload = answered(answer)?;
     let todo = printed.todo;
     let seals = std::iter::once((Seal::Event, printed.event))

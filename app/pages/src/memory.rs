@@ -13,9 +13,11 @@ use viewtree::{Node, Program, view};
 use crate::chrome::{self, Chrome, Masthead, Shape, callout, counted, empty, link};
 use crate::places::{Place, Question};
 use crate::reading::{Nothing, Opened};
-use crate::runtime::{Answer, Body, Context, Effect, Gate, Held, Input};
+use crate::runtime::{
+    self, Answer, Body, Context, Effect, Gate, Held, Input, Listening, Never, Slot, hold,
+};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "MemoryHold")]
 pub enum Hold {
     Memory,
@@ -31,7 +33,7 @@ pub enum Act {
 }
 
 impl Act {
-    fn effect(&self) -> Effect<Hold, Act> {
+    fn effect(&self) -> Effect<Act> {
         let path = match self {
             Act::Forget(id) => Question::Forget(id.0).path(),
             Act::Retract(node) => Question::Retract(node).path(),
@@ -70,10 +72,10 @@ const READS: [Question<'static>; 2] = [Question::Memory, Question::Record];
 impl Program for Memory {
     type Model = Model;
     type Msg = Msg;
-    type Effect = Effect<Hold, Act>;
+    type Effect = Effect<Act>;
     type Flags = Opened<Nothing>;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(o: Opened<Nothing>) -> (Model, Vec<Self::Effect>) {
         let m = Model {
@@ -82,16 +84,15 @@ impl Program for Memory {
             record: Held::loading(),
             running: Vec::new(),
         };
-        let holds = [Hold::Memory, Hold::Record].into_iter().zip(READS);
-        (
-            m,
-            holds
-                .map(|(ask, q)| Effect::Hold {
-                    ask,
-                    path: q.path(),
-                })
-                .collect(),
-        )
+        (m, Vec::new())
+    }
+
+    fn subscriptions(_: &Model) -> Listening<Hold, Never> {
+        [Hold::Memory, Hold::Record]
+            .into_iter()
+            .zip(READS)
+            .map(|(ask, q)| hold(ask, q.path()))
+            .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Self::Effect> {

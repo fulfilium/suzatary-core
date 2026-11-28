@@ -9,7 +9,7 @@ pub(crate) use suzatary_cards::wire::cards::{AboutPayload, HeldTodo};
 pub(crate) use suzatary_memory::secretary::memory::{FactId, Kind};
 pub(crate) use suzatary_pages::reading::{Nothing, One, Opened};
 pub(crate) use suzatary_pages::runtime::{
-    Answer, Behind, Body, Context, Effect, Gate, Input, Reach, Text, Untrusted,
+    Answer, Behind, Body, Context, Effect, Gate, Input, Reach, Slot, Sub, Text, Untrusted,
 };
 pub(crate) use suzatary_pages::todoparts::{Seal, Verb};
 pub(crate) use suzatary_pages::waiting::Watched;
@@ -25,7 +25,6 @@ pub(crate) use suzatary_topics::wire::topics::{
     BlockRow, FactRow, FactSaid, MemoryPayload, SaidOn,
 };
 pub(crate) use viewtree::Runtime;
-pub(crate) use viewtree::dom::page_laws;
 pub(crate) use viewtree::kit::Reading;
 
 pub(crate) fn context(writes: bool) -> Context {
@@ -413,4 +412,49 @@ pub(crate) fn hosted<P: viewtree::host::Hosted>(input: &Value) -> P::Msg {
             P::reply(serde_json::from_value(r).expect("a reply it takes"), text)
         }
     }
+}
+
+/// A page's laws over one run of `msgs` (`viewtree::dom::page_laws`), and two more: the frames it
+/// waits for, answered, end; and once nothing is owed, the context the host pushes, heard twice,
+/// moves no source, patch or effect the second time. A source that held a counter or the clock
+/// would differ at every step and restart its listener each time.
+pub(crate) fn page_laws<P>(flags: impl Fn() -> P::Flags, msgs: &[P::Msg])
+where
+    P: viewtree::host::Hosted<Msg: std::fmt::Debug, Slot: std::fmt::Debug, Sub: std::fmt::Debug>,
+{
+    viewtree::dom::page_laws::<P>(&flags, msgs);
+    let (mut rt, _) = Runtime::<P>::start(flags());
+    for msg in msgs {
+        rt.send(msg.clone());
+    }
+    // Every frame a page waits for is answered, as the host does, until it waits for none.
+    for _ in 0..100_000 {
+        let Some(of) = rt.active().iter().find_map(|(slot, source)| {
+            let slot = printed(slot);
+            (printed(source)["type"] == "Frames").then(|| slot["of"].clone())
+        }) else {
+            break;
+        };
+        let reply =
+            serde_json::from_value(json!({"type": "Answered", "ask": of})).expect("a reply reads");
+        rt.send(P::reply(reply, b"null".to_vec()));
+    }
+    assert!(
+        rt.active()
+            .iter()
+            .all(|(_, s)| printed(s)["type"] != "Frames"),
+        "a page that is drawn whole still waits for frames"
+    );
+    let heard = || {
+        let context = json!({"type": "Context", "gate": "writes", "reach": {"type": "Writes"},
+            "offsets": [], "keys": "Touch", "opens": "Over", "categories": [], "clock": null});
+        P::input(serde_json::from_value(context).expect("a context reads"))
+    };
+    rt.send(heard());
+    let again = rt.send(heard());
+    assert!(
+        again.subs.is_empty() && again.patches.is_empty() && again.effects.is_empty(),
+        "a page with nothing owed took the same context again and moved: {:?}",
+        again.subs
+    );
 }

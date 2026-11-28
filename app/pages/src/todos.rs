@@ -27,8 +27,9 @@ use crate::held::{Folded, Own, Unsent, Unsents};
 use crate::needsyou::Route;
 use crate::places::{Place as To, Question};
 use crate::runtime::{
-    ActName, Answer, Context, Core, Effect, Gate, Input, KeyKind, Keyed, Local, Opens, Outcome,
-    Placed, PlacedWorth, Register, Said, answered, read,
+    self, ActName, Answer, Context, Core, Effect, Gate, Input, KeyKind, Keyed, Listening, Local,
+    Never, Opens, Outcome, Placed, PlacedWorth, Register, Said, Slot, answered, hold, keys, read,
+    watch,
 };
 use crate::todoparts::{
     Acting, Came, Phase, Seal, Verb, applicable, begin, came, conflicts, finish, headline, is_open,
@@ -49,7 +50,7 @@ pub struct Flags {
     pub now: i64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "of")]
 #[ts(rename = "TodosHold")]
 pub enum Hold {
@@ -118,7 +119,7 @@ pub enum Ask {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "TodosListen")]
 pub enum Listen {
     Keys,
@@ -650,7 +651,6 @@ pub struct Model {
     cursor: String,
     sheet: Sheet,
     running: BTreeSet<(String, Acting)>,
-    keys: Vec<KeyKind>,
 }
 
 #[derive(Debug, Clone)]
@@ -718,11 +718,11 @@ impl Narrow {
 #[derive(Debug)]
 pub enum Todos {}
 
-type Fx = Effect<Hold, Ask, Listen>;
+type Fx = Effect<Ask>;
 
 impl Model {
-    fn open(f: Flags) -> (Model, Vec<Fx>) {
-        let m = Model {
+    fn open(f: Flags) -> Model {
+        Model {
             context: f.context,
             chain: f.chain,
             title: f.title,
@@ -752,27 +752,23 @@ impl Model {
             cursor: String::new(),
             sheet: Sheet::blank(),
             running: BTreeSet::new(),
-            keys: Vec::new(),
-        };
-        let watch = |ask: Hold, local: Local| Effect::Watch { ask, local };
-        let mut effects = vec![
+        }
+    }
+
+    /// What the page listens to: the fixed readings, and the keys it answers now.
+    fn listening(&self) -> Listening<Hold, Never, Listen> {
+        [
             watch(Hold::Fold, Local::Fold),
             watch(Hold::Unsent, Local::Unsent),
             watch(Hold::Waiting, Local::Waiting),
             watch(Hold::Route, Local::Route),
-            Effect::Hold {
-                ask: Hold::Briefings,
-                path: Question::Briefings.path(),
-            },
-            Effect::Hold {
-                ask: Hold::Overview,
-                path: Question::Overview.path(),
-            },
-        ];
-        effects.extend(KEPT.map(|k| watch(Hold::Kept(k), m.local(k))));
-        let mut m = m;
-        effects.extend(m.declare());
-        (m, effects)
+            hold(Hold::Briefings, Question::Briefings.path()),
+            hold(Hold::Overview, Question::Overview.path()),
+            keys(Listen::Keys, self.wanted_keys()),
+        ]
+        .into_iter()
+        .chain(KEPT.map(|k| watch(Hold::Kept(k), self.local(k))))
+        .collect()
     }
 
     /// Where a register is kept: its key, and whether this device or this tab keeps it.
@@ -1003,8 +999,8 @@ impl Model {
     }
 
     /// The keys the page answers now: Escape only while it has something to close.
-    fn wanted_keys(&self) -> Vec<KeyKind> {
-        let mut keys = vec![
+    fn wanted_keys(&self) -> BTreeSet<KeyKind> {
+        let mut keys = BTreeSet::from([
             KeyKind::Move,
             KeyKind::Open,
             KeyKind::Close,
@@ -1013,29 +1009,16 @@ impl Model {
             KeyKind::Redo,
             KeyKind::Search,
             KeyKind::Add,
-        ];
+        ]);
         if self.up || !self.opened.is_empty() || !self.cursor.is_empty() {
-            keys.push(KeyKind::Escape);
+            keys.insert(KeyKind::Escape);
         }
         keys
-    }
-
-    fn declare(&mut self) -> Vec<Fx> {
-        let keys = self.wanted_keys();
-        if keys == self.keys {
-            return Vec::new();
-        }
-        self.keys.clone_from(&keys);
-        vec![Effect::Keys {
-            ask: Listen::Keys,
-            keys,
-        }]
     }
 
     fn update(&mut self, msg: Msg) -> Vec<Fx> {
         let mut out = self.step(msg);
         out.extend(self.regrow());
-        out.extend(self.declare());
         out
     }
 
@@ -2195,11 +2178,15 @@ impl Program for Todos {
     type Msg = Msg;
     type Effect = Fx;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never, Listen>;
+    type Sub = runtime::Sub;
 
     fn init(f: Flags) -> (Model, Vec<Fx>) {
-        Model::open(f)
+        (Model::open(f), Vec::new())
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Never, Listen> {
+        m.listening()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Fx> {
@@ -2324,7 +2311,6 @@ mod tests {
             title: "Todos".to_owned(),
             now: 0,
         })
-        .0
     }
 
     #[test]

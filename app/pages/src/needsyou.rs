@@ -9,7 +9,7 @@ use viewtree::Attr::{Href, Role, Title, Type};
 use viewtree::{Node, Program, view};
 
 use crate::places::Place;
-use crate::runtime::{self, Context, Local, Never, read};
+use crate::runtime::{self, Context, Listening, Local, Never, Slot, read, watch};
 use crate::waiting::{CHAINS, Readings, Waiting, Watched, Where, open};
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -58,7 +58,7 @@ pub enum Named {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "of")]
 #[ts(rename = "NeedsYouHold")]
 pub enum Hold {
@@ -67,7 +67,7 @@ pub enum Hold {
 }
 
 pub(crate) type Ask = Never;
-pub(crate) type Effect = runtime::Effect<Hold, Never>;
+pub(crate) type Effect = runtime::Effect<Never>;
 pub type Input = runtime::Input<Hold, Never>;
 
 #[derive(Debug, Clone)]
@@ -126,29 +126,24 @@ impl Program for NeedsYou {
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(_: Flags) -> (Model, Vec<Effect>) {
-        let (readings, watched) = Readings::of(&CHAINS);
-        let mut effects: Vec<Effect> = watched
-            .into_iter()
-            .map(|w| Effect::Watch {
-                local: w.local,
-                ask: Hold::Rows(w.ask),
-            })
-            .collect();
-        effects.push(Effect::Watch {
-            ask: Hold::Route,
-            local: Local::Route,
-        });
         let m = Model {
-            readings,
+            readings: Readings::of(&CHAINS),
             route: Route::default(),
             baseline: None,
             shown: Vec::new(),
         };
-        (m, effects)
+        (m, Vec::new())
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Never> {
+        m.readings
+            .listening(Hold::Rows)
+            .chain([watch(Hold::Route, Local::Route)])
+            .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Effect> {
@@ -160,8 +155,7 @@ impl Program for NeedsYou {
                     reading,
                     ..
                 } => {
-                    // The popup reads no card, so the conversations it names are not watched.
-                    let _named = m.readings.held(w, reading);
+                    m.readings.held(w, reading);
                     NeedsYou::draw(m);
                 }
                 Input::Held {

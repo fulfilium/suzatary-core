@@ -298,18 +298,15 @@ fn drawn_after(rt: &mut Runtime<conversation::Conversation>, answer: &Value) -> 
         },
         behind: None,
     };
-    let mut effects = rt.step(Msg::Host(Box::new(held))).1;
-    while effects
-        .iter()
-        .any(|e| matches!(e, Effect::Frame { ask: Ask::Slice }))
-    {
+    rt.step(Msg::Host(Box::new(held)));
+    while rt.active().get(&Slot::Asked(Ask::Slice)).is_some() {
         let slice = Input::Answered {
             ask: Ask::Slice,
             answer: Answer::Done {
                 body: Text::printed(&json!(1_790_000_005_000_i64)),
             },
         };
-        effects = rt.step(Msg::Host(Box::new(slice))).1;
+        rt.step(Msg::Host(Box::new(slice)));
     }
     format!(
         "{:?}",

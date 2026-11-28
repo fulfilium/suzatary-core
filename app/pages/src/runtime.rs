@@ -1,9 +1,12 @@
 //! The effects a page's `update` returns, as data the host (`web/src/pages/program.ts`) performs,
 //! and the inputs the host answers with, each tagged with the page's own `Ask`.
 
+use std::collections::BTreeSet;
+
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use viewtree::Subs;
 use viewtree::kit::Reading;
 
 use crate::zone::Offset;
@@ -71,17 +74,17 @@ pub enum Untrusted {
     NotTheKey,
 }
 
-/// `H` names held questions, `A` one-time asks, `S` streams; holding an `H` again lets the earlier go.
+/// What a page asks the host to do once; `A` names the asks.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(tag = "type")]
-pub enum Effect<H, A, S = Never> {
-    /// A GET of `path`, handed over as `Input::Held` whenever it moves; a 5xx keeps what stood.
-    Hold {
-        ask: H,
-        path: String,
-    },
+pub enum Effect<A> {
     Again {
         path: String,
+    },
+    /// The window read again, as a reader that has just come reads it.
+    AgainWindow {
+        id: String,
+        window: Window,
     },
     /// HTML the box rendered, kept under its block's key.
     Rendered {
@@ -101,25 +104,10 @@ pub enum Effect<H, A, S = Never> {
     NewKey {
         ask: A,
     },
-    Watch {
-        ask: H,
-        local: Local,
-    },
     Keep {
         register: Register,
         #[ts(type = "unknown")]
         value: serde_json::Value,
-    },
-    /// Each frame as `Input::Heard`, each opening as `Input::Opened`, and its giving up as
-    /// `Input::Lost`.
-    Listen {
-        ask: S,
-        path: String,
-    },
-    /// Each key pressed as [`Input::Heard`] with a [`Keyed`].
-    Keys {
-        ask: S,
-        keys: Vec<KeyKind>,
     },
     /// Pull every store now.
     Sync,
@@ -141,10 +129,6 @@ pub enum Effect<H, A, S = Never> {
     Timer {
         ask: A,
         after: u32,
-    },
-    /// Answered at the next animation frame.
-    Frame {
-        ask: A,
     },
     /// Focus the field marked `data-field` after this step's patches, caret at the end.
     Focus {
@@ -197,6 +181,79 @@ pub enum Effect<H, A, S = Never> {
     /// Let this page's tile go: a pinned page, docked beside others, asks the shell to stop
     /// holding it.
     Release,
+}
+
+/// A page's name for a source; the case is the input the source makes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, TS)]
+#[serde(tag = "type", content = "of")]
+pub enum Slot<H, A, S = Never> {
+    Held(H),
+    Asked(A),
+    Streamed(S),
+}
+
+/// What a page listens to; equal sources are one listener.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "type")]
+pub enum Sub {
+    /// `Input::Held` whenever the GET of `path` moves.
+    Hold {
+        path: String,
+    },
+    Watch {
+        local: Local,
+    },
+    /// `Input::Heard` for each frame, `Opened` and `Lost`.
+    Stream {
+        path: String,
+    },
+    /// `Input::Heard` with a [`Keyed`] for each key pressed.
+    Keys {
+        keys: BTreeSet<KeyKind>,
+    },
+    /// `Input::Answered` once at `instant`, epoch ms.
+    At {
+        #[ts(type = "number")]
+        instant: i64,
+    },
+    /// `Input::Answered` at every animation frame.
+    Frames,
+}
+
+/// The sources of a page at one model.
+pub(crate) type Listening<H, A, S = Never> = Subs<Slot<H, A, S>, Sub>;
+
+/// A source and the slot it is named by; each constructor pairs the slot case its source makes.
+pub(crate) type Listens<H, A, S = Never> = (Slot<H, A, S>, Sub);
+
+#[must_use]
+pub(crate) fn hold<H, A, S>(ask: H, path: String) -> Listens<H, A, S> {
+    (Slot::Held(ask), Sub::Hold { path })
+}
+
+#[must_use]
+pub(crate) fn watch<H, A, S>(ask: H, local: Local) -> Listens<H, A, S> {
+    (Slot::Held(ask), Sub::Watch { local })
+}
+
+#[must_use]
+pub(crate) fn stream<H, A, S>(ask: S, path: String) -> Listens<H, A, S> {
+    (Slot::Streamed(ask), Sub::Stream { path })
+}
+
+#[must_use]
+pub(crate) fn keys<H, A, S>(ask: S, keys: BTreeSet<KeyKind>) -> Listens<H, A, S> {
+    (Slot::Streamed(ask), Sub::Keys { keys })
+}
+
+#[must_use]
+pub(crate) fn at<H, A, S>(ask: A, instant: i64) -> Listens<H, A, S> {
+    (Slot::Asked(ask), Sub::At { instant })
+}
+
+#[must_use]
+pub(crate) fn frames<H, A, S>(ask: A) -> Listens<H, A, S> {
+    (Slot::Asked(ask), Sub::Frames)
 }
 
 /// A question the core in the tab's worker answers (`web/src/prodrome/questions.ts`).

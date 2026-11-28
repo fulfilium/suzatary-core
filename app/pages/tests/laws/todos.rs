@@ -360,7 +360,7 @@ proptest! {
         // The last tree asked and not yet answered: its number, and the price its members give `a`
         // when it asks for `a`, which is all the worker prices it from.
         let mut asked: Option<(u32, Option<f64>)> = None;
-        let tree = |effects: Vec<Effect<todos::Hold, todos::Ask, todos::Listen>>| {
+        let tree = |effects: Vec<Effect<todos::Ask>>| {
             effects.into_iter().filter_map(|e| match e {
                 Effect::Core { ask: todos::Ask::Tree { n }, .. } => Some((n, priced_a(&format!("{e:?}")))),
                 _ => None,
@@ -423,4 +423,32 @@ proptest! {
             }
         }
     }
+}
+
+/// The page answers Escape only while it has something to close, so its keys are one source whose
+/// value moves with the cursor, and a move that leaves them as they were restarts nothing.
+#[test]
+fn the_keys_are_a_source_that_moves_with_the_cursor() {
+    let (mut page, first) = Runtime::<todos::Todos>::start(todos::Flags {
+        context: context(true),
+        chain: "life".to_owned(),
+        title: "Todos".to_owned(),
+        now: 1_788_000_000_000,
+    });
+    let keys = Slot::Streamed(todos::Listen::Keys);
+    let has_escape = |page: &Runtime<todos::Todos>| {
+        let source = page.active().get(&keys).expect("the keys are a source");
+        printed(source)["keys"]
+            .as_array()
+            .is_some_and(|keys| keys.iter().any(|k| k == "Escape"))
+    };
+    assert!(!has_escape(&page), "nothing to close");
+    assert!(first.subs.iter().any(|s| matches!(s, viewtree::SubPatch::Start { slot, source: Sub::Keys { .. } } if *slot == keys)));
+    let tapped = page.send(todos::Msg::Tap("a".to_owned(), "a".to_owned()));
+    assert!(has_escape(&page), "a todo is open, so Escape closes it");
+    assert_eq!(tapped.subs.len(), 1, "only the keys moved");
+    let again = page.send(todos::Msg::Fold("urgent".to_owned(), true));
+    assert_eq!(again.subs, Vec::new(), "keys the same restart nothing");
+    page.send(todos::Msg::Tap("a".to_owned(), String::new()));
+    assert!(!has_escape(&page), "closed again");
 }

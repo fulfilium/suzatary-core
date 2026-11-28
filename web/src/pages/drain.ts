@@ -21,7 +21,7 @@ export namespace drain {
   export const DRAWN: State = { type: "Drawn", owed: NONE }
   export const HIDDEN: State = { type: "Hidden", owed: NONE }
 
-  type Kind = Effect<unknown, unknown, unknown>["type"]
+  type Kind = Effect<unknown>["type"]
 
   const WRITES: ReadonlySet<Kind> = new Set<Kind>(["Post", "Act", "NewKey", "Endorse"])
 
@@ -35,23 +35,20 @@ export namespace drain {
   // Hidden, a program reads, writes and says how a write went; what moves the screen waits for it to be drawn, and what
   // moves the address, or the clipboard, which wants the person's gesture, drops.
   const UNDRAWN: { readonly [K in Kind]: Verdict } = {
-    Hold: "Performs", Again: "Performs", Rendered: "Performs", Get: "Performs", Post: "Performs", NewKey: "Performs",
-    Watch: "Performs", Keep: "Performs", Listen: "Performs", Keys: "Waits", Sync: "Performs", Act: "Performs",
-    Endorse: "Performs", Timer: "Performs", Frame: "Performs", Focus: "Waits", Scroll: "Waits", Copy: "Drops",
+    Again: "Performs", AgainWindow: "Performs", Rendered: "Performs", Get: "Performs", Post: "Performs", NewKey: "Performs",
+    Keep: "Performs", Sync: "Performs", Act: "Performs",
+    Endorse: "Performs", Timer: "Performs", Focus: "Waits", Scroll: "Waits", Copy: "Drops",
     Go: "Drops", Leave: "Drops", Replace: "Drops", Back: "Drops", Toast: "Performs", Offer: "Performs",
     Core: "Performs", Reset: "Performs", Mark: "Performs", Release: "Drops",
   }
 
   const LEAVING: { readonly [K in Kind]: Verdict } = {
-    Hold: "Drops", Again: "Drops", Rendered: "Drops", Get: "Drops", Post: "Performs", NewKey: "Performs",
-    Watch: "Drops", Keep: "Drops", Listen: "Drops", Keys: "Drops", Sync: "Drops", Act: "Performs",
-    Endorse: "Performs", Timer: "Drops", Frame: "Drops", Focus: "Drops", Scroll: "Drops", Copy: "Drops",
+    Again: "Drops", AgainWindow: "Drops", Rendered: "Drops", Get: "Drops", Post: "Performs", NewKey: "Performs",
+    Keep: "Drops", Sync: "Drops", Act: "Performs",
+    Endorse: "Performs", Timer: "Drops", Focus: "Drops", Scroll: "Drops", Copy: "Drops",
     Go: "Drops", Leave: "Drops", Replace: "Drops", Back: "Drops", Toast: "Performs", Offer: "Performs",
     Core: "Drops", Reset: "Drops", Mark: "Drops", Release: "Drops",
   }
-
-  // The place an effect that waits holds: one scroll, one focus, the keys of each ask, the last of each kept.
-  export const slot = (e: Effect<unknown, unknown, unknown>): string => (e.type === "Keys" ? `Keys ${JSON.stringify(e.ask)}` : e.type)
 
   export const verdict = (s: State, k: Kind): Verdict => {
     switch (s.type) {

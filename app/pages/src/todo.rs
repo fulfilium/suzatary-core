@@ -28,7 +28,8 @@ use crate::form::{self, Kind, Markup, PriceMsg, Pricing};
 use crate::held::{Folded, Unsents};
 use crate::places::{Place, Question};
 use crate::runtime::{
-    Answer, Body, Context, Core, Effect, Gate, Held, Input, Local, answered, read,
+    self, Answer, Body, Context, Core, Effect, Gate, Held, Input, Listening, Local, Never, Slot,
+    answered, hold, read, watch,
 };
 use crate::todoparts::{
     Acting, Came, Phase, Seal, Verb, applicable, begin, came, chips, conflicts, is_open,
@@ -225,12 +226,12 @@ pub enum Msg {
 #[derive(Debug)]
 pub enum Todo {}
 
-type Fx = Effect<Hold, Ask>;
+type Fx = Effect<Ask>;
 
 impl Model {
     #[must_use]
-    pub(crate) fn open(f: Flags) -> (Model, Vec<Fx>) {
-        let m = Model {
+    pub(crate) fn open(f: Flags) -> Model {
+        Model {
             today: day_ms(&f.context.offsets, f.now),
             context: f.context,
             chain: f.chain,
@@ -248,26 +249,18 @@ impl Model {
             provenance: Fold::Shut,
             history: Fold::Shut,
             owed: Owed::Nothing,
-        };
-        let effects = vec![
-            Effect::Hold {
-                ask: Hold::Page,
-                path: m.path(),
-            },
-            Effect::Watch {
-                ask: Hold::Fold,
-                local: Local::Fold,
-            },
-            Effect::Watch {
-                ask: Hold::Unsent,
-                local: Local::Unsent,
-            },
-            Effect::Watch {
-                ask: Hold::Proposals,
-                local: Local::Proposals,
-            },
-        ];
-        (m, effects)
+        }
+    }
+
+    fn listening(&self) -> Listening<Hold, Never> {
+        [
+            hold(Hold::Page, self.path()),
+            watch(Hold::Fold, Local::Fold),
+            watch(Hold::Unsent, Local::Unsent),
+            watch(Hold::Proposals, Local::Proposals),
+        ]
+        .into_iter()
+        .collect()
     }
 
     fn path(&self) -> String {
@@ -1492,11 +1485,15 @@ impl Program for Todo {
     type Msg = Msg;
     type Effect = Fx;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(f: Flags) -> (Model, Vec<Fx>) {
-        Model::open(f)
+        (Model::open(f), Vec::new())
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Never> {
+        m.listening()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Fx> {
@@ -1529,7 +1526,6 @@ mod tests {
             id: "renewcard".to_owned(),
             now: 1_788_000_000_000,
         })
-        .0
     }
 
     /// One thing the page hears about a write: its answer, or a reading of the replica's unsent

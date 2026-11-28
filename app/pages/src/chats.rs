@@ -15,7 +15,7 @@ use viewtree::{Node, view};
 
 use crate::chrome::{self, Shape, link};
 use crate::places::Place;
-use crate::runtime::{Effect, Local, Reach, read};
+use crate::runtime::{Effect, Listens, Local, Reach, read, watch};
 use crate::zone::{Offset, recent};
 
 const DEBOUNCE_MS: u32 = 250;
@@ -35,14 +35,31 @@ pub(crate) enum Search {
     On {
         q: String,
         n: u32,
-        found: Reading<SearchPayload>,
+        found: Found,
     },
+}
+
+/// Whether the search is asked yet: the typing must rest first, and a search not asked listens to
+/// nothing.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Found {
+    Resting,
+    Asked(Reading<SearchPayload>),
+}
+
+impl Found {
+    /// What the page shows of it: a search not asked yet is a search not read yet.
+    pub(crate) fn reading(&self) -> &Reading<SearchPayload> {
+        match self {
+            Found::Resting => &Reading::Loading,
+            Found::Asked(r) => r,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[ts(rename = "SearchAsk")]
 pub enum Asking {
-    Found,
     /// The rest after the typing numbered here.
     Rested(u32),
 }
@@ -66,11 +83,11 @@ impl Default for Searching {
 
 impl Searching {
     /// The search goes off with no words, and is asked once the typing rests.
-    pub(crate) fn typed<H, A, S>(
+    pub(crate) fn typed<A>(
         &mut self,
         words: String,
         rested: impl Fn(Asking) -> A,
-    ) -> Vec<Effect<H, A, S>> {
+    ) -> Vec<Effect<A>> {
         let q = words.trim().to_owned();
         self.typed = words;
         self.typings += 1;
@@ -84,7 +101,7 @@ impl Searching {
                 self.search = Search::On {
                     q,
                     n: self.typings,
-                    found: Reading::Loading,
+                    found: Found::Resting,
                 };
                 vec![Effect::Timer {
                     ask: rested(Asking::Rested(self.typings)),
@@ -95,19 +112,41 @@ impl Searching {
     }
 
     /// Asked unless another typing came since.
-    pub(crate) fn rested<H, A, S>(&self, n: u32, found: H) -> Vec<Effect<H, A, S>> {
+    pub(crate) fn rested(&mut self, n: u32) {
+        if let Search::On {
+            n: m,
+            found: found @ Found::Resting,
+            ..
+        } = &mut self.search
+            && *m == n
+        {
+            *found = Found::Asked(Reading::Loading);
+        }
+    }
+
+    /// What the search is read from, while it is asked.
+    pub(crate) fn listening<H, A, S>(&self, found: H) -> Option<Listens<H, A, S>> {
         match &self.search {
-            Search::On { q, n: m, .. } if *m == n => vec![Effect::Watch {
-                ask: found,
-                local: Local::Search { q: q.clone() },
-            }],
-            Search::On { .. } | Search::Off => Vec::new(),
+            Search::On {
+                q,
+                found: Found::Asked(_),
+                ..
+            } => Some(watch(found, Local::Search { q: q.clone() })),
+            Search::On {
+                found: Found::Resting,
+                ..
+            }
+            | Search::Off => None,
         }
     }
 
     pub(crate) fn found(&mut self, r: Reading<crate::runtime::Answer>) {
-        if let Search::On { found, .. } = &mut self.search {
-            *found = read::<SearchPayload>(r);
+        if let Search::On {
+            found: Found::Asked(was),
+            ..
+        } = &mut self.search
+        {
+            *was = read::<SearchPayload>(r);
         }
     }
 
@@ -115,11 +154,8 @@ impl Searching {
     #[must_use]
     pub(crate) fn waits(&self) -> bool {
         matches!(
-            self.search,
-            Search::On {
-                found: Reading::Loading,
-                ..
-            }
+            &self.search,
+            Search::On { found, .. } if matches!(found.reading(), Reading::Loading)
         )
     }
 }

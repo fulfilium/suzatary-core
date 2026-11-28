@@ -16,7 +16,7 @@ use ts_rs::TS;
 use viewtree::kit::Reading;
 
 use crate::card::{asker_name, is_setup};
-use crate::runtime::{Answer, Local, read};
+use crate::runtime::{Answer, Listens, Local, read, watch};
 use crate::zone::{self, Offset};
 
 /// Named, not discovered: the login lands after the first paint, and the Inbox answers quickly.
@@ -293,56 +293,59 @@ pub enum Watched {
     Cards(String),
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct Watch {
-    pub(crate) ask: Watched,
-    pub(crate) local: Local,
-}
-
 impl Readings {
-    fn watch(&self, ask: Watched) -> Watch {
-        let local = match &ask {
-            Watched::Proposals => Local::Proposals,
-            Watched::Decisions(chain) => Local::Decisions {
-                chain: chain.clone(),
-            },
-            Watched::Waiting => Local::Waiting,
-            Watched::Cards(conversation) => Local::Cards {
-                conversation: conversation.clone(),
-                indices: self
-                    .asked
-                    .get(conversation)
-                    .map_or_else(Vec::new, |asked| asked.iter().copied().collect()),
-            },
-        };
-        Watch { ask, local }
+    /// What the readings are read from: the proposals, what waits, each chain's decisions, and the
+    /// cards of every conversation a row has named, each as it is asked now.
+    pub(crate) fn listening<'a, H: 'a, A: 'a, S: 'a>(
+        &'a self,
+        hold: fn(Watched) -> H,
+    ) -> impl Iterator<Item = Listens<H, A, S>> + 'a {
+        let cards = self.asked.iter().map(|(conversation, asked)| {
+            (
+                Watched::Cards(conversation.clone()),
+                Local::Cards {
+                    conversation: conversation.clone(),
+                    indices: asked.iter().copied().collect(),
+                },
+            )
+        });
+        let decisions = self.decisions.keys().map(|chain| {
+            (
+                Watched::Decisions(chain.clone()),
+                Local::Decisions {
+                    chain: chain.clone(),
+                },
+            )
+        });
+        [
+            (Watched::Proposals, Local::Proposals),
+            (Watched::Waiting, Local::Waiting),
+        ]
+        .into_iter()
+        .chain(decisions)
+        .chain(cards)
+        .map(move |(ask, local)| watch(hold(ask), local))
     }
 
     #[must_use]
-    pub(crate) fn of(chains: &[&str]) -> (Readings, Vec<Watch>) {
+    pub(crate) fn of(chains: &[&str]) -> Readings {
         let decisions: BTreeMap<String, Reading<FoldPayload>> = chains
             .iter()
             .map(|c| ((*c).to_owned(), Reading::Loading))
             .collect();
-        let asks: Vec<Watched> = [Watched::Proposals, Watched::Waiting]
-            .into_iter()
-            .chain(decisions.keys().cloned().map(Watched::Decisions))
-            .collect();
-        let readings = Readings {
+        Readings {
             proposals: Reading::Loading,
             decisions,
             waiting: Reading::Loading,
             cards: BTreeMap::new(),
             asked: BTreeMap::new(),
             refused: BTreeMap::new(),
-        };
-        let watches = asks.into_iter().map(|w| readings.watch(w)).collect();
-        (readings, watches)
+        }
     }
 
-    /// Returns the cards to watch again, for proposals a row names that were not asked; a card
-    /// read again keeps what it drew until the box answers.
-    pub(crate) fn held(&mut self, w: Watched, r: Reading<Answer>) -> Vec<Watch> {
+    /// Takes a reading, and asks for the proposals a row names that were not asked; a card read
+    /// again keeps what it drew until the box answers.
+    pub(crate) fn held(&mut self, w: Watched, r: Reading<Answer>) {
         match w {
             Watched::Proposals => self.proposals = read(r),
             Watched::Decisions(chain) => {
@@ -367,19 +370,10 @@ impl Readings {
                 Where::Batch(..) | Where::Unresolved(_) => None,
             })
             .collect();
-        let mut moved = BTreeSet::new();
         for (c, index) in named {
-            if self.asked.entry(c.clone()).or_default().insert(index) {
-                moved.insert(c);
-            }
+            self.asked.entry(c.clone()).or_default().insert(index);
+            self.cards.entry(c).or_insert(Reading::Loading);
         }
-        moved
-            .into_iter()
-            .map(|c| {
-                self.cards.entry(c.clone()).or_insert(Reading::Loading);
-                self.watch(Watched::Cards(c))
-            })
-            .collect()
     }
 
     #[must_use]

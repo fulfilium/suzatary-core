@@ -11,7 +11,7 @@ use crate::chrome::{self, Chrome, Masthead, Shape, Status};
 use crate::composer::{self, Composer};
 use crate::places::Place;
 use crate::refused;
-use crate::runtime::{self, Context, Reach, answered, read};
+use crate::runtime::{self, Context, Listening, Never, Reach, Slot, answered, read, watch};
 use viewtree::kit::Reading;
 
 /// The composer's key for the draft, a name no conversation can have.
@@ -23,7 +23,7 @@ pub struct Flags {
     pub context: Context,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize, TS)]
 #[ts(rename = "DraftHold")]
 pub enum Hold {
     Draft,
@@ -42,7 +42,7 @@ pub enum Ask {
     Acted,
 }
 
-pub(crate) type Effect = runtime::Effect<Hold, Ask>;
+pub(crate) type Effect = runtime::Effect<Ask>;
 pub type Input = runtime::Input<Hold, Ask>;
 
 /// Not asked, asked with sends waiting on it, or open; a failed open is asked again by the next
@@ -149,11 +149,11 @@ impl Program for Draft {
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
-    type Slot = crate::runtime::Never;
-    type Sub = crate::runtime::Never;
+    type Slot = Slot<Hold, Never>;
+    type Sub = runtime::Sub;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
-        let (composer, draft) = Composer::of(DRAFT, &[]);
+        let composer = Composer::of(DRAFT, &[]);
         let m = Model {
             context: flags.context,
             name: String::new(),
@@ -161,20 +161,19 @@ impl Program for Draft {
             opened: Opened::No,
             refused: Vec::new(),
         };
-        let effects = vec![
-            Effect::Watch {
-                ask: Hold::Draft,
-                local: draft,
-            },
-            Effect::Watch {
-                ask: Hold::Refused,
-                local: runtime::Local::Refused,
-            },
-            Effect::Focus {
-                field: "compose".to_owned(),
-            },
-        ];
-        (m, effects)
+        let focus = Effect::Focus {
+            field: "compose".to_owned(),
+        };
+        (m, vec![focus])
+    }
+
+    fn subscriptions(m: &Model) -> Listening<Hold, Never> {
+        [
+            watch(Hold::Draft, m.composer.watching()),
+            watch(Hold::Refused, runtime::Local::Refused),
+        ]
+        .into_iter()
+        .collect()
     }
 
     fn update(m: &mut Model, msg: Msg) -> Vec<Effect> {
