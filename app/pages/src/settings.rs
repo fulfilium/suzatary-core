@@ -184,6 +184,8 @@ impl Program for Settings {
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
         let (rows, watched) = Readings::of(&[]);

@@ -14,6 +14,7 @@ import stream from "../algebra/stream"
 import { toast } from "../view/toast"
 import { UNDO_WINDOW_MS } from "../todo/undo"
 import drain from "./drain"
+import subscribed from "./subscribed"
 import frame from "../view/frame"
 import address from "../shell/address"
 import { parseAddress, parseRoute } from "../shell/route"
@@ -253,6 +254,9 @@ export namespace program {
         return () => ((gone = true), unheard())
       }
       let life: drain.State = placed.shown() === "Hidden" ? drain.HIDDEN : drain.DRAWN
+      // The listeners its subscriptions ask for. No page has a source yet (`Sub` is `Never`), so a `Start` cannot be written and
+      // the one function that would turn a source into a listener has no case.
+      const listeners = subscribed.of<never, never>((_slot, source) => source, life)
       // What waits for the page to be drawn, the last of each (`drain.slot`).
       const waiting = new Map<string, [Out, (i: In) => void]>()
       // The keys the page holds, installed again when it is drawn again.
@@ -260,6 +264,7 @@ export namespace program {
       // Gone only after `Left`, which `destroy` steps once the program has started.
       const lived = (e: drain.Event): void => {
         life = drain.step(life, e)
+        listeners.follow(life)
         if (life.type === "Gone") running.destroy()
       }
       const handle: run.Handler<In, Out> = (e, send) => {
@@ -406,7 +411,7 @@ export namespace program {
       const program = new glue[page](flags)
       const t2 = performance.now()
       const keeps = (e: Out): boolean => e.type === "Scroll" && e.to.type === "Keep"
-      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, keeps, parts.gone, box, parts.refresh, layer, () => life.type === "Drawn")
+      const running = run.start<In, Out>(root, program, parts.draw, blocks.held, handle, listeners.apply, keeps, parts.gone, box, parts.refresh, layer, () => life.type === "Drawn")
       const t3 = performance.now()
       measure("page:draw", t0, { page, read: "Program", flags: Math.round(t1 - t0), made: Math.round(t2 - t1), first: Math.round(t3 - t2) })
       // Each program hears a change of its context in a task of its own, so the tiles a tab keeps never step together.

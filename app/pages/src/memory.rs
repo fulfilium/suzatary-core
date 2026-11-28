@@ -72,6 +72,8 @@ impl Program for Memory {
     type Msg = Msg;
     type Effect = Effect<Hold, Act>;
     type Flags = Opened<Nothing>;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(o: Opened<Nothing>) -> (Model, Vec<Self::Effect>) {
         let m = Model {

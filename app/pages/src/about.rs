@@ -80,6 +80,8 @@ impl Program for About {
     type Msg = Msg;
     type Effect = Effect<Hold, Never>;
     type Flags = Opened<Nothing>;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(o: Opened<Nothing>) -> (Model, Vec<Self::Effect>) {
         let hold = |ask, q: Question<'_>| Effect::Hold {

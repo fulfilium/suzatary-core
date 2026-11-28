@@ -7,6 +7,10 @@ knows nothing of Suzatary.
 
 - Implement `program::Program`: a model, one pure `update` that answers a new model and the
   effects to perform, and a `view` that is a function of the model alone.
+- `subscriptions` says which sources the program listens to at a model, as `subs::Subs` of slot to
+  source, data with no closure. The runtime keeps what it last sent and each frame carries the
+  `subpatch::SubPatch`es from it to the next; a source that is equal is never started again. A
+  program that listens to nothing leaves it as it is.
 - A view is a tree of `node::Node`s whose handlers are messages, never closures.
 - `paint::Painter` keeps the last tree and answers the smallest list of `patch::Patch`es;
   `patch::encode` prints them as the bytes `web/src/painter` applies.

@@ -259,11 +259,13 @@ fifteen small values at most, and the diff walks two small ordered maps. The cos
 is `conversation` while a model answer streams: one step per delta frame, and the `Block`
 sources are derived from the blocks in flight, which is small beside the view of the same step.
 
-I could not measure this here. Stage 2 measures it before pages move: a `page:subs` User Timing
-measure beside `page:draw`, read with the browser bench of `docs/BENCH.md`. If it is over a
-tenth of a step on any page, the runtime skips the call for a step whose message cannot move a
-source (a `Msg` the page marks as view-only). I do not add that skip now, because I have no
-figure that asks for it.
+Stage 2 measured it (`scripts/web-e2e.sh stepbench`: the fixture, a phone viewport, the main thread
+4 times slower, five fresh opens of each page). `page:subs` is the host taking and applying a step's
+patches, and no page has a source yet, so it holds only that cost: under the timer's 0.1 ms at the
+median on every page, 3.4 ms at the slowest step. The wasm module has no clock, so `subscriptions`
+and `diff` are timed natively in a release build: 0.6 µs for `diff` over 15 equal sources, 4.9 µs
+to build 15 sources and diff them with one moved. Against a 3.5 ms median step on the largest page
+(below) that is well under 1%. The skip for a view-only `Msg` is not added.
 
 ### 2.6 What is worse, and the verdict
 
@@ -593,12 +595,14 @@ What the numbers say:
 - A page's `update`, `view`, diff, patch bytes and painter apply are not in either path, so I
   have no figure for them and did not invent one. The code reads so (`snap` and `resized` call
   only the desk), and the bench's frame times agree with it. The bench does not split a frame
-  into its parts. A split needs a `User Timing` measure around `update`, `view`, diff and apply,
-  which stage 2 adds as `page:subs` and its neighbours; I did not add one in a stage that
-  changes no code.
-- The figure for a page's whole step on a large model, which is what a footprint would cut, is
-  the one thing the brief asked for that I could not take here. I name it as the first
-  measurement of stage 2.
+  into its parts. A split inside the program is not possible from the page, since the wasm module has no
+  clock; stage 2 splits it into the program's part and the host's (`painter:step`, `page:subs`).
+- Stage 2 took the figure for a page's whole step (`painter:step`: `update`, `view`, diff, patch
+  bytes and apply; its `wasm` detail is the program's part), at 4x. The largest page is `todos`:
+  a median of 3.5 ms, 2.7 ms of it the program's, and a slowest step of 60.8 ms (the first draw,
+  5,087 patch bytes). Most steps patch nothing. The next are `todo` (2.4 ms, 47.4 ms) and
+  `settings` (2.2 ms, 14.8 ms). The 60 ms is one first draw, which the footprint of §7.2 would not
+  cut, so the measure asks for no footprint.
 
 ## 8. Priorities: urgent and deferred work
 

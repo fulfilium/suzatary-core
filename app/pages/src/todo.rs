@@ -1492,6 +1492,8 @@ impl Program for Todo {
     type Msg = Msg;
     type Effect = Fx;
     type Flags = Flags;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(f: Flags) -> (Model, Vec<Fx>) {
         Model::open(f)

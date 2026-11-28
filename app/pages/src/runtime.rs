@@ -709,7 +709,7 @@ pub(crate) enum Said {
 }
 
 /// The `A` of a page that asks nothing once.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 pub enum Never {}
 
 /// Whether a held question's answer may be behind the box.

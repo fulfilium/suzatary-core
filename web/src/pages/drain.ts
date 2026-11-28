@@ -27,6 +27,9 @@ export namespace drain {
 
   export const writes = (k: Kind): boolean => WRITES.has(k)
 
+  // A program keeps its subscriptions while it is drawn or hidden; one let go keeps none, though it runs on for its writes.
+  export const listens = (s: State): boolean => s.type === "Drawn" || s.type === "Hidden"
+
   export type Verdict = "Performs" | "Waits" | "Drops"
 
   // Hidden, a program reads, writes and says how a write went; what moves the screen waits for it to be drawn, and what

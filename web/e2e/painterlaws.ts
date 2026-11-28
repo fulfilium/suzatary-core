@@ -103,7 +103,7 @@ export namespace painterlaws {
     const page = run.start(root, program, foreign, held, e => {
       effects.push(e);
       if (isAsk(e)) waiting.push(e);
-    }, keeps, undefined, () => box.element);
+    }, () => {}, keeps, undefined, () => box.element);
     const step = (s: Step): void => {
       switch (s.type) {
         case "input":

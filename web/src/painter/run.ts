@@ -1,6 +1,6 @@
 // A Rust program in the tab: its patches painted, each effect handed to the host, one input at a time.
 
-import type { Input } from "../wire/generated/pages"
+import type { Input, SubPatch } from "../wire/generated/pages"
 import deliver from "./deliver"
 import mailbox from "./mailbox"
 import painter from "./painter"
@@ -14,17 +14,22 @@ export namespace run {
     readonly reply: (json: string, text: Uint8Array) => Uint8Array
     readonly event: (id: number, on: number, words: string) => Uint8Array | undefined
     readonly effects: () => string
+    readonly subs: () => string
     readonly free: () => void
   }
   export type Handler<I, E> = (effect: E, send: (input: I) => void) => void
+  // No page has a source yet, so a patch is of the empty sum, and only a `Stop` can be written.
+  export type Patched = SubPatch<never, never>
   export type T<I> = { readonly send: (input: I) => void; readonly destroy: () => void }
 
   const named = (input: Input<unknown, unknown, unknown>): string =>
     input.type === "Context" ? input.type : `${input.type} ${JSON.stringify(input.ask)}`
 
-  // Serde prints the `Effect` sum the handler's type is generated from, so it needs no decoder.
+  // Serde prints the `Effect` and `SubPatch` sums the handlers' types are generated from, so they need no decoder.
   const parse = <E>(json: string): readonly E[] => JSON.parse(json)
 
+  // `page:subs` is the host taking and applying a step's subscription patches; `painter:step` is the whole step, `wasm` of it the
+  // program's own (update, view, diff, subscriptions and their prints).
   // A step with an effect that `keeps` holds the box `box` finds (a page's own once drawn) at its distance from the end
   // across its patches, before any of its effects is handled (a `Focus` of the same step moves the box after); only such
   // a step reads layout before its patches, so the others' patches are laid out by the frame.
@@ -34,6 +39,7 @@ export namespace run {
     foreign: painter.Foreign,
     blocks: painter.Blocks,
     handle: Handler<I, E>,
+    subscribe: (patch: Patched) => void,
     keeps: (effect: E) => boolean,
     gone: ((n: Node) => void) | undefined,
     box: () => Element,
@@ -49,6 +55,7 @@ export namespace run {
         if (!live) return false
         const t0 = performance.now()
         const bytes = patches()
+        const wasm = performance.now() - t0
         if (bytes === undefined) return false
         const effects = parse<E>(page.effects())
         const measured = drawn()
@@ -56,7 +63,12 @@ export namespace run {
         dom.apply(bytes)
         if (measured) scroll.settle(box())
         if (kept !== null) scroll.keep(kept)
-        measure("painter:step", t0, { step: name, bytes: bytes.length, effects: effects.length })
+        // Its listeners change before any of its effects is performed, so an effect may name one the step starts.
+        const s0 = performance.now()
+        const patched = parse<Patched>(page.subs())
+        patched.forEach(subscribe)
+        measure("page:subs", s0, { patches: patched.length })
+        measure("painter:step", t0, { step: name, bytes: bytes.length, effects: effects.length, wasm })
         for (const e of effects) handle(e, send)
         return true
       })

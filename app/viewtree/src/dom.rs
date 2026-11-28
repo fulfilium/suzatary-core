@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use crate::node::Node;
 use crate::paint::Painter;
 use crate::patch::{Patch, ROOT};
-use crate::program::{Program, Runtime};
+use crate::program::{Program, Runtime, Stepped};
+use crate::subs::Subs;
 
 #[derive(Debug, Clone, Default)]
 pub struct Dom {
@@ -265,9 +266,13 @@ pub fn fresh<M: Clone>(view: &Node<M>) -> Vec<Seen> {
     dom.page()
 }
 
-/// A page's two laws over one run of `msgs`: the view is a pure function of the model (a rerun
-/// paints the same bytes), and after every step the patched DOM equals a fresh draw.
-pub fn page_laws<P: Program<Msg: std::fmt::Debug>>(flags: impl Fn() -> P::Flags, msgs: &[P::Msg]) {
+/// A page's three laws over one run of `msgs`: the view is a pure function of the model (a rerun
+/// paints the same bytes), after every step the patched DOM equals a fresh draw, and the listeners
+/// a host keeps by applying each frame's `subs` equal the model's subscriptions.
+pub fn page_laws<P: Program<Msg: std::fmt::Debug, Slot: std::fmt::Debug, Sub: std::fmt::Debug>>(
+    flags: impl Fn() -> P::Flags,
+    msgs: &[P::Msg],
+) {
     let (mut one, first) = Runtime::<P>::start(flags());
     let (mut two, again) = Runtime::<P>::start(flags());
     assert_eq!(
@@ -276,14 +281,28 @@ pub fn page_laws<P: Program<Msg: std::fmt::Debug>>(flags: impl Fn() -> P::Flags,
     );
     let mut dom = Dom::default();
     dom.apply(&crate::patch::decode(&first.patches).expect("the first frame reads back"));
+    let mut host = Subs::new();
+    host.apply(&first.subs);
+    assert_eq!(
+        host,
+        P::subscriptions(one.model()),
+        "the first frame starts every source of the first model"
+    );
     for msg in msgs {
-        let (patches, _) = one.step(msg.clone());
-        let (replayed, _) = two.step(msg.clone());
+        let Stepped { patches, subs, .. } = one.advance(msg.clone());
+        let replayed = two.advance(msg.clone());
         assert_eq!(
-            patches, replayed,
+            (&patches, &subs),
+            (&replayed.patches, &replayed.subs),
             "the same message from the same model paints the same patches"
         );
         dom.apply(&patches);
+        host.apply(&subs);
+        assert_eq!(
+            host,
+            P::subscriptions(one.model()),
+            "after {msg:?}, the host listens to the model's subscriptions"
+        );
         let view = P::view(one.model());
         let drawn = fresh(&view);
         assert_eq!(

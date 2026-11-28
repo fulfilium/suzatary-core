@@ -131,6 +131,8 @@ impl Program for Mail {
     type Msg = Msg;
     type Effect = Effect<Hold, Ask>;
     type Flags = Flags;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(flags: Flags) -> (Model, Vec<Effect<Hold, Ask>>) {
         let effects = vec![

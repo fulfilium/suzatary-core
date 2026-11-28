@@ -13,6 +13,7 @@ fn generates_the_pages_boundary_types() {
     d.visit::<runtime::Effect<runtime::Never, runtime::Never>>();
     d.visit::<runtime::Input<runtime::Never, runtime::Never>>();
     d.visit::<runtime::Reply<runtime::Never, runtime::Never>>();
+    d.visit::<viewtree::SubPatch<runtime::Never, runtime::Never>>();
     d.visit::<mail::Flags>();
     d.visit::<mail::Hold>();
     d.visit::<mail::Ask>();

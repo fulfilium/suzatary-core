@@ -31,9 +31,11 @@ const rehearse = async (module: WebAssembly.Module): Promise<void> => {
       page = new Page(JSON.stringify(flags))
       page.first()
       page.effects()
+      page.subs()
       for (const input of inputs) {
         deliver(page, written(input))
         page.effects()
+        page.subs()
       }
     } catch (e) {
       console.warn("rehearsal", e)

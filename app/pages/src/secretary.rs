@@ -269,6 +269,8 @@ impl Program for Secretary {
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(flags: Flags) -> (Model, Vec<Effect>) {
         let (composer, draft) = Composer::of(DEFAULT.as_str(), &[]);

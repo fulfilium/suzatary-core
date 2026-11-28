@@ -18,6 +18,8 @@ declare class Page {
   fresh(): Uint8Array;
   /** A JSON array, since last asked. */
   effects(): string;
+  /** A JSON array of `SubPatch`es, since last asked: applied before the effects of the same steps. */
+  subs(): string;
   free(): void;
   /** `{"flags": …, "inputs": […]}` (`Hosted::rehearsal`), or undefined for a page that has none. */
   static rehearsal(): string | undefined;

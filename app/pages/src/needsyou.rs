@@ -126,6 +126,8 @@ impl Program for NeedsYou {
     type Msg = Msg;
     type Effect = Effect;
     type Flags = Flags;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(_: Flags) -> (Model, Vec<Effect>) {
         let (readings, watched) = Readings::of(&CHAINS);

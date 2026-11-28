@@ -61,6 +61,8 @@ impl Program for Conversations {
     type Msg = Msg;
     type Effect = Effect<Hold, Ask>;
     type Flags = Flags;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(f: Flags) -> (Model, Vec<Self::Effect>) {
         let m = Model {

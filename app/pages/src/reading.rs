@@ -77,6 +77,8 @@ impl<V: View> Program for One<V> {
     type Msg = Msg;
     type Effect = Effect<Hold, Never>;
     type Flags = Opened<V::At>;
+    type Slot = crate::runtime::Never;
+    type Sub = crate::runtime::Never;
 
     fn init(Opened { context, at }: Opened<V::At>) -> (Model<V>, Vec<Self::Effect>) {
         let hold = Effect::Hold {

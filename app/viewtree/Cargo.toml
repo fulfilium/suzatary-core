@@ -29,5 +29,9 @@ proptest.workspace = true
 name = "laws"
 path = "tests/laws.rs"
 
+[[test]]
+name = "subs"
+path = "tests/subs.rs"
+
 [lints]
 workspace = true

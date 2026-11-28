@@ -6,8 +6,11 @@ use serde::de::DeserializeOwned;
 
 use crate::node::On;
 use crate::program::{Frame, Program, Runtime};
+use crate::subpatch::SubPatch;
 
-pub trait Hosted: Program<Flags: DeserializeOwned, Effect: Serialize> {
+pub trait Hosted:
+    Program<Flags: DeserializeOwned, Effect: Serialize, Slot: Serialize, Sub: Serialize>
+{
     type Input: DeserializeOwned;
     fn input(input: Self::Input) -> Self::Msg;
     /// An input whose answer the host hands over beside it as text, in UTF-8: the program parses
@@ -27,6 +30,7 @@ pub trait Hosted: Program<Flags: DeserializeOwned, Effect: Serialize> {
 pub struct Host<P: Hosted> {
     runtime: Runtime<P>,
     effects: Vec<P::Effect>,
+    subs: Vec<SubPatch<P::Slot, P::Sub>>,
 }
 
 impl<P: Hosted> Host<P> {
@@ -34,8 +38,22 @@ impl<P: Hosted> Host<P> {
         let flags = serde_json::from_str::<serde_json::Value>(flags)
             .and_then(serde_json::from_value)
             .map_err(|e| format!("flags: {e}"))?;
-        let (runtime, Frame { patches, effects }) = Runtime::start(flags);
-        Ok((Self { runtime, effects }, patches))
+        let (
+            runtime,
+            Frame {
+                patches,
+                subs,
+                effects,
+            },
+        ) = Runtime::start(flags);
+        Ok((
+            Self {
+                runtime,
+                effects,
+                subs,
+            },
+            patches,
+        ))
     }
 
     /// A bad input steps nothing.
@@ -73,14 +91,20 @@ impl<P: Hosted> Host<P> {
             .map_err(|e| format!("effects: {e}"))
     }
 
-    fn took(&mut self, frame: Frame<P::Effect>) -> Vec<u8> {
+    /// The changes to the listeners since the host last took them, as a JSON array, to be applied before the effects.
+    pub fn subs(&mut self) -> Result<String, String> {
+        serde_json::to_string(&std::mem::take(&mut self.subs)).map_err(|e| format!("subs: {e}"))
+    }
+
+    fn took(&mut self, frame: Frame<P::Effect, P::Slot, P::Sub>) -> Vec<u8> {
+        self.subs.extend(frame.subs);
         self.effects.extend(frame.effects);
         frame.patches
     }
 }
 
 /// A wasm-bindgen class `$class` over `$program`: `new(flags)`, `first()` (the first paint),
-/// `input(json)`, `reply(json, text)`, `event(id, on, words)`, `fresh()`, `effects()`, and the static `rehearsal()`.
+/// `input(json)`, `reply(json, text)`, `event(id, on, words)`, `fresh()`, `effects()`, `subs()`, and the static `rehearsal()`.
 /// Needs `wasm-bindgen`.
 #[macro_export]
 macro_rules! export {
@@ -132,6 +156,10 @@ macro_rules! export {
                 self.host
                     .effects()
                     .map_err(|e| wasm_bindgen::JsError::new(&e))
+            }
+
+            pub fn subs(&mut self) -> Result<String, wasm_bindgen::JsError> {
+                self.host.subs().map_err(|e| wasm_bindgen::JsError::new(&e))
             }
 
             pub fn rehearsal() -> Option<String> {
