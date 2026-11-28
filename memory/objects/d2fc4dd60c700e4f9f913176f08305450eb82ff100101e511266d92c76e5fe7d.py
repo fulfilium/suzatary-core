@@ -1,0 +1,1 @@
+Change(genesis='66602cd0dec37d58d03eec9518ca805a7ac38ea912d2b0c366a0b67b4b9f50b6', deps=('b573a60de8b49bdd2ddfd8a9bf94f7b0f07f7b42e38aa1b9227a4e411feb936d',), event=Governs(decision='cachemarkshared', at=datetime(2026, 11, 28, 5, 51, 28, 796749), actor='assistant', areas=('app/digest/src/secretary/compact_logs.rs', 'app/secretary')))
