@@ -73,9 +73,11 @@ confirm. Everything below derives from this.
 - **An agent can read what it changes**: `context.toml` names the units, and
   `scripts/context.sh` prints what each costs to USE (README and public
   interface, ≤ 25k tokens) and to DEVELOP (≤ 500k). The goal is no unit over
-  either, and the table names each unit still over; a derived figure (the
-  reading set, a unit's USE, a wasm module's bytes) grows only by what a pull
-  request declares; the train's build records it (AGENTS.md, "Derived figures").
+  either, and the table names each unit still over. The gate refuses a unit
+  that crosses the USE budget (the units over it before the check stand in
+  `budget.over_use`), and the shipped wasm modules' brotli total against one
+  ceiling that stands for a phone's first load. It keeps no other budget: a
+  limit stays only where a person would feel it (→ `contextbudget`).
 
 ## Semantics (the FPL layer)
 
@@ -388,10 +390,7 @@ Threat model: an injected email can at worst mis-triage or write bad todo text
   train by hand. A live row names a digest of the stores beside the instance
   file, taken before the run; a land reads the live half at its newest row's
   digest (each file's last), a red and a green are a finding only at one digest,
-  and the land prints every set-aside and each red the stores moved past. The
-  growth check runs first: an undeclared growth or a malformed declaration
-  refuses the train, with no row; a check that compared nothing lets the halves
-  go on and fails the nightly. A red traced
+  and the land prints every set-aside and each red the stores moved past. A red traced
   outside the tree is set aside only at a terminal, naming one row and a roadmap
   task (→ `train`). `land` publishes the landed commit's public
   tree to suzatary-core, which every deployment runs (→ `publication`).

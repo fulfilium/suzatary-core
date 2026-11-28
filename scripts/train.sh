@@ -95,18 +95,6 @@ completes_of() {
   done <<<"$body"
 }
 
-# PR <n>'s growth lines (`Reading-growth:`, `Use-growth:`, `Wasm-growth:`), which its merge carries
-# as trailers.
-growth_of() {
-  local body line
-  body="$("$gh" pr view "$1" --json body --jq .body)" || return 1
-  while IFS= read -r line; do
-    line="${line%$'\r'}"
-    [[ "$line" =~ ^[[:space:]]*(Reading-growth|Use-growth|Wasm-growth):[[:space:]]*(.+)$ ]] || continue
-    echo "${BASH_REMATCH[1]}: ${BASH_REMATCH[2]}"
-  done <<<"$body"
-}
-
 # PR <n>'s `Lesson:` lines, one a line, each led by the PR.
 lessons_of() {
   local body line
@@ -131,9 +119,6 @@ print_lessons() {
   printf 'lessons proposed by the landed PRs: record each with `suzatary decision record --store memory`, or decline it, now:\n'
   printf '  %s\n' "${lessons[@]}"
 }
-
-# PR <n>'s growth lines, ready to follow its other trailers.
-grown() { sed '/^$/d' <<<"${growth_lines[$1]}"; }
 
 # Sets `app_bin`: SUZATARY_TRAIN_BIN, else the named commit's app from a cache, else the deployed one.
 app_bin=""
@@ -281,7 +266,7 @@ build() {
   : >"$state/skipped"
   local rows=() prs meta title url head current said code unknown ids=() checker=""
   local ready=()
-  local -A head_of=() title_of=() url_of=() todos_of=() growth_lines=() carrier_of=()
+  local -A head_of=() title_of=() url_of=() todos_of=() carrier_of=()
   # `Completes:` todos are placed, on the roadmap's head or the upkeep chain, by master's binary.
   local tasks_dir=""
   find_roadmap origin/master
@@ -322,11 +307,6 @@ build() {
         ;;
     esac
     todos_of[$n]="$(paste -sd' ' <<<"$said")"
-    if ! growth_lines[$n]="$(growth_of "$n")"; then
-      rows+=("#$n|skipped|gh could not read its description")
-      echo "#$n gh could not read its description" >>"$state/skipped"
-      continue
-    fi
     read -r -a ids <<<"${todos_of[$n]}"
     if ((${#ids[@]})) && [[ -n "$checker" ]]; then
       code=0
@@ -377,7 +357,7 @@ build() {
     subject="${subject:0:72}"
     subject="${subject%"${subject##*[![:space:]]}"}"
     trailer=()
-    said="$( (trailers Completes "$todos" Carries "${carried[*]}"; for m in "$n" "${carried[@]}"; do grown "$m"; done) | sed '/^$/d')"
+    said="$(trailers Completes "$todos" Carries "${carried[*]}")"
     [[ -z "$said" ]] || trailer=(-m "$said")
     said=""
     if ! git merge --quiet --no-ff -m "$subject" -m "${url_of[$n]}" "${trailer[@]}" "$head" >/dev/null 2>&1; then
@@ -390,7 +370,7 @@ build() {
       done
       if ((${#conflicts[@]})) && ((${#resolved[@]} == ${#conflicts[@]})) \
         && git commit --quiet -m "$subject" -m "${url_of[$n]}" \
-          -m "$( (trailers Completes "$todos" Carries "${carried[*]}" Joined "${resolved[*]}" Mentions "${resolved[*]}"; for m in "$n" "${carried[@]}"; do grown "$m"; done) | sed '/^$/d')" \
+          -m "$(trailers Completes "$todos" Carries "${carried[*]}" Joined "${resolved[*]}" Mentions "${resolved[*]}")" \
           >/dev/null; then
         said=" (joined ${resolved[*]})"
       else

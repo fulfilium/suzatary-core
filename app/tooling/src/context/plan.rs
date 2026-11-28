@@ -1,5 +1,5 @@
 //! `context.toml`, parsed once: the units of the repository, the libraries it uses from outside,
-//! the budgets, the ratchet and the token ratios.
+//! the budgets and the token ratios.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -16,7 +16,6 @@ pub const FILE: &str = "context.toml";
 #[serde(deny_unknown_fields)]
 pub struct Plan {
     pub budget: Budget,
-    pub ratchet: Ratchet,
     pub tokens: Tokens,
     /// What the repository's reading set holds beside the units.
     pub repository: Repository,
@@ -30,39 +29,17 @@ pub struct Plan {
 }
 
 /// The budgets, in tokens.
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Budget {
     #[serde(rename = "use")]
     pub use_: u64,
     pub develop: u64,
     pub tests: u64,
-    /// How far each merged pull request may grow a tokens figure, undeclared.
-    pub allowance: u64,
-}
-
-/// The tokens figures as the train's build last recorded them (`figures`).
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Ratchet {
-    pub reading: u64,
-    /// The USE of each unit over `budget.use`; a unit absent here is held to the budget.
-    #[serde(rename = "use", default)]
-    pub use_: BTreeMap<String, u64>,
-}
-
-/// The ratchet of `text`, a `context.toml` whose other tables may be another version's.
-///
-/// # Errors
-/// When it does not parse, or its ratchet does not.
-pub(crate) fn ratchet(text: &str) -> anyhow::Result<Ratchet> {
-    #[derive(Deserialize)]
-    struct Ratcheted {
-        ratchet: Ratchet,
-    }
-    Ok(toml::from_str::<Ratcheted>(text)
-        .with_context(|| format!("{FILE} does not parse"))?
-        .ratchet)
+    /// The units that were over `use` when the budget became a check: named in the table, not
+    /// refused. A unit not listed that crosses `use` is refused.
+    #[serde(default)]
+    pub over_use: BTreeSet<String>,
 }
 
 /// How a file's characters become tokens, and the measurement the ratios came from.
@@ -216,12 +193,12 @@ impl Plan {
             bail!("{FILE}: in_force names {} twice", row.file);
         }
         if let Some(name) = plan
-            .ratchet
-            .use_
-            .keys()
+            .budget
+            .over_use
+            .iter()
             .find(|name| !names.contains(name.as_str()))
         {
-            bail!("{FILE}: ratchet.use names {name}, which is no unit");
+            bail!("{FILE}: budget.over_use names {name}, which is no unit");
         }
         for unit in &plan.units {
             if let Some(name) = unit

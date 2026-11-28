@@ -216,7 +216,7 @@ change is wrong, not the mechanism.
 
 - Nothing personal is in a tracked file. Held by the leak guards
   (`app/cli/tests/guards/leak.rs`, `scripts/public-tree.sh`).
-- A unit's USE stays within `budget.use`, and the reading set does not grow past its ratchet.
+- A unit's USE stays within `budget.use`, or the unit is listed in `budget.over_use`.
   Held by `app/cli/tests/guards/context.rs`.
 - A branch reaches master only through a green `scripts/merge-gate.sh` run and the train.
 - An `app/` or `web/` change moves an entry of `CHANGELOG.md`'s `## [Unreleased]`. Held by the

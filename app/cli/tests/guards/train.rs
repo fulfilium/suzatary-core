@@ -176,16 +176,6 @@ fi
 mkdir -p "$1" && git archive "$2" | tar -x -C "$1" && rm -rf "$1/private"
 "#;
 
-/// The stub growth check: within, unless `GROWTH=refused` (exit 1) or `GROWTH=broken` (a check that
-/// compared nothing, exit 2).
-const GROWTH: &str = r#"#!/bin/sh
-echo "$(git rev-parse HEAD)" >>"$TRAIN_PROBES.growth"
-case "$GROWTH" in
-  refused) echo "the reading set grows 900 tokens past what the commits declare"; exit 1 ;;
-  broken) echo "no merge base with origin/master" >&2; exit 2 ;;
-esac
-"#;
-
 const CHANGELOG: &str = "# Changelog\n\n## [Unreleased]\n\n## [0.1.0]\n\n- the first release\n";
 /// A lockfile cargo reads for a one-package workspace with no dependency.
 const LOCK: &str = "version = 4\n\n[[package]]\nname = \"fixture\"\nversion = \"0.0.0\"\n";
@@ -270,12 +260,7 @@ impl Train {
         std::fs::create_dir_all(root.join("prs")).expect("prs dir");
         // A half is red where the tree holds `broken` (tree) or `broken-live` (live), and ends with
         // the real gate's last section.
-        for (stub, body) in [
-            ("gh", GH),
-            ("gate", GATE),
-            ("public", PUBLIC),
-            ("growth", GROWTH),
-        ] {
+        for (stub, body) in [("gh", GH), ("gate", GATE), ("public", PUBLIC)] {
             let _ = suzatary_testkit::fake_program(&bin, stub, body);
         }
         train
@@ -439,7 +424,6 @@ impl Train {
             .env("SUZATARY_SHELL", "triage")
             .env("SUZATARY_SHELL_SETS", "")
             .env("SUZATARY_TRAIN_GATE", bin.join("gate"))
-            .env("SUZATARY_TRAIN_GROWTH", bin.join("growth"))
             .env("SUZATARY_TRAIN_GH", bin.join("gh"))
             .env("SUZATARY_TRAIN_PUBLIC", bin.join("public"))
             .env("SUZATARY_TRAIN_BIN", super::binary::path())
@@ -695,207 +679,6 @@ fn merge_trailer(t: &Train, n: u32, key: &str) -> String {
         &format!("--format=%(trailers:key={key},valueonly,separator= )"),
         &merge,
     ])
-}
-
-/// A PR's growth lines ride on its merge commit as trailers, each as written, where the growth
-/// check reads them; a PR declaring none carries none.
-#[test]
-fn train_build_carries_a_pr_s_declared_wasm_growth_on_its_merge() {
-    let t = Train::new("wasm-growth");
-    t.pr(3, "grows the pages", &[("a.txt", "a\n")]);
-    std::fs::write(
-        t.scratch.join("prs/3.body"),
-        "The topic bar.\n\nWasm-growth: views_bg.wasm +19000: the topic bar's sheet\nWasm-growth: prodrome_bg.wasm +5000: held values\nUse-growth: lines +900: the rule's view\n",
-    )
-    .expect("a body");
-    t.pr(4, "beside", &[("c.txt", "c\n")]);
-    let out = t.train(&["build", "3", "4"]);
-    assert!(out.status.success(), "build: {}", text(&out.stderr));
-    let merge = |n: u32| {
-        t.git(&[
-            "log",
-            "--first-parent",
-            "--format=%B%x00",
-            "origin/master..train",
-        ])
-        .split('\0')
-        .find(|m| m.contains(&format!("Merge #{n}:")))
-        .unwrap_or_else(|| panic!("no merge of #{n}"))
-        .to_owned()
-    };
-    let grown = merge(3);
-    assert!(
-        grown.contains("Wasm-growth: views_bg.wasm +19000: the topic bar's sheet")
-            && grown.contains("Wasm-growth: prodrome_bg.wasm +5000: held values")
-            && grown.contains("Use-growth: lines +900: the rule's view"),
-        "both lines, as written: {grown}"
-    );
-    assert!(
-        !merge(4).contains("Wasm-growth"),
-        "none declared: {}",
-        merge(4)
-    );
-}
-
-/// A `context.toml` the train's tool reads: two units whose USE is their README's characters over
-/// 2.5, over a budget of 10 tokens: `lib`, which the ratchet holds at 40, and `small`. The reading
-/// set holds `changelog.d`, which a release cut empties, and `web`, which holds the budget.
-const CONTEXT_PLAN: &str = r#"in_force = []
-library = []
-
-[budget]
-use = 10
-develop = 500000
-tests = 500000
-allowance = 2000
-
-[ratchet]
-reading = 0
-
-[ratchet.use]
-lib = 40
-
-[tokens]
-calibrated = "2026-11-04T07:18:17Z"
-sample = []
-
-[tokens.ratio]
-rust = 2.5
-typescript = 2.5
-markdown = 2.5
-shell = 2.5
-nix = 2.5
-toml = 2.5
-typst = 2.5
-other = 2.5
-
-[repository]
-include = ["changelog.d", "web"]
-records = []
-documents = "docs"
-
-[[unit]]
-name = "lib"
-path = "lib"
-shape = "crate"
-depends = []
-scripts = []
-
-[[unit]]
-name = "small"
-path = "small"
-shape = "crate"
-depends = []
-scripts = []
-"#;
-
-/// Master's figures: the plan, `lib`'s README of 100 characters, `small`'s of 20, and the module's
-/// line.
-fn figure_files() -> Vec<(&'static str, String)> {
-    vec![
-        ("context.toml", CONTEXT_PLAN.to_owned()),
-        ("lib/README.md", format!("{}\n", "a".repeat(99))),
-        ("small/README.md", format!("{}\n", "a".repeat(19))),
-        (
-            "web/wasm-budget",
-            "# <module> <system> <measured> <limit>\nviews_bg.wasm test-system 1000 17000\n"
-                .to_owned(),
-        ),
-    ]
-}
-
-impl Train {
-    /// A train over master holding `figure_files`.
-    fn figured(name: &str) -> Self {
-        let t = Train::new(name);
-        let files = figure_files();
-        let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
-        t.master_moves(&files);
-        t
-    }
-}
-
-/// The train's tool, built where `train.sh` builds it with its seams, judging the growth of
-/// `checkout`.
-fn growth(checkout: &Path) -> Output {
-    static TOOL: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let tool = TOOL.get_or_init(|| {
-        let common = run_git(
-            &repo(),
-            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
-        );
-        let target = Path::new(&common).join("train/tool-seams");
-        let built = Command::new("cargo")
-            .args([
-                "build",
-                "--quiet",
-                "--locked",
-                "-p",
-                "suzatary-tooling",
-                "--features",
-                "seams",
-            ])
-            .arg("--manifest-path")
-            .arg(repo().join("app/Cargo.toml"))
-            .arg("--target-dir")
-            .arg(&target)
-            .status()
-            .expect("cargo runs");
-        assert!(built.success(), "the train's tool builds");
-        target.join("debug/train")
-    });
-    let mut cmd = isolated(Command::new(tool));
-    cmd.args(["context", "--repo"]).arg(checkout).arg("growth");
-    cmd.output().expect("the tool runs")
-}
-
-/// A branch's own gate grants a declaration once, though two of its commits repeat it beside two
-/// merges of master, which count as no merge.
-#[test]
-fn growth_on_a_branch_grants_a_repeated_declaration_once_through_merges_of_master() {
-    let t = Train::figured("branch");
-    let author = t.author();
-    let grown = |chars: usize| format!("{}\n", "a".repeat(chars - 1));
-    run_git(&author, &["checkout", "-q", "-B", "grows", "origin/master"]);
-    write(&author, "lib/README.md", &grown(12_600));
-    run_git(
-        &author,
-        &[
-            "commit",
-            "-qam",
-            "lib grows\n\nUse-growth: lib +3000: its laws\nReading-growth: +3100: its laws",
-        ],
-    );
-    for file in ["a.txt", "b.txt"] {
-        t.master_moves(&[(file, "moved\n")]);
-        run_git(&author, &["checkout", "-q", "grows"]);
-        run_git(&author, &["merge", "-q", "--no-edit", "origin/master"]);
-    }
-    write(&author, "c.txt", "c\n");
-    run_git(&author, &["add", "c.txt"]);
-    run_git(
-        &author,
-        &[
-            "commit",
-            "-qm",
-            "again\n\nUse-growth: lib +3000: its laws\nReading-growth: +3100: its laws",
-        ],
-    );
-    let judged = growth(&author);
-    assert!(
-        judged.status.success(),
-        "40 + 2,000 + 3,000: {}",
-        text(&judged.stderr)
-    );
-    write(&author, "lib/README.md", &grown(12_603));
-    run_git(&author, &["commit", "-qam", "lib grows a little more"]);
-    let judged = growth(&author);
-    assert!(
-        !judged.status.success()
-            && text(&judged.stderr).contains("lib's USE is 5041 tokens, over the 5040"),
-        "a repeat grants nothing: {}",
-        text(&judged.stderr)
-    );
 }
 
 /// A stacked PR merges before the PR it carries whatever their numbers, so a stack numbered either
@@ -4595,94 +4378,6 @@ fn train_nightly_gates_master_whole_and_files_nothing_when_green() {
         "both halves of master, nightly"
     );
     assert!(Train::nightly_todos(&data).is_empty());
-}
-
-/// THE GROWTH CHECK REFUSES A TRAIN, AND ONLY A REFUSAL DOES: a refusal stops the gate before
-/// either half with no row, and a check that compared nothing says why and lets the halves go on.
-#[test]
-fn train_gate_is_refused_by_an_undeclared_growth_and_goes_on_when_none_was_checked() {
-    let t = Train::new("growth");
-    t.pr(1, "the first", &[("a.txt", "a\n")]);
-    assert!(t.train(&["build", "1"]).status.success());
-    let train = t.git(&["rev-parse", "train"]);
-
-    let refused = t.train_with(&["gate"], &[("GROWTH", "refused")]);
-    let said = text(&refused.stderr);
-    assert!(!refused.status.success(), "a refused growth gates nothing");
-    assert!(
-        said.contains("growth: the reading set grows 900 tokens")
-            && said.contains("no row was written"),
-        "{said}"
-    );
-    let checked =
-        std::fs::read_to_string(t.probes_file().with_extension("growth")).expect("the check ran");
-    assert_eq!(
-        checked.trim(),
-        train,
-        "in the train's worktree, at its commit"
-    );
-    assert_eq!(
-        t.probes("--no-live") + t.probes("--only-live"),
-        0,
-        "no half ran"
-    );
-    assert_eq!(verdict_rows(&t), "", "and no row was written");
-    assert!(text(&t.train(&["land"]).stderr).contains("gate first"));
-
-    let unrun = t.train_with(&["gate"], &[("GROWTH", "broken")]);
-    let said = text(&unrun.stderr);
-    assert!(
-        unrun.status.success(),
-        "a check that did not run stops nothing: {said}"
-    );
-    assert!(
-        said.contains(
-            "the growth check did not run (no merge base with origin/master); the halves go on"
-        ),
-        "{said}"
-    );
-    assert_eq!(
-        t.probes("--no-live") + t.probes("--only-live"),
-        2,
-        "both halves ran"
-    );
-}
-
-/// The nightly runs both halves whatever the growth check found, then fails on a refusal and on a
-/// check that compared nothing, so a check that never runs is seen within a day.
-#[test]
-fn train_nightly_fails_after_its_halves_on_a_growth_it_could_not_pass() {
-    let t = Train::new("nightly-growth");
-    let data = t.scratch.join("data");
-    std::fs::create_dir_all(&data).expect("a data root");
-    let env = release_env(&a_release_deployment(&data));
-    t.master_moves(&[("a.txt", "a\n")]);
-    for (growth, said) in [
-        (
-            "refused",
-            "origin/master's commits do not declare their growth",
-        ),
-        ("broken", "the growth check did not run on origin/master"),
-    ] {
-        let env: Vec<(&str, &str)> = env
-            .iter()
-            .map(|(k, v)| (*k, v.as_str()))
-            .chain([("GROWTH", growth)])
-            .collect();
-        let before = t.full_runs().len();
-        let out = t.train_with(&["nightly"], &env);
-        assert!(!out.status.success(), "{growth}: the nightly fails");
-        assert!(
-            text(&out.stderr).contains(said),
-            "{growth}: {}",
-            text(&out.stderr)
-        );
-        assert_eq!(
-            t.full_runs().len(),
-            before + 2,
-            "{growth}: both halves ran first"
-        );
-    }
 }
 
 /// A red night runs both halves whatever the first says, files one todo for the tree naming the

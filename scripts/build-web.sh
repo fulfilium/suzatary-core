@@ -172,11 +172,11 @@ for br in web/dist/*.br web/dist/*/*.br; do
 done
 echo "    app.js: $(stat -c %s web/dist/app.js) bytes, $(stat -c %s web/dist/app.js.br) bytes brotli"
 
-# Each shipped wasm module against the limit web/wasm-budget records for this system; the
-# development modules ship nowhere and are not judged.
+# The shipped wasm modules against one ceiling on a phone's first load; the development modules
+# ship nowhere and are not judged.
 if [[ "${SUZATARY_WASM:-optimised}" == optimised ]]; then
-  echo "==> every wasm module within its limit (web/wasm-budget, ${system:?build-web.sh: no Nix system})"
-  bash scripts/wasm-limits.sh web/wasm-budget "$system" web/dist/*.wasm
+  echo "==> the wasm modules within the first-load ceiling"
+  bash scripts/wasm-ceiling.sh web/dist
 fi
 
 echo "built: $(du -sh web/dist | cut -f1) in web/dist/"

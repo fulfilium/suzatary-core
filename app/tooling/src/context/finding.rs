@@ -1,5 +1,5 @@
-//! What the guard refuses of the tree alone: a plan that no longer matches the code. A unit's USE
-//! is a derived figure (`figures`), judged against the commits.
+//! What the guard refuses of the tree alone: a plan that no longer matches the code, and a unit
+//! whose USE crosses the budget.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -18,6 +18,12 @@ pub enum Finding {
         unshown: BTreeSet<String>,
         /// Shown and not named in `depends`.
         unnamed: BTreeSet<String>,
+    },
+    /// A unit not named in `budget.over_use` whose USE is over `budget.use`.
+    OverUse {
+        unit: String,
+        tokens: u64,
+        budget: u64,
     },
     /// A workspace member that no unit names.
     NoUnit {
@@ -53,6 +59,16 @@ impl fmt::Display for Finding {
                 "{unit}: {FILE} names {unshown:?} that its code does not use, and its code uses \
                  {unnamed:?} that {FILE} does not name"
             ),
+            Self::OverUse {
+                unit,
+                tokens,
+                budget,
+            } => write!(
+                f,
+                "{unit}: its USE is {tokens} tokens, over the budget of {budget}: an agent cannot \
+                 use it from its README and public interface; cut its interface or split the unit \
+                 (AGENTS.md, rule 7)"
+            ),
             Self::NoUnit { member } => {
                 write!(f, "the workspace member {member} is no unit of {FILE}")
             }
@@ -80,6 +96,13 @@ pub(crate) fn findings(plan: &Plan, tree: &Tree, report: &Report) -> Vec<Finding
                 unit: unit.name.clone(),
                 unshown: unit.depends.difference(&measured.uses).cloned().collect(),
                 unnamed: measured.uses.difference(&unit.depends).cloned().collect(),
+            });
+        }
+        if measured.figures.use_ > plan.budget.use_ && !plan.budget.over_use.contains(&unit.name) {
+            found.push(Finding::OverUse {
+                unit: unit.name.clone(),
+                tokens: measured.figures.use_,
+                budget: plan.budget.use_,
             });
         }
         let entries = match &unit.shape {

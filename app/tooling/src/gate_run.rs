@@ -19,11 +19,9 @@ use std::time::Duration;
 
 /// The train's own test seams and signing keys, and the variables it hands its own children: a
 /// gate is handed none.
-pub(crate) const TRAIN_READS: [&str; 14] = [
+pub(crate) const TRAIN_READS: [&str; 12] = [
     "SUZATARY_TRAIN_BIN",
-    "SUZATARY_TRAIN_WASM",
     "SUZATARY_TRAIN_GATE",
-    "SUZATARY_TRAIN_GROWTH",
     "SUZATARY_TRAIN_GH",
     "SUZATARY_TRAIN_POLL",
     "SUZATARY_TRAIN_PIN",
@@ -44,14 +42,6 @@ const SCRIPTS: &str = "SUZATARY_SCRIPTS";
 pub(crate) const HOLDER: &str = "SUZATARY_LOCK_HOLDER";
 /// A gate run not ended in six hours (GitHub's job limit) says nothing.
 const RUN_SECONDS: u64 = 6 * 3600;
-
-/// What the growth check found of the commits since the merge base.
-pub(crate) enum Growth {
-    Within,
-    Refused(Vec<String>),
-    /// It compared nothing, and says why: never a pass.
-    Unrun(String),
-}
 
 /// Who a child is: a half's job, or a command the train runs on its own behalf.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -79,8 +69,6 @@ pub(crate) enum Depth {
 /// The guards' seams (`seams`), else the deployed train's own.
 pub(crate) struct Seams {
     pub(crate) gate: Option<PathBuf>,
-    /// A program in the growth check's place: exit 0 within, 1 refused (its lines on stdout).
-    pub(crate) growth: Option<PathBuf>,
     pub(crate) gh: OsString,
     pub(crate) poll: Duration,
     pub(crate) cache_timeout: u64,
@@ -97,7 +85,6 @@ fn seams() -> Seams {
         };
         Seams {
             gate: var("SUZATARY_TRAIN_GATE").map(PathBuf::from),
-            growth: var("SUZATARY_TRAIN_GROWTH").map(PathBuf::from),
             gh: var("SUZATARY_TRAIN_GH").unwrap_or_else(|| "gh".into()),
             poll: Duration::from_secs(number("SUZATARY_TRAIN_POLL", 60)),
             cache_timeout: number("SUZATARY_TRAIN_CACHE_TIMEOUT", 12_000),
@@ -106,7 +93,6 @@ fn seams() -> Seams {
     #[cfg(not(feature = "seams"))]
     Seams {
         gate: None,
-        growth: None,
         gh: "gh".into(),
         poll: Duration::from_mins(1),
         cache_timeout: 12_000,
@@ -487,42 +473,6 @@ impl Train {
         cmd.env("SUZATARY_GATE_EVIDENCE", self.state.join("logs/evidence"));
         cmd.current_dir(worktree);
         cmd
-    }
-
-    /// What the commits since the merge base declare of the growth of `commit` (`context::growth`),
-    /// read in its worktree.
-    pub(crate) fn history(&mut self, commit: &Oid) -> Growth {
-        if !self.worktree_open(commit) {
-            return Growth::Unrun(format!("no worktree could be made at {}", commit.short()));
-        }
-        let worktree = self.state.join("worktree");
-        let found = match &self.seams.growth {
-            Some(stub) => {
-                let mut cmd = Command::new(stub);
-                cmd.current_dir(&worktree);
-                match process::output(&mut cmd) {
-                    Ok(out) if out.status.code() == Some(1) => {
-                        Ok(String::from_utf8_lossy(&out.stdout)
-                            .lines()
-                            .map(str::to_owned)
-                            .collect())
-                    }
-                    Ok(out) if out.status.success() => Ok(Vec::new()),
-                    Ok(out) => Err(anyhow::anyhow!(
-                        "{}",
-                        String::from_utf8_lossy(&out.stderr).trim()
-                    )),
-                    Err(e) => Err(anyhow::anyhow!("{e}")),
-                }
-            }
-            None => crate::context::growth(&worktree),
-        };
-        self.worktree_close();
-        match found {
-            Ok(refused) if refused.is_empty() => Growth::Within,
-            Ok(refused) => Growth::Refused(refused),
-            Err(e) => Growth::Unrun(format!("{e:#}")),
-        }
     }
 
     /// `gh`, bounded by 60 s, as every call the train makes to GitHub.

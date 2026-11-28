@@ -234,9 +234,8 @@ fn is_plan(path: &str, documents: &str) -> bool {
         })
 }
 
-/// The files that record the derived figures, which no figure counts: the train writes them after
-/// it measures, so a figure is the measure of exactly the tree that records it.
-const RECORDING: [&str; 2] = [super::plan::FILE, super::wasm::BUDGET];
+/// The file that holds the budgets, which no figure counts.
+const RECORDING: [&str; 1] = [super::plan::FILE];
 
 /// The files of `unit`, sorted into its parts.
 fn parts<'a>(unit: &'a Unit, tree: &'a Tree) -> Parts<'a> {

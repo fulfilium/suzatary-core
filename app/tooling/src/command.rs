@@ -17,7 +17,7 @@ pub(crate) const USAGE: &str = "usage: train table read <commit> [--half tree|li
        train nightly
        train check <pr>
        train locked <verb> -- <command>...
-       train context [--repo <dir>] [files [<unit>] | record [--merged] | growth | external <name> <dir> | order <unit> [<cut>]]";
+       train context [--repo <dir>] [files [<unit>] | external <name> <dir> | order <unit> [<cut>]]";
 
 /// One verb of the tool, its arguments parsed.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -153,21 +153,10 @@ impl Command {
 
     fn context(repo: &str, words: &[&str]) -> Result<Command, Error> {
         use crate::context::Act;
-        use crate::context::wasm::Modules;
-        let modules = |words: &[&str]| match words {
-            [] => Ok(None),
-            ["--wasm", system, files @ ..] if !files.is_empty() => Ok(Some(Modules {
-                system: (*system).to_owned(),
-                files: files.iter().map(Into::into).collect(),
-            })),
-            _ => Err(usage("--wasm <system> <module>...")),
-        };
         let act = match words {
             [] => Act::Show,
             ["files"] => Act::Files(None),
             ["files", unit] => Act::Files(Some((*unit).to_owned())),
-            ["record", rest @ ..] => Act::Record(modules(rest)?),
-            ["growth"] => Act::Growth,
             ["external", name, checkout] => Act::External {
                 name: (*name).to_owned(),
                 checkout: checkout.into(),

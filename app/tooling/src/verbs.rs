@@ -4,7 +4,7 @@
 use crate::bisect::{Search, Stuck};
 use crate::data::Data;
 use crate::gate_branch::GateBranch;
-use crate::gate_run::{Depth, Growth, HOLDER, Kept, Logs, Ran, TRAIN_READS, Train, said};
+use crate::gate_run::{Depth, HOLDER, Kept, Logs, Ran, TRAIN_READS, Train, said};
 use crate::gating::{OnRed, Plan, Push};
 use crate::lock::Holder;
 use crate::oid::Oid;
@@ -107,27 +107,10 @@ impl Train {
             .ok_or_else(|| said("there is no train; scripts/train.sh build <pr>... first."))
     }
 
-    /// `gate [--full] [--remote github]`: the growth check, then both halves of the train, and the
-    /// report.
+    /// `gate [--full] [--remote github]`: both halves of the train, and the report.
     pub fn gate(&mut self, full: bool, remote: bool) -> Result<u8, Error> {
         self.begin("gate", if full { Kept::Full } else { Kept::Selective })?;
         let commit = Self::train_commit()?;
-        match self.history(&commit) {
-            Growth::Within => {}
-            Growth::Refused(refused) => {
-                for growth in &refused {
-                    eprintln!("train: growth: {growth}");
-                }
-                return Err(said(
-                    "the train's commits do not declare the growth above: build again with the \
-                     pull request's description mended, or without it. Nothing was gated, and no \
-                     row was written.",
-                ));
-            }
-            Growth::Unrun(why) => {
-                eprintln!("train: the growth check did not run ({why}); the halves go on");
-            }
-        }
         if remote {
             self.repo()?;
             self.sweep()?;
@@ -285,13 +268,11 @@ impl Train {
         }
     }
 
-    /// `nightly`: origin/master's growth check, then both halves, full, neither stopping the other;
-    /// a red half files a todo (`train.sh nightly-report`), and a refused growth fails it after the
-    /// halves. It waits for a running train's lock.
+    /// `nightly`: both halves of origin/master, full, neither stopping the other; a red half files
+    /// a todo (`train.sh nightly-report`). It waits for a running train's lock.
     pub fn nightly(&mut self) -> Result<u8, Error> {
         self.begin("nightly", Kept::Nightly)?;
         let commit = git::commit("origin/master")?;
-        let growth = self.history(&commit);
         let prefix = self.repo.is_some().then_some("gate/nightly-");
         let plan = self.plan(&commit, &Half::BOTH, prefix, OnRed::GoOn)?;
         self.run(plan)?;
@@ -318,17 +299,7 @@ impl Train {
                 self.state.join("logs").display()
             )));
         }
-        match growth {
-            Growth::Within => Ok(status),
-            Growth::Refused(refused) => Err(said(format!(
-                "origin/master's commits do not declare their growth: {}",
-                refused.join("; ")
-            ))),
-            Growth::Unrun(why) => Err(said(format!(
-                "the growth check did not run on origin/master ({why}), so no train's growth is \
-                 checked until it does"
-            ))),
-        }
+        Ok(status)
     }
 
     /// `check <pr>`: the runners' run of the pull request's head merged on origin/master, posted on

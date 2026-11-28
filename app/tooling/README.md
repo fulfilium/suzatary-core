@@ -28,8 +28,7 @@ runs, and the lock.
   and HUP, INT or TERM stop every half before anything waits, write no row, close the gate branch
   and exit 128 plus the signal. `nightly` waits for a running train's lock; `check` takes none and
   writes no row. Each gate half runs as a process group whose id the train prints. `gate` and
-  `nightly` run `train context growth` first; a refusal stops a gate with no row, and an unrun
-  check fails the nightly. A live `bisect` names the stores its probes run at.
+  `nightly` run no pre-check. A live `bisect` names the stores its probes run at.
 - `train locked <verb> -- <command>...` runs `scripts/train.sh <verb>` under the lock, and passes
   a signal on to it; another train's lock refuses with exit 1, naming its holder.
 - Every verb exits 64 on a usage error and 3 when a step it needs could not run. A line of the
