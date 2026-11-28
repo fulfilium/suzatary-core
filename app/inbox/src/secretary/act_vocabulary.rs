@@ -32,6 +32,7 @@ pub const SIGNATURES: &[Constructor] = &[
     suzatary_record::record::SUBTODO,
     acts::AUTH,
     acts::AUTH_SEND,
+    acts::AUTH_CALENDAR,
     acts::SECRET,
     acts::WEB,
     acts::PATCH,
@@ -53,6 +54,7 @@ pub const SIGNATURES: &[Constructor] = &[
     acts::GOOGLE_CLIENT,
     acts::GOOGLE_SIGN_IN,
     acts::CALENDAR_EVENT,
+    acts::MICROSOFT_CALENDAR_EVENT,
     suzatary_services::web::SEARCH,
     suzatary_services::web::FETCH,
     attached::ATTACHED,
@@ -105,6 +107,7 @@ mod tests {
             SubTodo(body, done)
             Auth(account)
             AuthSend(account)
+            AuthCalendar(account)
             Secret(name, why)
             Web(request, rule)
             Patch(repo, visibility, base, patch, message)
@@ -126,6 +129,7 @@ mod tests {
             GoogleClient(redirect)
             GoogleSignIn(account, scopes)
             CalendarEvent(account, title, when, place)
+            MicrosoftCalendarEvent(account, title, when, place)
             Search(query)
             Fetch(url)
             Attached(source, name, media, size, sha256)

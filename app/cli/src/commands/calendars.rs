@@ -1,21 +1,31 @@
-//! Each Google account's calendars, and each lieer account's that holds a calendar grant, read
-//! through Google's Calendar API into the calendar's cache tier, by `suzatary plugin sync` beside
-//! the plugins.
+//! Each account's calendars, read through the provider that keeps them (Google's Calendar API, or
+//! Microsoft Graph) into the calendar's cache tier, by `suzatary plugin sync` beside the plugins.
 
 use suzatary_base::capability::Clock as _;
+use suzatary_google::calendar::{Occurrence, Provider};
 use suzatary_health::health::Failure;
 use suzatary_health::health::SourceKey;
 use suzatary_health::health::{Healths, Outcome};
-use suzatary_io_mail::google::ReadError;
+use suzatary_io_mail::calendar::ReadError;
+use suzatary_io_mail::oauth::TokenStore;
+use suzatary_mail::mail::oauth::{Calendar, NeedsLogin, OauthError, Protocol as _, Silent};
 
 use crate::instance::Instance;
 
-/// Sync the calendars of every account the box reads them for, asking `google`: one line each,
-/// and whether every one was stored.
+/// What reads an account's calendars: Google's grants, and the token store Graph's come from.
+#[derive(Clone, Copy)]
+pub struct Providers<'a> {
+    pub google: &'a suzatary_io_mail::google::Grants,
+    pub microsoft: &'a TokenStore,
+}
+
+/// Sync the calendars of every account the box reads them for: one line each, and whether every
+/// one was stored.
 #[must_use]
 pub fn sync_calendars(
     instance: &Instance,
     google: suzatary_io_mail::google::Google,
+    microsoft: &TokenStore,
     health: &suzatary_io_local::source_health::Health,
 ) -> (Vec<String>, bool) {
     let grants =
@@ -26,33 +36,34 @@ pub fn sync_calendars(
     let removed = remove_unowned(&instance.google_calendars(), &accounts);
     let (mut lines, healths, stored) = read_calendars(
         instance.mail.accounts.accounts(),
-        &grants,
+        Providers {
+            google: &grants,
+            microsoft,
+        },
         |account| instance.google_calendar(account),
         suzatary_io_local::clock::SystemClock.now(),
     );
     match removed {
         Ok(0) => {}
         Ok(removed) => lines.push(format!(
-            "google: removed the calendars of {removed} account(s) no longer read"
+            "calendars: removed those of {removed} account(s) no longer read"
         )),
         Err(failed) => lines.push(format!(
-            "google: a removed account's calendar was not removed: {failed}"
+            "calendars: a removed account's calendar was not removed: {failed}"
         )),
     }
     if let Err(failed) = health.join(&healths) {
-        lines.push(format!(
-            "google: the calendars' health was not recorded: {failed}"
-        ));
+        lines.push(format!("calendars: the health was not recorded: {failed}"));
     }
     (lines, stored)
 }
 
 /// Empty each account's store held at another schema, before any fetch; then a line and a health
-/// for each account the box reads calendars for (`google::reads_calendars`), and whether every one
-/// was stored; a lieer account is read through its calendar grant alone.
+/// for each account the box reads calendars for (`Provider::held`), and whether every one was
+/// stored.
 pub fn read_calendars(
     accounts: &[suzatary_mail::mail::account::MailAccount],
-    grants: &suzatary_io_mail::google::Grants,
+    providers: Providers<'_>,
     store_of: impl Fn(&suzatary_mail::mail::account::MailAccount) -> std::path::PathBuf,
     now: suzatary_base::capability::Datetime,
 ) -> (Vec<String>, Healths<SourceKey>, bool) {
@@ -64,38 +75,22 @@ pub fn read_calendars(
         if let Err(failed) = settle(&store_of(account)) {
             stored = false;
             lines.push(format!(
-                "google {}: its calendar store was not emptied: {failed}",
+                "calendars {}: its store was not emptied: {failed}",
                 account.email
             ));
         }
         // A store that does not answer reads as no grant: the account's next sync says why.
-        let held = grants
+        let google = providers
+            .google
             .held(account.email.address())
             .unwrap_or(suzatary_google::google::Held::NotSignedIn);
-        if !suzatary_google::google::reads_calendars(&account.sync, &held) {
-            continue;
-        }
-        let said = (grants.live(account.email.address()))
-            .map_err(|failed| (failed.class().into(), failed.to_string()))
-            .and_then(|grant| {
-                if !grant
-                    .parts
-                    .contains(suzatary_google::google::Scope::Calendar)
-                {
-                    return Err((
-                        Failure::NeedsLogin,
-                        "its grant holds no calendars: a sign-in card asks Google for them"
-                            .to_owned(),
-                    ));
-                }
-                let read = grants.google().occurrences(&grant, at);
-                read.map_err(|failed| match failed {
-                    ReadError::NeedsLogin(_) => (Failure::NeedsLogin, failed.to_string()),
-                    ReadError::Failed(why) => (Failure::Unclassified, why),
-                })
-            })
-            .and_then(|occurrences| {
-                suzatary_io_mail::google::learn(&store_of(account), &occurrences, now)
+        let microsoft = providers
+            .microsoft
+            .granted(account)
+            .is_ok_and(|slots| slots.contains(&Calendar::SLOT));
+        for provider in Provider::held(&account.sync, &google, microsoft) {
+            let said = occurrences(provider, account, providers, at).and_then(|occurrences| {
+                suzatary_io_mail::calendar::learn(&store_of(account), provider, &occurrences, now)
                     .map(|learnt| {
                         format!(
                             "{} occurrences read, {} learned, {} known",
@@ -106,16 +101,66 @@ pub fn read_calendars(
                     })
                     .map_err(|why| (Failure::Unclassified, why))
             });
-        let (outcome, words) = said.map_or_else(
-            |(class, why)| (Outcome::Failed(class), why),
-            |read| (Outcome::Succeeded, read),
-        );
-        stored &= outcome == Outcome::Succeeded;
-        let key = SourceKey::GoogleCalendar(account.email.clone());
-        healths = healths.join(&Healths::one(key, at, outcome, &words));
-        lines.push(format!("google {}: {words}", account.email));
+            let (outcome, words) = said.map_or_else(
+                |(class, why)| (Outcome::Failed(class), why),
+                |read| (Outcome::Succeeded, read),
+            );
+            stored &= outcome == Outcome::Succeeded;
+            let key = SourceKey::GoogleCalendar(account.email.clone());
+            healths = healths.join(&Healths::one(key, at, outcome, &words));
+            lines.push(format!("{} {}: {words}", provider.actor(), account.email));
+        }
     }
     (lines, healths, stored)
+}
+
+/// What `provider` reads of `account`'s calendars, or the class and words of why it could not.
+fn occurrences(
+    provider: Provider,
+    account: &suzatary_mail::mail::account::MailAccount,
+    providers: Providers<'_>,
+    at: chrono::NaiveDateTime,
+) -> Result<Vec<Occurrence>, (Failure, String)> {
+    let read_error = |failed: ReadError| match failed {
+        ReadError::NeedsLogin(_) => (Failure::NeedsLogin, failed.to_string()),
+        ReadError::Failed(why) => (Failure::Unclassified, why),
+    };
+    match provider {
+        Provider::Google => {
+            let grant = (providers.google.live(account.email.address()))
+                .map_err(|failed| (failed.class().into(), failed.to_string()))?;
+            if !grant
+                .parts
+                .contains(suzatary_google::google::Scope::Calendar)
+            {
+                return Err((
+                    Failure::NeedsLogin,
+                    "its grant holds no calendars: a sign-in card asks Google for them".to_owned(),
+                ));
+            }
+            providers
+                .google
+                .google()
+                .occurrences(&grant, at)
+                .map_err(read_error)
+        }
+        Provider::Microsoft => match providers.microsoft.access::<Calendar>(account) {
+            Ok(Silent::Token(token)) => providers
+                .microsoft
+                .graph()
+                .occurrences(&token, account.email.address(), at)
+                .map_err(read_error),
+            // The administrator's refusal is its own class: no sign-in and no retry mends it.
+            Ok(Silent::NeedsLogin(needs @ NeedsLogin::AdminApproval { .. })) => {
+                Err((Failure::NeedsAdministrator, needs.to_string()))
+            }
+            Ok(Silent::NeedsLogin(needs)) => Err((Failure::NeedsLogin, needs.to_string())),
+            Err(failed @ OauthError::AdminApproval { .. }) => {
+                Err((Failure::NeedsAdministrator, failed.to_string()))
+            }
+            Err(failed) => Err((Failure::Unclassified, failed.to_string())),
+        },
+    }
 }
 
 /// Empty the calendar store at `root` where it holds another schema, before any fetch.
@@ -123,7 +168,7 @@ pub fn read_calendars(
 /// # Errors
 /// The calendar's schema refused, or the store not emptied.
 fn settle(root: &std::path::Path) -> Result<(), String> {
-    let schema = prodrome_declared::Declaration::admit(suzatary_google::google::SCHEMA)
+    let schema = prodrome_declared::Declaration::admit(suzatary_google::calendar::SCHEMA)
         .map_err(|refused| format!("the calendar's schema: {refused}"))?;
     suzatary_io_chains::plugin_store::PluginStore::at(root)
         .settle(&schema)

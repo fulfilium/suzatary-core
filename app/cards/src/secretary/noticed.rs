@@ -248,6 +248,7 @@ pub(crate) fn owns(proposal: &Proposal) -> bool {
             | Act::SignInCode { .. }
             | Act::Auth { .. }
             | Act::AuthSend { .. }
+            | Act::AuthCalendar { .. }
             | Act::GoogleSignIn { .. }
             | Act::GoogleClient { .. }
             | Act::Grant { .. }

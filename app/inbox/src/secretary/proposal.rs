@@ -56,6 +56,7 @@ impl Proposal {
             Proposal::Act(
                 crate::secretary::acts::Act::Auth { .. }
                     | crate::secretary::acts::Act::AuthSend { .. }
+                    | crate::secretary::acts::Act::AuthCalendar { .. }
                     | crate::secretary::acts::Act::GoogleSignIn { .. }
                     | crate::secretary::acts::Act::Grant { .. }
                     | crate::secretary::acts::Act::Secret { .. }
@@ -79,6 +80,7 @@ impl Proposal {
             Proposal::Act(act) => match act {
                 Act::Auth { .. }
                 | Act::AuthSend { .. }
+                | Act::AuthCalendar { .. }
                 | Act::Secret { .. }
                 | Act::Web { .. }
                 | Act::DriveRead { .. }

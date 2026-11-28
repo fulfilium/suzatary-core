@@ -32,9 +32,47 @@ impl CalendarName {
         }
     }
 
+    /// The name a calendar's occurrences are kept under: `PLUGIN_<PROVIDER>_` and the account's
+    /// folder for its own calendar, and a digest of the calendar's id after it for each other, so
+    /// a calendar keeps its name however the list is ordered. A folder too long for a calendar's
+    /// name is spelt by its digest.
+    ///
+    /// # Errors
+    /// None for any account and calendar the box reads.
+    pub fn of(
+        provider: super::Provider,
+        account: &suzatary_mail::mail::address::EmailAddress,
+        calendar: &super::Listed,
+    ) -> Result<Self, NotAnOccurrence> {
+        use sha2::Digest as _;
+        let digest = |text: &str, digits: usize| {
+            hex::encode_upper(sha2::Sha256::digest(text.as_bytes()))[..digits].to_owned()
+        };
+        let folder = account_folder(account);
+        let folder = if folder.len() <= 60 {
+            folder
+        } else {
+            digest(&folder, 16)
+        };
+        let plugin = provider.actor().to_ascii_uppercase();
+        Self::parse(&if calendar.primary {
+            format!("PLUGIN_{plugin}_{folder}")
+        } else {
+            format!("PLUGIN_{plugin}_{folder}_{}", digest(&calendar.id, 8))
+        })
+    }
+
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// The provider whose namespace it is in.
+    #[must_use]
+    pub fn provider(&self) -> Option<super::Provider> {
+        [super::Provider::Google, super::Provider::Microsoft]
+            .into_iter()
+            .find(|provider| self.of_plugin(provider.actor()))
     }
 
     /// Whether it is in the namespace of the plugin named `plugin`, `PLUGIN_<PLUGIN>_`: the only
@@ -61,6 +99,14 @@ impl fmt::Display for CalendarName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
+}
+
+/// An account's maildir folder in capitals, what its calendars and its Google grant are named by.
+#[must_use]
+pub fn account_folder(account: &suzatary_mail::mail::address::EmailAddress) -> String {
+    suzatary_mail::mail::account::slug_of(account.as_str())
+        .to_ascii_uppercase()
+        .replace(|c: char| !c.is_ascii_alphanumeric(), "_")
 }
 
 /// One occurrence of one event: the store's key.
@@ -185,5 +231,39 @@ mod tests {
         assert!(name.of_plugin("ics"));
         assert!(!name.of_plugin("bank"));
         assert!(!name.of_plugin("ic"));
+    }
+
+    /// Every provider names its calendars in its own namespace, the account's own as its folder,
+    /// and a long address by its digest.
+    #[test]
+    fn a_calendars_name_is_its_own() {
+        use crate::calendar::{Listed, Provider};
+        use suzatary_mail::mail::address::EmailAddress;
+        let ada = EmailAddress::new("ada@example.test").expect("an address");
+        let long =
+            EmailAddress::new(&format!("{}@example.test", "a".repeat(120))).expect("an address");
+        let listed = |id: &str, primary| Listed {
+            id: id.to_owned(),
+            primary,
+        };
+        for (provider, namespace) in [
+            (Provider::Google, "PLUGIN_GOOGLE_"),
+            (Provider::Microsoft, "PLUGIN_MICROSOFT_"),
+        ] {
+            let own = CalendarName::of(provider, &ada, &listed("a", true)).expect("a name");
+            assert_eq!(own.as_str(), format!("{namespace}ADA_AT_EXAMPLE_TEST"));
+            let team = CalendarName::of(provider, &ada, &listed("team", false)).expect("a name");
+            assert!(
+                team.as_str()
+                    .starts_with(&format!("{namespace}ADA_AT_EXAMPLE_TEST_")),
+                "{team}"
+            );
+            assert!(team.of_plugin(provider.actor()));
+            for primary in [true, false] {
+                let name = CalendarName::of(provider, &long, &listed("x", primary))
+                    .expect("a long address's calendar is named by its digest");
+                assert!(name.of_plugin(provider.actor()), "{name}");
+            }
+        }
     }
 }

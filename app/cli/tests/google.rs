@@ -157,11 +157,11 @@ fn marked_mail() -> suzatary_mail::mail::MailMessage {
     }
 }
 
-fn setup(base: &str) -> serde_json::Value {
+pub(crate) fn setup(base: &str) -> serde_json::Value {
     common::poll_conversation(base, SETUP.as_str(), |_| true)
 }
 
-fn card(conversation: &serde_json::Value, kind: &str, state: &str) -> Option<usize> {
+pub(crate) fn card(conversation: &serde_json::Value, kind: &str, state: &str) -> Option<usize> {
     conversation["proposals"]
         .as_array()?
         .iter()
@@ -170,7 +170,7 @@ fn card(conversation: &serde_json::Value, kind: &str, state: &str) -> Option<usi
         .and_then(|index| usize::try_from(index).ok())
 }
 
-fn tap(base: &str, index: usize, body: &serde_json::Value) -> serde_json::Value {
+pub(crate) fn tap(base: &str, index: usize, body: &serde_json::Value) -> serde_json::Value {
     let mut tapped = common::act(
         &format!(
             "{base}/api/secretary/conversations/{}/proposals/{index}/tap",
@@ -843,14 +843,26 @@ fn the_calendars_are_read_bounded_and_learned_once() {
     let read = google.occurrences(&grant, now).expect("occurrences");
     assert_eq!(
         read.len(),
-        2 * suzatary_google::google::EVENTS,
+        2 * suzatary_google::calendar::EVENTS,
         "two calendars, each read to its bound"
     );
     let root = common::scratch("google-calendar");
     let at = prodrome_data::literal::Datetime::new(2026, 10, 17, 9, 0, 0, 0).expect("an instant");
-    let learnt = suzatary_io_mail::google::learn(&root, &read, at).expect("learned");
+    let learnt = suzatary_io_mail::calendar::learn(
+        &root,
+        suzatary_google::calendar::Provider::Google,
+        &read,
+        at,
+    )
+    .expect("learned");
     assert_eq!(learnt.written, read.len());
-    let again = suzatary_io_mail::google::learn(&root, &read, at).expect("learned");
+    let again = suzatary_io_mail::calendar::learn(
+        &root,
+        suzatary_google::calendar::Provider::Google,
+        &read,
+        at,
+    )
+    .expect("learned");
     assert_eq!(
         (again.written, again.known),
         (0, read.len()),
@@ -867,7 +879,7 @@ fn the_calendars_are_read_bounded_and_learned_once() {
 
 /// A line said before the round's closing reply joins that round (`Round::run` joins before every
 /// ask), so the wait is for `idle`, not for the card.
-fn event_proposed(base: &str) -> String {
+pub(crate) fn event_proposed(base: &str) -> String {
     let id = common::opened(base, "The dentist");
     let proposed = common::said(base, &id, "put the dentist in my calendar");
     assert_eq!(
@@ -883,7 +895,7 @@ fn an_event_is_written_only_by_its_tapped_card() {
     let model = common::FakeModel::saying_owned([
         format!(
             r#"{{"say": "Here is the event.", "calls": [{{"verb": "propose_act", "args": {{
-              "act": "calendar_event", "account": "{ADA}", "title": "Dentist",
+              "act": "calendar_event", "account": "{ADA}", "provider": "google", "title": "Dentist",
               "start": "2026-10-20T14:00:00Z", "end": "2026-10-20T14:45:00Z",
               "place": "Main St 4",
               "why": "the owner asked for the appointment in his calendar",
@@ -955,20 +967,6 @@ fn a_lieer_card_that_lacks_a_grant_is_fixed_from_its_button() {
     fixed_from_its_button("google-fix", &Sync::Gmail);
 }
 
-/// [`a_lieer_card_that_lacks_a_grant_is_fixed_from_its_button`], for an account whose mail is
-/// read by IMAP from Microsoft: its calendar is Google's all the same.
-#[test]
-fn a_microsoft_card_that_lacks_a_grant_is_fixed_from_its_button() {
-    fixed_from_its_button(
-        "google-fix-ms",
-        &Sync::MsImap(suzatary_mail::mail::account::MsImap {
-            authority: suzatary_mail::mail::account::Authority::Organizations,
-            inbox_folders: suzatary_mail::mail::folders::Folders::inbox(),
-            sent_folder: "Sent Items".to_owned(),
-        }),
-    );
-}
-
 /// The same, for an account whose mail Proton's Bridge reads.
 #[test]
 fn a_proton_card_that_lacks_a_grant_is_fixed_from_its_button() {
@@ -988,7 +986,7 @@ fn fixed_from_its_button(tag: &str, sync: &Sync) {
     let model = common::FakeModel::saying_owned([
         format!(
             r#"{{"say": "Here is the event.", "calls": [{{"verb": "propose_act", "args": {{
-              "act": "calendar_event", "account": "{ADA}", "title": "Dentist",
+              "act": "calendar_event", "account": "{ADA}", "provider": "google", "title": "Dentist",
               "start": "2026-10-20T14:00:00Z", "end": "2026-10-20T14:45:00Z",
               "why": "the owner asked for the appointment in his calendar",
               "sources": "briefing:2026-10-17"}}}}]}}"#
@@ -1116,9 +1114,12 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
     std::fs::create_dir_all(older.join("objects")).expect("a store");
     std::fs::write(older.join("schema"), "an older schema").expect("writes");
     std::fs::write(older.join("objects/kept.py"), &address).expect("writes");
-    let (lines, healths, stored) = suzatary_cli::commands::google::read_calendars(
+    let (lines, healths, stored) = suzatary_cli::commands::calendars::read_calendars(
         &[account(sync.clone()), unsigned],
-        &grants,
+        suzatary_cli::commands::calendars::Providers {
+            google: &grants,
+            microsoft: &suzatary_io_mail::oauth::TokenStore::new(root.join("oauth")),
+        },
         |account| root.join(&account.subdir),
         at,
     );
@@ -1161,7 +1162,7 @@ fn calendars_are_read(serving: &Serving, sync: &Sync) {
 fn no_answer_of_propose_act_holds_words_from_outside_the_round() {
     let event = |extra: &str| {
         format!(
-            r#"{{"verb": "propose_act", "args": {{"act": "calendar_event", "account": "{ADA}",
+            r#"{{"verb": "propose_act", "args": {{"act": "calendar_event", "account": "{ADA}", "provider": "google",
               "title": "Dentist", "start": "2026-10-20T14:00:00Z", "end": "2026-10-20T14:45:00Z",
               "why": "the owner asked for it", "sources": "briefing:2026-10-17"{extra}}}}}"#
         )
@@ -1271,7 +1272,7 @@ fn the_google_calendar_writes_the_calendar_plugins_schema() {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugin-ics/ics.schema"),
     )
     .expect("the plugin's schema");
-    assert_eq!(declared, suzatary_google::google::SCHEMA);
+    assert_eq!(declared, suzatary_google::calendar::SCHEMA);
 }
 
 /// Every sign-in that fails, abandoned, never called back, refused or holding a grant that cannot

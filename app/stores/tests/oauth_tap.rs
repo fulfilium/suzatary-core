@@ -1,7 +1,7 @@
 //! A tap minted by the gate is the consent the device flow asks for.
 
 use suzatary_mail::mail::account::Authority;
-use suzatary_mail::mail::oauth::{Consent, Imap, device_request};
+use suzatary_mail::mail::oauth::{Consent, Endpoints, Imap, device_request};
 
 /// A minted tap builds the device flow's `Consent`, whose request names the IMAP scope.
 #[test]
@@ -18,7 +18,8 @@ fn a_minted_tap_is_a_consent_for_the_device_flow() {
     )
     .expect("a tap");
     let consent = Consent::given_by_tap(&tap);
-    let request = device_request::<Imap>(&consent, Authority::Organizations);
+    let request =
+        device_request::<Imap>(&consent, &Endpoints::microsoft(), Authority::Organizations);
     assert!(request.url.contains("devicecode"), "{}", request.url);
     assert!(
         request

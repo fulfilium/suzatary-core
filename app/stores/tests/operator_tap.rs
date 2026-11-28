@@ -1,8 +1,9 @@
 //! The operator's tap at the box's terminal performs every card but the ones that send mail or
 //! grant a way to, over one proposal of every kind; the device's tap performs them all.
 
+use suzatary_google::calendar::NewEvent;
 use suzatary_google::calendar::When;
-use suzatary_google::google::{NewEvent, Scope};
+use suzatary_google::google::Scope;
 use suzatary_inbox::secretary::acts::Act;
 use suzatary_inbox::secretary::proposal::Proposal;
 use suzatary_inbox::secretary::sending::performs;
@@ -30,6 +31,7 @@ fn every_kind() -> Vec<Proposal> {
         r#"{"act":"decide","id":"operatortaps","title":"The operator taps","body":"Not sends.","rationale":"testing","supersedes":[]}"#.to_owned(),
         r#"{"act":"act","kind":"auth","account":"her@example.test"}"#.to_owned(),
         r#"{"act":"act","kind":"auth_send","account":"her@example.test"}"#.to_owned(),
+        r#"{"act":"act","kind":"auth_calendar","account":"her@example.test"}"#.to_owned(),
         r#"{"act":"act","kind":"secret","name":"NTFY_TOPIC","why":"a channel"}"#.to_owned(),
         r#"{"act":"act","kind":"web","request":{"kind":"search","query":"train times"}}"#.to_owned(),
         format!(
@@ -57,6 +59,7 @@ fn every_kind() -> Vec<Proposal> {
     .collect();
     every.push(Proposal::Act(Act::CalendarEvent {
         account: EmailAddress::new("her@example.test").expect("an address"),
+        provider: suzatary_google::calendar::Provider::Google,
         event: NewEvent::new("Dentist", When::all_day(day(3), day(4)).expect("a day"), "")
             .expect("an event"),
     }));
@@ -75,6 +78,7 @@ fn sends(proposal: &Proposal) -> bool {
         | Proposal::Decide(_)
         | Proposal::Act(
             Act::Auth { .. }
+            | Act::AuthCalendar { .. }
             | Act::Secret { .. }
             | Act::Web { .. }
             | Act::Patch { .. }

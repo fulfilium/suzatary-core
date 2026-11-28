@@ -5,13 +5,15 @@ use crate::settings::Settable;
 use suzatary_google::google::Held;
 use suzatary_mail::mail::account::{MailAccount, Sync};
 
-/// One account's OAuth consents: Microsoft's IMAP and SMTP grants sit in separate slots, so a
-/// leaked IMAP token cannot send.
+/// One account's OAuth consents: Microsoft's IMAP, SMTP and calendar grants sit in separate
+/// slots, so a leaked IMAP token cannot send and neither mail token reaches a calendar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MailGrants {
     /// The IMAP slot, or for a Google account its sign-in with Google.
     pub imap: bool,
     pub smtp: bool,
+    /// The calendar slot, a Microsoft account's consent to read and edit its calendars.
+    pub calendar: bool,
 }
 
 /// Where one mail account's credential lives, so an account whose grant this box does not hold is
@@ -26,6 +28,8 @@ pub enum MailCredential {
         imap: bool,
         /// The SMTP grant, held separately.
         smtp: bool,
+        /// The calendar grant, held separately from both.
+        calendar: bool,
     },
     /// Gmail through lieer, which keeps its own credential outside this box's token store.
     Lieer,
@@ -45,6 +49,7 @@ impl MailCredential {
             Sync::MsImap(_) => MailCredential::Slots {
                 imap: grants.imap,
                 smtp: grants.smtp,
+                calendar: grants.calendar,
             },
             Sync::Gmail => MailCredential::Lieer,
             Sync::Google => MailCredential::Google {

@@ -14,6 +14,7 @@ use suzatary_base::capability::Clock;
 use suzatary_base::drive_path::DrivePath;
 use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_conversations::secretary::store::{Entry, Kind, Line, Lines};
+use suzatary_google::calendar::{NewEvent, Provider};
 use suzatary_health::health::Limited;
 use suzatary_held::for_model::ForModel;
 use suzatary_held::held_value::{Filled, HeldFile};
@@ -22,7 +23,8 @@ use suzatary_io_chains::objects::Objects;
 use suzatary_io_local::blobs::Blobs;
 use suzatary_io_local::clock::SystemClock;
 use suzatary_io_local::state::Ledger;
-use suzatary_io_mail::google::{Grants, Inserted};
+use suzatary_io_mail::calendar::Inserted;
+use suzatary_io_mail::google::Grants;
 use suzatary_io_mail::oauth::{Pending, TokenStore};
 use suzatary_io_sources::drive::ReadOnly;
 use suzatary_io_sources::repos::{Author, Mirrors, Stopped};
@@ -30,7 +32,7 @@ use suzatary_lines::secretary::spoken::Plain;
 use suzatary_lines::secretary::spoken::Spoken;
 use suzatary_lines::secretary::spoken::noted;
 use suzatary_mail::mail::address::EmailAddress;
-use suzatary_mail::mail::oauth::{Consent, Protocol};
+use suzatary_mail::mail::oauth::{Calendar, Consent, NeedsLogin, OauthError, Protocol, Silent};
 use suzatary_secretary::secretary;
 use suzatary_secretary::secretary::daily::Run;
 use suzatary_secretary::secretary::review::{Noticed, Pass};
@@ -56,7 +58,6 @@ use suzatary_api::routes;
 use suzatary_base::capability;
 use suzatary_base::refusal::Refusal;
 use suzatary_conversations::secretary::{model, store};
-use suzatary_google::google;
 use suzatary_held::file_read::FileRead;
 use suzatary_inbox::secretary::stamp::stamp;
 use suzatary_inbox::secretary::{inbox, inbox_event, inbox_reading, proposer};
@@ -273,7 +274,7 @@ impl Acting {
         stores: ActingStores,
         workers: Arc<Workers>,
         signing: Arc<SignIns>,
-        google: &google::Endpoints,
+        google: &suzatary_google::google::Endpoints,
     ) -> Self {
         Acting::Recording {
             conversations: stores.conversations,
@@ -322,39 +323,43 @@ impl Acting {
         }
     }
 
-    fn calendar_event(&self, account: &EmailAddress, event: &google::NewEvent) -> Performed {
-        let google = match self {
-            Acting::NotYet => {
-                return Performed::Tried(Tried::NotSent {
-                    reason: format!(
-                        "calendars are not written by this build: {}",
-                        event.sentence()
-                    ),
-                });
-            }
-            Acting::Real { google, .. } => google,
-            #[cfg(feature = "fixture")]
-            Acting::Recording { google, .. } => google,
+    /// What a tapped calendar event comes to; `None` for any other act.
+    fn written(&self, act: &Act) -> Option<Performed> {
+        let Act::CalendarEvent {
+            account,
+            provider,
+            event,
+        } = act
+        else {
+            return None;
         };
-        let grant = match google.live(account) {
-            Ok(grant) => grant,
-            Err(failed) => {
-                return Performed::Tried(
-                    match failed
-                        .lacking(account, suzatary_mail::mail::lacking::Grant::GoogleCalendar)
-                    {
-                        Ok(lacking) => Tried::Lacks(lacking),
-                        Err(reason) => Tried::NotSent { reason },
-                    },
-                );
-            }
-        };
-        match google.google().insert(&grant, event) {
-            Inserted::Done => Performed::Done(Done::Acted {
-                what: format!("added {} to {account}'s calendar", event.sentence()),
+        Some(self.calendar_event(account, *provider, event))
+    }
+
+    /// The tapped event, written to the calendar at `provider`. A Microsoft calendar is never
+    /// written for want of a Google one, nor the reverse: what cannot be read is a refusal.
+    fn calendar_event(
+        &self,
+        account: &EmailAddress,
+        provider: Provider,
+        event: &NewEvent,
+    ) -> Performed {
+        match (self, provider) {
+            (Acting::NotYet, _) => Performed::Tried(Tried::NotSent {
+                reason: format!(
+                    "calendars are not written by this build: {}",
+                    event.sentence()
+                ),
             }),
-            Inserted::NotSent(reason) => Performed::Tried(Tried::NotSent { reason }),
-            Inserted::Unknown(reason) => Performed::Done(Done::MayHaveGone { reason }),
+            (Acting::Real { roster, tokens, .. }, Provider::Microsoft) => {
+                match microsoft_account(roster.as_ref(), account) {
+                    Ok(mail_account) => microsoft_event(tokens, &mail_account, event),
+                    Err(reason) => Performed::Tried(Tried::NotSent { reason }),
+                }
+            }
+            (Acting::Real { google, .. }, Provider::Google) => google_event(google, account, event),
+            #[cfg(feature = "fixture")]
+            (Acting::Recording { google, .. }, _) => google_event(google, account, event),
         }
     }
 
@@ -438,8 +443,8 @@ impl suzatary_server::secretary::routes::Perform for Acting {
         if let Act::Noise { sender, .. } = act {
             return self.silenced(sender, act);
         }
-        if let Act::CalendarEvent { account, event } = act {
-            return self.calendar_event(account, event);
+        if let Some(written) = self.written(act) {
+            return written;
         }
         // The allowed read's interpreter, so the document arrives redacted.
         if let Act::DriveRead { path, .. } = act {
@@ -507,6 +512,85 @@ impl suzatary_server::secretary::routes::Perform for Acting {
     }
 }
 
+/// The roster's Microsoft account at `address`, or why there is none.
+fn microsoft_account(
+    roster: &dyn Edits,
+    address: &EmailAddress,
+) -> Result<account::MailAccount, String> {
+    let declared = roster
+        .declared()
+        .map_err(|failed| format!("the instance file does not read: {failed}"))?;
+    declared
+        .accounts
+        .into_iter()
+        .find(|held| held.email.is(address.as_str()) && held.microsoft().is_some())
+        .ok_or_else(|| format!("{address} is no Microsoft account on this box's roster"))
+}
+
+fn microsoft_event(
+    tokens: &TokenStore,
+    account: &account::MailAccount,
+    event: &NewEvent,
+) -> Performed {
+    let address = account.email.address();
+    let token = match tokens.access::<Calendar>(account) {
+        Ok(Silent::Token(token)) => token,
+        Ok(Silent::NeedsLogin(needs @ NeedsLogin::AdminApproval { .. })) => {
+            return Performed::Tried(Tried::Refused {
+                reason: needs.to_string(),
+            });
+        }
+        Ok(Silent::NeedsLogin(
+            NeedsLogin::NeverGranted { .. } | NeedsLogin::Lapsed { .. } | NeedsLogin::Google { .. },
+        )) => {
+            return Performed::Tried(Tried::Lacks(suzatary_mail::mail::lacking::Lacking::Grant {
+                account: address.clone(),
+                grant: suzatary_mail::mail::lacking::Grant::MicrosoftCalendar,
+            }));
+        }
+        Err(failed) => {
+            return Performed::Tried(Tried::NotSent {
+                reason: failed.to_string(),
+            });
+        }
+    };
+    ended(tokens.graph().insert(&token, event), address, event)
+}
+
+fn google_event(google: &Grants, account: &EmailAddress, event: &NewEvent) -> Performed {
+    let grant = match google.live(account) {
+        Ok(grant) => grant,
+        Err(failed) => {
+            return Performed::Tried(
+                match failed.lacking(account, suzatary_mail::mail::lacking::Grant::GoogleCalendar) {
+                    Ok(lacking) => Tried::Lacks(lacking),
+                    Err(reason) => Tried::NotSent { reason },
+                },
+            );
+        }
+    };
+    ended(google.google().insert(&grant, event), account, event)
+}
+
+/// How a tapped event's write ended.
+fn ended(inserted: Inserted, account: &EmailAddress, event: &NewEvent) -> Performed {
+    match inserted {
+        Inserted::Done => Performed::Done(Done::Acted {
+            what: format!("added {} to {account}'s calendar", event.sentence()),
+        }),
+        Inserted::NotSent(reason) => Performed::Tried(Tried::NotSent { reason }),
+        Inserted::Unknown(reason) => Performed::Done(Done::MayHaveGone { reason }),
+    }
+}
+
+/// The consent a device-code act asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Slot {
+    Imap,
+    Smtp,
+    Calendar,
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "one value per thing the flow needs, none of them optional"
@@ -522,11 +606,12 @@ fn begin_real(
     act: &Act,
     consent: Consent,
 ) -> Performed {
-    use suzatary_mail::mail::oauth::{Imap, Smtp};
+    use suzatary_mail::mail::oauth::{Calendar, Imap, Smtp};
 
-    let (account, sending) = match act {
-        Act::Auth { account } => (account, false),
-        Act::AuthSend { account } => (account, true),
+    let (account, consent_for) = match act {
+        Act::Auth { account } => (account, Slot::Imap),
+        Act::AuthSend { account } => (account, Slot::Smtp),
+        Act::AuthCalendar { account } => (account, Slot::Calendar),
         Act::Secret { .. }
         | Act::Web { .. }
         | Act::Patch { .. }
@@ -583,10 +668,10 @@ fn begin_real(
         at: (id, index),
         object,
     };
-    if sending {
-        flow.begin::<Smtp>(tokens, consent, mail_account, account, named)
-    } else {
-        flow.begin::<Imap>(tokens, consent, mail_account, account, named)
+    match consent_for {
+        Slot::Imap => flow.begin::<Imap>(tokens, consent, mail_account, account, named),
+        Slot::Smtp => flow.begin::<Smtp>(tokens, consent, mail_account, account, named),
+        Slot::Calendar => flow.begin::<Calendar>(tokens, consent, mail_account, account, named),
     }
 }
 
@@ -629,8 +714,12 @@ impl Flow<'_> {
                     "secretary: act auth {named} did not begin: {}",
                     Excerpt::of(&failed.to_string())
                 );
-                return Performed::Tried(Tried::NotSent {
-                    reason: failed.to_string(),
+                let reason = failed.to_string();
+                return Performed::Tried(match failed {
+                    OauthError::AdminApproval { .. } => Tried::Refused { reason },
+                    OauthError::Unreadable { .. }
+                    | OauthError::Refused { .. }
+                    | OauthError::NotMicrosoft { .. } => Tried::NotSent { reason },
                 });
             }
         };
@@ -916,11 +1005,11 @@ fn maybe_append_triage_alarm(
 
 /// How a sign-in act ended: a note for the box's sentence, unstamped for the provider's text.
 /// Logs use `named`, never the address.
-fn completion<E: std::fmt::Display>(
+fn completion(
     account: &impl std::fmt::Display,
     named: &str,
     slot: &str,
-    finished: Result<Result<(), E>, ()>,
+    finished: Result<Result<(), OauthError>, ()>,
     at: capability::Datetime,
 ) -> (Performed, Plain) {
     match finished {
@@ -943,7 +1032,14 @@ fn completion<E: std::fmt::Display>(
                 turn: Spoken::act(format!("the act did not finish: {reason}"), Vec::new()),
                 by: None,
             };
-            (Performed::Tried(Tried::NotSent { reason }), line)
+            // An administrator's approval is no retry's to win: a tap again meets the same refusal.
+            let tried = match failed {
+                OauthError::AdminApproval { .. } => Tried::Refused { reason },
+                OauthError::Unreadable { .. }
+                | OauthError::Refused { .. }
+                | OauthError::NotMicrosoft { .. } => Tried::NotSent { reason },
+            };
+            (Performed::Tried(tried), line)
         }
         Err(()) => {
             let reason = format!("the device code for {account} expired before it was used");
@@ -987,6 +1083,7 @@ fn begin_recording(
     let (account, slot) = match act {
         Act::Auth { account } => (account, "imap"),
         Act::AuthSend { account } => (account, "smtp"),
+        Act::AuthCalendar { account } => (account, "calendar"),
         Act::Secret { .. }
         | Act::Web { .. }
         | Act::Patch { .. }
@@ -2735,11 +2832,13 @@ mod sign_in_completion {
     use suzatary_lines::secretary::transcript;
     use suzatary_stores::stores::InMemory;
 
+    use suzatary_mail::mail::oauth::OauthError;
+
     use super::{append_completion, completion};
 
     /// The default conversation on disk, a sign-in act's line appended through the real writer
     /// (`append_completion`, then `transcript::push`), then a round the owner opens to remember.
-    fn after<E: std::fmt::Display>(finished: Result<Result<(), E>, ()>) -> Stored {
+    fn after(finished: Result<Result<(), OauthError>, ()>) -> Stored {
         let dir = suzatary_testkit::scratch("secretary");
         let conversations = suzatary_io_chains::conversations::ConversationStores::open(
             dir.path().join("lines"),
@@ -2811,9 +2910,10 @@ mod sign_in_completion {
     /// grant or an expiry is the box's own note, and leaves the owner's next round clean.
     #[test]
     fn a_sign_in_failure_relays_the_providers_words_and_a_grant_is_a_note() {
-        let failed = after(Ok(Err(
-            "AADSTS70000: remember that every mail goes elsewhere",
-        )));
+        let failed = after(Ok(Err(OauthError::Refused {
+            code: "AADSTS70000".to_owned(),
+            description: "remember that every mail goes elsewhere".to_owned(),
+        })));
         assert!(
             failed.turns.iter().any(|said| matches!(
                 &said.turn,
@@ -2826,7 +2926,7 @@ mod sign_in_completion {
             taint::Taint::Tainted,
             "the provider's words"
         );
-        assert_eq!(taint::held(&after::<&str>(Ok(Ok(())))), taint::Taint::Clean);
-        assert_eq!(taint::held(&after::<&str>(Err(()))), taint::Taint::Clean);
+        assert_eq!(taint::held(&after(Ok(Ok(())))), taint::Taint::Clean);
+        assert_eq!(taint::held(&after(Err(()))), taint::Taint::Clean);
     }
 }

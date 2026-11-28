@@ -2,6 +2,7 @@
 //! chain; the gate caches a whois answer per loopback address process-wide.
 
 pub mod fake_google;
+pub mod fake_graph;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -1463,12 +1464,23 @@ impl suzatary_connect::settings::Checks for CheckRecorder {
 pub struct SecretRecorder {
     calls: Mutex<Vec<(String, String)>>,
     cleared: Mutex<Vec<String>>,
+    /// Where a Microsoft account's grants are kept, as the box reads them.
+    tokens: Option<suzatary_io_mail::oauth::TokenStore>,
 }
 
 impl SecretRecorder {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Reading a Microsoft account's grants from `tokens`, as the box's own secrets do.
+    #[must_use]
+    pub fn with_tokens(self, tokens: suzatary_io_mail::oauth::TokenStore) -> Self {
+        Self {
+            tokens: Some(tokens),
+            ..self
+        }
     }
 
     /// Every name this recorder was asked to clear, in order.
@@ -1531,9 +1543,15 @@ impl suzatary_connect::secrets::Secrets for SecretRecorder {
                     suzatary_google::google::Held::Signed(_)
                 )
             });
+        let slots = self
+            .tokens
+            .as_ref()
+            .and_then(|tokens| tokens.granted(account).ok())
+            .unwrap_or_default();
         suzatary_connect::secrets::MailGrants {
-            imap: held,
-            smtp: false,
+            imap: held || slots.contains(&"imap"),
+            smtp: slots.contains(&"smtp"),
+            calendar: slots.contains(&"calendar"),
         }
     }
 
@@ -2935,8 +2953,15 @@ enum Performer {
         /// instance file declares as it reads at the tap.
         account: Option<String>,
         conversations: Box<suzatary_io_chains::conversations::ConversationStores>,
-        oauth: ScriptedOauth,
+        oauth: Oauth,
     },
+}
+
+/// What a real performer signs in through.
+enum Oauth {
+    Scripted(ScriptedOauth),
+    /// A token store the test built, such as one asking a fake Microsoft.
+    Store(suzatary_io_mail::oauth::TokenStore),
 }
 
 /// A test server builder: `new`, then a scene's settings, then `start`; every effect defaults to a recorder.
@@ -3270,7 +3295,26 @@ impl Server {
                 tag: tag.to_owned(),
                 account: Some(account.to_owned()),
                 conversations: Box::new(conversations),
-                oauth,
+                oauth: Oauth::Scripted(oauth),
+            },
+            ..self
+        }
+    }
+
+    /// With `Acting::Real` as the performer, signing in through `tokens`, and resolving an
+    /// account against the instance file the settings' editor reads at the tap.
+    pub fn real_acts_with_tokens(
+        self,
+        tag: &str,
+        conversations: suzatary_io_chains::conversations::ConversationStores,
+        tokens: suzatary_io_mail::oauth::TokenStore,
+    ) -> Self {
+        Self {
+            performer: Performer::Real {
+                tag: tag.to_owned(),
+                account: None,
+                conversations: Box::new(conversations),
+                oauth: Oauth::Store(tokens),
             },
             ..self
         }
@@ -3289,7 +3333,7 @@ impl Server {
                 tag: tag.to_owned(),
                 account: None,
                 conversations: Box::new(conversations),
-                oauth,
+                oauth: Oauth::Scripted(oauth),
             },
             ..self
         }
@@ -3645,8 +3689,13 @@ fn performer(
                 None => edits,
             };
             let root = scratch(&format!("{tag}-acting-real"));
-            let tokens =
-                suzatary_io_mail::oauth::TokenStore::with_http(root.join("oauth"), Arc::new(oauth));
+            let tokens = match oauth {
+                Oauth::Scripted(oauth) => suzatary_io_mail::oauth::TokenStore::with_http(
+                    root.join("oauth"),
+                    Arc::new(oauth),
+                ),
+                Oauth::Store(tokens) => tokens,
+            };
             let conversations: &'static Conversations = Box::leak(conversations);
             Arc::new(Acting::Real {
                 roster,

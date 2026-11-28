@@ -132,12 +132,12 @@ impl FakeGoogle {
     }
 }
 
-struct Request {
-    method: String,
-    path: String,
-    query: BTreeMap<String, String>,
-    authorization: Option<String>,
-    body: Vec<u8>,
+pub struct Request {
+    pub method: String,
+    pub path: String,
+    pub query: BTreeMap<String, String>,
+    pub authorization: Option<String>,
+    pub body: Vec<u8>,
 }
 
 fn decode(text: &str) -> String {
@@ -161,7 +161,8 @@ fn decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn form(text: &str) -> BTreeMap<String, String> {
+#[must_use]
+pub fn form(text: &str) -> BTreeMap<String, String> {
     text.split('&')
         .filter(|pair| !pair.is_empty())
         .map(|pair| {
@@ -171,7 +172,7 @@ fn form(text: &str) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn read(stream: &TcpStream) -> std::io::Result<Request> {
+pub fn read(stream: &TcpStream) -> std::io::Result<Request> {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
     reader.read_line(&mut line)?;
@@ -206,7 +207,7 @@ fn read(stream: &TcpStream) -> std::io::Result<Request> {
     })
 }
 
-fn respond(mut stream: TcpStream, status: u16, headers: &[(&str, String)], body: &str) {
+pub fn respond(mut stream: TcpStream, status: u16, headers: &[(&str, String)], body: &str) {
     let mut head = format!(
         "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n",
         body.len()

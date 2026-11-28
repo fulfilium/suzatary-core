@@ -1,6 +1,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use suzatary_google::calendar::Provider;
 
 use crate::secretary::verbs::FilingArgs;
 use crate::secretary::{Call, SecretarySurface};
@@ -40,6 +41,8 @@ pub struct ProposeActArgs {
     #[serde(default)]
     place: Caught<Option<String>>,
     #[serde(default)]
+    provider: Caught<Option<String>>,
+    #[serde(default)]
     handle: Caught<Option<String>>,
     #[serde(flatten)]
     filing: FilingArgs,
@@ -57,6 +60,9 @@ impl Verb for ProposeAct {
         URL and code arrive in this conversation as turns, so they never need a \
         terminal on the box. Use it when a sync is failing for want of a grant \
         and you can point at the evidence.\n\n\
+        `act=\"auth_calendar\"` with `account=<address>` asks the owner to authorise that \
+        Microsoft account to read and edit its calendars, a sign-in of its own. Propose it \
+        only when they ask for their calendars on that account.\n\n\
         `act=\"secret\"` with `name=<NAME>` asks the owner to type a value for a secret \
         this deployment declares and does not currently resolve — `context` \
         names which ones. The value never reaches you; the tap that stores it is \
@@ -79,10 +85,12 @@ impl Verb for ProposeAct {
         itself: `sources` is not read, and may be `\"\"`. In any other round name \
         `sources`, and in one that read outside text (or that they did not open) the \
         box adds a line to the card's reasons saying so; the owner decides.\n\n\
-        `act=\"calendar_event\"` with `account=<a Google account's address>`, \
+        `act=\"calendar_event\"` with `account=<address>`, \
         `title`, `start` and `end` (both UTC instants `2026-10-20T14:00:00Z`, or \
         both days `2026-10-20`, `end` the day after the last) and an optional \
-        `place` asks the owner to add that event to the account's own calendar. \
+        `place` asks the owner to add that event to the account's own calendar. Name \
+        `provider=google` or `provider=microsoft` only when the account holds calendar \
+        sign-ins at both; otherwise the one it holds is used. \
         Nothing is written to any calendar unless the owner taps it.\n\n\
         `act=\"retract\"` with `handle=<first+lines>` (a summary the record or `zoom` \
         showed you) asks the owner to mark that summary wrong, when it misstates what was \
@@ -111,7 +119,9 @@ impl Verb for ProposeAct {
         let object = answer.as_object_mut().expect("an object literal");
         object.insert("act".to_owned(), json!(act.kind()));
         let field = match act {
-            Act::Auth { account } => Some(("account", account.as_str().to_owned())),
+            Act::Auth { account } | Act::AuthCalendar { account } => {
+                Some(("account", account.as_str().to_owned()))
+            }
             Act::Secret { name, .. } => Some(("name", name.clone())),
             Act::Web { request, .. } => Some(("request", request.sentence())),
             Act::Patch { repo, .. } => Some(("repo", repo.to_string())),
@@ -144,12 +154,10 @@ impl Verb for ProposeAct {
 
 fn other(call: &Call<'_>, args: &ProposeActArgs, reasons: &Reasons) -> Result<Act, Refusal> {
     Ok(match args.act.as_str() {
-        "auth" => {
-            let account_text = args
-                .account
-                .read()?
-                .as_deref()
-                .ok_or_else(|| Refusal::bad_request("account is required for act=\"auth\""))?;
+        "auth" | "auth_calendar" => {
+            let account_text = args.account.read()?.as_deref().ok_or_else(|| {
+                Refusal::bad_request(format!("account is required for act=\"{}\"", args.act))
+            })?;
             let account = EmailAddress::new(account_text)
                 .map_err(|_| Refusal::bad_request("account must be an email address"))?;
             let roster = call.caps.mail.accounts();
@@ -160,7 +168,11 @@ fn other(call: &Call<'_>, args: &ProposeActArgs, reasons: &Reasons) -> Result<Ac
                     shown(account.as_str())
                 )));
             }
-            Act::Auth { account }
+            if args.act == "auth" {
+                Act::Auth { account }
+            } else {
+                Act::AuthCalendar { account }
+            }
         }
         "secret" => {
             // A name its own card asks for (the Google client, a sign-in with Google)
@@ -189,14 +201,15 @@ fn other(call: &Call<'_>, args: &ProposeActArgs, reasons: &Reasons) -> Result<Ac
         "retract" => retract(call, args)?,
         other => {
             return Err(Refusal::bad_request(format!(
-                "act must be one of: auth, secret, connect, calendar_event, retract, got {}",
+                "act must be one of: auth, auth_calendar, secret, connect, calendar_event, retract, got {}",
                 shown(other)
             )));
         }
     })
 }
 
-/// An event for an account's own calendar; the tap checks that the account is a Google one.
+/// An event for an account's own calendar at one provider; the tap checks that the box holds the
+/// sign-in that writes it.
 fn calendar_event(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal> {
     let required = |field: &Caught<Option<String>>, name: &str| -> Result<String, Refusal> {
         field.read()?.clone().ok_or_else(|| {
@@ -224,13 +237,61 @@ fn calendar_event(call: &Call<'_>, args: &ProposeActArgs) -> Result<Act, Refusal
              (2026-10-20), the end after the start",
         )
     })?;
-    let event = suzatary_google::google::NewEvent::new(
+    let event = suzatary_google::calendar::NewEvent::new(
         &required(&args.title, "title")?,
         when,
         args.place.read()?.as_deref().unwrap_or_default(),
     )
     .map_err(Refusal::bad_request)?;
-    Ok(Act::CalendarEvent { account, event })
+    let provider = match args.provider.read()?.as_deref() {
+        Some(word) => Provider::of_word(word).ok_or_else(|| {
+            Refusal::bad_request(format!(
+                "provider must be google or microsoft, got {}",
+                shown(word)
+            ))
+        })?,
+        None => default_provider(&account, call)?,
+    };
+    Ok(Act::CalendarEvent {
+        account,
+        provider,
+        event,
+    })
+}
+
+/// The one provider whose calendar grant `account` holds, for a proposal that names none.
+fn default_provider(account: &EmailAddress, call: &Call<'_>) -> Result<Provider, Refusal> {
+    let declared = call
+        .caps
+        .configuration
+        .declared()
+        .map_err(|failed| Refusal::internal(failed.to_string()))?;
+    let held = declared
+        .accounts
+        .iter()
+        .find(|held| held.email.is(account.as_str()))
+        .ok_or_else(|| Refusal::bad_request("account is no account the instance file declares"))?;
+    let providers = Provider::held(
+        &held.sync,
+        &call.caps.secrets.google_grant(account),
+        call.caps.secrets.mail_grants(held).calendar,
+    );
+    only_provider(&providers, Provider::home(&held.sync)).map_err(Refusal::bad_request)
+}
+
+/// The provider an event goes to when the proposal names none: the only one held, else where the
+/// account's mail is, so the tap asks for that provider's sign-in. Both held is a refusal.
+fn only_provider(held: &[Provider], home: Provider) -> Result<Provider, String> {
+    match held {
+        [] => Ok(home),
+        [only] => Ok(*only),
+        [first, second, ..] => Err(format!(
+            "the account holds calendar sign-ins at both {} and {}: name the provider with \
+             provider=google or provider=microsoft",
+            first.label(),
+            second.label()
+        )),
+    }
 }
 
 /// The summary `handle` names, as the record and `zoom` print a handle.
@@ -310,4 +371,35 @@ fn connect(call: &Call<'_>, args: &ProposeActArgs) -> Result<(Connection, Reason
         .with(&connection)
         .map_err(|refused| Refusal::bad_request(format!("no card was filed: {refused}")))?;
     Ok((connection, reasons))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_one_provider_held_is_the_default() {
+        assert_eq!(
+            only_provider(&[Provider::Microsoft], Provider::Google),
+            Ok(Provider::Microsoft)
+        );
+    }
+
+    #[test]
+    fn an_account_holding_both_providers_is_refused_with_both_named() {
+        let said = only_provider(&[Provider::Google, Provider::Microsoft], Provider::Google)
+            .expect_err("both");
+        assert!(
+            said.contains("Google") && said.contains("Microsoft"),
+            "{said}"
+        );
+    }
+
+    #[test]
+    fn an_account_holding_none_goes_where_its_mail_is() {
+        assert_eq!(
+            only_provider(&[], Provider::Microsoft),
+            Ok(Provider::Microsoft)
+        );
+    }
 }

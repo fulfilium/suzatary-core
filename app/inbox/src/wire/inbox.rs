@@ -204,6 +204,12 @@ pub enum ProposedAct {
         account: String,
         sentence: String,
     },
+    #[serde(rename = "auth_calendar")]
+    AuthCalendar {
+        /// Verbatim.
+        account: String,
+        sentence: String,
+    },
     /// No value field: the card's own password field sends it in the tap's body.
     Secret {
         /// What the owner calls it; its stored name stays on the box.

@@ -281,3 +281,30 @@ fn the_stored_names_are_pinned() {
         "Connection(template, params)",
     );
 }
+
+/// Calendars are the owner's choice for each account: a Microsoft account signed in for reading
+/// and sending owes nothing and stands complete, so the calendar consent is no step of its
+/// template.
+#[test]
+fn a_microsoft_account_signed_in_for_mail_owes_no_calendar_card() {
+    let connection = Connection::new(
+        TemplateId::MsImap,
+        Params::Microsoft {
+            email: EmailAddress::new("ada@example.test").expect("an address"),
+            tenant: Authority::Organizations,
+        },
+    )
+    .expect("a Microsoft account");
+    let seen = Seen {
+        secret: &|_: &str| SecretState::Set,
+        signed_in: &|_: &EmailAddress| true,
+        may_send: &|_: &EmailAddress| true,
+        checked: Checked::Once,
+        reach: &PLAIN,
+    };
+    assert!(connection.unmet(&seen).is_empty());
+    assert_eq!(
+        connection.standing(&seen),
+        suzatary_connect::connect::Standing::Kept
+    );
+}

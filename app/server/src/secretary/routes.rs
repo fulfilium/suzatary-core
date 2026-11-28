@@ -24,6 +24,7 @@ use suzatary_connect::settings::{Edits, Settable, Settables, Writes};
 use suzatary_conversations::secretary::store::Kind;
 use suzatary_conversations::secretary::store::Lines;
 use suzatary_digest::secretary::memories::{Held, Memories};
+use suzatary_google::calendar::Provider;
 use suzatary_google::google::RedirectUri;
 use suzatary_google::google::ical::Linked;
 use suzatary_health::health::plugin::{Origin, PluginName};
@@ -734,6 +735,7 @@ impl<'p, 'c> Prepared<'p, 'c> {
             }
             Act::Auth { .. }
             | Act::AuthSend { .. }
+            | Act::AuthCalendar { .. }
             | Act::Patch { .. }
             | Act::CodingSession { .. }
             | Act::SignIn { .. }
@@ -959,7 +961,12 @@ fn calendar_event(
     (act, account): (&Act, &EmailAddress),
     consent: Consent,
 ) -> Performed {
-    match google_account(edits, secrets, account) {
+    let Act::CalendarEvent { provider, .. } = act else {
+        return Performed::Tried(Tried::Refused {
+            reason: "only a calendar event is written to a calendar".to_owned(),
+        });
+    };
+    match calendar_account(edits, secrets, (account, *provider)) {
         Ok(()) => performer.begin(id, index, object, proposer, act, consent),
         Err(tried) => Performed::Tried(tried),
     }
@@ -1018,20 +1025,20 @@ pub fn fix(
                 Performed::Done(_) => None,
             }
         }
-        Fix::GoogleSignIn { .. } | Fix::MicrosoftSend { .. } => {
+        Fix::GoogleSignIn { .. } | Fix::MicrosoftSend { .. } | Fix::MicrosoftCalendar { .. } => {
             let answered = Tapped { now }.fire(caps.secretary.inbox, fixing, tap, |_| {
                 Ok(match &fix {
                     Fix::GoogleSignIn { account, scopes } => begin(account, scopes),
-                    Fix::MicrosoftSend { .. } | Fix::GoogleClient { .. } => {
-                        effectors.performer.begin(
-                            &at.asked.asked.conversation,
-                            at.asked.asked.index,
-                            fixing,
-                            &at.asked.proposer,
-                            &fix.act(),
-                            Consent::given_by_tap(tap),
-                        )
-                    }
+                    Fix::MicrosoftSend { .. }
+                    | Fix::MicrosoftCalendar { .. }
+                    | Fix::GoogleClient { .. } => effectors.performer.begin(
+                        &at.asked.asked.conversation,
+                        at.asked.asked.index,
+                        fixing,
+                        &at.asked.proposer,
+                        &fix.act(),
+                        Consent::given_by_tap(tap),
+                    ),
                 })
             })?;
             match answered {
@@ -1497,6 +1504,7 @@ pub fn ask_trust(caps: &Server<'_>, actor: &Actor, key: &PublicKey) -> Answered<
             Proposal::Act(
                 Act::Auth { .. }
                 | Act::AuthSend { .. }
+                | Act::AuthCalendar { .. }
                 | Act::Secret { .. }
                 | Act::Web { .. }
                 | Act::Patch { .. }
@@ -1732,14 +1740,15 @@ fn forwarded(
     }
 }
 
-/// Whether `account`'s Google calendar may be written (`google::reads_calendars`); else the first
-/// step the box owes, or why no step gives it: an address the instance file does not declare is
-/// no account of this box, so no grant would make the event its own.
-fn google_account(
+/// Whether the box may write `account`'s calendar at `provider`; else the first step the box owes,
+/// or why no step gives it: an address the instance file does not declare is no account of this
+/// box, and a Microsoft calendar is the calendar of a Microsoft account alone.
+fn calendar_account(
     edits: &dyn Edits,
     (secrets, settables): (&dyn Secrets, &Settables),
-    account: &EmailAddress,
+    (account, provider): (&EmailAddress, Provider),
 ) -> Result<(), Tried> {
+    use suzatary_mail::mail::account::Sync;
     let declared = edits.declared().map_err(|failed| Tried::NotSent {
         reason: format!("nothing was written: the instance file does not read ({failed})"),
     })?;
@@ -1754,15 +1763,30 @@ fn google_account(
             ),
         });
     };
-    if suzatary_google::google::reads_calendars(&declared.sync, &secrets.google_grant(account)) {
-        Ok(())
-    } else if suzatary_topics::secretary::set_up::client_kept(secrets, settables).is_set() {
-        Err(Tried::Lacks(Lacking::Grant {
+    match (provider, &declared.sync) {
+        (Provider::Microsoft, Sync::MsImap(_)) if secrets.mail_grants(declared).calendar => Ok(()),
+        (Provider::Microsoft, Sync::MsImap(_)) => Err(Tried::Lacks(Lacking::Grant {
             account: account.clone(),
-            grant: suzatary_mail::mail::lacking::Grant::GoogleCalendar,
-        }))
-    } else {
-        Err(Tried::Lacks(Lacking::GoogleClient))
+            grant: suzatary_mail::mail::lacking::Grant::MicrosoftCalendar,
+        })),
+        (Provider::Microsoft, Sync::Google | Sync::Gmail | Sync::Proton(_)) => {
+            Err(Tried::Refused {
+                reason: format!("nothing was written: {account} is no Microsoft account"),
+            })
+        }
+        (Provider::Google, sync) => {
+            let held = secrets.google_grant(account);
+            if Provider::held(sync, &held, false).contains(&Provider::Google) {
+                Ok(())
+            } else if suzatary_topics::secretary::set_up::client_kept(secrets, settables).is_set() {
+                Err(Tried::Lacks(Lacking::Grant {
+                    account: account.clone(),
+                    grant: suzatary_mail::mail::lacking::Grant::GoogleCalendar,
+                }))
+            } else {
+                Err(Tried::Lacks(Lacking::GoogleClient))
+            }
+        }
     }
 }
 

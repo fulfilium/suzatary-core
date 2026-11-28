@@ -79,6 +79,8 @@ mod markup;
 mod mcp;
 #[path = "memory.rs"]
 mod memory;
+#[path = "microsoft_calendar.rs"]
+mod microsoft_calendar;
 #[cfg(feature = "fixture")]
 #[path = "migrate_cost.rs"]
 mod migrate_cost;

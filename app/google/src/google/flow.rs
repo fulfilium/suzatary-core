@@ -392,12 +392,7 @@ pub enum Held {
 /// account's maildir folder, in capitals.
 #[must_use]
 pub fn grant_name(account: &EmailAddress) -> String {
-    format!(
-        "GOOGLE_GRANT_{}",
-        suzatary_mail::mail::account::slug_of(account.as_str())
-            .to_ascii_uppercase()
-            .replace(|c: char| !c.is_ascii_alphanumeric(), "_")
-    )
+    format!("GOOGLE_GRANT_{}", crate::calendar::account_folder(account))
 }
 
 #[cfg(test)]

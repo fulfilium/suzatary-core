@@ -5,58 +5,14 @@
 //! calendar's own limits: a longer title or place is cut, and attendees past the list's limit
 //! are counted without their names, so a meeting with a long invitation is still a meeting.
 
-use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime};
 
 use super::Endpoints;
-use crate::calendar::{Attendees, CalendarName, Content, Occurrence, OccurrenceId, Status, When};
-use suzatary_mail::mail::address::EmailAddress;
-
-/// The text the calendar plugin declares (`app/plugin-ics/ics.schema`, which a test holds this
-/// to), so the calendar reads what this source writes as it reads the plugin's.
-pub const SCHEMA: &str = "Schema(key='occurrence', events=(Event(name='Learned', fields=(Field(name='occurrence', type=Text()), Field(name='at', type=Instant()), Field(name='actor', type=Text()), Field(name='title', type=Text()), Field(name='when', type=Text()), Field(name='place', type=Text()), Field(name='attendees', type=List(item=Text())), Field(name='unnamed', type=Integer()), Field(name='status', type=Enum(alternatives=('cancelled', 'confirmed', 'tentative'))))),), registers=(Register(name='attendees', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='attendees'),)), Register(name='place', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='place'),)), Register(name='status', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='status'),)), Register(name='title', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='title'),)), Register(name='unnamed', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='unnamed'),)), Register(name='when', order=Discrete(), inflationary=False, writes=(Write(event='Learned', field='when'),))))";
-
-/// The actor a Google account's occurrences are written as, which names their calendars.
-pub const ACTOR: &str = "google";
-
-/// The most calendars of one account a sync reads.
-pub const CALENDARS: usize = 20;
-
-/// The most events of one calendar a sync reads.
-pub const EVENTS: usize = 250;
-
-/// The most bytes of one answer the box reads.
-pub const MAX_ANSWER: usize = 1 << 20;
-
-/// The span a sync reads: a week back, for what just happened, and ninety days ahead.
-#[must_use]
-pub fn window(now: NaiveDateTime) -> (NaiveDateTime, NaiveDateTime) {
-    (now - Duration::days(7), now + Duration::days(90))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum Unread {
-    #[error("an answer of {0} bytes is longer than the box reads")]
-    TooLarge(usize),
-    #[error("the answer is not the Calendar API's JSON")]
-    NotJson,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Listed {
-    pub id: String,
-    /// Whether it is the account's own.
-    pub primary: bool,
-}
-
-/// The calendars an account lists, at most [`CALENDARS`] of them, its own first.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Calendars(Vec<Listed>);
-
-impl Calendars {
-    pub fn iter(&self) -> impl Iterator<Item = &Listed> {
-        self.0.iter()
-    }
-}
+use crate::calendar::bounds::{items, json};
+use crate::calendar::{
+    CALENDARS, CalendarName, Calendars, EVENTS, Listed, NewEvent, Occurrence, Point, Said, Status,
+    Unread, When,
+};
 
 #[must_use]
 pub fn list_url(endpoints: &Endpoints) -> String {
@@ -89,76 +45,20 @@ pub fn events_url(
     )
 }
 
-/// `body` as JSON, refused unread past [`MAX_ANSWER`].
-fn json(body: &[u8]) -> Result<serde_json::Value, Unread> {
-    if body.len() > MAX_ANSWER {
-        return Err(Unread::TooLarge(body.len()));
-    }
-    serde_json::from_slice(body).map_err(|_| Unread::NotJson)
-}
-
-fn items(answer: &serde_json::Value, most: usize) -> Vec<&serde_json::Value> {
-    answer
-        .get("items")
-        .and_then(serde_json::Value::as_array)
-        .map(|items| items.iter().take(most).collect())
-        .unwrap_or_default()
-}
-
 /// Read the calendar list's answer: at most [`CALENDARS`], the account's own first.
 pub fn read_calendars(body: &[u8]) -> Result<Calendars, Unread> {
     let answer = json(body)?;
-    let mut listed: Vec<Listed> = items(&answer, CALENDARS)
-        .into_iter()
-        .filter_map(|item| {
-            let id = item.get("id")?.as_str()?;
-            (!id.is_empty() && id.len() <= 500).then(|| Listed {
-                id: id.to_owned(),
-                primary: item.get("primary").and_then(serde_json::Value::as_bool) == Some(true),
+    Ok(Calendars::of(
+        items(&answer, "items", CALENDARS)
+            .into_iter()
+            .filter_map(|item| {
+                Listed::new(
+                    item.get("id")?.as_str()?,
+                    item.get("primary").and_then(serde_json::Value::as_bool) == Some(true),
+                )
             })
-        })
-        .collect();
-    listed.sort_by_key(|calendar| !calendar.primary);
-    Ok(Calendars(listed))
-}
-
-/// The name the calendar's occurrences are kept under: `PLUGIN_GOOGLE_` and the account's
-/// folder for its own calendar, and a digest of the calendar's id after it for each other, so a
-/// calendar keeps its name however the list is ordered. A folder too long for a calendar's name
-/// is spelt by its digest.
-///
-/// # Errors
-/// None for any account and calendar the box reads.
-pub fn calendar_name(
-    account: &EmailAddress,
-    calendar: &Listed,
-) -> Result<CalendarName, crate::calendar::NotAnOccurrence> {
-    use sha2::Digest as _;
-    let digest = |text: &str, digits: usize| {
-        hex::encode_upper(sha2::Sha256::digest(text.as_bytes()))[..digits].to_owned()
-    };
-    let grant = super::grant_name(account);
-    let folder = grant.trim_start_matches("GOOGLE_GRANT_");
-    let folder = if folder.len() <= 60 {
-        folder.to_owned()
-    } else {
-        digest(folder, 16)
-    };
-    CalendarName::parse(&if calendar.primary {
-        format!("PLUGIN_GOOGLE_{folder}")
-    } else {
-        format!("PLUGIN_GOOGLE_{folder}_{}", digest(&calendar.id, 8))
-    })
-}
-
-fn cut(text: &str, most: usize) -> String {
-    text.chars().take(most).collect()
-}
-
-/// When one of the API's `start`/`end` objects is: a UTC instant, or a day.
-enum Point {
-    At(NaiveDateTime),
-    Day(NaiveDate),
+            .collect(),
+    ))
 }
 
 fn point(value: Option<&serde_json::Value>) -> Option<Point> {
@@ -180,7 +80,7 @@ fn point(value: Option<&serde_json::Value>) -> Option<Point> {
 /// left out.
 pub fn read_events(body: &[u8], name: &CalendarName) -> Result<Vec<Occurrence>, Unread> {
     let answer = json(body)?;
-    Ok(items(&answer, EVENTS)
+    Ok(items(&answer, "items", EVENTS)
         .into_iter()
         .filter_map(|item| occurrence(item, name))
         .collect())
@@ -188,154 +88,39 @@ pub fn read_events(body: &[u8], name: &CalendarName) -> Result<Vec<Occurrence>, 
 
 fn occurrence(item: &serde_json::Value, name: &CalendarName) -> Option<Occurrence> {
     let text = |key: &str| item.get(key).and_then(serde_json::Value::as_str);
-    let uid = text("iCalUID").or_else(|| text("id"))?;
     let when = match (point(item.get("start")), point(item.get("end"))) {
         (Some(Point::At(start)), Some(Point::At(end))) => When::timed(start, end).ok()?,
         (Some(Point::Day(start)), Some(Point::Day(end))) => When::all_day(start, end).ok()?,
         _ => return None,
     };
-    // The occurrence's original start keys it, so a moved instance of a series stays itself.
-    let key = match point(item.get("originalStartTime")).unwrap_or(match when {
-        When::Timed { start, .. } => Point::At(start),
-        When::AllDay { start, .. } => Point::Day(start),
-    }) {
-        Point::At(at) => at.format("%Y%m%dT%H%M%SZ").to_string(),
-        Point::Day(day) => day.format("%Y%m%d").to_string(),
-    };
-    // An attendee's `email` is never read: one with no `displayName` is counted unnamed.
-    let attendees = Attendees::of(
-        item.get("attendees")
-            .and_then(serde_json::Value::as_array)
-            .into_iter()
-            .flatten()
-            .map(|attendee| {
-                attendee
-                    .get("displayName")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or_default()
-            }),
-        0,
-    );
-    let status = match text("status") {
-        Some("cancelled") => Status::Cancelled,
-        Some("tentative") => Status::Tentative,
-        _ => Status::Confirmed,
-    };
-    Some(Occurrence {
-        id: OccurrenceId::new(name.clone(), &cut(uid, 500), &key).ok()?,
-        content: Content::new(
-            cut(
-                text("summary").unwrap_or_default(),
-                crate::calendar::MAX_TEXT,
-            ),
+    Occurrence::said(
+        name,
+        Said {
+            uid: text("iCalUID").or_else(|| text("id"))?,
             when,
-            cut(
-                text("location").unwrap_or_default(),
-                crate::calendar::MAX_TEXT,
-            ),
-            attendees,
-            status,
-        )
-        .ok()?,
-    })
-}
-
-/// An event's title, as a card shows it and the tap writes it: one line, at most 200
-/// characters.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventTitle(String);
-
-impl EventTitle {
-    pub fn parse(text: &str) -> Result<Self, String> {
-        let text = text.trim();
-        if text.is_empty() {
-            return Err("an event needs a title".to_owned());
-        }
-        if text.chars().count() > 200 || text.chars().any(char::is_control) {
-            return Err("an event's title is one line of at most 200 characters".to_owned());
-        }
-        Ok(Self(text.to_owned()))
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// An event to write to the account's own calendar, on a tap.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewEvent {
-    pub title: EventTitle,
-    pub when: When,
-    /// Where, `""` for nowhere in particular.
-    pub place: String,
-}
-
-impl NewEvent {
-    /// An event, its place held to one line of at most 200 characters.
-    pub fn new(title: &str, when: When, place: &str) -> Result<Self, String> {
-        let place = place.trim();
-        if place.chars().count() > 200 || place.chars().any(char::is_control) {
-            return Err("an event's place is one line of at most 200 characters".to_owned());
-        }
-        Ok(Self {
-            title: EventTitle::parse(title)?,
-            when,
-            place: place.to_owned(),
-        })
-    }
-
-    #[must_use]
-    pub fn sentence(&self) -> String {
-        let when = match self.when {
-            When::Timed { start, end } => format!(
-                "{} to {} UTC",
-                start.format("%Y-%m-%d %H:%M"),
-                end.format("%H:%M")
-            ),
-            When::AllDay { start, end } if end == start.succ_opt().unwrap_or(end) => {
-                format!("all day on {start}")
-            }
-            When::AllDay { start, end } => {
-                format!("all day from {start} to {}", end.pred_opt().unwrap_or(end))
-            }
-        };
-        if self.place.is_empty() {
-            format!("“{}”, {when}", self.title.as_str())
-        } else {
-            format!("“{}”, {when}, at {}", self.title.as_str(), self.place)
-        }
-    }
-}
-
-/// The text form a page and a stored act read, `{title, when, place}`, `when` as the calendar's
-/// store spells a span.
-#[derive(serde::Serialize, serde::Deserialize)]
-struct Spelled {
-    title: String,
-    when: String,
-    place: String,
-}
-
-impl serde::Serialize for NewEvent {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        Spelled {
-            title: self.title.as_str().to_owned(),
-            when: self.when.print(),
-            place: self.place.clone(),
-        }
-        .serialize(serializer)
-    }
-}
-
-// Read through `new`, so a stored act names only an event the constructor admits.
-impl<'de> serde::Deserialize<'de> for NewEvent {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let spelled = Spelled::deserialize(deserializer)?;
-        let when = When::parse(&spelled.when).map_err(serde::de::Error::custom)?;
-        Self::new(&spelled.title, when, &spelled.place).map_err(serde::de::Error::custom)
-    }
+            moved_from: point(item.get("originalStartTime")),
+            title: text("summary").unwrap_or_default(),
+            place: text("location").unwrap_or_default(),
+            // An attendee's `email` is never read: one with no `displayName` is counted unnamed.
+            attendees: item
+                .get("attendees")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|attendee| {
+                    attendee
+                        .get("displayName")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                })
+                .collect(),
+            status: match text("status") {
+                Some("cancelled") => Status::Cancelled,
+                Some("tentative") => Status::Tentative,
+                _ => Status::Confirmed,
+            },
+        },
+    )
 }
 
 #[must_use]
@@ -367,30 +152,20 @@ pub fn insert_body(event: &NewEvent) -> serde_json::Value {
     body
 }
 
-/// Whether the box may read and write an account's Google calendar: a Google account's always,
-/// its failures its health; any other account's exactly while its grant holds the calendars,
-/// however its mail is read, since the calendar is a fact about the grant and the mail is not.
-#[must_use]
-pub fn reads_calendars(sync: &suzatary_mail::mail::account::Sync, held: &super::Held) -> bool {
-    use suzatary_mail::mail::account::Sync;
-    let granted =
-        matches!(held, super::Held::Signed(parts) if parts.contains(super::Scope::Calendar));
-    match sync {
-        Sync::Google => true,
-        Sync::Gmail | Sync::MsImap(_) | Sync::Proton(_) => granted,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::calendar::{MAX_ANSWER, Provider};
+    use chrono::Duration;
+    use suzatary_mail::mail::address::EmailAddress;
 
     fn ada() -> EmailAddress {
         EmailAddress::new("ada@example.test").expect("an address")
     }
 
     fn primary() -> CalendarName {
-        calendar_name(
+        CalendarName::of(
+            Provider::Google,
             &ada(),
             &Listed {
                 id: "ada@example.test".to_owned(),
@@ -494,38 +269,6 @@ mod tests {
         assert!(named.iter().all(|name| !name.contains('@')), "{named:?}");
         assert_eq!(meeting.content.status(), Status::Tentative);
         assert_eq!(read[1].content.when().print(), "2026-10-23/2026-10-24");
-    }
-
-    #[test]
-    fn a_calendars_name_is_its_own() {
-        assert_eq!(primary().as_str(), "PLUGIN_GOOGLE_ADA_AT_EXAMPLE_TEST");
-        let team = calendar_name(
-            &ada(),
-            &Listed {
-                id: "team@group.calendar.example.test".to_owned(),
-                primary: false,
-            },
-        )
-        .expect("a name");
-        assert!(
-            team.as_str()
-                .starts_with("PLUGIN_GOOGLE_ADA_AT_EXAMPLE_TEST_"),
-            "{team}"
-        );
-        assert!(team.of_plugin("google"));
-        let long =
-            EmailAddress::new(&format!("{}@example.test", "a".repeat(120))).expect("an address");
-        for primary in [true, false] {
-            let name = calendar_name(
-                &long,
-                &Listed {
-                    id: "x".to_owned(),
-                    primary,
-                },
-            )
-            .expect("a long address's calendar is named by its digest");
-            assert!(name.of_plugin("google"), "{name}");
-        }
     }
 
     #[test]

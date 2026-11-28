@@ -128,8 +128,11 @@ impl Connection {
             (Table::Account(kind), Params::Address(email) | Params::Microsoft { email, .. }) => {
                 let email = AccountEmail::folded(email);
                 let mut sources = vec![SourceKey::Mail(email.clone())];
-                if kind == AccountKind::Google {
-                    sources.push(SourceKey::GoogleCalendar(email));
+                match kind {
+                    AccountKind::Google | AccountKind::Microsoft => {
+                        sources.push(SourceKey::GoogleCalendar(email));
+                    }
+                    AccountKind::Gmail | AccountKind::Proton => {}
                 }
                 sources
             }

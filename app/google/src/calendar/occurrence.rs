@@ -6,13 +6,32 @@ use prodrome_data::literal::{Datetime, ProdromeError, Value};
 use prodrome_data::schema::Schema;
 use prodrome_declared::{Datum, Declaration, Declared};
 
-use super::{Attendees, Content, NotAnOccurrence, OccurrenceId, Status, When};
+use super::bounds::cut;
+use super::{
+    Attendees, CalendarName, Content, MAX_TEXT, NotAnOccurrence, OccurrenceId, Point, Status, When,
+};
 
 /// An occurrence a plugin reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Occurrence {
     pub id: OccurrenceId,
     pub content: Content,
+}
+
+/// What a provider's event says, before the calendar holds it to its limits.
+#[derive(Debug, Clone)]
+pub struct Said<'a> {
+    /// The event's identity across syncs.
+    pub uid: &'a str,
+    pub when: When,
+    /// Where the instance started before it was moved, for an instance of a series; its key
+    /// stays the same however it moves.
+    pub moved_from: Option<Point>,
+    pub title: &'a str,
+    pub place: &'a str,
+    /// Each attendee's display name, `""` for one with none; an address is never read.
+    pub attendees: Vec<&'a str>,
+    pub status: Status,
 }
 
 /// The event every occurrence is learned by.
@@ -37,6 +56,25 @@ fn written<'e>(event: &'e Declared, field: &'static str) -> Result<&'e Datum, No
 }
 
 impl Occurrence {
+    /// What `said` is as the calendar keeps it, in `name`: each text cut to the calendar's limit,
+    /// each attendee counted and named only by a display name. `None` for an event the calendar
+    /// cannot read, such as one with no identity.
+    #[must_use]
+    pub fn said(name: &CalendarName, said: Said<'_>) -> Option<Self> {
+        let key = said.moved_from.unwrap_or_else(|| said.when.into()).key();
+        Some(Self {
+            id: OccurrenceId::new(name.clone(), &cut(said.uid, 500), &key).ok()?,
+            content: Content::new(
+                cut(said.title, MAX_TEXT),
+                said.when,
+                cut(said.place, MAX_TEXT),
+                Attendees::of(said.attendees, 0),
+                said.status,
+            )
+            .ok()?,
+        })
+    }
+
     /// Whether a store at `schema` is a calendar: its every register is one this reader reads.
     #[must_use]
     pub fn reads(schema: &Declaration) -> bool {
@@ -135,7 +173,7 @@ mod tests {
 
     /// The calendar plugin's schema, byte for byte (`cli/tests/google.rs` holds the two equal).
     pub(crate) fn schema() -> Declaration {
-        Declaration::admit(crate::google::SCHEMA).expect("lawful")
+        Declaration::admit(crate::calendar::SCHEMA).expect("lawful")
     }
 
     fn standup(title: &str, attendees: &[&str], calendar: &str) -> Occurrence {

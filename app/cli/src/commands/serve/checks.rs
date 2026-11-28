@@ -40,9 +40,10 @@ impl suzatary_connect::settings::Checks for Synced {
                 Self::plugin(&instance, plugin);
             }
             SourceKey::GoogleCalendar(_) => {
-                let (lines, _) = crate::commands::google::sync_calendars(
+                let (lines, _) = crate::commands::calendars::sync_calendars(
                     &instance,
                     suzatary_io_mail::google::Google::new(self.google.clone()),
+                    &crate::commands::mail::tokens(&instance),
                     &suzatary_io_local::source_health::beside(&instance.mail.heartbeat),
                 );
                 for line in lines {

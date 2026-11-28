@@ -537,6 +537,7 @@ fn kind(row: &ProposalRow) -> Kind {
         | ProposedAct::Changes { .. }
         | ProposedAct::Auth { .. }
         | ProposedAct::AuthSend { .. }
+        | ProposedAct::AuthCalendar { .. }
         | ProposedAct::Web { .. }
         | ProposedAct::Patch { .. }
         | ProposedAct::Drive { .. }
@@ -673,6 +674,9 @@ fn cause(c: Failure) -> &'static str {
     match c {
         Failure::Revoked { .. } => " Its link was changed or revoked, so store the new one.",
         Failure::NeedsLogin => " Its sign-in lapsed: sign in again.",
+        Failure::NeedsAdministrator => {
+            " An administrator of its organisation must approve the app; signing in again does not help."
+        }
         Failure::Unresolved => " A secret it reads is stored nowhere: set it.",
         Failure::KeyRefused => " Its key was refused: the card below connects it again.",
         Failure::Limited(_) => {

@@ -31,6 +31,7 @@ impl Proposal {
                 | Act::Device(_)
                 | Act::Auth { .. }
                 | Act::AuthSend { .. }
+                | Act::AuthCalendar { .. }
                 | Act::SignIn { .. }
                 | Act::SignInCode { .. }
                 | Act::UnlockStore { .. }

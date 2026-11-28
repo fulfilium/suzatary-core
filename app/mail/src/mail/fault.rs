@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Fault {
     NeedsLogin,
+    /// An administrator of the account's organisation must approve the app.
+    NeedsAdministrator,
     /// A secret it reads is stored nowhere on this box.
     Unresolved,
     Unreachable,

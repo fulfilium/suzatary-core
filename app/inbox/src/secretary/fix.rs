@@ -22,6 +22,8 @@ pub enum Fix {
     },
     /// Its card shows a device code.
     MicrosoftSend { account: EmailAddress },
+    /// Its card shows a device code, for the calendar consent.
+    MicrosoftCalendar { account: EmailAddress },
     /// The owner pastes the client's file into its card.
     GoogleClient { redirect: RedirectUri },
 }
@@ -35,6 +37,9 @@ impl Fix {
                 scopes: scopes.clone(),
             },
             Fix::MicrosoftSend { account } => Act::AuthSend {
+                account: account.clone(),
+            },
+            Fix::MicrosoftCalendar { account } => Act::AuthCalendar {
                 account: account.clone(),
             },
             Fix::GoogleClient { redirect } => Act::GoogleClient {
@@ -63,6 +68,12 @@ pub fn of(
             account,
             grant: Grant::MicrosoftSend,
         } => Ok(Fix::MicrosoftSend {
+            account: account.clone(),
+        }),
+        Lacking::Grant {
+            account,
+            grant: Grant::MicrosoftCalendar,
+        } => Ok(Fix::MicrosoftCalendar {
             account: account.clone(),
         }),
         Lacking::GoogleClient => redirect
@@ -100,7 +111,7 @@ pub fn then(lacking: &Lacking, card: &ProposalId) -> crate::wire::inbox::FixThen
             href: format!("{}{}", suzatary_google::google::CONSENT, card.as_str()),
         },
         Lacking::Grant {
-            grant: Grant::MicrosoftSend,
+            grant: Grant::MicrosoftSend | Grant::MicrosoftCalendar,
             ..
         }
         | Lacking::GoogleClient => FixThen::Place {
@@ -166,6 +177,10 @@ mod tests {
         assert_eq!(
             of(&lacks(Grant::MicrosoftSend), &Held::NotSignedIn, None),
             Ok(Fix::MicrosoftSend { account: ada() })
+        );
+        assert_eq!(
+            of(&lacks(Grant::MicrosoftCalendar), &Held::NotSignedIn, None),
+            Ok(Fix::MicrosoftCalendar { account: ada() })
         );
         assert_eq!(
             of(&Lacking::GoogleClient, &Held::NotSignedIn, None),

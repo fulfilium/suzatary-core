@@ -33,6 +33,7 @@ impl Sending {
                     .max()
                     .unwrap_or(Sending::SendsNothing),
                 Act::Auth { .. }
+                | Act::AuthCalendar { .. }
                 | Act::Secret { .. }
                 | Act::Web { .. }
                 | Act::Patch { .. }

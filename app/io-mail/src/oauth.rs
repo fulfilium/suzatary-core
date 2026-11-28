@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,9 +18,9 @@ use suzatary_io_access::http::{Http, Req, Ureq};
 use suzatary_io_access::tokens::{Bearer, Fresh, Grant, unix_now};
 use suzatary_mail::mail::account::{Authority, MailAccount};
 use suzatary_mail::mail::oauth::{
-    Answered, Consent, DeviceCode, FormPost, Imap, NeedsLogin, OauthError, Polled, Protocol,
-    Silent, Smtp, device_request, poll_request, read_device_code, read_poll, read_silent,
-    refresh_request,
+    Answered, Calendar, Consent, DeviceCode, Endpoints, FormPost, Imap, NeedsLogin, OauthError,
+    Polled, Protocol, Silent, Smtp, device_request, poll_request, read_device_code, read_poll,
+    read_silent, refresh_request,
 };
 use suzatary_os::present::Present as _;
 
@@ -102,7 +102,10 @@ impl<P: Protocol> Grant for Stored<'_, P> {
             }));
         };
         let refresh = Secret::new(grant.refresh_token.clone());
-        let answered = post(http, &refresh_request::<P>(ms.authority, &refresh))?;
+        let answered = post(
+            http,
+            &refresh_request::<P>(&store.endpoints, ms.authority, &refresh),
+        )?;
         let minted = match read_silent::<P>(&answered, account.email.as_str())? {
             Silent::Token(minted) => minted,
             Silent::NeedsLogin(needs) => return Err(Unminted::NeedsLogin(needs)),
@@ -128,8 +131,9 @@ enum Writing {
 
 #[derive(Clone)]
 pub struct TokenStore {
-    dir: PathBuf,
+    dir: Arc<Path>,
     http: Arc<dyn Http>,
+    endpoints: Arc<Endpoints>,
 }
 
 impl std::fmt::Debug for TokenStore {
@@ -149,8 +153,24 @@ impl TokenStore {
     #[must_use]
     pub fn with_http(dir: impl Into<PathBuf>, http: Arc<dyn Http>) -> Self {
         Self {
-            dir: dir.into(),
+            dir: Arc::from(dir.into()),
             http,
+            endpoints: Arc::new(Endpoints::microsoft()),
+        }
+    }
+
+    /// Graph, over the transport and endpoints this store signs in through.
+    #[must_use]
+    pub fn graph(&self) -> crate::graph::Graph {
+        crate::graph::Graph::with_http((*self.endpoints).clone(), Arc::clone(&self.http))
+    }
+
+    /// The same store asking `endpoints`, a fake Microsoft a test serves.
+    #[must_use]
+    pub fn at(self, endpoints: Endpoints) -> Self {
+        Self {
+            endpoints: Arc::new(endpoints),
+            ..self
         }
     }
 
@@ -266,7 +286,7 @@ impl TokenStore {
             });
         };
         let authority = ms.authority;
-        let request = device_request::<P>(consent, authority);
+        let request = device_request::<P>(consent, &self.endpoints, authority);
         let answered = post(self.http.as_ref(), &request)?;
         let code = read_device_code(&answered)?;
         Ok((
@@ -293,7 +313,7 @@ impl TokenStore {
         pending.finish(wait)
     }
 
-    /// Delete every grant this account holds, reading and sending alike.
+    /// Delete every grant this account holds: reading, sending and calendars alike.
     pub fn revoke(&self, account: &MailAccount) -> Result<bool, OauthError> {
         let unreadable = |error: std::io::Error| OauthError::Unreadable {
             step: "stored grant",
@@ -308,13 +328,10 @@ impl TokenStore {
         let Some(stored) = self.read_grants(account)? else {
             return Ok(Vec::new());
         };
-        let mut slots = Vec::new();
-        if stored.grants.contains_key(Imap::SLOT) {
-            slots.push(Imap::SLOT);
-        }
-        if stored.grants.contains_key(Smtp::SLOT) {
-            slots.push(Smtp::SLOT);
-        }
+        let mut slots: Vec<&'static str> = [Imap::SLOT, Smtp::SLOT, Calendar::SLOT]
+            .into_iter()
+            .filter(|slot| stored.grants.contains_key(*slot))
+            .collect();
         slots.sort_unstable();
         Ok(slots)
     }
@@ -337,7 +354,7 @@ impl<P: Protocol> Pending<P> {
         let mut interval = self.code.interval_seconds;
         let mut elapsed = 0u64;
         loop {
-            let poll = poll_request(self.authority, &self.code);
+            let poll = poll_request(&self.store.endpoints, self.authority, &self.code);
             let answered = post(self.store.http.as_ref(), &poll)?;
             match read_poll::<P>(&answered, interval)? {
                 Polled::Pending { wait_seconds } => {
@@ -773,5 +790,56 @@ mod tests {
             !waited.into_inner().unwrap().is_empty(),
             "at least one interval was waited out"
         );
+    }
+
+    /// An administrator's refusal of a refresh reaches the owner on every slot as a class of its
+    /// own, with Microsoft's words bounded and free of control characters.
+    #[test]
+    fn an_administrators_refusal_reaches_every_slot_as_its_own_class() {
+        let words = format!("AADSTS90094: need an administrator\u{7}{}", "x".repeat(900));
+        for slot in [Imap::SLOT, Smtp::SLOT, Calendar::SLOT] {
+            let transport = scripted(vec![Answered {
+                status: 400,
+                body: serde_json::json!({
+                    "error": "consent_required",
+                    "error_description": words,
+                    "error_codes": [90094],
+                }),
+            }]);
+            let store = TokenStore::with_http(scratch(&format!("admin-{slot}")), transport);
+            let account = ms_account("her@study.test");
+            let needs = match slot {
+                "imap" => grant_and_access::<Imap>(&store, &account),
+                "smtp" => grant_and_access::<Smtp>(&store, &account),
+                _ => grant_and_access::<Calendar>(&store, &account),
+            };
+            let NeedsLogin::AdminApproval {
+                slot: named,
+                description,
+                ..
+            } = needs
+            else {
+                panic!("{slot}: {needs:?}");
+            };
+            assert_eq!(named, slot);
+            assert_eq!(description.chars().count(), 300);
+            assert!(!description.contains('\u{7}'));
+        }
+    }
+
+    fn grant_and_access<P: Protocol>(store: &TokenStore, account: &MailAccount) -> NeedsLogin {
+        store
+            .write_grant::<P>(
+                account,
+                Authority::Organizations,
+                &Secret::new("refresh"),
+                Writing::Granted,
+            )
+            .expect("a stored grant");
+        store
+            .access::<P>(account)
+            .expect("an answer")
+            .required()
+            .expect_err("the refusal")
     }
 }

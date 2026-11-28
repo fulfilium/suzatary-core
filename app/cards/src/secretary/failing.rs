@@ -10,7 +10,7 @@ use chrono::Duration;
 
 use crate::secretary::bootstrap::Answering;
 use crate::secretary::noticed::Owed;
-use suzatary_connect::connect::{Connection, Declared, Key, Step, Table};
+use suzatary_connect::connect::{Connection, Declared, Key, Params, Step, Table, TemplateId};
 use suzatary_connect::settings::{Settable, Settables};
 use suzatary_google::calendar::CalendarName;
 use suzatary_health::health::SourceKey;
@@ -54,6 +54,8 @@ pub struct Observed<'a> {
 pub struct Failing {
     /// The connection that failed, one the instance's tables hold.
     pub connection: Connection,
+    /// The source of the connection that failed: its mail, or its calendars.
+    pub source: SourceKey,
     pub class: Failure,
     /// It has not succeeded since this instant.
     pub since: Instant,
@@ -68,7 +70,8 @@ impl Failing {
         let since = utc(self.since);
         let connection = &self.connection;
         let (act, instead): (Act, Option<&str>) = match self.remedy() {
-            Remedy::Retry => return None,
+            // An administrator's approval is no card's to give; the account's line says so.
+            Remedy::Retry | Remedy::Administrator => return None,
             Remedy::Secret => {
                 let name = connection.secrets().into_iter().next()?;
                 let act = Act::Secret {
@@ -82,22 +85,13 @@ impl Failing {
                 };
                 (act, None)
             }
-            Remedy::Auth => connection
-                .steps()
-                .into_iter()
-                .find_map(|step| match step {
-                    Step::DeviceCode { account } => Some(Act::Auth { account }),
-                    // A revoked grant, or one a client in Testing ended after 7 days, holds no
-                    // part any more (Google forgets the whole grant), so the consent asks for all.
-                    Step::AuthCode { account } => Some(Act::GoogleSignIn {
-                        account,
-                        scopes: suzatary_google::google::Scopes::all(),
-                    }),
-                    Step::Secret { .. }
-                    | Step::SendingConsent { .. }
-                    | Step::GoogleClient
-                    | Step::SignIn
-                    | Step::Terminal { .. } => None,
+            Remedy::Auth => self
+                .microsoft_calendars()
+                .or_else(|| {
+                    connection
+                        .steps()
+                        .into_iter()
+                        .find_map(|step| self.signs_in(step))
                 })
                 .map(|act| (act, None))
                 // Lieer's own sign-in is a terminal step, so a Gmail account is offered the move
@@ -119,6 +113,40 @@ impl Failing {
             )
             .since(episode),
         )
+    }
+
+    /// A Microsoft account's calendars have a consent of their own, which no step of its template
+    /// owes: the card is filed only for calendars that failed for want of it.
+    fn microsoft_calendars(&self) -> Option<Act> {
+        let SourceKey::GoogleCalendar(_) = self.source else {
+            return None;
+        };
+        let Params::Microsoft { email, .. } = self.connection.params() else {
+            return None;
+        };
+        (self.connection.id() == TemplateId::MsImap).then(|| Act::AuthCalendar {
+            account: email.clone(),
+        })
+    }
+
+    /// The sign-in `step` gives the failing source; Google's one grant serves mail and calendars.
+    fn signs_in(&self, step: Step) -> Option<Act> {
+        let calendars = matches!(self.source, SourceKey::GoogleCalendar(_));
+        match step {
+            Step::DeviceCode { account } if !calendars => Some(Act::Auth { account }),
+            // A revoked grant, or one a client in Testing ended after 7 days, holds no part any
+            // more (Google forgets the whole grant), so the consent asks for all.
+            Step::AuthCode { account } => Some(Act::GoogleSignIn {
+                account,
+                scopes: suzatary_google::google::Scopes::all(),
+            }),
+            Step::DeviceCode { .. }
+            | Step::Secret { .. }
+            | Step::SendingConsent { .. }
+            | Step::GoogleClient
+            | Step::SignIn
+            | Step::Terminal { .. } => None,
+        }
     }
 
     fn named(&self) -> String {
@@ -165,6 +193,9 @@ fn said(class: Failure) -> String {
             status.status()
         ),
         Failure::NeedsLogin => "it needs its sign-in again".to_owned(),
+        Failure::NeedsAdministrator => {
+            "an administrator of its organisation must approve the app".to_owned()
+        }
         Failure::Unresolved => "it reads a secret stored nowhere".to_owned(),
         Failure::KeyRefused => "its key was refused".to_owned(),
         Failure::Limited(limited) => limited.to_string(),
@@ -187,13 +218,17 @@ pub fn failing(observed: &Observed<'_>) -> Vec<Failing> {
         .connections()
         .values()
         .filter_map(|connection| {
-            let (class, since) = connection
+            let (source, (class, since)) = connection
                 .sources()
-                .iter()
-                .filter_map(|key| observed.health.health(key).and_then(Health::remedial))
-                .min_by_key(|(class, since)| (class.remedy() == Remedy::Retry, *since))?;
+                .into_iter()
+                .filter_map(|key| {
+                    let failure = observed.health.health(&key).and_then(Health::remedial)?;
+                    Some((key, failure))
+                })
+                .min_by_key(|(_, (class, since))| (class.remedy() == Remedy::Retry, *since))?;
             Some(Failing {
                 connection: connection.clone(),
+                source,
                 class,
                 since,
             })

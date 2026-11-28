@@ -46,6 +46,7 @@ impl Proposer {
                 Proposal::Act(
                     Act::Auth { .. }
                     | Act::AuthSend { .. }
+                    | Act::AuthCalendar { .. }
                     | Act::Web { .. }
                     | Act::Patch { .. }
                     | Act::DriveRead { .. }

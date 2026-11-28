@@ -26,7 +26,7 @@ use suzatary_mail::mail::account::{AccountName, MailAccount, Sender};
 use suzatary_mail::mail::idle;
 use suzatary_mail::mail::imap::Session as _;
 use suzatary_mail::mail::mailbox::Query;
-use suzatary_mail::mail::oauth::{Consent, DeviceCode, Imap, Smtp};
+use suzatary_mail::mail::oauth::{Calendar, Consent, DeviceCode, Imap, Smtp};
 use suzatary_mail::mail::send::{Composed, Outgoing, SendError, Step, build_mime, guess_mime_type};
 use suzatary_mail::mail::transport::Transport as _;
 use suzatary_triage::mail::corpus::Corpus as _;
@@ -275,9 +275,9 @@ pub fn backfill(path: &Path, args: &BackfillArgs) -> anyhow::Result<()> {
 pub struct AuthArgs {
     /// A Microsoft account in the roster.
     email: Option<String>,
-    /// Which protocol's grant: `imap` for syncing, `smtp` for sending, kept as separate
-    /// consents so a leaked read token cannot send.
-    #[arg(long, default_value = "imap", value_parser = ["imap", "smtp"])]
+    /// Which grant: `imap` for syncing, `smtp` for sending, `calendar` for the calendars, kept as
+    /// separate consents so a leaked read token cannot send or touch a calendar.
+    #[arg(long, default_value = "imap", value_parser = ["imap", "smtp", "calendar"])]
     scope: String,
 }
 
@@ -324,7 +324,8 @@ fn authorise(instance: &Instance, email: &str, scope: &str) -> anyhow::Result<()
     match scope {
         "imap" => store.authorise::<Imap>(&consent, account, &mut announce, &wait)?,
         "smtp" => store.authorise::<Smtp>(&consent, account, &mut announce, &wait)?,
-        other => bail!("--scope is imap or smtp, got {other:?}"),
+        "calendar" => store.authorise::<Calendar>(&consent, account, &mut announce, &wait)?,
+        other => bail!("--scope is imap, smtp or calendar, got {other:?}"),
     }
     emit(&serde_json::json!({
         "authorised": account.email,

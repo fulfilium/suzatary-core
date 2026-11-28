@@ -585,6 +585,7 @@ fn yes(key: &Key, row: &ProposalRow, a: &CardAnswer, ui: &Ui) -> Wants {
             | ProposedAct::Changes { .. }
             | ProposedAct::Auth { .. }
             | ProposedAct::AuthSend { .. }
+        | ProposedAct::AuthCalendar { .. }
             | ProposedAct::Secret { .. }
             | ProposedAct::Web { .. }
             | ProposedAct::Patch { .. }

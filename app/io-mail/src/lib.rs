@@ -5,9 +5,11 @@
 
 #![forbid(unsafe_code)]
 
+pub mod calendar;
 pub mod corpus;
 pub mod gmail;
 pub mod google;
+pub mod graph;
 pub mod imap;
 pub mod junk;
 pub mod mail_sync;

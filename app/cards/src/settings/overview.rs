@@ -31,6 +31,8 @@ pub enum Need {
     MailSignIn(String),
     /// A Microsoft account's consent to send.
     MailSending(String),
+    /// A Microsoft account's consent to read and edit its calendars.
+    MailCalendars(String),
     /// The Google client, on the first Google account's line.
     GoogleClient,
     /// A secret, by its stored name, which never leaves.
@@ -65,6 +67,9 @@ impl Asking {
                 let need = match &object.asked.proposal {
                     Proposal::Act(Act::AuthSend { account }) => {
                         Need::MailSending(account.to_string())
+                    }
+                    Proposal::Act(Act::AuthCalendar { account }) => {
+                        Need::MailCalendars(account.to_string())
                     }
                     Proposal::Act(Act::Auth { account } | Act::GoogleSignIn { account, .. }) => {
                         Need::MailSignIn(account.to_string())
@@ -562,6 +567,7 @@ impl Overview {
                 Need::Secret(name) => Some(name.as_str()),
                 Need::MailSignIn(_)
                 | Need::MailSending(_)
+                | Need::MailCalendars(_)
                 | Need::GoogleClient
                 | Need::SignIn
                 | Need::SignInCode
@@ -693,10 +699,24 @@ fn mail(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected<
                 .copied()
                 .unwrap_or_default();
             let detail = match MailCredential::of(account, grants) {
-                MailCredential::Slots { imap, smtp } => format!(
-                    "Microsoft: reading {}, sending {}.",
+                MailCredential::Slots {
+                    imap,
+                    smtp,
+                    calendar,
+                } => format!(
+                    "Microsoft: reading {}, sending {}, calendars {}.{}",
                     granted(imap),
-                    granted(smtp)
+                    granted(smtp),
+                    granted(calendar),
+                    if calendar {
+                        String::new()
+                    } else {
+                        format!(
+                            " Calendars are optional: ask the secretary to sign it in for them, \
+                             or run `suzatary auth {} --scope calendar` at a terminal.",
+                            account.email
+                        )
+                    }
                 ),
                 MailCredential::Lieer => "Gmail, through lieer's own grant.".to_owned(),
                 MailCredential::Google { granted: held } => format!(
@@ -725,6 +745,7 @@ fn mail(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected<
                     [Need::GoogleClient].into_iter().chain([
                         Need::MailSignIn(account.email.to_string()),
                         Need::MailSending(account.email.to_string()),
+                        Need::MailCalendars(account.email.to_string()),
                         removal(Group::Mail, account.email.as_str()),
                     ]),
                 ),
@@ -830,7 +851,7 @@ fn drive(declared: &Declared<'_>, observed: &Observed<'_>, connected: &Connected
         None | Some(Reading::Ok { .. }) => Some(Checked::of(probed)),
         Some(Reading::Failing { class, .. }) => match class.remedy() {
             Remedy::Auth => Some(Checked::Never),
-            Remedy::Secret | Remedy::Retry => None,
+            Remedy::Secret | Remedy::Retry | Remedy::Administrator => None,
         },
     };
     let as_probed = Standing::of_health(reading);
@@ -1048,7 +1069,7 @@ pub(crate) mod tests {
             any::<bool>(),
             any::<bool>(),
             proptest::collection::vec(state(), 16),
-            proptest::collection::vec(any::<(bool, bool, bool)>(), 4),
+            proptest::collection::vec(any::<(bool, bool, bool, bool)>(), 4),
             proptest::collection::vec((0u8..4, 0usize..8, 1u8..10), 0..6),
         )
             .prop_map(
@@ -1091,12 +1112,15 @@ pub(crate) mod tests {
                         .zip(states.iter().cycle())
                         .map(|(name, state)| (name.clone(), *state))
                         .collect();
-                    for ((account, _), (imap, smtp, failing)) in accounts.iter().zip(&flags) {
+                    for ((account, _), (imap, smtp, calendar, failing)) in
+                        accounts.iter().zip(&flags)
+                    {
                         world.grants.insert(
                             account.clone(),
                             MailGrants {
                                 imap: *imap,
                                 smtp: *smtp,
+                                calendar: *calendar,
                             },
                         );
                         if *failing {

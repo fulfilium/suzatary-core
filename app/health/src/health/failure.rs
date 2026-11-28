@@ -22,6 +22,9 @@ pub enum Failure {
     },
     /// The account's sign-in is missing or lapsed.
     NeedsLogin,
+    /// An administrator of the account's organisation must approve the app: no sign-in of the
+    /// owner's and no retry mends it.
+    NeedsAdministrator,
     /// A secret it reads is stored nowhere on this box.
     Unresolved,
     /// The model refused its key or token.
@@ -69,6 +72,8 @@ pub enum Remedy {
     Secret,
     /// Sign the account in again, from an Auth card.
     Auth,
+    /// Only an administrator of the account's organisation mends it: no tap and no retry does.
+    Administrator,
     /// Nothing a tap mends: the next run tries again.
     Retry,
 }
@@ -78,6 +83,7 @@ impl From<suzatary_mail::mail::fault::Fault> for Failure {
         use suzatary_mail::mail::fault::Fault;
         match fault {
             Fault::NeedsLogin => Failure::NeedsLogin,
+            Fault::NeedsAdministrator => Failure::NeedsAdministrator,
             Fault::Unresolved => Failure::Unresolved,
             Fault::Unreachable => Failure::Unreachable,
             Fault::Unclassified => Failure::Unclassified,
@@ -128,12 +134,13 @@ impl Failure {
             | Failure::KeyRefused
             | Failure::Unusable => Remedy::Secret,
             Failure::NeedsLogin => Remedy::Auth,
+            Failure::NeedsAdministrator => Remedy::Administrator,
             Failure::Limited(_) | Failure::Unreachable | Failure::Unclassified => Remedy::Retry,
         }
     }
 
     /// Every class, each revocation once: what a law ranges over.
-    pub const ALL: [Failure; 10] = [
+    pub const ALL: [Failure; 11] = [
         Failure::Revoked {
             status: Revocation::Unauthorized,
         },
@@ -144,6 +151,7 @@ impl Failure {
             status: Revocation::NotFound,
         },
         Failure::NeedsLogin,
+        Failure::NeedsAdministrator,
         Failure::Unresolved,
         Failure::KeyRefused,
         Failure::Limited(crate::health::Limited {

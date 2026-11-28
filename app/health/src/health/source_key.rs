@@ -25,7 +25,8 @@ pub enum SourceKey {
         /// The credential, in the plugin's namespace.
         credential: CredentialName,
     },
-    /// A Google account's calendars, read through Google's Calendar API.
+    /// An account's calendars, read through its provider's API: Google's Calendar API or
+    /// Microsoft Graph. Its print keeps its first word, since stored registers name it.
     GoogleCalendar(AccountEmail),
     /// The Drive folders the secretary may read, listed together.
     Drive,

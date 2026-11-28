@@ -204,7 +204,7 @@
             "kind": "failing",
             "since": "2026-09-02T11:00:00",
             "class": {
-              "kind": "unresolved"
+              "kind": "needs_administrator"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -220,7 +220,7 @@
             "kind": "failing",
             "since": "2026-09-02T11:00:00",
             "class": {
-              "kind": "key_refused"
+              "kind": "unresolved"
             },
             "words": "what the source said",
             "at": "2026-09-02T12:00:00"
@@ -231,6 +231,22 @@
         {
           "key": "plugin:p15",
           "label": "p15",
+          "detail": null,
+          "standing": {
+            "kind": "failing",
+            "since": "2026-09-02T11:00:00",
+            "class": {
+              "kind": "key_refused"
+            },
+            "words": "what the source said",
+            "at": "2026-09-02T12:00:00"
+          },
+          "cards": [],
+          "replaces": []
+        },
+        {
+          "key": "plugin:p16",
+          "label": "p16",
           "detail": null,
           "standing": {
             "kind": "failing",
@@ -247,8 +263,8 @@
           "replaces": []
         },
         {
-          "key": "plugin:p16",
-          "label": "p16",
+          "key": "plugin:p17",
+          "label": "p17",
           "detail": null,
           "standing": {
             "kind": "failing",
@@ -263,8 +279,8 @@
           "replaces": []
         },
         {
-          "key": "plugin:p17",
-          "label": "p17",
+          "key": "plugin:p18",
+          "label": "p18",
           "detail": null,
           "standing": {
             "kind": "failing",
@@ -279,8 +295,8 @@
           "replaces": []
         },
         {
-          "key": "plugin:p18",
-          "label": "p18",
+          "key": "plugin:p19",
+          "label": "p19",
           "detail": null,
           "standing": {
             "kind": "failing",

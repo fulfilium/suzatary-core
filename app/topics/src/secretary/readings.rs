@@ -876,6 +876,10 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> Proposed
             account: account.as_str().to_owned(),
             sentence: act.sentence(),
         },
+        Act::AuthCalendar { account } => ProposedAct::AuthCalendar {
+            account: account.as_str().to_owned(),
+            sentence: act.sentence(),
+        },
         Act::Secret { name, .. } => card::secret_act(name, routine, draws.model()),
         Act::Web { request, rule } => ProposedAct::Web {
             request: request.kind(),
@@ -960,7 +964,7 @@ fn act_on_wire(act: &Act, consent: Option<String>, draws: &dyn Draw) -> Proposed
             consent,
             sentence: act.sentence(),
         },
-        Act::CalendarEvent { account, event } => ProposedAct::CalendarEvent {
+        Act::CalendarEvent { account, event, .. } => ProposedAct::CalendarEvent {
             account: account.to_string(),
             event: event.sentence(),
             sentence: act.sentence(),

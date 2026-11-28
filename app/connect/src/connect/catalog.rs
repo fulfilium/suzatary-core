@@ -82,7 +82,8 @@ const GOOGLE: Template = Template {
     check: Check::MailSynced,
 };
 
-/// Sending is a second device-code grant, kept separate from reading's.
+/// Sending is a second device-code grant, kept separate from reading's. A third, for the
+/// account's calendars, is the owner's choice and no step of the template.
 const MS_IMAP: Template = Template {
     id: TemplateId::MsImap,
     group: Group::Mail,

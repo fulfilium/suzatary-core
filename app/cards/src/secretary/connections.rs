@@ -8,6 +8,7 @@ use suzatary_base::reference::{ProposalRef, Reference};
 use suzatary_base::refusal::Refusal;
 use suzatary_connect::connect::{Checked, Connection, Declared, Group, Params, Seen, Step, Table};
 use suzatary_connect::secrets::{SecretState, Secrets};
+use suzatary_google::calendar::Provider;
 use suzatary_google::google::{Held, Scope, Scopes};
 use suzatary_health::health::plugin::{Origin, PluginName};
 use suzatary_inbox::secretary::acts::Act;
@@ -141,6 +142,12 @@ fn unmet(
             .find(|held| held.email.as_str() == account.as_str())
             .is_some_and(|held| !secrets.mail_grants(held).smtp)
             .then(asked),
+        Proposal::Act(Act::AuthCalendar { account }) => declared
+            .accounts
+            .iter()
+            .find(|held| held.email.as_str() == account.as_str())
+            .is_some_and(|held| !secrets.mail_grants(held).calendar)
+            .then(asked),
         Proposal::Act(Act::Disconnect { connection }) => {
             let (link, card) = pasted(declared, inbox, reasons)?;
             (link == *connection).then(|| retiring(link, card))
@@ -228,13 +235,12 @@ fn read_through<'a>(
         })
 }
 
-/// Whether the box reads `account`'s calendars (`google::reads_calendars`) through a grant that
-/// holds them.
+/// Whether the box reads `account`'s calendars through a Google grant that holds them.
 fn reads_calendars(declared: &Declared, secrets: &dyn Secrets, account: &EmailAddress) -> bool {
     let held = secrets.google_grant(account);
     declared.accounts.iter().any(|declared| {
         declared.email.as_str() == account.as_str()
-            && suzatary_google::google::reads_calendars(&declared.sync, &held)
+            && Provider::held(&declared.sync, &held, false).contains(&Provider::Google)
     }) && matches!(held, Held::Signed(parts) if parts.contains(Scope::Calendar))
 }
 

@@ -2,7 +2,7 @@
 //!
 //! `Auth` has no `scope` field on purpose: its tap mints the IMAP grant alone, and sending's
 //! consent is `AuthSend`, a card only the box files, kept in the SMTP slot apart from the IMAP
-//! one, so a leaked read token still cannot send.
+//! one, so a leaked read token still cannot send. Calendars have `AuthCalendar`, a third slot.
 
 use prodrome_data::literal::{ProdromeError, Value};
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ use suzatary_base::conversation_id::ConversationId;
 use suzatary_base::reference::ProposalRef;
 use suzatary_connect::connect::Connection;
 use suzatary_connect::settings::Help;
-use suzatary_google::google::NewEvent;
+use suzatary_google::calendar::{NewEvent, Provider};
 use suzatary_mail::mail::address::EmailAddress;
 use suzatary_memory::secretary::locked_text;
 use suzatary_memory::secretary::memory;
@@ -30,6 +30,13 @@ pub enum Act {
     /// Authorise a Microsoft account to send mail through the device-code flow, SMTP only.
     #[serde(rename = "auth_send")]
     AuthSend {
+        /// The account to authorise.
+        account: EmailAddress,
+    },
+    /// Authorise a Microsoft account to read and edit its calendars through Graph, by the
+    /// device-code flow in a slot of its own.
+    #[serde(rename = "auth_calendar")]
+    AuthCalendar {
         /// The account to authorise.
         account: EmailAddress,
     },
@@ -116,10 +123,17 @@ pub enum Act {
         account: EmailAddress,
         scopes: suzatary_google::google::Scopes,
     },
-    /// Write one event into a Google account's own calendar, as the card shows it.
+    /// Write one event into the account's own calendar at `provider`, as the card shows it.
     #[serde(rename = "calendar_event")]
     CalendarEvent {
         account: EmailAddress,
+        /// Whose calendar of the account: an address may keep calendars at both. An act stored
+        /// before the field existed is a Google one, and prints back as it was.
+        #[serde(
+            default = "Provider::google",
+            skip_serializing_if = "Provider::is_google"
+        )]
+        provider: Provider,
         event: NewEvent,
     },
     /// Erase these words, which may restate a forgotten fact its erasure left in other words.
@@ -159,6 +173,7 @@ impl Act {
         match self {
             Act::Auth { .. } => "auth",
             Act::AuthSend { .. } => "auth_send",
+            Act::AuthCalendar { .. } => "auth_calendar",
             Act::Secret { .. } => "secret",
             Act::Web { .. } => "web",
             Act::Patch { .. } => "patch",
@@ -188,9 +203,8 @@ impl Act {
         match self {
             Act::Auth { account } => format!("authorise {account} to sync mail (IMAP)"),
             Act::AuthSend { account } => format!("authorise {account} to send mail (SMTP)"),
-            Act::Secret { name, why } => {
-                format!("store {} ({why})", Help::label(name))
-            }
+            Act::AuthCalendar { account } => format!("authorise {account} for calendars (Graph)"),
+            Act::Secret { name, why } => format!("store {} ({why})", Help::label(name)),
             Act::Web { request, .. } => request.sentence(),
             Act::Patch {
                 repo,
@@ -267,9 +281,11 @@ impl Act {
                  and Google sends you back here",
                 scopes.sentence()
             ),
-            Act::CalendarEvent { account, event } => {
-                format!("add {} to {account}'s calendar", event.sentence())
-            }
+            Act::CalendarEvent {
+                account,
+                provider,
+                event,
+            } => event_in(account, *provider, event),
             Act::Erase { fact, keys } => format!(
                 "erase {} more passage{} of this conversation around fact {fact}, now forgotten: \
                  the turn that said it and the answers of its round, which may say it in other \
@@ -311,6 +327,7 @@ pub fn folder_of(path: &DrivePath) -> DrivePath {
 
 pub const AUTH: Constructor = ("Auth", &["account"]);
 pub const AUTH_SEND: Constructor = ("AuthSend", &["account"]);
+pub const AUTH_CALENDAR: Constructor = ("AuthCalendar", &["account"]);
 pub const SECRET: Constructor = ("Secret", &["name", "why"]);
 pub const WEB: Constructor = ("Web", &["request", "rule"]);
 pub const PATCH: Constructor = ("Patch", &["repo", "visibility", "base", "patch", "message"]);
@@ -331,6 +348,29 @@ pub const RESTORE: Constructor = ("Restore", &["card"]);
 pub const GOOGLE_CLIENT: Constructor = ("GoogleClient", &["redirect"]);
 pub const GOOGLE_SIGN_IN: Constructor = ("GoogleSignIn", &["account", "scopes"]);
 pub const CALENDAR_EVENT: Constructor = ("CalendarEvent", &["account", "title", "when", "place"]);
+pub const MICROSOFT_CALENDAR_EVENT: Constructor = (
+    "MicrosoftCalendarEvent",
+    &["account", "title", "when", "place"],
+);
+
+fn event_in(account: &EmailAddress, provider: Provider, event: &NewEvent) -> String {
+    format!(
+        "add {} to {account}'s {} calendar",
+        event.sentence(),
+        provider.label()
+    )
+}
+
+/// A consent act, which has one field, the account it signs in.
+fn consent_of(value: &Value) -> Result<Act, ProdromeError> {
+    let (constructor, act): (Constructor, fn(EmailAddress) -> Act) = match arm(value)? {
+        "Auth" => (AUTH, |account| Act::Auth { account }),
+        "AuthSend" => (AUTH_SEND, |account| Act::AuthSend { account }),
+        "AuthCalendar" => (AUTH_CALENDAR, |account| Act::AuthCalendar { account }),
+        other => return Err(no_arm("Act", other)),
+    };
+    Ok(act(Fields::of(value, constructor)?.get("account")?))
+}
 
 // By hand: its reads refuse as `Fields` does.
 impl Literal for Act {
@@ -338,6 +378,7 @@ impl Literal for Act {
         match self {
             Act::Auth { account } => record(AUTH, vec![account.to_value()]),
             Act::AuthSend { account } => record(AUTH_SEND, vec![account.to_value()]),
+            Act::AuthCalendar { account } => record(AUTH_CALENDAR, vec![account.to_value()]),
             Act::Secret { name, why } => record(SECRET, vec![name.to_value(), why.to_value()]),
             Act::Web { request, rule } => record(WEB, vec![request.to_value(), rule.to_value()]),
             Act::Patch {
@@ -379,8 +420,15 @@ impl Literal for Act {
             Act::GoogleSignIn { account, scopes } => {
                 record(GOOGLE_SIGN_IN, vec![account.to_value(), scopes.to_value()])
             }
-            Act::CalendarEvent { account, event } => record(
-                CALENDAR_EVENT,
+            Act::CalendarEvent {
+                account,
+                provider,
+                event,
+            } => record(
+                match provider {
+                    Provider::Google => CALENDAR_EVENT,
+                    Provider::Microsoft => MICROSOFT_CALENDAR_EVENT,
+                },
                 vec![
                     account.to_value(),
                     Value::str(event.title.as_str()),
@@ -411,12 +459,7 @@ impl Literal for Act {
 
     fn from_value(value: &Value) -> Result<Self, ProdromeError> {
         Ok(match arm(value)? {
-            "Auth" => Act::Auth {
-                account: Fields::of(value, AUTH)?.get("account")?,
-            },
-            "AuthSend" => Act::AuthSend {
-                account: Fields::of(value, AUTH_SEND)?.get("account")?,
-            },
+            "Auth" | "AuthSend" | "AuthCalendar" => consent_of(value)?,
             "Secret" => {
                 let fields = Fields::of(value, SECRET)?;
                 Act::Secret {
@@ -480,7 +523,10 @@ impl Literal for Act {
                     origin: fields.get("origin")?,
                 }
             }
-            arm @ ("GoogleClient" | "GoogleSignIn" | "CalendarEvent") => google(value, arm)?,
+            arm
+            @ ("GoogleClient" | "GoogleSignIn" | "CalendarEvent" | "MicrosoftCalendarEvent") => {
+                google(value, arm)?
+            }
             "Erase" => {
                 let fields = Fields::of(value, ERASE)?;
                 Act::Erase {
@@ -555,12 +601,18 @@ fn google(value: &Value, arm: &str) -> Result<Act, ProdromeError> {
                 scopes: fields.get("scopes")?,
             }
         }
-        "CalendarEvent" => {
-            let fields = Fields::of(value, CALENDAR_EVENT)?;
+        "CalendarEvent" | "MicrosoftCalendarEvent" => {
+            let (provider, constructor) = if arm == "CalendarEvent" {
+                (Provider::Google, CALENDAR_EVENT)
+            } else {
+                (Provider::Microsoft, MICROSOFT_CALENDAR_EVENT)
+            };
+            let fields = Fields::of(value, constructor)?;
             let when = suzatary_google::calendar::When::parse(&fields.get::<String>("when")?)
                 .map_err(|refused| ProdromeError::invalid(refused.to_string()))?;
             Act::CalendarEvent {
                 account: fields.get("account")?,
+                provider,
                 event: NewEvent::new(
                     &fields.get::<String>("title")?,
                     when,
@@ -601,6 +653,26 @@ mod tests {
         );
         assert_eq!(Act::from_value(&send.to_value()).as_ref(), Ok(&send));
         assert_ne!(Act::from_value(&auth().to_value()).as_ref(), Ok(&send));
+    }
+
+    #[test]
+    fn the_calendar_consent_is_its_own_act_and_names_graph() {
+        let calendar = Act::AuthCalendar {
+            account: EmailAddress::new("ada@example.com").expect("a shaped address"),
+        };
+        assert_eq!(
+            calendar.sentence(),
+            "authorise ada@example.com for calendars (Graph)"
+        );
+        assert_eq!(
+            prodrome_data::literal::print_literal(&calendar.to_value()),
+            "AuthCalendar(account='ada@example.com')"
+        );
+        assert_eq!(
+            Act::from_value(&calendar.to_value()).as_ref(),
+            Ok(&calendar)
+        );
+        assert_ne!(Act::from_value(&auth().to_value()).as_ref(), Ok(&calendar));
     }
 
     #[test]
@@ -668,7 +740,8 @@ mod tests {
             },
             Act::CalendarEvent {
                 account: account.clone(),
-                event: suzatary_google::google::NewEvent::new(
+                provider: Provider::Microsoft,
+                event: suzatary_google::calendar::NewEvent::new(
                     "Dentist",
                     suzatary_google::calendar::When::parse(
                         "2026-10-20T14:00:00Z/2026-10-20T14:45:00Z",
@@ -709,5 +782,38 @@ mod tests {
         );
         let read: Act = serde_json::from_str(&printed).expect("and reads back");
         assert_eq!(read, act);
+    }
+
+    /// An act stored before it named a provider was Google's: its bytes read as Google's and print
+    /// back unchanged, as a literal and as JSON.
+    #[test]
+    fn a_calendar_event_stored_before_the_provider_reads_as_google_and_prints_back() {
+        let old = "CalendarEvent(account='ada@example.com', title='Dentist', \
+                   when='2026-10-20T14:00:00Z/2026-10-20T14:45:00Z', place='Main St 4')";
+        let value = record(
+            CALENDAR_EVENT,
+            vec![
+                Value::str("ada@example.com"),
+                Value::str("Dentist"),
+                Value::str("2026-10-20T14:00:00Z/2026-10-20T14:45:00Z"),
+                Value::str("Main St 4"),
+            ],
+        );
+        assert_eq!(prodrome_data::literal::print_literal(&value), old);
+        let act = Act::from_value(&value).expect("reads");
+        let Act::CalendarEvent { provider, .. } = &act else {
+            panic!("{act:?}");
+        };
+        assert_eq!(*provider, Provider::Google);
+        assert_eq!(prodrome_data::literal::print_literal(&act.to_value()), old);
+        assert_eq!(
+            act.sentence(),
+            "add “Dentist”, 2026-10-20 14:00 to 14:45 UTC, at Main St 4 to ada@example.com's \
+             Google calendar"
+        );
+        let json = r#"{"kind":"calendar_event","account":"ada@example.com","event":{"title":"Dentist","when":"2026-10-20T14:00:00Z/2026-10-20T14:45:00Z","place":"Main St 4"}}"#;
+        let read: Act = serde_json::from_str(json).expect("reads");
+        assert_eq!(read, act);
+        assert_eq!(serde_json::to_string(&read).expect("prints"), json);
     }
 }

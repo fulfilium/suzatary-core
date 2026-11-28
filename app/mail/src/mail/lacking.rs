@@ -25,13 +25,17 @@ pub enum Grant {
     GoogleSend,
     /// Send as the Microsoft account: its send sign-in, kept apart from its mail's.
     MicrosoftSend,
+    /// Read and edit the Microsoft account's calendars: its calendar sign-in, kept apart from
+    /// its mail's.
+    MicrosoftCalendar,
 }
 
 impl Grant {
-    pub const ALL: [Grant; 3] = [
+    pub const ALL: [Grant; 4] = [
         Grant::GoogleCalendar,
         Grant::GoogleSend,
         Grant::MicrosoftSend,
+        Grant::MicrosoftCalendar,
     ];
 
     /// The word its literal begins with.
@@ -41,12 +45,13 @@ impl Grant {
             Grant::GoogleCalendar => "google-calendar",
             Grant::GoogleSend => "google-send",
             Grant::MicrosoftSend => "microsoft-send",
+            Grant::MicrosoftCalendar => "microsoft-calendar",
         }
     }
 
     const fn lets(self) -> &'static str {
         match self {
-            Grant::GoogleCalendar => "write its calendar",
+            Grant::GoogleCalendar | Grant::MicrosoftCalendar => "write its calendar",
             Grant::GoogleSend | Grant::MicrosoftSend => "send its mail",
         }
     }
@@ -58,6 +63,9 @@ impl Grant {
             Grant::GoogleSend => "press Allow on Google's page, then tap Try again to send",
             Grant::MicrosoftSend => {
                 "enter the code it shows on Microsoft's page, then tap Try again"
+            }
+            Grant::MicrosoftCalendar => {
+                "enter the code it shows on Microsoft's page, then tap Try again to add the event"
             }
         }
     }

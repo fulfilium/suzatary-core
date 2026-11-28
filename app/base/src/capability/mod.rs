@@ -124,6 +124,24 @@ impl SmtpToken {
     }
 }
 
+/// An access token that may read and edit a Microsoft account's calendars through Graph, a type
+/// apart from [`ImapToken`] and [`SmtpToken`] so neither mail consent can touch a calendar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CalendarToken(Secret);
+
+impl CalendarToken {
+    /// Only the token store's refresh calls this.
+    #[must_use]
+    pub fn from_refresh(secret: Secret) -> Self {
+        Self(secret)
+    }
+
+    #[must_use]
+    pub fn secret(&self) -> &Secret {
+        &self.0
+    }
+}
+
 /// A todo's prose, tagged by whether a trusted actor wrote it.
 /// Only [`Content::Confirmed`] yields an [`Escaped`], which `Render::html` requires.
 #[derive(Debug, Clone, PartialEq, Eq)]

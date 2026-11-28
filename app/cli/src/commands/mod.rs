@@ -11,13 +11,13 @@ pub mod doctor;
 pub mod door;
 pub mod follow;
 // The browser suite's fixtures, test support.
+pub mod calendars;
 #[cfg(feature = "fixture")]
 #[path = "../../tests/support/fixture.rs"]
 pub mod fixture;
 #[cfg(feature = "fixture")]
 #[path = "../../tests/support/fixture_live.rs"]
 pub mod fixture_live;
-pub mod google;
 pub mod guide;
 pub mod heartbeat;
 pub mod init;

@@ -103,6 +103,7 @@ impl suzatary_connect::secrets::Secrets for Decrypting {
         suzatary_connect::secrets::MailGrants {
             imap: self.decrypt(),
             smtp: false,
+            calendar: false,
         }
     }
 

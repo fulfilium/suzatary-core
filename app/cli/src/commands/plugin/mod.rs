@@ -79,7 +79,7 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
         let declared: Vec<&str> = (plugins.manifests.iter())
             .map(|manifest| manifest.name().as_str())
             .collect();
-        match super::google::remove_unowned(&plugins.root(), &declared) {
+        match super::calendars::remove_unowned(&plugins.root(), &declared) {
             Ok(0) => {}
             Ok(removed) => {
                 println!("plugin: removed the stores of {removed} plugin(s) no longer declared");
@@ -91,9 +91,10 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
             }
         }
         probe_drive(&instance, &health);
-        super::google::sync_calendars(
+        super::calendars::sync_calendars(
             &instance,
             suzatary_io_mail::google::Google::new(suzatary_google::google::Endpoints::google()),
+            &crate::commands::mail::tokens(&instance),
             &health,
         )
     } else {
@@ -104,7 +105,7 @@ fn sync_all(path: &Path, args: &SyncArgs) -> anyhow::Result<()> {
     }
     let mut unstored: Vec<String> = Vec::new();
     if !calendars_stored {
-        unstored.push("a Google account's calendars".to_owned());
+        unstored.push("an account's calendars".to_owned());
     }
     if chosen.is_empty() && google.is_empty() {
         println!("plugin: none declared in {}", instance.path.display());

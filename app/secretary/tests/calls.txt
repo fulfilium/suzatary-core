@@ -955,7 +955,7 @@ secretary propose_act [account garbled] refused 400: account must be an email ad
 secretary propose_act [act missing] refused 400: act is required
 secretary propose_act [act null] refused 400: act is required
 secretary propose_act [act mistyped] refused 400: act must be a string
-secretary propose_act [act garbled] refused 400: act must be one of: auth, secret, connect, calendar_event, retract, got '?'
+secretary propose_act [act garbled] refused 400: act must be one of: auth, auth_calendar, secret, connect, calendar_event, retract, got '?'
 secretary propose_act [end given] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [end null] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [end mistyped] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
@@ -975,6 +975,10 @@ secretary propose_act [place given] answered {"account":"a@b.test","act":"auth",
 secretary propose_act [place null] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [place mistyped] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [place garbled] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
+secretary propose_act [provider given] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
+secretary propose_act [provider null] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
+secretary propose_act [provider mistyped] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
+secretary propose_act [provider garbled] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [revises given] refused 404: conversation default has no proposal 3 (it has 0)
 secretary propose_act [revises null] answered {"account":"a@b.test","act":"auth","next":"The owner taps it, dismisses it, or leaves it standing; you will see which","proposed":0,"sources":["todo:life/alpha"],"why":"Because it matters."}
 secretary propose_act [revises mistyped] refused 400: invalid type: string "7", expected usize

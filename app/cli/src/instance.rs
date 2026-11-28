@@ -132,19 +132,19 @@ impl Instance {
         )
     }
 
-    /// Where a Google account's calendars are kept, in the cache tier.
+    /// Where an account's calendars are kept, in the cache tier, whichever provider reads them.
     #[must_use]
     pub fn google_calendar(&self, account: &suzatary_mail::mail::account::MailAccount) -> PathBuf {
         self.google_calendars().join(&account.subdir).join("store")
     }
 
-    /// The directory of every account's Google calendar store, one directory each.
+    /// The directory of every account's calendar store, one directory each.
     #[must_use]
     pub fn google_calendars(&self) -> PathBuf {
         self.plugins.cache.join("google")
     }
 
-    /// Every store the calendar reads: each declared plugin's, and each account's Google calendar's.
+    /// Every store the calendar reads: each declared plugin's, and each account's calendars'.
     #[must_use]
     pub fn calendar_stores(&self) -> Vec<PathBuf> {
         let google = self
@@ -313,8 +313,8 @@ impl Instance {
             Kind::Topics => once(secretary.topics.memberships.clone()),
             Kind::TopicAliases => once(secretary.topics.aliases.clone()),
             Kind::Asks => once(self.asks()),
-            // Each declared plugin's store, and each mail account's Google calendars, which are
-            // learned as a plugin's are (`suzatary_io_mail::google::learn`).
+            // Each declared plugin's store, and each mail account's calendars, which are
+            // learned as a plugin's are (`suzatary_io_mail::calendar::learn`).
             Kind::Plugin => self
                 .plugins
                 .manifests

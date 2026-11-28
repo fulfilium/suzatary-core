@@ -4,6 +4,7 @@
 
 pub mod calendar;
 pub mod google;
+pub mod microsoft;
 pub mod url;
 
 #[cfg(any(test, feature = "nothing"))]

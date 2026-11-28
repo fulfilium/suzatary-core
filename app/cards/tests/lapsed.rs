@@ -23,7 +23,7 @@ fn at(day: u32, hour: u32) -> Datetime {
 }
 
 fn card(inbox: &InMemory<InboxEvent>, index: usize, when: When) -> inbox::ProposalId {
-    let event = suzatary_google::google::NewEvent::new("Dentist", when, "").expect("an event");
+    let event = suzatary_google::calendar::NewEvent::new("Dentist", when, "").expect("an event");
     inbox::ask(
         inbox,
         Asked {
@@ -31,6 +31,7 @@ fn card(inbox: &InMemory<InboxEvent>, index: usize, when: When) -> inbox::Propos
             proposal: Proposal::Act(Act::CalendarEvent {
                 account: suzatary_mail::mail::address::EmailAddress::new("ada@example.test")
                     .expect("an address"),
+                provider: suzatary_google::calendar::Provider::Google,
                 event,
             }),
             reasons: Reasons::new(

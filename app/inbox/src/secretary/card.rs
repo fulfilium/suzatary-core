@@ -96,7 +96,26 @@ pub fn of(act: &ProposedAct) -> Card {
                 "run",
             )
         },
-        ProposedAct::AuthSend { account, sentence } => auth_send(account, sentence),
+        ProposedAct::AuthSend { account, sentence } => device_consent(
+            account,
+            sentence,
+            &Consent {
+                title: "Sign in to send",
+                question: "send mail? The box shows a code to enter on Microsoft's page; reading is not touched.",
+                yes: "Yes, sign in to send",
+                done: "to send",
+            },
+        ),
+        ProposedAct::AuthCalendar { account, sentence } => device_consent(
+            account,
+            sentence,
+            &Consent {
+                title: "Sign in for calendars",
+                question: "read and edit its calendars? The box shows a code to enter on Microsoft's page; mail is not touched. An administrator of the account's organisation may have to approve the app first.",
+                yes: "Yes, sign in for calendars",
+                done: "for calendars",
+            },
+        ),
         ProposedAct::Secret { label, found, link } => {
             secret(label, found.as_deref(), link.as_deref())
         }
@@ -291,20 +310,28 @@ fn calendar_event(account: &str, event: &str, sentence: &str) -> Card {
     }
 }
 
-fn auth_send(account: &str, sentence: &str) -> Card {
+/// The words of one device-code consent's card.
+struct Consent {
+    title: &'static str,
+    /// Finishes "Sign {account} in to …".
+    question: &'static str,
+    yes: &'static str,
+    /// Finishes "running: authorising {account} …".
+    done: &'static str,
+}
+
+fn device_consent(account: &str, sentence: &str, consent: &Consent) -> Card {
     Card {
         answers: vec![CardAnswer {
-            done: format!("running: authorising {account} to send"),
+            done: format!("running: authorising {account} {}", consent.done),
             asks: Asks::Confirm {
-                question: format!(
-                    "Sign {account} in to send mail? The box shows a code to enter on Microsoft's page; reading is not touched."
-                ),
-                yes: "Yes, sign in to send".to_owned(),
+                question: format!("Sign {account} in to {}", consent.question),
+                yes: consent.yes.to_owned(),
             },
-            ..answer("run", "Sign in to send")
+            ..answer("run", consent.title)
         }],
         ..card(
-            "Sign in to send",
+            consent.title,
             sentence,
             vec![field("Account", account)],
             "run",

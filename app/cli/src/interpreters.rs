@@ -150,6 +150,7 @@ impl suzatary_connect::secrets::Secrets for Declared {
             Sync::Google => MailGrants {
                 imap: matches!(self.google_grant(account.email.address()), Held::Signed(_)),
                 smtp: false,
+                calendar: false,
             },
             Sync::MsImap(_) | Sync::Gmail | Sync::Proton(_) => {
                 let held = self
@@ -160,6 +161,7 @@ impl suzatary_connect::secrets::Secrets for Declared {
                 MailGrants {
                     imap: held.contains(&"imap"),
                     smtp: held.contains(&"smtp"),
+                    calendar: held.contains(&"calendar"),
                 }
             }
         }
